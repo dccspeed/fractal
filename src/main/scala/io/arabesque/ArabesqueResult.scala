@@ -1,16 +1,20 @@
 package io.arabesque
 
-import io.arabesque.computation.SparkMasterEngine
-import io.arabesque.conf.SparkConfiguration
+import io.arabesque.aggregation._
+import io.arabesque.aggregation.reductions._
+import io.arabesque.computation._
+import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding.{Embedding, ResultEmbedding}
 import io.arabesque.odag.{SinglePatternODAG, BasicODAG}
-import io.arabesque.aggregation.AggregationStorage
+import io.arabesque.pattern.Pattern
+import io.arabesque.utils.{Logging, SerializableWritable}
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.Writable
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{Logging, SparkContext}
+import org.apache.spark.SparkContext
 import scala.collection.JavaConversions._
 import scala.collection.mutable.Map
+import scala.reflect.ClassTag
 
 /**
  * Results of an Arabesque computation.
@@ -27,7 +31,7 @@ import scala.collection.mutable.Map
   * @tparam E an embedding.
   */
 
-case class ArabesqueResult [E <: Embedding] (
+case class ArabesqueResult [E <: Embedding : ClassTag] (
     sc: SparkContext,
     config: SparkConfiguration[E]) extends Logging {
 
@@ -87,13 +91,29 @@ case class ArabesqueResult [E <: Embedding] (
   }
 
   /**
-   * Get aggregations defined by the user or empty if it does not exist
+   * Get aggregation mappings defined by the user or empty if it does not exist
    */
   def aggregation [K <: Writable, V <: Writable] (name: String): Map[K,V] = {
-    val aggValue = masterEngine.
-      getAggregatedValue [AggregationStorage[K,V]] (name)
+    val aggValue = aggregationStorage [K,V] (name)
     if (aggValue == null) Map.empty[K,V]
     else aggValue.getMapping
+  }
+  
+  /**
+   * Get aggregation mappings defined by the user or empty if it does not exist
+   */
+  def aggregationStorage [K <: Writable, V <: Writable] (name: String): AggregationStorage[K,V] = {
+    masterEngine.getAggregatedValue [AggregationStorage[K,V]] (name)
+  }
+
+  /*
+   * Get aggregations defined by the user as an RDD or empty if it does not exist.
+   */
+  def aggregationRDD [K <: Writable, V <: Writable] (name: String)
+      : RDD[(SerializableWritable[K],SerializableWritable[V])] = {
+    sc.parallelize (this.aggregation [K,V] (name).toSeq.map {
+      case (k,v) => (new SerializableWritable(k), new SerializableWritable(v))
+    }, config.numPartitions)
   }
 
   /**
@@ -105,7 +125,6 @@ case class ArabesqueResult [E <: Embedding] (
       registeredAggregations.map (name => (name,aggregation(name))).toSeq: _*
     )
   }
-  
 
   /**
    * Saves embeddings as sequence files (HDFS): [[org.apache.hadoop.io.NullWritable, ResultEmbedding]]
@@ -155,4 +174,260 @@ case class ArabesqueResult [E <: Embedding] (
   def set(key: String, value: Any): ArabesqueResult[E] = {
     this.copy (sc = sc, config = config.withNewConfig (key,value))
   }
+
+  /**
+   * Auxiliary function for handling computation containers that were not set in
+   * this result
+   */
+  private def getComputationContainer [O <: Embedding]: ComputationContainer[O] = {
+    try {
+      config.computationContainer[O]
+    } catch {
+      case e: RuntimeException =>
+        logError (s"No computation container was set." +
+          s" Please start with 'edgeInducedComputation' or 'vertexInducedComputation' from ArabesqueGraph." +
+          s" Error message: ${e.getMessage}")
+        throw e
+    }
+  }
+
+  /****** Arabesque Scala API: ComputationContainer ******/
+  
+  /**
+   * Updates the process function of the underlying computation container.
+   *
+   * @param process process function to be applied to each embedding produced
+   *
+   * @return new result
+   */
+  def withProcess [O <: Embedding] (process: (O,Computation[O]) => Unit): ArabesqueResult[_] = {
+    val newConfig = config.withNewComputation [O] (
+      getComputationContainer[O].withNewFunctions (processOpt = Some(process)))
+    this.copy (sc = sc, config = newConfig)
+  }
+
+  /**
+   * Updates the filter function of the underlying computation container.
+   *
+   * @param filter filter function that determines whether embeddings must be
+   * further processed or not.
+   *
+   * @return new result
+   */
+  def withFilter (filter: (E,Computation[E]) => Boolean): ArabesqueResult[E] = {
+    val newConfig = config.withNewComputation [E] (
+      getComputationContainer[E].withNewFunctions (filterOpt = Some(filter)))
+    this.copy (sc = sc, config = newConfig)
+  }
+
+  /**
+   * Updates the shouldExpand function of the underlying computation container.
+   *
+   * @param shouldExpand function that determines whether the embeddings
+   * produced must be extended or not.
+   */
+  def withShouldExpand (shouldExpand: (E,Computation[E]) => Boolean): ArabesqueResult[E] = {
+    val newConfig = config.withNewComputation [E] (
+      getComputationContainer[E].withNewFunctions (shouldExpandOpt = Some(shouldExpand)))
+    this.copy (sc = sc, config = newConfig)
+  }
+ 
+  /**
+   * Updates the aggregationFilter function of the underlying computation
+   * container.
+   *
+   * @param filter function that filters embeddings in the aggregation phase.
+   *
+   * @return new result
+   */
+  def withAggregationFilter (filter: (E,Computation[E]) => Boolean): ArabesqueResult[E] = {
+    val newConfig = config.withNewComputation [E] (
+      getComputationContainer[E].withNewFunctions (aggregationFilterOpt = Some(filter)))
+    this.copy (sc = sc, config = newConfig)
+  }
+  
+  /**
+   * Updates the aggregationFilter function regarding patterns instead of
+   * embedding.
+   *
+   * @param filter function that filters embeddings of a given pattern in the
+   * aggregation phase.
+   *
+   * @return new result
+   */
+  def withPatternAggregationFilter (filter: (Pattern,Computation[E]) => Boolean): ArabesqueResult[E] = {
+    val newConfig = config.withNewComputation [E] (
+      getComputationContainer[E].withNewFunctions (pAggregationFilterOpt = Some(filter)))
+    this.copy (sc = sc, config = newConfig)
+  }
+  
+  /**
+   * Updates the aggregationProcess function of the underlying computation
+   * container.
+   *
+   * @param process function to be applied to each embedding in the aggregation
+   * phase.
+   *
+   * @return new result
+   */
+  def withAggregationProcess (process: (E,Computation[E]) => Unit): ArabesqueResult[E] = {
+    val newConfig = config.withNewComputation [E] (
+      getComputationContainer[E].withNewFunctions (aggregationProcessOpt = Some(process)))
+    this.copy (sc = sc, config = newConfig)
+  }
+  
+  /**
+   * Updates the handleNoExpansions function of the underlying computation
+   * container.
+   *
+   * @param func callback for embeddings that do not produce any expansion.
+   *
+   * @return new result
+   */
+  def withHandleNoExpansions (func: (E,Computation[E]) => Unit): ArabesqueResult[E] = {
+    val newConfig = config.withNewComputation [E] (
+      getComputationContainer[E].withNewFunctions (handleNoExpansionsOpt = Some(func)))
+    this.copy (sc = sc, config = newConfig)
+  }
+  
+  /**
+   * Updates the init function of the underlying computation
+   * container.
+   * TODO: this is really necessary for the Scala API ??
+   *
+   * @param init initialization function for the computation
+   *
+   * @return new result
+   */
+  def withInit (init: (Computation[E]) => Unit): ArabesqueResult[E] = {
+    val newConfig = config.withNewComputation [E] (
+      getComputationContainer[E].withNewFunctions (initOpt = Some(init)))
+    this.copy (sc = sc, config = newConfig)
+  }
+  
+  /**
+   * Updates the initAggregations function of the underlying computation
+   * container.
+   * TODO: maybe this function should be *private* as it is more natural for the
+   * user to call *withAggregation* instead of this function
+   *
+   * @param initAggregations function that initializes the aggregations for the computation
+   *
+   * @return new result
+   */
+  def withInitAggregations (initAggregations: (Computation[E]) => Unit): ArabesqueResult[E] = {
+    val newConfig = config.withNewComputation [E] (
+      getComputationContainer[E].withNewFunctions (initAggregationsOpt = Some(initAggregations)))
+    this.copy (sc = sc, config = newConfig)
+  }
+    
+  /**
+   * Adds a new aggregation to the computation
+   *
+   * @param name identifier of this new aggregation
+   * @param reductionFunction the function that aggregates two values
+   * @param endAggregationFunction the function that is applied at the end of
+   * each local aggregation, in the workers
+   * @param persistent whether this aggregation must be persisted in each
+   * superstep or not
+   * @param aggStorageClass custom aggregation storage implementation
+   *
+   * @return new result
+   */
+  def withAggregation [K <: Writable : ClassTag, V <: Writable: ClassTag] (
+      name: String,
+      reductionFunction: ReductionFunction[V],
+      endAggregationFunction: EndAggregationFunction[K,V] = null,
+      persistent: Boolean = false,
+      aggStorageClass: Class[_ <: AggregationStorage[K,V]] = classOf[AggregationStorage[K,V]])
+    : ArabesqueResult[E] = {
+
+    // if the user specifies *Pattern* as the key, we must find the concrete
+    // implementation within the Configuration before registering the
+    // aggregation
+    val _keyClass = implicitly[ClassTag[K]].runtimeClass
+    val keyClass = if (_keyClass == classOf[Pattern]) {
+      SparkConfiguration.get.getPatternClass().asInstanceOf[Class[K]]
+    } else {
+      _keyClass.asInstanceOf[Class[K]]
+    }
+    val valueClass = implicitly[ClassTag[V]].runtimeClass.asInstanceOf[Class[V]]
+
+    // get the old init aggregations function in order to compose it
+    val oldInitAggregation = getComputationContainer[E].initAggregationsOpt match {
+      case Some(initAggregations) => initAggregations
+      case None => (c: Computation[E]) => {}
+    }
+
+    // construct an incremental init aggregations function
+    val initAggregations = (c: Computation[E]) => {
+      oldInitAggregation (c) // init aggregations so far
+      SparkConfiguration.get.registerAggregation (name, aggStorageClass, keyClass, valueClass,
+        persistent, reductionFunction, endAggregationFunction)
+    }
+
+    withInitAggregations (initAggregations)
+
+  }
+  
+  /**
+   * Adds a new aggregation to the computation
+   *
+   * @param name identifier of this new aggregation
+   * @param reductionFunction the function that aggregates two values
+   *
+   * @return new result
+   */
+  def withAggregation [K <: Writable : ClassTag, V <: Writable : ClassTag] (name: String)(
+      reductionFunction: (V,V) => V): ArabesqueResult[E] = {
+    withAggregation [K,V] (name, new ReductionFunctionContainer [V] (reductionFunction))
+  }
+
+  /**
+   * Adds a new aggregation to the computation
+   *
+   * @param name identifier of this new aggregation
+   * @param reductionFunction the function that aggregates two values
+   * @param endAggregationFunction the function that is applied at the end of
+   * each local aggregation, in the workers
+   *
+   * @return new result
+   */
+  def withAggregation [K <: Writable : ClassTag, V <: Writable : ClassTag] (name: String,
+      reductionFunction: (V,V) => V,
+      endAggregationFunction: (AggregationStorage[K,V]) => Unit): ArabesqueResult[E] = {
+    withAggregation [K,V] (name, new ReductionFunctionContainer [V] (reductionFunction),
+      new EndAggregationFunctionContainer [K,V] (endAggregationFunction))
+  }
+  
+  /****** Arabesque Scala API: MasterComputationContainer ******/
+  
+  /**
+   * Updates the init function of the underlying master computation
+   * container.
+   *
+   * @param init initialization function for the master computation
+   *
+   * @return new result
+   */
+  def withMasterInit (init: (MasterComputation) => Unit): ArabesqueResult[E] = {
+    val newConfig = config.withNewMasterComputation (
+      config.masterComputationContainer.withNewFunctions (initOpt = Some(init)))
+    this.copy (sc = sc, config = newConfig)
+  }
+  
+  /**
+   * Updates the compute function of the underlying master computation
+   * container.
+   *
+   * @param compute callback executed at the end of each superstep in the master
+   *
+   * @return new result
+   */
+  def withMasterCompute (compute: (MasterComputation) => Unit): ArabesqueResult[E] = {
+    val newConfig = config.withNewMasterComputation (
+      config.masterComputationContainer.withNewFunctions (computeOpt = Some(compute)))
+    this.copy (sc = sc, config = newConfig)
+  }
+
 }

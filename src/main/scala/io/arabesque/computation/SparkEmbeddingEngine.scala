@@ -23,15 +23,11 @@ import scala.reflect.ClassTag
 case class SparkEmbeddingEngine[O <: Embedding](
     partitionId: Int,
     superstep: Int,
-    hadoopConf: SerializableConfiguration,
     accums: Map[String,Accumulator[_]],
     // TODO do not broadcast if user's code does not requires it
     previousAggregationsBc: Broadcast[_])
   extends SparkEngine[O] {
 
-  // configuration has input parameters, computation knows how to ensure
-  // arabesque's computational model
-  @transient lazy val configuration: Configuration[O] = Configuration.get[Configuration[O]]
   @transient lazy val computation: Computation[O] = {
     val computation = configuration.createComputation [O]
     computation.setUnderlyingExecutionEngine (this)
@@ -72,12 +68,6 @@ case class SparkEmbeddingEngine[O <: Embedding](
    * the superstep in this partition
    */
   def init() = {
-    //configuration = Configuration.get()
-
-    // set log level (from spark logging)
-    val logLevel = Level.toLevel (configuration.getLogLevel)
-    Logger.getLogger(logName).setLevel (logLevel)
-
     if (configuration.getEmbeddingClass() == null)
       configuration.setEmbeddingClass (computation.getEmbeddingClass())
 
@@ -140,7 +130,6 @@ case class SparkEmbeddingEngine[O <: Embedding](
         case Some(embedding) =>
           internalCompute (embedding)
           numEmbeddingsProcessed += 1
-
       }
     }
   }
@@ -286,7 +275,7 @@ case class SparkEmbeddingEngine[O <: Embedding](
    * @param name aggregator's name
    * @return an aggregation storage with the specified name
    */
-  private def getAggregationStorage[K <: Writable, V <: Writable](name: String)
+  override def getAggregationStorage[K <: Writable, V <: Writable](name: String)
       : AggregationStorage[K,V] = aggregationStorages.get(name) match {
     case Some(aggregationStorage : AggregationStorage[K,V]) => aggregationStorage
     case None =>
@@ -321,7 +310,7 @@ case class SparkEmbeddingEngine[O <: Embedding](
       // instantiate the embedding writer (sequence file)
       val superstepPath = new Path(outputPath, s"${getSuperstep}")
       val partitionPath = new Path(superstepPath, s"${partitionId}")
-      val embeddingWriter = SequenceFile.createWriter(hadoopConf.value,
+      val embeddingWriter = SequenceFile.createWriter(configuration.hadoopConf,
         SeqWriter.file(partitionPath),
         SeqWriter.keyClass(classOf[NullWritable]),
         SeqWriter.valueClass(resEmbeddingClass))
@@ -352,7 +341,7 @@ case class SparkEmbeddingEngine[O <: Embedding](
 
     case None =>
       logInfo (s"[partitionId=${getPartitionId}] Creating output stream")
-      val fs = FileSystem.get(hadoopConf.value)
+      val fs = FileSystem.get(configuration.hadoopConf)
       val superstepPath = new Path(outputPath, s"${getSuperstep}")
       val partitionPath = new Path(superstepPath, s"${partitionId}")
       val outputStream = new OutputStreamWriter(fs.create(partitionPath))
@@ -363,9 +352,6 @@ case class SparkEmbeddingEngine[O <: Embedding](
   
   // other functions
   override def getPartitionId() = partitionId
-
-  override def getNumberPartitions() =
-    configuration.getInteger ("num_partitions", 10)
 
   override def getSuperstep() = superstep
 

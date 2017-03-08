@@ -3,7 +3,7 @@ package io.arabesque.computation;
 import io.arabesque.aggregation.AggregationStorage;
 import io.arabesque.embedding.Embedding;
 import io.arabesque.pattern.Pattern;
-import net.openhft.koloboke.collect.IntCollection;
+import com.koloboke.collect.IntCollection;
 import org.apache.hadoop.io.Writable;
 
 public interface Computation<E extends Embedding> {
@@ -43,6 +43,8 @@ public interface Computation<E extends Embedding> {
 
     // {{{ Aggregation-related stuff
     <K extends Writable, V extends Writable> AggregationStorage<K, V> readAggregation(String name);
+    
+    <K extends Writable, V extends Writable> AggregationStorage<K, V> getAggregationStorage(String name);
 
     <K extends Writable, V extends Writable> void map(String name, K key, V value);
 

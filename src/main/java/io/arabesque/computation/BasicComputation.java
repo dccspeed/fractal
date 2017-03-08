@@ -5,10 +5,10 @@ import io.arabesque.conf.Configuration;
 import io.arabesque.embedding.Embedding;
 import io.arabesque.graph.MainGraph;
 import io.arabesque.pattern.Pattern;
-import net.openhft.koloboke.collect.IntCollection;
-import net.openhft.koloboke.collect.set.hash.HashIntSet;
-import net.openhft.koloboke.collect.set.hash.HashIntSets;
-import net.openhft.koloboke.function.IntConsumer;
+import com.koloboke.collect.IntCollection;
+import com.koloboke.collect.set.hash.HashIntSet;
+import com.koloboke.collect.set.hash.HashIntSets;
+import com.koloboke.function.IntConsumer;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
@@ -159,6 +159,11 @@ public abstract class BasicComputation<E extends Embedding> implements Computati
     @Override
     public <K extends Writable, V extends Writable> AggregationStorage<K, V> readAggregation(String name) {
         return underlyingExecutionEngine.getAggregatedValue(name);
+    }
+    
+    @Override
+    public <K extends Writable, V extends Writable> AggregationStorage<K, V> getAggregationStorage(String name) {
+        return underlyingExecutionEngine.getAggregationStorage(name);
     }
 
     @Override

@@ -1,11 +1,14 @@
 package io.arabesque
 
+import io.arabesque.utils.Logging
+
 import java.util.UUID
 
+import io.arabesque.computation._
 import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding._
-import org.apache.spark.Logging
 
+import scala.reflect.ClassTag
 
 /**
   *  Creates an [[io.arabesque.ArabesqueGraph]] used for calling arabesque graph algorithms
@@ -17,22 +20,24 @@ import org.apache.spark.Logging
 class ArabesqueGraph(
     path: String,
     local: Boolean,
-    arab: ArabesqueContext) extends Logging {
+    arab: ArabesqueContext,
+    logLevel: String) extends Logging {
 
   private val uuid: UUID = UUID.randomUUID
   def tmpPath: String = s"${arab.tmpPath}/graph-${uuid}"
 
-  def this(path: String, arab: ArabesqueContext) = {
-    this (path, false, arab)
+  def this(path: String, arab: ArabesqueContext, logLevel: String) = {
+    this (path, false, arab, logLevel)
   }
 
-  private def resultHandler [E <: Embedding] (
+  private def resultHandler [E <: Embedding : ClassTag] (
       config: SparkConfiguration[E]): ArabesqueResult[E] = {
+    config.set ("log_level", logLevel)
     new ArabesqueResult [E] (arab.sparkContext, config)
   }
 
   /** motifs */
-  def motifs [E <: Embedding] (config: SparkConfiguration[E]): ArabesqueResult[E] = {
+  def motifs [E <: Embedding : ClassTag] (config: SparkConfiguration[E]): ArabesqueResult[E] = {
     resultHandler [E] (config)
   }
 
@@ -85,8 +90,8 @@ class ArabesqueGraph(
     * val graph = arab.textFile(input_graph)
     * val res = graph.fsm(support, max_size)
     *
-    * res.embedding.count
-    * res.embedding.collect
+    * res.embeddings.count
+    * res.embeddings.collect
     *
     * }}}
     *
@@ -123,8 +128,8 @@ class ArabesqueGraph(
     *   val res = graph.triangles()
     *
     *   // The cube graph has no triangle
-    *   res.embedding.count()
-    *   res.embedding.collect()
+    *   res.embeddings.count()
+    *   res.embeddings.collect()
     * }}}
    *
    * @return an [[io.arabesque.ArabesqueResult]] carrying odags and embeddings
@@ -153,8 +158,8 @@ class ArabesqueGraph(
     *   val graph = arab.textFile(input_graph)
     *   val res = graph.fsm()
     *
-    *   res.embedding.count()
-    *   res.embedding.collect()
+    *   res.embeddings.count()
+    *   res.embeddings.collect()
     * }}}
     *
     *
@@ -170,5 +175,98 @@ class ArabesqueGraph(
     config.set ("arabesque.clique.maxsize", maxSize)
     config.set ("computation", "io.arabesque.gmlib.clique.CliqueComputation")
     cliques (config)
+  }
+  
+  /** cliques percolation */
+  def cliquesPercolation(config: SparkConfiguration[_ <: Embedding]): ArabesqueResult[_] = {
+    resultHandler (config)
+  }
+
+  def cliquesPercolation(maxSize: Int): ArabesqueResult[_] = {
+    val config = new SparkConfiguration [VertexInducedEmbedding]
+    config.set ("input_graph_path", path)
+    config.set ("input_graph_local", local)
+    config.set ("output_path", s"${tmpPath}/cliques-${config.getUUID}")
+    config.set ("arabesque.clique.maxsize", maxSize)
+    config.set ("computation", "io.arabesque.gmlib.cliqueperc.CliquePercComputation")
+    cliques (config)
+  }
+
+  /** api for custom computations **/
+
+  /**
+   * Returns a new result with a configurable computation container.
+   *
+    * {{{
+    *   import io.arabesque.ArabesqueContext
+    *   val input_graph = "ArabesqueDir/data/cube.graph"
+    *
+    *   val graph = arab.textFile(input_graph)
+    *   val res = arabGraph.
+    *     edgeInducedComputation {(e,c) =>
+    *       if (e.getNumWords == 3) {
+    *         c.output (e)
+    *       }
+    *     }.
+    *     withFilter ((e,c) => e.getNumWords == 3).
+    *     withShouldExpand ((e,c) => e.getNumWords < 3)
+    *
+    *   res.embeddings.count()
+    *   res.embeddings.collect()
+    * }}}
+    *
+    * @param process function that is called for each embedding produced
+    *
+    * @return an [[io.arabesque.ArabesqueResult]] carrying odags and embeddings
+   */
+  def edgeInducedComputation(process: (EdgeInducedEmbedding, Computation[EdgeInducedEmbedding]) => Unit)
+      : ArabesqueResult[EdgeInducedEmbedding] = {
+    val computation: Computation[EdgeInducedEmbedding] =
+      new EComputationContainer(processOpt = Some(process))
+    val config = new SparkConfiguration[EdgeInducedEmbedding].withNewComputation (computation)
+    config.set ("input_graph_path", path)
+    config.set ("input_graph_local", local)
+    config.set ("output_path", s"${tmpPath}/edge-computation-${config.getUUID}")
+    customComputation [EdgeInducedEmbedding] (config)
+  }
+
+  /**
+   * Returns a new result with a configurable computation container.
+   *
+    * {{{
+    *   import io.arabesque.ArabesqueContext
+    *   val input_graph = "ArabesqueDir/data/cube.graph"
+    *
+    *   val graph = arab.textFile(input_graph)
+    *   val res = arabGraph.
+    *     vertexInducedComputation {(e,c) =>
+    *       if (e.getNumWords == 3) {
+    *         c.output (e)
+    *       }
+    *     }.
+    *     withFilter ((e,c) => e.getNumWords == 3).
+    *     withShouldExpand ((e,c) => e.getNumWords < 3)
+    *
+    *   res.embeddings.count()
+    *   res.embeddings.collect()
+    * }}}
+    *
+    * @param process function that is called for each embedding produced
+    *
+    * @return an [[io.arabesque.ArabesqueResult]] carrying odags and embeddings
+   */
+  def vertexInducedComputation(process: (VertexInducedEmbedding, Computation[VertexInducedEmbedding]) => Unit)
+      : ArabesqueResult[VertexInducedEmbedding] = {
+    val computation: Computation[VertexInducedEmbedding] =
+      new VComputationContainer(processOpt = Some(process))
+    val config = new SparkConfiguration[VertexInducedEmbedding].withNewComputation (computation)
+    config.set ("input_graph_path", path)
+    config.set ("input_graph_local", local)
+    config.set ("output_path", s"${tmpPath}/vertex-computation-${config.getUUID}")
+    customComputation [VertexInducedEmbedding] (config)
+  }
+
+  def customComputation [E <: Embedding: ClassTag] (config: SparkConfiguration[E]): ArabesqueResult[E] = {
+    resultHandler [E] (config)
   }
 }

@@ -4,10 +4,11 @@ import io.arabesque.aggregation.AggregationStorage
 import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding._
 import io.arabesque.odag._
+import io.arabesque.utils.Logging
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.{NullWritable, Writable}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{Logging, SparkContext}
+import org.apache.spark.SparkContext
 import scala.reflect.ClassTag
 
 import scala.collection.mutable.Map
@@ -18,9 +19,21 @@ trait SparkMasterEngine [E <: Embedding]
   var sc: SparkContext = _
 
   def config: SparkConfiguration[E]
-  def init(): Unit
+  def init(): Unit = {
+    // set log level
+    logInfo (s"Setting log level to ${config.getLogLevel}")
+    setLogLevel (config.getLogLevel)
+    sc.setLogLevel (config.getLogLevel.toUpperCase)
+    config.setIfUnset ("num_partitions", sc.defaultParallelism)
+    config.setHadoopConfig (sc.hadoopConfiguration)
+  }
   def compute(): Unit
   def finalizeComputation(): Unit
+
+  def numPartitions: Int = config.numPartitions
+  
+  // for compatibility with the previous version (Giraph)
+  def getNumberPartitions: Int = numPartitions
 
   /**
    * Merges or replaces the aggregations for the next superstep. We can have one

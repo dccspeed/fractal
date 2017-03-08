@@ -16,19 +16,13 @@ class CubeGraphSuite extends FunSuite with BeforeAndAfterAll {
 
   /** set up spark context */
   override def beforeAll: Unit = {
-    // configure log levels
-    import org.apache.log4j.{Level, Logger}
-    Logger.getLogger("org").setLevel(Level.ERROR)
-    Logger.getLogger("akka").setLevel(Level.ERROR)
-    Logger.getLogger("io").setLevel(Level.ERROR)
-
     // spark conf and context
     val conf = new SparkConf().
       setMaster(master).
       setAppName(appName)
 
     sc = new SparkContext(conf)
-    arab = new ArabesqueContext(sc)
+    arab = new ArabesqueContext(sc, "warn")
 
     val loader = classOf[SparkArabesqueSuite].getClassLoader
 
@@ -53,7 +47,7 @@ class CubeGraphSuite extends FunSuite with BeforeAndAfterAll {
 
     for(k <- 0 to (numEmbedding.size - 1)) {
       val motifsRes = arabGraph.motifs(k).
-        set ("log_level", "debug")
+        set ("num_partitions", 10)
       val odags = motifsRes.odags
       val embeddings = motifsRes.embeddings
 
@@ -68,8 +62,7 @@ class CubeGraphSuite extends FunSuite with BeforeAndAfterAll {
     val numEmbedding = List(0, 8, 12, 0)
 
     for(k <- 0 to (numEmbedding.size - 1)) {
-      val cliqueRes = arabGraph.cliques(k).
-        set ("log_level", "debug")
+      val cliqueRes = arabGraph.cliques(k)
 
       val embeddings = cliqueRes.embeddings
 
@@ -88,8 +81,7 @@ class CubeGraphSuite extends FunSuite with BeforeAndAfterAll {
     val numEmbedding = List(0, 0, 9, 24)
 
     for(k <- 0 to (numEmbedding.size -1)) {
-      val motifsRes = arabGraph.fsm(support, k).
-        set ("log_level", "debug")
+      val motifsRes = arabGraph.fsm(support, k)
 
       val embeddings = motifsRes.embeddings
 
@@ -105,8 +97,7 @@ class CubeGraphSuite extends FunSuite with BeforeAndAfterAll {
     // Expected output
     val numTriangles = 0
 
-    val trianglesRes = arabGraph.triangles().
-      set ("log_level", "debug")
+    val trianglesRes = arabGraph.triangles()
 
     val embeddings = trianglesRes.embeddings
 

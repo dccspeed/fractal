@@ -1,7 +1,6 @@
 package io.arabesque.embedding
 
-import java.io.DataInput
-
+import java.io.{DataInput, DataOutput}
 
 /** An edge induced embedding
   *
@@ -10,21 +9,26 @@ import java.io.DataInput
   *
   * @param words integer array indicating the embedding edges
   */
-case class EEmbedding(var words: Array[Int]) extends ResultEmbedding {
+case class EEmbedding(var words: Array[(Int,Int)]) extends ResultEmbedding[(Int,Int)] {
 
   // must have because we are messing around with Writables
   def this() = {
-    this(null)
+    this(null.asInstanceOf[Array[(Int,Int)]])
   }
-  
+
   def combinations(k: Int): Iterator[EEmbedding] = {
     words.combinations(k).map (new EEmbedding(_))
   }
 
+  override def write(out: DataOutput): Unit = {
+    out.writeInt (words.size)
+    words.foreach {w => out.writeInt(w._1); out.writeInt(w._2)}
+  }
+
   override def readFields(in: DataInput): Unit = {
     val wordsLen = in.readInt
-    words = new Array [Int] (wordsLen)
-    for (i <- 0 until wordsLen) words(i) = in.readInt
+    words = new Array [(Int,Int)] (wordsLen)
+    for (i <- 0 until wordsLen) words(i) = (in.readInt, in.readInt)
   }
 
   override def toString = {
@@ -38,11 +42,10 @@ case class EEmbedding(var words: Array[Int]) extends ResultEmbedding {
 object EEmbedding {
   def apply (strEmbedding: String) = {
     val edgesStr = strEmbedding split "\\s+"
-    val edges = new Array[Int](edgesStr.size * 2)
-    for (i <- 0 until edges.size by 2) {
+    val edges = new Array[(Int,Int)](edgesStr.size)
+    for (i <- 0 until edges.size) {
       val words = (edgesStr(i) split "-").map (_.toInt)
-      edges(i) = words(0)
-      edges(i+1) = words(1)
+      edges(i) = (words(0), words(1))
     }
 
     new EEmbedding (edges)

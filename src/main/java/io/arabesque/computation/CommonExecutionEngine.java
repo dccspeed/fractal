@@ -23,8 +23,6 @@ public interface CommonExecutionEngine<O extends Embedding> {
 
     void aggregate(String name, LongWritable value);
     
-    void output(String outputString);
-
     void output(Embedding embedding);
 
 }

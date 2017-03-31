@@ -225,8 +225,4 @@ public abstract class BasicComputation<E extends Embedding> implements Computati
         }
     }
 
-    @Override
-    public void output(String outputString) {
-        underlyingExecutionEngine.output(outputString);
-    }
 }

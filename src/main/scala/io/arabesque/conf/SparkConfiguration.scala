@@ -238,6 +238,7 @@ case class SparkConfiguration[O <: Embedding](confs: Map[String,Any])
     // output
     updateIfExists ("output_active", CONF_OUTPUT_ACTIVE)
     updateIfExists ("output_path", CONF_OUTPUT_PATH)
+    updateIfExists ("output_format", CONF_OUTPUT_FORMAT)
 
     // aggregation
     updateIfExists ("incremental_aggregation", CONF_INCREMENTAL_AGGREGATION)
@@ -339,4 +340,8 @@ object SparkConfiguration {
   // computation container
   val COMPUTATION_CONTAINER = "computation_container"
   val MASTER_COMPUTATION_CONTAINER = "master_computation_container"
+
+  // output format
+  val OUTPUT_PLAIN_TEXT = "plain_text"
+  val OUTPUT_SEQUENCE_FILE = "sequence_file"
 }

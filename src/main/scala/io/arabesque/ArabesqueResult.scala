@@ -54,8 +54,8 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
   /**
    * Output: embeddings
    */
-  private var embeddingsOpt: Option[RDD[ResultEmbedding]] = None
-  def embeddings: RDD[ResultEmbedding] = embeddingsOpt match {
+  private var embeddingsOpt: Option[RDD[ResultEmbedding[_]]] = None
+  def embeddings: RDD[ResultEmbedding[_]] = embeddingsOpt match {
     case None if config.isOutputActive =>
       val _embeddings = masterEngine.getEmbeddings
       embeddingsOpt = Some(_embeddings)

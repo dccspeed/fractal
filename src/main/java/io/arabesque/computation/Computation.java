@@ -37,7 +37,6 @@ public interface Computation<E extends Embedding> {
     // }}}
 
     // {{{ Output
-    void output(String outputString);
     void output(Embedding embedding);
     // }}}
 

@@ -1,27 +1,22 @@
 package io.arabesque.embedding
 
-import java.io.DataOutput
+import io.arabesque.conf.SparkConfiguration
+import io.arabesque.graph.BasicMainGraph
 
 import org.apache.hadoop.io.Writable
-
 
 /**
   *
   */
-trait ResultEmbedding extends Writable {
-  def words: Array[Int]
-  def combinations(k: Int): Iterator[ResultEmbedding]
-
-  override def write(out: DataOutput): Unit = {
-    out.writeInt (words.size)
-    words.foreach (w => out.writeInt(w))
-  }
+trait ResultEmbedding[T] extends Writable {
+  def words: Array[T]
+  def combinations(k: Int): Iterator[ResultEmbedding[T]]
 
   override def hashCode(): Int = {
     var result = this.words.length
     var i = 0
     while (i < this.words.length) {
-      result = 31 * result + this.words(i)
+      result = 31 * result + this.words(i).hashCode
       i += 1
     }
     result
@@ -29,10 +24,10 @@ trait ResultEmbedding extends Writable {
 
   override def equals(_other: Any): Boolean = {
     if (_other == null || getClass != _other.getClass) return false
-    return equals (_other.asInstanceOf[ResultEmbedding])
+    return equals (_other.asInstanceOf[ResultEmbedding[T]])
   }
 
-  def equals(other: ResultEmbedding): Boolean = {
+  def equals(other: ResultEmbedding[T]): Boolean = {
     if (other == null) return false
 
     if (this.words.length != other.words.length) return false
@@ -49,16 +44,28 @@ trait ResultEmbedding extends Writable {
 }
 
 object ResultEmbedding {
+
   def apply (strEmbedding: String) = {
     if (strEmbedding contains "-")
       EEmbedding (strEmbedding)
     else
       VEmbedding (strEmbedding)
   }
+
   def apply(embedding: Embedding) = {
-    if (embedding.isInstanceOf[EdgeInducedEmbedding])
-      EEmbedding (embedding.getEdges.toIntArray)
-    else
-      VEmbedding (embedding.getVertices.toIntArray)
+    if (embedding.isInstanceOf[EdgeInducedEmbedding]) {
+      val mainGraph = SparkConfiguration.get.getMainGraph[BasicMainGraph]
+      val edges = new Array [(Int,Int)] (embedding.getNumEdges)
+      val edgesIter = embedding.getEdges.iterator
+      var i = 0
+      while (edgesIter.hasNext) {
+        val e = mainGraph.getEdge(edgesIter.next)
+        edges(i) = (e.getSourceId, e.getDestinationId)
+        i += 1
+      }
+      new EEmbedding (edges)
+    } else {
+      new VEmbedding (embedding.getVertices.toIntArray)
+    }
   }
 }

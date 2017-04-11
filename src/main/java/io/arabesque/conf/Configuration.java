@@ -70,6 +70,8 @@ public class Configuration<O extends Embedding> implements java.io.Serializable 
 
     public static final String CONF_OUTPUT_ACTIVE = "arabesque.output.active";
     public static final boolean CONF_OUTPUT_ACTIVE_DEFAULT = true;
+    public static final String CONF_OUTPUT_FORMAT = "arabesque.output.format";
+    public static final String CONF_OUTPUT_FORMAT_DEFAULT = "plain_text";
 
     public static final String INFO_PERIOD = "arabesque.info.period";
     public static final long INFO_PERIOD_DEFAULT = 60000;
@@ -480,6 +482,10 @@ public class Configuration<O extends Embedding> implements java.io.Serializable 
 
     public void setOutputPath(String outputPath) {
         this.outputPath = outputPath;
+    }
+
+    public String getOutputFormat() {
+       return getString(CONF_OUTPUT_FORMAT, CONF_OUTPUT_FORMAT_DEFAULT);
     }
 
     public MasterComputation createMasterComputation() {

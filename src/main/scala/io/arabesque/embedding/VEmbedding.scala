@@ -1,7 +1,6 @@
 package io.arabesque.embedding
 
-import java.io.DataInput
-
+import java.io.{DataInput, DataOutput}
 
 /**
   * A vertex induced embedding
@@ -11,7 +10,7 @@ import java.io.DataInput
   *
   * @param words integer array indicating the embedding vertices
   */
-case class VEmbedding(var words: Array[Int]) extends ResultEmbedding {
+case class VEmbedding(var words: Array[Int]) extends ResultEmbedding[Int] {
 
   // must have because we are messing around with Writables
   def this() = {
@@ -20,6 +19,11 @@ case class VEmbedding(var words: Array[Int]) extends ResultEmbedding {
 
   def combinations(k: Int): Iterator[VEmbedding] = {
     words.combinations(k).map (new VEmbedding(_))
+  }
+
+  override def write(out: DataOutput): Unit = {
+    out.writeInt (words.size)
+    words.foreach (w => out.writeInt(w))
   }
 
   override def readFields(in: DataInput): Unit = {
@@ -36,7 +40,6 @@ case class VEmbedding(var words: Array[Int]) extends ResultEmbedding {
 
 /**
   * A vertex induced embedding
-  *
   */
 object VEmbedding {
   def apply (strEmbedding: String) = {

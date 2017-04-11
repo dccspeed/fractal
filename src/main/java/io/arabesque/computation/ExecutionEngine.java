@@ -104,15 +104,14 @@ public class ExecutionEngine<O extends Embedding>
         }
     }
 
-    @Override
-    public void output(String outputString) {
+    private void outputString(String outputString) {
         workerContext.output(outputString);
         numberOfEmbeddingsOutput++;
     }
 
     @Override
     public void output(Embedding embedding) {
-       output(embedding.toOutputString());
+       outputString(embedding.toOutputString());
     }
 
     @Override

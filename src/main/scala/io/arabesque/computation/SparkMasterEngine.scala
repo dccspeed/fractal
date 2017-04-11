@@ -73,31 +73,36 @@ trait SparkMasterEngine [E <: Embedding]
   def getOdags: RDD[_ <: BasicODAG] = {
     sc.makeRDD (Seq.empty[BasicODAG])
   }
-  def getEmbeddings: RDD[ResultEmbedding] = {
+
+  def getEmbeddings: RDD[ResultEmbedding[_]] = {
 
     val embeddPath = s"${config.getOutputPath}"
     val fs = FileSystem.get (sc.hadoopConfiguration)
 
     if (config.isOutputActive && fs.exists (new Path (embeddPath))) {
       logInfo (s"Reading embedding words from: ${config.getOutputPath}")
-      //sc.textFile (s"${embeddPath}/*").map (ResultEmbedding(_))
+      config.getOutputFormat match {
+        case SparkConfiguration.OUTPUT_PLAIN_TEXT =>
+          sc.textFile (s"${embeddPath}/*").map (ResultEmbedding(_))
 
-      // we must decide at runtime the concrete Writable to be used
-      val resEmbeddingClass = if (config.getEmbeddingClass == classOf[EdgeInducedEmbedding])
-        classOf[EEmbedding]
-      else if (config.getEmbeddingClass == classOf[VertexInducedEmbedding])
-        classOf[VEmbedding]
-      else
-        classOf[ResultEmbedding] // not allowed, will crash and should not happen
+        case SparkConfiguration.OUTPUT_SEQUENCE_FILE =>
+          // we must decide at runtime the concrete Writable to be used
+          val resEmbeddingClass = if (config.getEmbeddingClass == classOf[EdgeInducedEmbedding])
+            classOf[EEmbedding]
+          else if (config.getEmbeddingClass == classOf[VertexInducedEmbedding])
+            classOf[VEmbedding]
+          else
+            classOf[ResultEmbedding[_]] // not allowed, will crash and should not happen
 
-      sc.sequenceFile (s"${embeddPath}/*", classOf[NullWritable], resEmbeddingClass).
-        map {
-          case (_,e: EEmbedding) => e.copy()
-          case (_,e: VEmbedding) => e.copy()
-        }. // writables are reused, workaround on that
-        asInstanceOf[RDD[ResultEmbedding]]
+          sc.sequenceFile (s"${embeddPath}/*", classOf[NullWritable], resEmbeddingClass).
+          map {
+            case (_,e: EEmbedding) => e.copy()
+            case (_,e: VEmbedding) => e.copy()
+          }. // writables are reused, workaround on that
+          asInstanceOf[RDD[ResultEmbedding[_]]]
+      }
     } else {
-      sc.emptyRDD[ResultEmbedding]
+      sc.emptyRDD[ResultEmbedding[_]]
     }
   }
 }

@@ -29,12 +29,6 @@ trait ODAGEngine[
     C <: ODAGEngine[E,O,S,C]
   ] extends SparkEngine[E] {
 
-  // superstep arguments
-  val partitionId: Int
-  val superstep: Int
-  val accums: Map[String,Accumulator[_]]
-  val previousAggregationsBc: Broadcast[_]
- 
   // update aggregations before flush
   def withNewAggregations(aggregationsBc: Broadcast[_]): C
 
@@ -45,16 +39,7 @@ trait ODAGEngine[
   var currentEmbeddingStashOpt: Option[S] = None
   var nextEmbeddingStash: S = _
   @transient var odagStashReader: EfficientReader[E] = _
-
   
-  @transient lazy val computation: Computation[E] = {
-    val computation = configuration.createComputation [E]
-    computation.setUnderlyingExecutionEngine (this)
-    computation.init()
-    computation.initAggregations()
-    computation
-  }
-
   // reader parameters
   lazy val numBlocks: Int =
     configuration.getInteger ("numBlocks", getNumberPartitions() * getNumberPartitions())
@@ -63,24 +48,6 @@ trait ODAGEngine[
 
   lazy val numPartitionsPerWorker = configuration.numPartitionsPerWorker
  
-  // aggregation storages
-  @transient lazy val aggregationStorageFactory = new AggregationStorageFactory
-  lazy val aggregationStorages
-    : Map[String,AggregationStorage[_ <: Writable, _ <: Writable]] = Map.empty
-
-  // accumulators
-  var numEmbeddingsProcessed: Long = 0
-  var numEmbeddingsGenerated: Long = 0
-  var numEmbeddingsOutput: Long = 0
-
-  // TODO: tirar isso !!!
-  def init(): Unit = {}
-
-  // output
-  @transient var embeddingWriterOpt: Option[SeqWriter] = None
-  @transient var outputStreamOpt: Option[OutputStreamWriter] = None
-  @transient lazy val outputPath: Path = new Path(configuration.getOutputPath)
-
   /**
    * Releases resources allocated for this instance
    */
@@ -182,46 +149,6 @@ trait ODAGEngine[
   }
 
   /**
-   * Any Spark accumulator used for stats accounting is flushed here
-   */
-  private def flushStatsAccumulators: Unit = {
-    // accumulates an aggregator in the corresponding spark accumulator
-    def accumulate[T : ClassTag](it: T, accum: Accumulator[_]) = {
-      accum.asInstanceOf[Accumulator[T]] += it
-    }
-    logInfo (s"Embeddings processed: ${numEmbeddingsProcessed}")
-    accumulate (numEmbeddingsProcessed,
-      accums(ODAGMasterEngine.AGG_EMBEDDINGS_PROCESSED))
-    logInfo (s"Embeddings generated: ${numEmbeddingsGenerated}")
-    accumulate (numEmbeddingsGenerated,
-      accums(ODAGMasterEngine.AGG_EMBEDDINGS_GENERATED))
-    logInfo (s"Embeddings output: ${numEmbeddingsOutput}")
-    accumulate (numEmbeddingsOutput,
-      accums(ODAGMasterEngine.AGG_EMBEDDINGS_OUTPUT))
-  }
-
-  /**
-   * Flushes a given aggregation.
-   *
-   * @param name name of the aggregation
-   * @return iterator of aggregation storages
-   * TODO: split aggregations before flush them and review the return type
-   */
-  def flushAggregationsByName(name: String) = {
-    // the following function does the final local aggregation
-    // e.g. for motifs, turns quick patterns into canonical ones
-    def aggregate[K <: Writable, V <: Writable](agg1: AggregationStorage[K,V], agg2: AggregationStorage[_,_]) = {
-      agg1.finalLocalAggregate (agg2.asInstanceOf[AggregationStorage[K,V]])
-      agg1
-    }
-    val aggStorage = getAggregationStorage(name)
-    val finalAggStorage = aggregate (
-      aggregationStorageFactory.createAggregationStorage (name),
-      aggStorage)
-    Iterator(finalAggStorage)
-  }
-
-  /**
    * Called whenever an embedding survives the expand/filter process and must be
    * carried on to the next superstep
    *
@@ -237,128 +164,6 @@ trait ODAGEngine[
   override def processExpansion(expansion: E) = {
     nextEmbeddingStash.addEmbedding (expansion)
     numEmbeddingsGenerated += 1
-  }
-
-  /**
-   * Returns the current value of an aggregation installed in this execution
-   * engine.
-   *
-   * @param name name of the aggregation
-   * @return the aggregated value or null if no aggregation was found
-   */
-  override def getAggregatedValue[A <: Writable](name: String): A =
-    previousAggregationsBc.value.asInstanceOf[Map[String,A]].get(name) match {
-      case Some(aggStorage) => aggStorage
-      case None =>
-        logWarning (s"Previous aggregation storage $name not found")
-        null.asInstanceOf[A]
-    }
-
-  /**
-   * Maps (key,value) to the respective local aggregator
-   *
-   * @param name identifies the aggregator
-   * @param key key to account for
-   * @param value value to be accounted for key in that aggregator
-   * 
-   */
-  override def map[K <: Writable, V <: Writable](name: String, key: K, value: V) = {
-    val aggStorage = getAggregationStorage[K,V] (name)
-    aggStorage.aggregateWithReusables (key, value)
-  }
-
-  /**
-   * Retrieves or creates the local aggregator for the specified name.
-   * Obs. the name must match to the aggregator's metadata configured in
-   * *initAggregations* (Computation)
-   *
-   * @param name aggregator's name
-   * @return an aggregation storage with the specified name
-   */
-  override def getAggregationStorage[K <: Writable, V <: Writable](name: String)
-      : AggregationStorage[K,V] = aggregationStorages.get(name) match {
-    case Some(aggregationStorage : AggregationStorage[K,V]) => aggregationStorage
-    case None =>
-      val aggregationStorage = aggregationStorageFactory.createAggregationStorage (name)
-      aggregationStorages.update (name, aggregationStorage)
-      aggregationStorage.asInstanceOf[AggregationStorage[K,V]]
-    case Some(aggregationStorage) =>
-      val e = new RuntimeException (s"Unexpected type for aggregation ${aggregationStorage}")
-      logError (s"Wrong type of aggregation storage: ${e.getMessage}")
-      throw e
-  }
-
-  /**
-   * TODO: change srialization ??
-   */
-  override def output(embedding: Embedding) = embeddingWriterOpt match {
-    case Some(embeddingWriter) =>
-      val resEmbedding = ResultEmbedding (embedding)
-      embeddingWriter.append (NullWritable.get, resEmbedding)
-      numEmbeddingsOutput += 1
-
-    case None =>
-      // we must decide at runtime the concrete Writable to be used
-      val resEmbeddingClass = if (embedding.isInstanceOf[EdgeInducedEmbedding])
-        classOf[EEmbedding]
-      else if (embedding.isInstanceOf[VertexInducedEmbedding])
-        classOf[VEmbedding]
-      else
-        classOf[ResultEmbedding] // not allowed, will crash and should not happen
-
-      // instantiate the embedding writer (sequence file)
-      val superstepPath = new Path(outputPath, s"${getSuperstep}")
-      val partitionPath = new Path(superstepPath, s"${partitionId}")
-      val embeddingWriter = SequenceFile.createWriter(configuration.hadoopConf,
-        SeqWriter.file(partitionPath),
-        SeqWriter.keyClass(classOf[NullWritable]),
-        SeqWriter.valueClass(resEmbeddingClass))
-
-      embeddingWriterOpt = Some(embeddingWriter)
-      
-      val resEmbedding = ResultEmbedding (embedding)
-      embeddingWriter.append (NullWritable.get, resEmbedding)
-      numEmbeddingsOutput += 1
-  }
-
-  /**
-   * Maybe output string to fileSystem
-   *
-   * @param outputString data to write
-   */
-  override def output(outputString: String) = {
-    if (configuration.isOutputActive) {
-      writeOutput(outputString)
-      numEmbeddingsOutput += 1
-    }
-  }
-
-  private def writeOutput(outputString: String) = outputStreamOpt match {
-    case Some(outputStream) =>
-      outputStream.write(outputString)
-      outputStream.write("\n")
-
-    case None =>
-      logInfo (s"[partitionId=${getPartitionId}] Creating output stream")
-      val fs = FileSystem.get(configuration.hadoopConf)
-      val superstepPath = new Path(outputPath, s"${getSuperstep}")
-      val partitionPath = new Path(superstepPath, s"${partitionId}")
-      val outputStream = new OutputStreamWriter(fs.create(partitionPath))
-      outputStreamOpt = Some(outputStream)
-      outputStream.write(outputString)
-      outputStream.write("\n")
-  }
-  
-  // other functions
-  override def getPartitionId() = partitionId
-
-  override def getSuperstep() = superstep
-
-  override def aggregate(name: String, value: LongWritable) = accums.get (name) match {
-    case Some(accum) =>
-      accum.asInstanceOf[Accumulator[Long]] += value.get
-    case None => 
-      logWarning (s"Aggregator/Accumulator $name not found")
   }
 }
 

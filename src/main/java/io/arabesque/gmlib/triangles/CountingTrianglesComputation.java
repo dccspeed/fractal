@@ -9,22 +9,17 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 
 public class CountingTrianglesComputation extends VertexInducedComputation<VertexInducedEmbedding> {
-    private static final String AGG_OUTPUT = "output";
+    private static final String AGG_OUTPUT = "membership";
     private static final LongWritable unitLongWritable = new LongWritable(1);
 
     private final IntWritable reusableIdWritable = new IntWritable();
 
     @Override
-    public void initAggregations() {
-        super.initAggregations();
+    public void initAggregations(Configuration config) {
+        super.initAggregations(config);
 
-        Configuration.get().registerAggregation(
-        		AGG_OUTPUT,
-                IntWritable.class,
-                LongWritable.class,
-                true,
-                new LongSumReduction()
-        );
+        config.registerAggregation(AGG_OUTPUT, IntWritable.class, LongWritable.class,
+              true, new LongSumReduction());
     }
 
     @Override

@@ -52,9 +52,9 @@ object ResultEmbedding {
       VEmbedding (strEmbedding)
   }
 
-  def apply(embedding: Embedding) = {
+  def apply(embedding: Embedding, config: SparkConfiguration[_]) = {
     if (embedding.isInstanceOf[EdgeInducedEmbedding]) {
-      val mainGraph = SparkConfiguration.get.getMainGraph[BasicMainGraph]
+      val mainGraph = config.getMainGraph[BasicMainGraph]
       val edges = new Array [(Int,Int)] (embedding.getNumEdges)
       val edgesIter = embedding.getEdges.iterator
       var i = 0

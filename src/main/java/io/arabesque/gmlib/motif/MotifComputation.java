@@ -6,7 +6,8 @@ import io.arabesque.conf.Configuration;
 import io.arabesque.embedding.VertexInducedEmbedding;
 import org.apache.hadoop.io.LongWritable;
 
-public class MotifComputation extends VertexInducedComputation<VertexInducedEmbedding> {
+public class MotifComputation
+      extends VertexInducedComputation<VertexInducedEmbedding> {
     public static final String AGG_MOTIFS = "motifs";
     private static final String MAXSIZE = "arabesque.motif.maxsize";
     private static final int MAXSIZE_DEFAULT = 4;
@@ -16,18 +17,17 @@ public class MotifComputation extends VertexInducedComputation<VertexInducedEmbe
     private int maxsize;
 
     @Override
-    public void init() {
-        super.init();
-        maxsize = Configuration.get().getInteger(MAXSIZE, MAXSIZE_DEFAULT);
+    public void init(Configuration config) {
+       super.init(config);
+       maxsize = getConfig().getInteger(MAXSIZE, MAXSIZE_DEFAULT);
     }
 
     @Override
-    public void initAggregations() {
-        super.initAggregations();
+    public void initAggregations(Configuration config) {
+        super.initAggregations(config);
 
-        Configuration conf = Configuration.get();
-
-        conf.registerAggregation(AGG_MOTIFS, conf.getPatternClass(), LongWritable.class, true, new LongSumReduction());
+        config.registerAggregation(AGG_MOTIFS, config.getPatternClass(),
+              LongWritable.class, true, new LongSumReduction());
     }
 
     @Override
@@ -38,8 +38,8 @@ public class MotifComputation extends VertexInducedComputation<VertexInducedEmbe
     @Override
     public void process(VertexInducedEmbedding embedding) {
         if (embedding.getNumWords() == maxsize) {
-            output(embedding);
             map(AGG_MOTIFS, embedding.getPattern(), reusableLongWritableUnit);
+            output(embedding);
         }
     }
 }

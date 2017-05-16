@@ -189,6 +189,7 @@ public class DomainStorage extends Storage<DomainStorage> {
 
     @Override
     public StorageReader getReader(Pattern pattern,
+            Configuration<Embedding> configuration,
             Computation<Embedding> computation,
             int numPartitions, int numBlocks, int maxBlockSize) {
         throw new RuntimeException("Shouldn't be read");
@@ -196,6 +197,7 @@ public class DomainStorage extends Storage<DomainStorage> {
 
     @Override
     public StorageReader getReader(Pattern[] patterns,
+            Configuration<Embedding> configuration,
             Computation<Embedding> computation,
             int numPartitions, int numBlocks, int maxBlockSize) {
         throw new RuntimeException("Shouldn't be read");

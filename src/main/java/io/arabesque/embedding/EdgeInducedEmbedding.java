@@ -1,5 +1,6 @@
 package io.arabesque.embedding;
 
+import io.arabesque.conf.Configuration;
 import io.arabesque.graph.Edge;
 import io.arabesque.utils.collection.IntArrayList;
 import com.koloboke.collect.IntCollection;
@@ -11,11 +12,14 @@ import java.io.ObjectInput;
 public class EdgeInducedEmbedding extends BasicEmbedding {
     private IntArrayList numVerticesAddedWithWord;
 
-    @Override
-    public void init() {
+    public EdgeInducedEmbedding() {
+        super();
         numVerticesAddedWithWord = new IntArrayList();
+    }
 
-        super.init();
+    @Override
+    public void init(Configuration config) {
+        super.init(config);
     }
 
     @Override
@@ -42,7 +46,7 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
         IntArrayList edges = getEdges();
 
         for (int i = 0; i < numEdges; ++i) {
-            Edge edge = mainGraph.getEdge(edges.getUnchecked(i));
+            Edge edge = configuration.getMainGraph().getEdge(edges.getUnchecked(i));
             sb.append(edge.getSourceId());
             sb.append("-");
             sb.append(edge.getDestinationId());
@@ -68,12 +72,12 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
 
     @Override
     protected IntCollection getValidNeighboursForExpansion(int vertexId) {
-        return mainGraph.getVertexNeighbourhood(vertexId).getNeighbourEdges();
+        return configuration.getMainGraph().getVertexNeighbourhood(vertexId).getNeighbourEdges();
     }
 
     @Override
     protected boolean areWordsNeighbours(int wordId1, int wordId2) {
-        return mainGraph.areEdgesNeighbors(wordId1, wordId2);
+        return configuration.getMainGraph().areEdgesNeighbors(wordId1, wordId2);
     }
 
 
@@ -90,7 +94,7 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
     }
 
     private void updateVertices(int word) {
-        final Edge edge = mainGraph.getEdge(word);
+        final Edge edge = configuration.getMainGraph().getEdge(word);
 
         int numVerticesAdded = 0;
 
@@ -134,6 +138,8 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
     @Override
     public void readFields(DataInput in) throws IOException {
         reset();
+
+        init(Configuration.get(in.readInt()));
 
         edges.readFields(in);
 

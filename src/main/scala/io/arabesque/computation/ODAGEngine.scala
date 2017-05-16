@@ -1,8 +1,5 @@
 package io.arabesque.computation
 
-import java.io._
-import java.util.concurrent.{ExecutorService, Executors}
-
 import io.arabesque.aggregation.{AggregationStorage, AggregationStorageFactory}
 import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding._
@@ -11,6 +8,10 @@ import io.arabesque.odag._
 import io.arabesque.odag.BasicODAGStash.EfficientReader
 import io.arabesque.pattern.Pattern
 import io.arabesque.utils.SerializableConfiguration
+
+import java.io._
+import java.util.concurrent.{ExecutorService, Executors}
+
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.{LongWritable, NullWritable, SequenceFile, Writable}
 import org.apache.hadoop.io.SequenceFile.{Writer => SeqWriter}
@@ -32,21 +33,30 @@ trait ODAGEngine[
   // update aggregations before flush
   def withNewAggregations(aggregationsBc: Broadcast[_]): C
 
-  // flush odags
-  def flush: Iterator[(_,_)]
-
-  // stashes: it is dependent of odag and stash implementation
+  /**
+   * Stashes: it is dependent of odag and stash implementation
+   */
   var currentEmbeddingStashOpt: Option[S] = None
+
   var nextEmbeddingStash: S = _
-  @transient var odagStashReader: EfficientReader[E] = _
+
+  @transient var odagStashReader: EfficientReader = _
+
+  /* */
   
-  // reader parameters
+  /**
+   * Reader parameters
+   */
   lazy val numBlocks: Int =
-    configuration.getInteger ("numBlocks", getNumberPartitions() * getNumberPartitions())
+    configuration.getInteger ("numBlocks",
+      getNumberPartitions() * getNumberPartitions())
+
   lazy val maxBlockSize: Int =
     configuration.getInteger ("maxBlockSize", 10000) // TODO: magic number ??
 
   lazy val numPartitionsPerWorker = configuration.numPartitionsPerWorker
+
+  /* */
  
   /**
    * Releases resources allocated for this instance
@@ -75,8 +85,8 @@ trait ODAGEngine[
   }
 
   /**
-   * Iterates over BasicODAG stashes and call expansion/compute procedures on them.
-   * It also bootstraps the cycle by requesting empty embedding from
+   * Iterates over BasicODAG stashes and call expansion/compute procedures on
+   * them. It also bootstraps the cycle by requesting empty embedding from
    * configuration and expanding them.
    *
    * @param inboundStashes iterator of BasicODAG stashes
@@ -85,7 +95,7 @@ trait ODAGEngine[
     if (superstep == 0) { // bootstrap
 
       val initialEmbedd: E = configuration.createEmbedding()
-      computation.expand (initialEmbedd)
+      computation.compute (initialEmbedd)
 
     } else {
       var hasNext = true
@@ -94,24 +104,17 @@ trait ODAGEngine[
           hasNext = false
 
         case Some(embedding) =>
-          internalCompute (embedding)
+          computation.compute (embedding)
           numEmbeddingsProcessed += 1
       }
     }
   }
 
   /**
-   * Calls computation to expand an embedding
-   *
-   * @param embedding embedding to be expanded
-   */
-  def internalCompute(embedding: E) = computation.expand (embedding)
-
-  /**
    * Reads next embedding from previous ODAGs
    *
-   * @param remainingStashes iterator containing SinglePatternODAG stashes which hold
-   * compressed embeddings
+   * @param remainingStashes iterator containing SinglePatternODAG
+   * stashes which hold compressed embeddings
    * @return some embedding or none
    */
   def getNextInboundEmbedding(
@@ -126,7 +129,8 @@ trait ODAGEngine[
           numPartitionsPerWorker)
         
         // odag stashes have an efficient reader for compressed embeddings
-        odagStashReader = new EfficientReader [E] (currentEmbeddingStash,
+        odagStashReader = new EfficientReader (currentEmbeddingStash,
+          configuration,
           computation,
           getNumberPartitions(),
           numBlocks,
@@ -139,7 +143,7 @@ trait ODAGEngine[
 
     // new embedding was found
     if (odagStashReader.hasNext) {
-      Some(odagStashReader.next)
+      Some(odagStashReader.next.asInstanceOf[E])
     // no more embeddings to be read from current stash, try to get another
     // stash by recursive call
     } else {
@@ -171,19 +175,25 @@ object ODAGEngine {
   import Configuration._
   import SparkConfiguration._
 
-  def apply [E <: Embedding, O <: BasicODAG, S <: BasicODAGStash[O,S], C <: ODAGEngine[E,O,S,C]] (
-      config: Configuration[E],
+  def apply [
+      E <: Embedding,
+      O <: BasicODAG,
+      S <: BasicODAGStash[O,S],
+      C <: ODAGEngine[E,O,S,C]
+    ] (
       partitionId: Int,
       superstep: Int,
       accums: Map[String,Accumulator[_]],
-      previousAggregationsBc: Broadcast[_]): C = 
-    config.getString(CONF_COMM_STRATEGY, CONF_COMM_STRATEGY_DEFAULT) match {
+      previousAggregationsBc: Broadcast[_],
+      configuration: SparkConfiguration[E]): C = 
+    configuration.getString(CONF_COMM_STRATEGY,
+      CONF_COMM_STRATEGY_DEFAULT) match {
       case COMM_ODAG_SP =>
         new ODAGEngineSP [E] (partitionId, superstep,
-          accums, previousAggregationsBc).asInstanceOf[C]
+          accums, previousAggregationsBc, configuration).asInstanceOf[C]
       case COMM_ODAG_MP =>
         new ODAGEngineMP [E] (partitionId, superstep,
-          accums, previousAggregationsBc).asInstanceOf[C]
+          accums, previousAggregationsBc, configuration).asInstanceOf[C]
   }
 
   // pool related vals

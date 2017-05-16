@@ -6,24 +6,37 @@ import io.arabesque.utils.Factory;
 import io.arabesque.utils.pool.CollectionPool;
 
 public class PatternEdgeArrayListPool extends CollectionPool<PatternEdgeArrayList> {
-    private static final Factory<PatternEdgeArrayList> factory = new BasicFactory<PatternEdgeArrayList>() {
+
+    private static class PatternEdgeArrayListFactory extends BasicFactory<PatternEdgeArrayList> {
         @Override
         public PatternEdgeArrayList createObject() {
-            return new PatternEdgeArrayList();
+            return new PatternEdgeArrayList(false);
         }
-    };
-
-    public static PatternEdgeArrayListPool instance() {
-        return PatternEdgeArrayListPoolHolder.INSTANCE;
     }
 
-    public PatternEdgeArrayListPool() {
+    private static class LabelledPatternEdgeArrayListFactory extends BasicFactory<PatternEdgeArrayList> {
+        @Override
+        public PatternEdgeArrayList createObject() {
+            return new PatternEdgeArrayList(true);
+        }
+    }
+
+    public static PatternEdgeArrayListPool instance(boolean areEdgesLabelled) {
+        if (!areEdgesLabelled) {
+            return PatternEdgeArrayListPoolHolder.INSTANCE;
+        } else {
+            return PatternEdgeArrayListPoolHolder.LBL_INSTANCE;
+        }
+    }
+
+    public PatternEdgeArrayListPool(Factory<PatternEdgeArrayList> factory) {
         super(factory);
     }
 
     @Override
     public void reclaimObject(PatternEdgeArrayList object) {
-        PatternEdgePool.instance().reclaimObjects(object);
+        PatternEdgePool.instance(object.areEdgesLabelled()).
+           reclaimObjects(object);
         super.reclaimObject(object);
     }
 
@@ -34,6 +47,10 @@ public class PatternEdgeArrayListPool extends CollectionPool<PatternEdgeArrayLis
      * This initialization is also guaranteed to be thread-safe.
      */
     private static class PatternEdgeArrayListPoolHolder {
-        static final PatternEdgeArrayListPool INSTANCE = new PatternEdgeArrayListPool();
+        static final PatternEdgeArrayListPool INSTANCE =
+           new PatternEdgeArrayListPool(new PatternEdgeArrayListFactory());
+
+        static final PatternEdgeArrayListPool LBL_INSTANCE =
+           new PatternEdgeArrayListPool(new LabelledPatternEdgeArrayListFactory());
     }
 }

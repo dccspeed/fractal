@@ -3,7 +3,7 @@ package io.arabesque.conf
 import io.arabesque.computation._
 import io.arabesque.conf.Configuration._
 import io.arabesque.embedding.Embedding
-import io.arabesque.graph.MainGraph
+import io.arabesque.graph.{BasicMainGraph, MainGraph}
 import io.arabesque.pattern.Pattern
 import io.arabesque.utils.{Logging, SerializableConfiguration}
 
@@ -16,8 +16,8 @@ import scala.collection.mutable.Map
 /**
  * Configurations are passed along in this mapping
  */
-case class SparkConfiguration[O <: Embedding](confs: Map[String,Any])
-    extends Configuration[O] with Logging {
+case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
+    extends Configuration[E] with Logging {
 
   def this() {
     this (Map.empty)
@@ -26,7 +26,7 @@ case class SparkConfiguration[O <: Embedding](confs: Map[String,Any])
   /**
    * Sets a configuration (mutable)
    */
-  def set(key: String, value: Any): SparkConfiguration[O] = {
+  def set(key: String, value: Any): SparkConfiguration[E] = {
     confs.update (key, value)
     fixAssignments
     this
@@ -35,7 +35,8 @@ case class SparkConfiguration[O <: Embedding](confs: Map[String,Any])
   /**
    * Sets a configuration (mutable) if this configuration has not been set yet
    */
-  def setIfUnset(key: String, value: Any): SparkConfiguration[O] = confs.get(key) match {
+  def setIfUnset(key: String, value: Any)
+    : SparkConfiguration[E] = confs.get(key) match {
     case Some(_) =>
       this
     case None =>
@@ -45,24 +46,35 @@ case class SparkConfiguration[O <: Embedding](confs: Map[String,Any])
   /**
    * Sets a configuration (immutable)
    */
-  def withNewConfig(key: String, value: Any): SparkConfiguration[O] = {
-    val newConfig = this.copy [O] (confs = confs ++ Map(key -> value))
+  def withNewConfig(key: String, value: Any): SparkConfiguration[E] = {
+    withNewConfig(Map(key -> value))
+  }
+  
+  /**
+   * Sets a few configurations (immutable)
+   */
+  def withNewConfig(configMap: Map[String,Any]): SparkConfiguration[E] = {
+    val newConfig = this.copy [E] (confs = confs ++ configMap)
     newConfig.fixAssignments
+    newConfig.setMainGraph (getMainGraph())
     newConfig
   }
 
   /**
    * Sets a new computation in this configuration (immutable)
    */
-  def withNewComputation [E <: Embedding] (computation: Computation[E]): SparkConfiguration[O] = {
+  def withNewComputation (computation: Computation[E])
+    : SparkConfiguration[E] = {
     withNewConfig (SparkConfiguration.COMPUTATION_CONTAINER, computation)
   }
   
   /**
    * Sets a new master computation in this configuration (immutable)
    */
-  def withNewMasterComputation (masterComputation: MasterComputation): SparkConfiguration[O] = {
-    withNewConfig (SparkConfiguration.MASTER_COMPUTATION_CONTAINER, masterComputation)
+  def withNewMasterComputation (masterComputation: MasterComputation)
+    : SparkConfiguration[E] = {
+    withNewConfig (SparkConfiguration.MASTER_COMPUTATION_CONTAINER,
+      masterComputation)
   }
 
   /**
@@ -70,7 +82,7 @@ case class SparkConfiguration[O <: Embedding](confs: Map[String,Any])
    * way both can be shipped together to the workers.
    * This function mutates the object.
    */
-  def setHadoopConfig(conf: HadoopConfiguration): SparkConfiguration[O] = {
+  def setHadoopConfig(conf: HadoopConfiguration): SparkConfiguration[E] = {
     val serHadoopConf = new SerializableConfiguration(conf)
     // we store the hadoop configuration as a common configuration
     this.confs.update (SparkConfiguration.HADOOP_CONF, serHadoopConf)
@@ -81,7 +93,8 @@ case class SparkConfiguration[O <: Embedding](confs: Map[String,Any])
    * Returns a hadoop configuration assigned to this configuration, or throw an
    * exception otherwise.
    */
-  def hadoopConf: HadoopConfiguration = confs.get(SparkConfiguration.HADOOP_CONF) match {
+  def hadoopConf
+    : HadoopConfiguration = confs.get(SparkConfiguration.HADOOP_CONF) match {
     case Some(serHadoopConf: SerializableConfiguration) =>
       serHadoopConf.value
 
@@ -112,13 +125,17 @@ case class SparkConfiguration[O <: Embedding](confs: Map[String,Any])
 
     sparkMaster match {
       case "yarn-client" | "yarn-cluster" | "yarn" =>
-        conf.set ("spark.executor.instances", getInteger("num_workers", 1).toString)
-        conf.set ("spark.executor.cores", getInteger("num_compute_threads", 1).toString)
-        conf.set ("spark.driver.cores", getInteger("num_compute_threads", 1).toString)
+        conf.set ("spark.executor.instances",
+          getInteger("num_workers", 1).toString)
+        conf.set ("spark.executor.cores",
+          getInteger("num_compute_threads", 1).toString)
+        conf.set ("spark.driver.cores",
+          getInteger("num_compute_threads", 1).toString)
 
       case standaloneUrl : String if standaloneUrl startsWith "spark://" =>
         conf.set ("spark.cores.max",
-          (getInteger("num_workers", 1) * getInteger("num_compute_threads", 1)).toString)
+          (getInteger("num_workers", 1) * 
+            getInteger("num_compute_threads", 1)).toString)
 
       case _ =>
     }
@@ -161,27 +178,45 @@ case class SparkConfiguration[O <: Embedding](confs: Map[String,Any])
   }
 
   /**
-   * This function accounts for the master computation instance that can be set in
-   * this configuration. If this is the case we just return the computation,
+   */
+  def computationContainerOpt[E <: Embedding]
+    : Option[ComputationContainer[E]] = {
+    confs.get(SparkConfiguration.COMPUTATION_CONTAINER).
+      asInstanceOf[Option[ComputationContainer[E]]]
+  }
+
+  /**
+   */
+  def clearComputationContainer: Boolean = {
+    confs.get(SparkConfiguration.COMPUTATION_CONTAINER) match {
+      case Some(cc: ComputationContainer[_]) =>
+        set (SparkConfiguration.COMPUTATION_CONTAINER, cc.clear())
+        true
+      case _ =>
+        false
+    }
+  }
+
+  /**
+   * This function accounts for the master computation instance that can be set
+   * in this configuration. If this is the case we just return the computation,
    * otherwise we create an extended one by calling the method from super.
    */
   override def createMasterComputation(): MasterComputation = {
     confs.get(SparkConfiguration.MASTER_COMPUTATION_CONTAINER) match {
       case Some(cc: MasterComputationContainer) =>
         cc.shallowCopy().asInstanceOf[MasterComputation]
-
       case Some(c) =>
         throw new RuntimeException (s"Invalid master computation type: ${c}")
-
       case None =>
         super.createMasterComputation()
     }
   }
 
   /**
-   * Returns the master computation container associated with this configuration, if
-   * available. A master computation container holds a custom computation that is
-   * shipped to execution in the workers.
+   * Returns the master computation container associated with this
+   * configuration, if available. A master computation container holds a custom
+   * computation that is shipped to execution in the workers.
    */
   def masterComputationContainer: MasterComputationContainer = {
     confs.get(SparkConfiguration.MASTER_COMPUTATION_CONTAINER) match {
@@ -193,10 +228,10 @@ case class SparkConfiguration[O <: Embedding](confs: Map[String,Any])
   }
 
   /**
-   * We assume the number of requested executor cores as an alternative number of
-   * partitions. However, by the time we call this function, the config *num_partitions*
-   * should be already set by the user, or by the execution master engine which
-   * has SparkContext.defaultParallelism as default
+   * We assume the number of requested executor cores as an alternative number
+   * of partitions. However, by the time we call this function, the config
+   * *num_partitions* should be already set by the user, or by the execution
+   * master engine which has SparkContext.defaultParallelism as default
    */
   def numPartitions: Int = getInteger("num_partitions",
     getInteger("num_workers", 1) *
@@ -254,16 +289,16 @@ case class SparkConfiguration[O <: Embedding](confs: Map[String,Any])
    * TODO: generalize the initialization in the superclass Configuration
    */
   override def initialize(): Unit = synchronized {
-    if (Configuration.isUnset || uuid != Configuration.get[SparkConfiguration[O]].uuid) {
-      initializeInJvm()
-      Configuration.set (this)
+    if (Configuration.isUnset(id)) {
+      initializeInstance()
+      Configuration.add(this)
     }
   }
 
   /**
    * Called whether no arabesque configuration is set in the running jvm
    */
-  private def initializeInJvm(): Unit = {
+  private def initializeInstance(): Unit = {
 
     fixAssignments
 
@@ -274,13 +309,14 @@ case class SparkConfiguration[O <: Embedding](confs: Map[String,Any])
     )
 
     setMasterComputationClass (
-      getClass (CONF_MASTER_COMPUTATION_CLASS, CONF_MASTER_COMPUTATION_CLASS_DEFAULT).
+      getClass (CONF_MASTER_COMPUTATION_CLASS,
+        CONF_MASTER_COMPUTATION_CLASS_DEFAULT).
       asInstanceOf[Class[_ <: MasterComputation]]
     )
     
     setComputationClass (
       getClass (CONF_COMPUTATION_CLASS, CONF_COMPUTATION_CLASS_DEFAULT).
-      asInstanceOf[Class[_ <: Computation[O]]]
+      asInstanceOf[Class[_ <: Computation[E]]]
     )
 
     setPatternClass (
@@ -291,13 +327,19 @@ case class SparkConfiguration[O <: Embedding](confs: Map[String,Any])
     setAggregationsMetadata (new java.util.HashMap())
 
     setOutputPath (getString(CONF_OUTPUT_PATH, CONF_OUTPUT_PATH_DEFAULT))
-    
-    // main graph
-    if ( (getMainGraph() == null && initialized)
-         || (getString ("spark_master", "local[*]") startsWith "local[")
-         ) {
-      logInfo ("Main graph is null, gonna read it")
+
+    // graph may be already set by a parent computation
+    if (getMainGraph() == null) {
       setMainGraph (createGraph())
+    }
+    
+    // in case of the mainGraph is empty (no vertices and no edges), we try to
+    // read it
+    getMainGraph[BasicMainGraph].synchronized {
+      if (!isMainGraphRead) {
+        logInfo ("MainGraph is empty, gonna try reading it")
+        readMainGraph()
+      }
     }
 
     initialized = true
@@ -320,19 +362,23 @@ case class SparkConfiguration[O <: Embedding](confs: Map[String,Any])
 }
 
 object SparkConfiguration {
-  def get[E <: Embedding]: SparkConfiguration[E] = {
-    Configuration.get[SparkConfiguration[E]].asInstanceOf[SparkConfiguration[E]]
-  }
+  /** odag flush methods */
 
-  // odag flush methods
-  val FLUSH_BY_PATTERN = "flush_by_pattern" // good for regular distributions
-  val FLUSH_BY_ENTRIES = "flush_by_entries" // good for irregular distributions but small embedding domains
-  val FLUSH_BY_PARTS = "flush_by_parts"     // good for irregular distributions, period
+  // good for regular distributions
+  val FLUSH_BY_PATTERN = "flush_by_pattern"
+  // good for irregular distributions but small embedding domains
+  val FLUSH_BY_ENTRIES = "flush_by_entries"
+  // good for irregular distributions, period
+  val FLUSH_BY_PARTS = "flush_by_parts"
 
-  // communication strategies
-  val COMM_ODAG_SP = "odag_sp"              // pack embeddings with single-pattern odags
-  val COMM_ODAG_MP = "odag_mp"              // pack embeddings with multi-pattern odags
-  val COMM_EMBEDDING = "embedding"          // pack embeddings with compressed caches (e.g., LZ4)
+  /** communication strategies */
+
+  // pack embeddings with single-pattern odags
+  val COMM_ODAG_SP = "odag_sp"
+  // pack embeddings with multi-pattern odags
+  val COMM_ODAG_MP = "odag_mp"
+  // pack embeddings with compressed caches (e.g., LZ4)
+  val COMM_EMBEDDING = "embedding"
 
   // hadoop conf
   val HADOOP_CONF = "hadoop_conf"

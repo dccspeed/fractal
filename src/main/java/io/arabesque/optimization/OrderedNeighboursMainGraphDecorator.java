@@ -32,6 +32,11 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
     }
 
     @Override
+    public int getId() {
+       return underlyingMainGraph.getId();
+    }
+
+    @Override
     public void reset() {
         underlyingMainGraph.reset();
     }

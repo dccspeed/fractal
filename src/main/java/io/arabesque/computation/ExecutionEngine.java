@@ -64,7 +64,7 @@ public class ExecutionEngine<O extends Embedding>
 
     protected void init() {
         this.configuration = Configuration.get();
-        this.aggregationStorageFactory = new AggregationStorageFactory();
+        this.aggregationStorageFactory = new AggregationStorageFactory(Configuration.get());
         this.aggregationStorages = new HashMap<>();
         this.workerContext = getWorkerContext();
         this.communicationStrategy = configuration.createCommunicationStrategy(configuration,
@@ -83,7 +83,7 @@ public class ExecutionEngine<O extends Embedding>
 
         if (getPhase() == 0) {
             computation = configuration.createComputation();
-            computation.setUnderlyingExecutionEngine(this);
+            computation.setExecutionEngine(this);
 
             if (getPhase() == 0 && getSuperstep() == 0) {
                 if (configuration.getEmbeddingClass() == null) {
@@ -91,7 +91,7 @@ public class ExecutionEngine<O extends Embedding>
                 }
             }
 
-            computation.init();
+            computation.init(configuration);
         }
     }
 

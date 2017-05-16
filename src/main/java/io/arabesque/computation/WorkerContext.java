@@ -52,7 +52,7 @@ public class WorkerContext extends org.apache.giraph.worker.WorkerContext {
         data = new ConcurrentHashMap<>();
         numberPartitions = 0;
         maxProcessedDepthReached = 0;
-        this.aggregationStorageFactory = new AggregationStorageFactory();
+        this.aggregationStorageFactory = new AggregationStorageFactory(Configuration.get());
         this.outboundAggregationStorages = new ConcurrentHashMap<>();
         this.inboundAggregationStorages = new ConcurrentHashMap<>();
     }

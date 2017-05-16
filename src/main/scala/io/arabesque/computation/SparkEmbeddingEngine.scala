@@ -1,12 +1,13 @@
 package io.arabesque.computation
 
-import java.io.OutputStreamWriter
-
 import io.arabesque.aggregation.{AggregationStorage, AggregationStorageFactory}
 import io.arabesque.cache.LZ4ObjectCache
-import io.arabesque.conf.Configuration
+import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding._
 import io.arabesque.utils.SerializableConfiguration
+
+import java.io.OutputStreamWriter
+
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.{LongWritable, NullWritable, Writable, SequenceFile}
 import org.apache.hadoop.io.SequenceFile.{Writer => SeqWriter}
@@ -20,20 +21,22 @@ import scala.reflect.ClassTag
 /**
  * Spark engine that works with raw embedding representation
  */
-case class SparkEmbeddingEngine[O <: Embedding](
+case class SparkEmbeddingEngine[E <: Embedding](
     partitionId: Int,
     superstep: Int,
     accums: Map[String,Accumulator[_]],
-    // TODO do not broadcast if user's code does not requires it
-    previousAggregationsBc: Broadcast[_])
-  extends SparkEngine[O] {
+    previousAggregationsBc: Broadcast[_],
+    configuration: SparkConfiguration[E])
+  extends SparkEngine[E] {
 
   // embedding caches
   var embeddingCaches: Array[LZ4ObjectCache] = _
+
   var currentCache: LZ4ObjectCache = _
 
   // round robin id
   var _nextGlobalId: Long = _
+
   def nextGlobalId: Long = {
     val id = _nextGlobalId
     _nextGlobalId += 1
@@ -41,11 +44,10 @@ case class SparkEmbeddingEngine[O <: Embedding](
   }
 
   override def init() = {
-    if (configuration.getEmbeddingClass() == null)
-      configuration.setEmbeddingClass (computation.getEmbeddingClass())
-
+    super.init()
     // embedding caches
-    embeddingCaches = Array.fill (getNumberPartitions) (new LZ4ObjectCache)
+    embeddingCaches = Array.fill (getNumberPartitions) (
+      new LZ4ObjectCache(configuration))
     currentCache = null
 
     // global round-robin id
@@ -79,17 +81,18 @@ case class SparkEmbeddingEngine[O <: Embedding](
   }
 
   /**
-   * Iterates over embedding caches and call expansion/compute procedures on them.
-   * It also bootstraps the cycle by requesting empty embedding from
+   * Iterates over embedding caches and call expansion/compute procedures on
+   * them. It also bootstraps the cycle by requesting empty embedding from
    * configuration and expanding them.
    *
    * @param inboundCaches iterator of embedding caches
    */
-  private def expansionCompute(inboundCaches: Iterator[LZ4ObjectCache]): Unit = {
+  private def expansionCompute(
+      inboundCaches: Iterator[LZ4ObjectCache]): Unit = {
     if (superstep == 0) { // bootstrap
 
-      val initialEmbedd: O = configuration.createEmbedding()
-      computation.expand (initialEmbedd)
+      val initialEmbedd: E = configuration.createEmbedding()
+      computation.compute (initialEmbedd)
 
     } else {
       var hasNext = true
@@ -98,18 +101,11 @@ case class SparkEmbeddingEngine[O <: Embedding](
           hasNext = false
 
         case Some(embedding) =>
-          internalCompute (embedding)
+          computation.compute (embedding)
           numEmbeddingsProcessed += 1
       }
     }
   }
-
-  /**
-   * Calls computation to expand an embedding
-   *
-   * @param embedding embedding to be expanded
-   */
-  def internalCompute(embedding: O) = computation.expand (embedding)
 
   /**
    * Reads next embedding from previous caches
@@ -119,7 +115,7 @@ case class SparkEmbeddingEngine[O <: Embedding](
    */
   @scala.annotation.tailrec
   private def getNextInboundEmbedding(
-      remainingCaches: Iterator[LZ4ObjectCache]): Option[O] = {
+      remainingCaches: Iterator[LZ4ObjectCache]): Option[E] = {
     if (currentCache == null) {
       if (remainingCaches.hasNext) {
         currentCache = remainingCaches.next
@@ -128,7 +124,7 @@ case class SparkEmbeddingEngine[O <: Embedding](
       } else None
     } else {
       if (currentCache.hasNext) {
-        val embedding = currentCache.next.asInstanceOf[O]
+        val embedding = currentCache.next.asInstanceOf[E]
         if (computation.aggregationFilter(embedding.getPattern))
           Some(embedding)
         else
@@ -146,14 +142,14 @@ case class SparkEmbeddingEngine[O <: Embedding](
    *
    * @param embedding embedding that must be processed
    */
-  def addOutboundEmbedding(embedding: O) = processExpansion (embedding)
+  def addOutboundEmbedding(embedding: E) = processExpansion (embedding)
 
   /**
    * Adds an expansion (embedding) to the outbound odags.
    *
    * @param expansion embedding to be added to the stash of outbound odags
    */
-  override def processExpansion(expansion: O) = {
+  override def processExpansion(expansion: E) = {
     val destId = (nextGlobalId % getNumberPartitions).toInt
     val cache = embeddingCaches(destId)
     cache.addObject (expansion)

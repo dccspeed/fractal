@@ -21,6 +21,10 @@ public class LZ4ObjectCache extends ByteArrayObjectCache {
     private LZ4Factory lz4factory;
 
     public LZ4ObjectCache() {
+    }
+
+    public LZ4ObjectCache(Configuration config) {
+        super(config);
         lz4factory = LZ4Factory.fastestInstance();
         reset();
     }
@@ -51,7 +55,7 @@ public class LZ4ObjectCache extends ByteArrayObjectCache {
     }
 
     private void compressDataOutput() {
-        if (!Configuration.get().isUseCompressedCaches() || !uncompressed) {
+        if (!configuration.isUseCompressedCaches() || !uncompressed) {
             return;
         }
 
@@ -67,7 +71,8 @@ public class LZ4ObjectCache extends ByteArrayObjectCache {
 
     @Override
     public void write(DataOutput dataOutput) throws IOException {
-        if (Configuration.get().isUseCompressedCaches()) {
+        dataOutput.writeInt(configuration.getId());
+        if (configuration.isUseCompressedCaches()) {
             compressDataOutput();
             dataOutput.writeInt(uncompressedSize);
         }
@@ -80,11 +85,9 @@ public class LZ4ObjectCache extends ByteArrayObjectCache {
     }
 
     private void decompressDataInput() {
-        if (!Configuration.get().isUseCompressedCaches() || uncompressed) {
+        if (!configuration.isUseCompressedCaches() || uncompressed) {
             return;
         }
-
-        //LOG.info("Big no no");
 
         LZ4FastDecompressor decompressor = lz4factory.fastDecompressor();
 
@@ -99,7 +102,8 @@ public class LZ4ObjectCache extends ByteArrayObjectCache {
 
     @Override
     public void readFields(DataInput dataInput) throws IOException {
-        if (Configuration.get().isUseCompressedCaches()) {
+        configuration = Configuration.get(dataInput.readInt());
+        if (configuration.isUseCompressedCaches()) {
             uncompressedSize = dataInput.readInt();
             uncompressed = false;
         } else {

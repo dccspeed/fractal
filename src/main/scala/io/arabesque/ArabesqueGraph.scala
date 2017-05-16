@@ -7,11 +7,13 @@ import java.util.UUID
 import io.arabesque.computation._
 import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding._
+import io.arabesque.graph.MainGraph
 
-import scala.reflect.ClassTag
+import scala.reflect.{classTag, ClassTag}
 
 /**
-  *  Creates an [[io.arabesque.ArabesqueGraph]] used for calling arabesque graph algorithms
+  * Creates an [[io.arabesque.ArabesqueGraph]] used for calling arabesque graph
+  * algorithms
   *
   * @param path  a string indicating the path for input graph
   * @param local TODO
@@ -24,21 +26,33 @@ class ArabesqueGraph(
     logLevel: String) extends Logging {
 
   private val uuid: UUID = UUID.randomUUID
+
+  private val mainGraph: MainGraph = {
+    import Configuration._
+    val config = new SparkConfiguration
+    config.set ("input_graph_path", path)
+    config.set ("input_graph_local", local)
+    config.setMainGraphClass (
+      config.getClass (CONF_MAINGRAPH_CLASS, CONF_MAINGRAPH_CLASS_DEFAULT).
+      asInstanceOf[Class[_ <: MainGraph]]
+    )
+    config.createGraph()
+  }
+
   def tmpPath: String = s"${arab.tmpPath}/graph-${uuid}"
+
+  def arabContext: ArabesqueContext = arab
 
   def this(path: String, arab: ArabesqueContext, logLevel: String) = {
     this (path, false, arab, logLevel)
   }
 
   private def resultHandler [E <: Embedding : ClassTag] (
-      config: SparkConfiguration[E]): ArabesqueResult[E] = {
+      config: SparkConfiguration[E], stepByStep: Boolean = true)
+    : ArabesqueResult[E] = {
     config.set ("log_level", logLevel)
-    new ArabesqueResult [E] (arab.sparkContext, config)
-  }
-
-  /** motifs */
-  def motifs [E <: Embedding : ClassTag] (config: SparkConfiguration[E]): ArabesqueResult[E] = {
-    resultHandler [E] (config)
+    config.setMainGraph (mainGraph)
+    new ArabesqueResult [E] (this, config).copy (stepByStep = stepByStep)
   }
 
   /**
@@ -61,25 +75,34 @@ class ArabesqueGraph(
    *
    * @return an [[io.arabesque.ArabesqueResult]] carrying odags and embeddings
    */
-  def motifs(maxSize: Int): ArabesqueResult[_] = {
-    Configuration.unset
+  def motifs(maxSize: Int): ArabesqueResult[VertexInducedEmbedding] = {
     val config = new SparkConfiguration [VertexInducedEmbedding]
     config.set ("input_graph_path", path)
     config.set ("input_graph_local", local)
-    config.set ("output_path", s"${tmpPath}/motifs-${config.getUUID}")
+    config.set ("output_path", s"${tmpPath}/motifs-${config.getId}")
     config.set ("arabesque.motif.maxsize", maxSize)
     config.set ("computation", "io.arabesque.gmlib.motif.MotifComputation")
-    motifs (config)
-  }
-
-  /** fsm */
-  def fsm(config: SparkConfiguration[_ <: Embedding]): ArabesqueResult[_] = {
-    resultHandler (config)
+    resultHandler (config, false)
   }
 
   /**
-    * Computes all the frequent subgraphs for the given support
-    *
+   * Return a motif computation containing:
+   * - Sum aggregation with key=Pattern and value=LongWritable
+   */
+  def motifs: ArabesqueResult[VertexInducedEmbedding] = {
+    import org.apache.hadoop.io.LongWritable
+    import io.arabesque.pattern.Pattern
+
+    val AGG_MOTIFS = "motifs"
+    vertexInducedComputation.withAggregationRegistered [Pattern,LongWritable] (
+      AGG_MOTIFS)(
+      (v1, v2) => {v1.set (v1.get + v2.get); v1})
+
+  }
+
+  /**
+   * Computes all the frequent subgraphs for the given support
+   *
     * {{{
     * import io.arabesque.ArabesqueContext
     *
@@ -92,30 +115,56 @@ class ArabesqueGraph(
     *
     * res.embeddings.count
     * res.embeddings.collect
-    *
     * }}}
-    *
-    *
-    * @param support frequency threshold
-    * @param maxSize upper bound for embedding exploration
-    *
-    * @return an [[io.arabesque.ArabesqueResult]] carrying odags and embeddings
-    */
-  def fsm(support: Int, maxSize: Int = Int.MaxValue): ArabesqueResult[_] = {
+   *
+   * @param support frequency threshold
+   * @param maxSize upper bound for embedding exploration
+   *
+   * @return an [[io.arabesque.ArabesqueResult]] carrying odags and embeddings
+   */
+  def fsm(support: Int, maxSize: Int): ArabesqueResult[EdgeInducedEmbedding] = {
     val config = new SparkConfiguration [EdgeInducedEmbedding]
     config.set ("input_graph_path", path)
     config.set ("input_graph_local", local)
-    config.set ("output_path", s"${tmpPath}/fsm-${config.getUUID}")
+    config.set ("output_path", s"${tmpPath}/fsm-${config.getId}")
     config.set ("arabesque.fsm.maxsize", maxSize)
     config.set ("arabesque.fsm.support", support)
     config.set ("computation", "io.arabesque.gmlib.fsm.FSMComputation")
-    config.set ("master_computation", "io.arabesque.gmlib.fsm.FSMMasterComputation")
-    fsm (config)
+    config.set ("master_computation",
+      "io.arabesque.gmlib.fsm.FSMMasterComputation")
+    resultHandler (config, false)
   }
 
-  /** triangles */
-  def triangles(config: SparkConfiguration[_ <: Embedding]): ArabesqueResult[_] = {
-    resultHandler (config)
+  /**
+   */
+  def fsm(support: Int): ArabesqueResult[EdgeInducedEmbedding] = {
+    import io.arabesque.gmlib.fsm._
+    import io.arabesque.pattern.Pattern
+    import io.arabesque.utils.SerializableWritable
+    import java.lang.ThreadLocal
+
+    val AGG_SUPPORT = "support"
+    edgeInducedComputation { new EdgeProcessFunc {
+      @transient lazy val domainSupport = new ThreadLocal [DomainSupport] {
+        override def initialValue = new DomainSupport(support)
+      }
+      def apply (e: EdgeInducedEmbedding, c: Computation[EdgeInducedEmbedding])
+        : Unit = {
+        domainSupport.get.setFromEmbedding (e)
+        c.map(AGG_SUPPORT, e.getPattern, domainSupport.get)
+      }
+    }}.
+    withPatternAggregationFilter ((p,c) => c.readAggregation(AGG_SUPPORT).
+      containsKey (p)).
+    withMasterCompute { c =>
+      if (c.readAggregation (AGG_SUPPORT).getNumberMappings <= 0 &&
+        c.getStep > 0) {
+        c.haltComputation()
+      }
+    }.
+    withAggregationRegistered [Pattern,DomainSupport] (AGG_SUPPORT,
+      new DomainSupportReducer(),
+      endAggregationFunction = new DomainSupportEndAggregationFunction())
   }
 
   /**
@@ -134,18 +183,42 @@ class ArabesqueGraph(
    *
    * @return an [[io.arabesque.ArabesqueResult]] carrying odags and embeddings
    */
-  def triangles(): ArabesqueResult[_] = {
+  def allStepsTriangles: ArabesqueResult[VertexInducedEmbedding] = {
     val config = new SparkConfiguration [VertexInducedEmbedding]
     config.set ("input_graph_path", path)
     config.set ("input_graph_local", local)
-    config.set ("output_path", s"${tmpPath}/triangles-${config.getUUID}")
-    config.set ("computation", "io.arabesque.gmlib.triangles.CountingTrianglesComputation")
-    triangles (config)
+    config.set ("output_path", s"${tmpPath}/triangles-${config.getId}")
+    config.set ("computation",
+      "io.arabesque.gmlib.triangles.CountingTrianglesComputation")
+    resultHandler (config, false)
   }
 
-  /** cliques */
-  def cliques(config: SparkConfiguration[_ <: Embedding]): ArabesqueResult[_] = {
-    resultHandler (config)
+  /**
+   */
+  def triangles: ArabesqueResult[VertexInducedEmbedding] = {
+    import org.apache.hadoop.io.{IntWritable, LongWritable}
+    import io.arabesque.utils.SerializableWritable
+    import io.arabesque.aggregation.reductions.LongSumReduction
+    import io.arabesque.utils.collection.IntArrayList
+
+    val longUnitSer = new SerializableWritable (new LongWritable(1))
+    val AGG_TRIANGLES = "membership"
+    vertexInducedComputation { (e,c) =>
+      if (e.getNumVertices == 3) {
+        val vertices = e.getVertices
+        val id = new IntWritable()
+        var i = 0
+        while (i < 3) {
+          id.set (vertices.getUnchecked(i))
+          c.map (AGG_TRIANGLES, id, longUnitSer.value)
+          i += 1
+        }
+      }
+    }.
+    withFilter ((e,c) => e.getNumVertices < 3 ||
+      (e.getNumVertices == 3 && e.getNumEdges == 3)).
+    withAggregationRegistered [IntWritable,LongWritable] (AGG_TRIANGLES,
+      new LongSumReduction)
   }
 
   /**
@@ -167,32 +240,55 @@ class ArabesqueGraph(
    *
    * @return an [[io.arabesque.ArabesqueResult]] carrying odags and embeddings
    */
-  def cliques(maxSize: Int): ArabesqueResult[_] = {
+  def cliques(maxSize: Int): ArabesqueResult[VertexInducedEmbedding] = {
     val config = new SparkConfiguration [VertexInducedEmbedding]
     config.set ("input_graph_path", path)
     config.set ("input_graph_local", local)
-    config.set ("output_path", s"${tmpPath}/cliques-${config.getUUID}")
+    config.set ("output_path", s"${tmpPath}/cliques-${config.getId}")
     config.set ("arabesque.clique.maxsize", maxSize)
     config.set ("computation", "io.arabesque.gmlib.clique.CliqueComputation")
-    cliques (config)
-  }
-  
-  /** cliques percolation */
-  def cliquesPercolation(config: SparkConfiguration[_ <: Embedding]): ArabesqueResult[_] = {
-    resultHandler (config)
+    resultHandler (config, false)
   }
 
-  def cliquesPercolation(maxSize: Int): ArabesqueResult[_] = {
+  /**
+   */
+  def cliques: ArabesqueResult[VertexInducedEmbedding] = {
+    vertexInducedComputation.
+      withFilter ((e,c) =>
+          e.getNumEdgesAddedWithExpansion == e.getNumVertices - 1)
+  }
+ 
+  /**
+   */
+  def cliquesPercolation(maxSize: Int)
+    : ArabesqueResult[VertexInducedEmbedding] = {
     val config = new SparkConfiguration [VertexInducedEmbedding]
     config.set ("input_graph_path", path)
     config.set ("input_graph_local", local)
-    config.set ("output_path", s"${tmpPath}/cliques-${config.getUUID}")
+    config.set ("output_path", s"${tmpPath}/cliques-${config.getId}")
     config.set ("arabesque.clique.maxsize", maxSize)
-    config.set ("computation", "io.arabesque.gmlib.cliqueperc.CliquePercComputation")
-    cliques (config)
+    config.set ("computation",
+      "io.arabesque.gmlib.cliqueperc.CliquePercComputation")
+    resultHandler (config, false)
   }
 
   /** api for custom computations **/
+
+  def computation [E <: Embedding : ClassTag]: ArabesqueResult[E] = {
+    val eClass = classTag[E].runtimeClass
+    if (eClass == classOf[VertexInducedEmbedding]) {
+      vertexInducedComputation.asInstanceOf[ArabesqueResult[E]]
+    } else if (eClass == classOf[EdgeInducedEmbedding]) {
+      edgeInducedComputation.asInstanceOf[ArabesqueResult[E]]
+    } else {
+      throw new RuntimeException (s"Unsupported embedding type ${eClass}")
+    }
+  }
+
+  def emptyComputation [E <: Embedding : ClassTag]: ArabesqueResult[E] = {
+    assert (computation.config.clearComputationContainer)
+    computation
+  }
 
   /**
    * Returns a new result with a configurable computation container.
@@ -219,16 +315,22 @@ class ArabesqueGraph(
     *
     * @return an [[io.arabesque.ArabesqueResult]] carrying odags and embeddings
    */
-  def edgeInducedComputation(process: (EdgeInducedEmbedding, Computation[EdgeInducedEmbedding]) => Unit)
-      : ArabesqueResult[EdgeInducedEmbedding] = {
+  def edgeInducedComputation(
+      process: (EdgeInducedEmbedding,
+                Computation[EdgeInducedEmbedding]) => Unit)
+    : ArabesqueResult[EdgeInducedEmbedding] = {
     val computation: Computation[EdgeInducedEmbedding] =
       new EComputationContainer(processOpt = Some(process))
-    val config = new SparkConfiguration[EdgeInducedEmbedding].withNewComputation (computation)
+    val config = new SparkConfiguration[EdgeInducedEmbedding].
+      withNewComputation (computation)
     config.set ("input_graph_path", path)
     config.set ("input_graph_local", local)
-    config.set ("output_path", s"${tmpPath}/edge-computation-${config.getUUID}")
+    config.set ("output_path", s"${tmpPath}/edge-computation-${config.getId}")
     customComputation [EdgeInducedEmbedding] (config)
   }
+
+  def edgeInducedComputation: ArabesqueResult[EdgeInducedEmbedding] =
+    edgeInducedComputation ((_,_) => {})
 
   /**
    * Returns a new result with a configurable computation container.
@@ -255,18 +357,25 @@ class ArabesqueGraph(
     *
     * @return an [[io.arabesque.ArabesqueResult]] carrying odags and embeddings
    */
-  def vertexInducedComputation(process: (VertexInducedEmbedding, Computation[VertexInducedEmbedding]) => Unit)
-      : ArabesqueResult[VertexInducedEmbedding] = {
+  def vertexInducedComputation(
+      process: (VertexInducedEmbedding,
+                Computation[VertexInducedEmbedding]) => Unit)
+    : ArabesqueResult[VertexInducedEmbedding] = {
     val computation: Computation[VertexInducedEmbedding] =
       new VComputationContainer(processOpt = Some(process))
-    val config = new SparkConfiguration[VertexInducedEmbedding].withNewComputation (computation)
+    val config = new SparkConfiguration[VertexInducedEmbedding].
+      withNewComputation (computation)
     config.set ("input_graph_path", path)
     config.set ("input_graph_local", local)
-    config.set ("output_path", s"${tmpPath}/vertex-computation-${config.getUUID}")
+    config.set ("output_path", s"${tmpPath}/vertex-computation-${config.getId}")
     customComputation [VertexInducedEmbedding] (config)
   }
 
-  def customComputation [E <: Embedding: ClassTag] (config: SparkConfiguration[E]): ArabesqueResult[E] = {
+  def vertexInducedComputation: ArabesqueResult[VertexInducedEmbedding] =
+    vertexInducedComputation ((_,_) => {})
+
+  def customComputation [E <: Embedding: ClassTag] (
+      config: SparkConfiguration[E]): ArabesqueResult[E] = {
     resultHandler [E] (config)
   }
 }

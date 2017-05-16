@@ -33,16 +33,17 @@ case class ODAGEngineMP [E <: Embedding] (
     superstep: Int,
     accums: Map[String,Accumulator[_]],
     // TODO do not broadcast if user's code does not requires it
-    previousAggregationsBc: Broadcast[_])
+    previousAggregationsBc: Broadcast[_],
+    configuration: SparkConfiguration[E])
   extends ODAGEngine[E,MultiPatternODAG,MultiPatternODAGStash,ODAGEngineMP[E]] {
 
   // stashes
-  nextEmbeddingStash = new MultiPatternODAGStash (configuration.getMaxOdags)
+  nextEmbeddingStash = new MultiPatternODAGStash (configuration.getMaxOdags).
+    init(configuration)
 
   /**
    * Returns a new execution engine from this with the aggregations/computation
    * variables updated (immutability)
-    configuration.getInteger (CONF_COMM_STRATEGY_ODAGMP_MAX, CONF_)
    *
    * @param aggregationsBc broadcast variable with aggregations
    * @return the new execution engine, ready for flushing

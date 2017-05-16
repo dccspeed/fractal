@@ -8,12 +8,15 @@ import io.arabesque.embedding._
 import io.arabesque.odag._
 import io.arabesque.pattern.Pattern
 import io.arabesque.utils.SerializableConfiguration
+
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.Writable
 import org.apache.log4j.{Level, Logger}
+import org.apache.spark.{Accumulator, SparkContext}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{Accumulator, SparkContext}
+import org.apache.spark.storage.StorageLevel._
+import org.apache.spark.util.SizeEstimator
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.Map
@@ -30,152 +33,184 @@ import scala.util.{Failure, Success}
  * SparkContext.
  */
 trait ODAGMasterEngine [
+    K,
     E <: Embedding,
     O <: BasicODAG,
     S <: BasicODAGStash[O,S],
     C <: ODAGEngine[E,O,S,C]
   ] extends SparkMasterEngine [E] {
 
-  implicit def oTag: ClassTag[O] // workaround to pass classtags to traits
+  // workaround to pass classtags to traits
+  implicit def oTag: ClassTag[O]
+  implicit def cTag: ClassTag[C]
 
-  // sub-classes must implement
   def config: SparkConfiguration[E]
-
-  import ODAGMasterEngine._
-
-  // testing
+  
   config.initialize()
+  
+  var aggregatedOdagsBc: Broadcast[scala.collection.Map[K,O]] = _
 
-  // Spark accumulators for stats counting (non-critical)
-  // Ad-hoc arabesque approach for user-defined aggregations
-  var aggAccums: Map[String,Accumulator[_]] = _
-  var aggregations
-    : Map[String,AggregationStorage[_ <: Writable, _ <: Writable]] = _
-
-  var superstep = 0
-
-  var masterComputation: MasterComputation = _
-
-  var odags: List[RDD[O]] = List()
-
-  def sparkContext: SparkContext = sc
-  def arabConfig: SparkConfiguration[_ <: Embedding] = config
-
-  override def init() = {
-    // garantees that outputPath does not exist
-    if (config.isOutputActive) {
-      val fs = FileSystem.get(sc.hadoopConfiguration)
-      val outputPath = new Path(config.getOutputPath)
-      if (fs.exists (outputPath))
-        throw new RuntimeException (
-          s"Output path ${config.getOutputPath} exists. Choose another one."
-          )
+  override def init(): Unit = {
+    parentOpt match {
+      case Some(parent) =>
+        aggregatedOdagsBc = parent.
+          asInstanceOf[ODAGMasterEngine[K,_,O,_,_]].aggregatedOdagsBc
+        
+      case None =>
+        aggregatedOdagsBc = sc.broadcast (Map.empty)
     }
-
-    // master computation
-    masterComputation = config.createMasterComputation()
-    masterComputation.setUnderlyingExecutionEngine(this)
-    masterComputation.init()
-
-    // master must know aggregators metadata
-    val computation = config.createComputation()
-    computation.initAggregations()
-
-    // stats aggregation via accumulators
-    aggAccums = Map.empty
-    aggAccums.update (AGG_EMBEDDINGS_PROCESSED,
-      sc.accumulator [Long] (0L, AGG_EMBEDDINGS_PROCESSED))
-    aggAccums.update (AGG_EMBEDDINGS_GENERATED,
-      sc.accumulator [Long] (0L, AGG_EMBEDDINGS_GENERATED))
-    aggAccums.update (AGG_EMBEDDINGS_OUTPUT,
-      sc.accumulator [Long] (0L, AGG_EMBEDDINGS_OUTPUT))
 
     super.init()
   }
 
-  override def haltComputation() = {
-    logInfo ("Halting master computation")
-    sc.stop()
-  }
-
-  override def getSuperstep(): Long = superstep
+  def getAggregatedOdags(execEngines: RDD[ODAGEngine[E,O,S,C]],
+      previousAggregationsBc: Broadcast[_], configBc: Broadcast[SparkConfiguration[E]])
+    : RDD[(K,O)]
 
   /**
-   * Extracts and aggregate AggregationStorages from executionEngines
-   *
-   * @param execEngines rdd of spark execution engines
-   * @param numPartitions based on the number of partitions, we decide the
-   * depth of the aggregation tree
-   * @return a future with a map (name -> aggregationStorage) as entries
-   *
+   * Master's computation takes place here, superstep by superstep
    */
-  def getAggregations(
-    execEngines: RDD[C],
-    numPartitions: Int) = Future {
+  lazy val next: Boolean = {
+    val superstepStart = System.currentTimeMillis
 
-    def reduce[K <: Writable, V <: Writable](
-        name: String,
-        metadata: AggregationStorageMetadata[K,V])
-      (implicit kt: ClassTag[K], vt: ClassTag[V]) =
-        Future[AggregationStorage[_ <: Writable, _ <: Writable]] {
+    logInfo (s"SparkConfiguration estimated size = ${SizeEstimator.estimate(config)} bytes")
+    logInfo (s"HadoopConfiguration estimated size = ${SizeEstimator.estimate(config.hadoopConf)} bytes")
 
-      val keyValues = execEngines.flatMap (execEngine =>
-          execEngine.flushAggregationsByName(name).
-            asInstanceOf[Iterator[AggregationStorage[K,V]]]
-          )
-      val aggStorage = keyValues.reduce { (agg1,agg2) =>
-        agg1.aggregate (agg2)
-        agg1
-      }
+    logInfo (s"superstepRDD id before: ${superstepRDD.id}")
 
-      aggStorage.endedAggregation
-      aggStorage
-    }
+    val execEngines = getExecutionEngines (
+      superstepRDD = superstepRDD,
+      superstep = superstep,
+      configBc = configBc,
+      aggregatedOdagsBc = aggregatedOdagsBc,
+      aggAccums = aggAccums,
+      previousAggregationsBc = previousAggregationsBc)
 
-    val future = Future.sequence (
-      config.getAggregationsMetadata.map { case (name, metadata) =>
-        reduce (name, metadata)
-      }
-    )
+    logInfo (s"execEngines id: ${execEngines.id}")
 
-    val aggregations = Map.empty[String,AggregationStorage[_ <: Writable, _ <: Writable]]
+    // keep engines (filled with expansions and aggregations) for the rest of
+    // the superstep
+    execEngines.persist (MEMORY_ONLY)
 
-    Await.ready (future, Duration.Inf)
-    future.value.get match {
-      case Success(aggStorages) =>
-        aggStorages.foreach (aggStorage => aggregations.update (aggStorage.getName, aggStorage))
+    // Materialize execEngines
+    execEngines.foreachPartition (_ => {})
+
+    /** [1] We extract and aggregate the *aggregations* globally.
+     *  That gives us the opportunity to do aggregationFilter in the generated
+     *  ODAGs before collecting/broadcasting */
+
+    // create futures (two jobs submitted roughly simultaneously)
+    val aggregationsFuture = getAggregations (execEngines, numPartitions)
+    // aggregations
+    Await.ready (aggregationsFuture, atMost = Duration.Inf)
+    aggregationsFuture.value.get match {
+      case Success(previousAggregations) =>
+
+        aggregations = mergeOrReplaceAggregations (aggregations, previousAggregations)
+
+        logInfo (s"""Aggregations and sizes
+          ${previousAggregations.
+          map(tup => (tup._1,tup._2)).mkString("\n")}
+        """)
+
+        previousAggregationsBc.unpersist()
+        previousAggregationsBc = sc.broadcast (previousAggregations)
+
       case Failure(e) =>
+        logError (s"Error in collecting aggregations: ${e.getMessage}")
         throw e
     }
 
-    aggregations
+    /** [2] At this point we have updated the *previousAggregations*. Now we
+     *  can: (i) aggregationFilter the ODAGs residing in the execution
+     *  engines, if this applies; and (ii) flush the remaining ODAGs for
+     *  global aggregation.
+     */
+
+    val aggregatedOdags = getAggregatedOdags(execEngines.asInstanceOf[RDD[ODAGEngine[E,O,S,C]]],
+      previousAggregationsBc, configBc)
+
+    val odagsFuture = Future { aggregatedOdags.collect.toMap  }
+    // odags
+    Await.ready (odagsFuture, atMost = Duration.Inf)
+    odagsFuture.value.get match {
+      case Success(aggregatedOdagsLocal) =>
+        logInfo (s"Number of aggregated ODAGs = ${aggregatedOdagsLocal.size}")
+        aggregatedOdagsBc.unpersist()
+        aggregatedOdagsBc = sc.broadcast (aggregatedOdagsLocal)
+
+        /* maybe debug odag stats */
+        if (log.isDebugEnabled) {
+          for ((pattern,odag) <- aggregatedOdagsLocal.iterator) {
+            val storage = odag.getStorage
+            storage.finalizeConstruction
+            logDebug (
+              s"Superstep{${superstep}}" +
+              s";Patterns{1}" +
+              s";StorageEstimate{${SizeEstimator.estimate (odag.getStorage)}}" +
+              s";PatternEstimate{${SizeEstimator.estimate (pattern.asInstanceOf[AnyRef])}}" +
+              s";${storage.toStringResume}" +
+              s";${storage.getStats}" +
+              s";${storage.getStats.getSizeEstimations}"
+            )
+          }
+        }
+
+      case Failure(e) =>
+        logError (s"Error in collecting odags ${e.getMessage}")
+        throw e
+    }
+
+    // the exec engines have no use anymore, make room for the next round
+    execEngines.unpersist()
+
+    // whether the user chose to customize master computation, executed every
+    // superstep
+    masterComputation.compute()
+
+    // print stats
+    aggAccums = aggAccums.map { case (name,accum) =>
+      logInfo (s"Accumulator[$name]: ${accum.value}")
+      (name -> sc.accumulator [Long] (0L, name))
+    }
+    
+    val superstepFinish = System.currentTimeMillis
+    logInfo (s"Superstep $superstep finished in ${superstepFinish - superstepStart} ms")
+
+    !sc.isStopped && !aggregatedOdagsBc.value.isEmpty
   }
 
-  override def getAggregatedValue[T <: Writable](name: String) = aggregations.get(name) match {
-    case Some(aggStorage) => aggStorage.asInstanceOf[T]
-    case None =>
-      logWarning (s"AggregationStorage $name not found")
-      null.asInstanceOf[T]
-  }
+  /**
+   * Creates an RDD of execution engines
+   * TODO
+   */
+  def getExecutionEngines(
+      superstepRDD: RDD[_],
+      superstep: Int,
+      configBc: Broadcast[SparkConfiguration[E]],
+      aggregatedOdagsBc: Broadcast[scala.collection.Map[K,O]],
+      aggAccums: Map[String,Accumulator[_]],
+      previousAggregationsBc: Broadcast[_]): RDD[SparkEngine[E]] = {
 
-  override def setAggregatedValue[T <: Writable](name: String, value: T) = {
-    logWarning ("Setting aggregated value has no effect in spark execution engine")
-  }
+    // read embeddings from global agg. ODAGs, expand, filter and process
+    val execEngines = superstepRDD.mapPartitionsWithIndex { (idx, _) =>
 
-  override def finalizeComputation() = {
-    super.finalize()
-  }
+      configBc.value.initialize()
 
-  override def getOdags: RDD[O] = {
-    sc.union (odags.toSeq)
+      val execEngine = ODAGEngine [E,O,S,C] (
+        partitionId = idx,
+        superstep = superstep,
+        accums = aggAccums,
+        previousAggregationsBc = previousAggregationsBc,
+        configuration = configBc.value
+      )
+      execEngine.init()
+      val stash = ODAGStash [E,O,S] (configBc.value, aggregatedOdagsBc.value)
+      execEngine.compute (Iterator (stash))
+      execEngine.finalize()
+      Iterator[SparkEngine[E]](execEngine)
+    }
+
+    execEngines
   }
-}
- 
-/**
- * Companion object: static methods and fields
- */
-object ODAGMasterEngine {
-  val AGG_EMBEDDINGS_PROCESSED = "embeddings_processed"
-  val AGG_EMBEDDINGS_GENERATED = "embeddings_generated"
-  val AGG_EMBEDDINGS_OUTPUT = "embeddings_output"
 }

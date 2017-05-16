@@ -9,31 +9,29 @@ import io.arabesque.utils.pool.Pool;
 
 public class PatternEdgePool extends Pool<PatternEdge> {
 
-    public static PatternEdgePool instance() {
-        return PatternEdgePoolHolder.INSTANCE;
+    public static PatternEdgePool instance(boolean areEdgesLabelled) {
+        if (!areEdgesLabelled) {
+            return PatternEdgePoolHolder.INSTANCE;
+        } else {
+            return PatternEdgePoolHolder.LBL_INSTANCE;
+        }
     }
-
+    
     public PatternEdgePool(Factory<PatternEdge> factory) {
         super(factory);
     }
 
     private static class PatternEdgeFactory extends BasicFactory<PatternEdge> {
-        private boolean areEdgesLabelled;
-
         @Override
         public PatternEdge createObject() {
-            if (!areEdgesLabelled) {
-                return new PatternEdge();
-            }
-            else {
-                return new LabelledPatternEdge();
-            }
+            return new PatternEdge();
         }
+    }
 
+    private static class LabelledPatternEdgeFactory extends BasicFactory<PatternEdge> {
         @Override
-        public void reset() {
-            Configuration conf = Configuration.get();
-            areEdgesLabelled = conf.isGraphEdgeLabelled();
+        public PatternEdge createObject() {
+            return new LabelledPatternEdge();
         }
     }
 
@@ -44,6 +42,10 @@ public class PatternEdgePool extends Pool<PatternEdge> {
      * This initialization is also guaranteed to be thread-safe.
      */
     private static class PatternEdgePoolHolder {
-        static final PatternEdgePool INSTANCE = new PatternEdgePool(new PatternEdgeFactory());
+        static final PatternEdgePool INSTANCE =
+           new PatternEdgePool(new PatternEdgeFactory());
+
+        static final PatternEdgePool LBL_INSTANCE =
+           new PatternEdgePool(new LabelledPatternEdgeFactory());
     }
 }

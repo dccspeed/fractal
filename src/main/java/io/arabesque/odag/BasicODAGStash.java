@@ -17,6 +17,8 @@ import java.util.concurrent.ExecutorService;
 public abstract class BasicODAGStash<O extends BasicODAG, S extends BasicODAGStash>
       implements Writable {
 
+   public abstract S init(Configuration config);
+
    public abstract void addEmbedding(Embedding embedding);
 
    public abstract void aggregate(O odag);
@@ -35,10 +37,13 @@ public abstract class BasicODAGStash<O extends BasicODAG, S extends BasicODAGSta
     
    public abstract void clear();
 
-   public interface Reader<O extends Embedding> extends Iterator<O> {
+   public interface Reader extends Iterator<Embedding> {
+      public <E extends Embedding> E next();
    }
-   public static class EfficientReader<O extends Embedding> implements Reader<O> {
+
+   public static class EfficientReader implements Reader {
       private final int numPartitions;
+      private final Configuration<Embedding> configuration;
       private final Computation<Embedding> computation;
       private final int numBlocks;
       private final int maxBlockSize;
@@ -47,8 +52,10 @@ public abstract class BasicODAGStash<O extends BasicODAG, S extends BasicODAGSta
       private StorageReader currentReader;
       private boolean currentPositionConsumed = true;
 
-      public EfficientReader(BasicODAGStash<?,?> stash, Computation<? extends Embedding> computation, int numPartitions, int numBlocks, int maxBlockSize) {
+      public EfficientReader(BasicODAGStash<?,?> stash, Configuration<? extends Embedding> configuration,
+            Computation<? extends Embedding> computation, int numPartitions, int numBlocks, int maxBlockSize) {
          this.numPartitions = numPartitions;
+         this.configuration = (Configuration<Embedding>) configuration;
          this.computation = (Computation<Embedding>) computation;
          this.numBlocks = numBlocks;
          this.maxBlockSize = maxBlockSize;
@@ -64,7 +71,7 @@ public abstract class BasicODAGStash<O extends BasicODAG, S extends BasicODAGSta
                if (stashIterator.hasNext()) {
                   currentReader = stashIterator.
                      next().
-                     getReader(computation, numPartitions, numBlocks, maxBlockSize);
+                     getReader(configuration, computation, numPartitions, numBlocks, maxBlockSize);
                }
             }
 
@@ -97,10 +104,10 @@ public abstract class BasicODAGStash<O extends BasicODAG, S extends BasicODAGSta
       }
 
       @Override
-      public O next() {
+      public Embedding next() {
          currentPositionConsumed = true;
 
-         return (O) currentReader.next();
+         return currentReader.next();
       }
 
       @Override

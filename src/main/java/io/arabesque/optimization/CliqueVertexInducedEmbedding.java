@@ -10,7 +10,7 @@ public class CliqueVertexInducedEmbedding extends VertexInducedEmbedding {
         if (dirtyExtensionWordIds) {
             extensionWordIds.clear();
 
-            IntCollection lastVertexNeighbours = mainGraph.getVertexNeighbours(getVertices().getLast());
+            IntCollection lastVertexNeighbours = configuration.getMainGraph().getVertexNeighbours(getVertices().getLast());
 
             if (lastVertexNeighbours != null) {
                 intAddConsumer.setCollection(extensionWordIds);

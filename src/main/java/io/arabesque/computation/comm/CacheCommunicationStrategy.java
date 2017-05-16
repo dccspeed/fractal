@@ -5,6 +5,7 @@ import io.arabesque.computation.BasicComputation;
 import io.arabesque.computation.Computation;
 import io.arabesque.computation.MasterExecutionEngine;
 import io.arabesque.computation.WorkerContext;
+import io.arabesque.conf.Configuration;
 import io.arabesque.embedding.Embedding;
 import io.arabesque.pattern.Pattern;
 import org.apache.giraph.graph.Vertex;
@@ -63,7 +64,7 @@ public class CacheCommunicationStrategy<O extends Embedding> extends Communicati
         outputCaches = new LZ4ObjectCache[numberOfPartitions];
 
         for (int i = 0; i < outputCaches.length; ++i) {
-            outputCaches[i] = new LZ4ObjectCache();
+            outputCaches[i] = new LZ4ObjectCache(Configuration.get());
         }
 
         totalSizeEmbeddingsProcessed = 0;

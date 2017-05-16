@@ -1,5 +1,6 @@
 package io.arabesque.pattern;
 
+import io.arabesque.conf.Configuration;
 import io.arabesque.embedding.Embedding;
 import io.arabesque.utils.collection.IntArrayList;
 import com.koloboke.collect.map.IntIntMap;
@@ -10,6 +11,8 @@ import java.io.Externalizable;
 public interface Pattern extends Writable, Externalizable {
     Pattern copy();
 
+    void init(Configuration config);
+    
     void reset();
 
     void setEmbedding(Embedding embedding);

@@ -5,7 +5,7 @@
 
    <groupId>io.arabesque</groupId>
    <artifactId>arabesque</artifactId>
-   <version>1.0.0-SPARK</version>
+   <version>2.0.0-SPARK</version>
    <name>Arabesque</name>
    <description>A system for distributed graph mining</description>
    <url>http://arabesque.io</url>
@@ -63,7 +63,7 @@
    <properties>
       <giraph.version>1.2.0-ARABESQUE</giraph.version>
       <hadoop.version>2.6.0</hadoop.version>
-      <spark.version>2.0.0</spark.version>
+      <spark.version>2.1.0</spark.version>
       <scala.version>2.11.8</scala.version>
       <scala.binary.version>2.11</scala.binary.version>
       <giraph.scope>compile</giraph.scope>
@@ -182,7 +182,7 @@
                <!--<trimStackTrace>false</trimStackTrace>-->
                <!-- <skipTests>true</skipTests>-->
                <includes>
-                  <include>**/*Spec.*</include>
+                  <!-- <include>**/*Spec.*</include> -->
                </includes>
             </configuration>
          </plugin>
@@ -313,6 +313,11 @@
          <groupId>org.yaml</groupId>
          <artifactId>snakeyaml</artifactId>
          <version>1.14</version>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.xbean</groupId>
+         <artifactId>xbean-asm5-shaded</artifactId>
+         <version>4.4</version>
       </dependency>
       <!-- Testing dependencies -->
       <dependency>

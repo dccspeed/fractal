@@ -37,7 +37,7 @@ public class ODAGCommunicationStrategy<O extends Embedding> extends Communicatio
     private SinglePatternODAGStash currentEmbeddingStash;
     private SinglePatternODAGStash nextEmbeddingStash;
     private SinglePatternODAGStash aggregatedEmbeddingStash;
-    private SinglePatternODAGStash.EfficientReader<O> odagStashReader;
+    private SinglePatternODAGStash.EfficientReader odagStashReader;
 
     private ODAGLocalCoordinationObjectFactory coordinationObjectFactory;
     private long totalSizeODAGs;
@@ -223,13 +223,14 @@ public class ODAGCommunicationStrategy<O extends Embedding> extends Communicatio
                 return null;
             }
 
-            odagStashReader = new SinglePatternODAGStash.EfficientReader<>(
-                    currentEmbeddingStash, getExecutionEngine().getComputation(),
+            odagStashReader = new SinglePatternODAGStash.EfficientReader (
+                    currentEmbeddingStash, Configuration.get(),
+                    getExecutionEngine().getComputation(),
                     getWorkerContext().getNumberPartitions(), numBlocks, maxBlockSize);
         }
 
         if (odagStashReader.hasNext()) {
-            return odagStashReader.next();
+            return (O) odagStashReader.next();
         } else {
             currentEmbeddingStash = null;
             flush();

@@ -23,6 +23,8 @@ import java.io.*;
 public abstract class BasicPattern implements Pattern {
     private static final Logger LOG = Logger.getLogger(BasicPattern.class);
 
+    protected Configuration configuration;
+
     protected HashIntIntMapFactory positionMapFactory = HashIntIntMaps.getDefaultFactory().withDefaultValue(-1);
 
     // Basic structure {{
@@ -44,7 +46,7 @@ public abstract class BasicPattern implements Pattern {
     // }}
 
     // Others {{
-    private transient final MainGraph mainGraph;
+    protected transient MainGraph mainGraph;
     private PatternEdgePool patternEdgePool;
 
     protected volatile boolean dirtyVertexPositionEquivalences;
@@ -54,15 +56,10 @@ public abstract class BasicPattern implements Pattern {
     // }}
 
     public BasicPattern() {
-        mainGraph = Configuration.get().getMainGraph();
-        patternEdgePool = PatternEdgePool.instance();
-
         vertices = new IntArrayList();
-        edges = createPatternEdgeArrayList();
         vertexPositions = positionMapFactory.newMutableMap();
         previousWords = new IntArrayList();
-
-        init();
+        reset();
     }
 
     public BasicPattern(BasicPattern basicPattern) {
@@ -70,6 +67,12 @@ public abstract class BasicPattern implements Pattern {
 
         intAddConsumer.setCollection(vertices);
         basicPattern.vertices.forEach(intAddConsumer);
+
+        edges = createPatternEdgeArrayList(basicPattern.
+              configuration.isGraphEdgeLabelled());
+
+        patternEdgePool = PatternEdgePool.instance(
+              basicPattern.configuration.isGraphEdgeLabelled());
 
         edges.ensureCapacity(basicPattern.edges.size());
 
@@ -80,16 +83,39 @@ public abstract class BasicPattern implements Pattern {
         vertexPositions.putAll(basicPattern.vertexPositions);
     }
 
-    protected void init() {
-        reset();
+    @Override
+    public void init(Configuration config) {
+        configuration = config;
+
+        if (edges == null) {
+           edges = createPatternEdgeArrayList(configuration.isGraphEdgeLabelled());
+        }
+
+        if (patternEdgePool == null) {
+           patternEdgePool = PatternEdgePool.
+              instance(configuration.isGraphEdgeLabelled());
+        }
+
+        mainGraph = configuration.getMainGraph();
     }
 
     @Override
     public void reset() {
-        vertices.clear();
-        patternEdgePool.reclaimObjects(edges);
-        edges.clear();
-        vertexPositions.clear();
+        if (vertices != null) {
+           vertices.clear();
+        }
+
+        if (patternEdgePool != null) {
+           patternEdgePool.reclaimObjects(edges);
+        }
+
+        if (edges != null) {
+           edges.clear();
+        }
+
+        if (vertexPositions != null) {
+           vertexPositions.clear();
+        }
 
         setDirty();
 
@@ -99,7 +125,9 @@ public abstract class BasicPattern implements Pattern {
     private void resetIncremental() {
         numVerticesAddedFromPrevious = 0;
         numAddedEdgesFromPrevious = 0;
-        previousWords.clear();
+        if (previousWords != null) {
+           previousWords.clear();
+        }
     }
 
     @Override
@@ -458,6 +486,7 @@ public abstract class BasicPattern implements Pattern {
 
     @Override
     public void write(DataOutput dataOutput) throws IOException {
+        dataOutput.writeInt(configuration.getId());
         edges.write(dataOutput);
         vertices.write(dataOutput);
     }
@@ -471,6 +500,8 @@ public abstract class BasicPattern implements Pattern {
     public void readFields(DataInput dataInput) throws IOException {
         reset();
 
+        init(Configuration.get(dataInput.readInt()));
+
         edges.readFields(dataInput);
         vertices.readFields(dataInput);
 
@@ -483,14 +514,15 @@ public abstract class BasicPattern implements Pattern {
        readFields(objInput);
     }
 
-    protected PatternEdgeArrayList createPatternEdgeArrayList() {
-        return new PatternEdgeArrayList();
+    protected PatternEdgeArrayList createPatternEdgeArrayList(boolean areEdgesLabelled) {
+        return new PatternEdgeArrayList(areEdgesLabelled);
     }
 
     protected PatternEdge createPatternEdge(Edge edge, int srcPos, int dstPos, int srcId) {
         PatternEdge patternEdge = patternEdgePool.createObject();
 
-        patternEdge.setFromEdge(edge, srcPos, dstPos, srcId);
+        patternEdge.setFromEdge(configuration.getMainGraph(),
+              edge, srcPos, dstPos, srcId);
 
         return patternEdge;
     }

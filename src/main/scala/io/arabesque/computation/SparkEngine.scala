@@ -27,27 +27,25 @@ trait SparkEngine [E <: Embedding]
   val superstep: Int
   val accums: Map[String,Accumulator[_]]
   val previousAggregationsBc: Broadcast[_]
+  val configuration: SparkConfiguration[E]
+  
+  def flush: Iterator[(_,_)]
 
   setLogLevel (configuration.getLogLevel)
-
-  // configuration has input parameters, computation knows how to ensure
-  // arabesque's computational model
-  @transient lazy val configuration: SparkConfiguration[E] = {
-    val configuration = Configuration.get [SparkConfiguration[E]]
-    configuration
-  }
 
   // computation implements the user algorithm
   @transient lazy val computation: Computation[E] = {
     val computation = configuration.createComputation [E]
-    computation.setUnderlyingExecutionEngine (this)
-    computation.init()
-    computation.initAggregations()
+    computation.setExecutionEngine (this)
+    computation.init(configuration)
+    computation.initAggregations(configuration)
     computation
   }
 
   // aggregation storages
-  @transient lazy val aggregationStorageFactory = new AggregationStorageFactory
+  @transient lazy val aggregationStorageFactory =
+    new AggregationStorageFactory(configuration)
+
   lazy val aggregationStorages
     : Map[String,AggregationStorage[_ <: Writable, _ <: Writable]] = Map.empty
 
@@ -58,11 +56,16 @@ trait SparkEngine [E <: Embedding]
   def getNumberPartitions: Int = configuration.numPartitions
 
   // accumulators
-  var numEmbeddingsProcessed: Long = 0
-  var numEmbeddingsGenerated: Long = 0
-  var numEmbeddingsOutput: Long = 0
+  var numEmbeddingsProcessed: Long = _
+  var numEmbeddingsGenerated: Long = _
+  var numEmbeddingsOutput: Long = _
 
-  def init(): Unit = {}
+  def init(): Unit = {
+    configuration.setEmbeddingClass (computation.getEmbeddingClass())
+    numEmbeddingsProcessed = 0
+    numEmbeddingsGenerated = 0
+    numEmbeddingsOutput = 0
+  }
 
   /**
    * Any Spark accumulator used for stats accounting is flushed here
@@ -72,15 +75,18 @@ trait SparkEngine [E <: Embedding]
     def accumulate[T : ClassTag](it: T, accum: Accumulator[_]) = {
       accum.asInstanceOf[Accumulator[T]] += it
     }
-    logInfo (s"Embeddings processed: ${numEmbeddingsProcessed}")
+    logInfo (s"Accumulator[${partitionId}]" +
+      s"[embeddings_processed]: ${numEmbeddingsProcessed}")
     accumulate (numEmbeddingsProcessed,
-      accums(ODAGMasterEngine.AGG_EMBEDDINGS_PROCESSED))
-    logInfo (s"Embeddings generated: ${numEmbeddingsGenerated}")
+      accums(SparkMasterEngine.AGG_EMBEDDINGS_PROCESSED))
+    logInfo (s"Accumulator[${partitionId}]" +
+      s"[embeddings_generated]: ${numEmbeddingsGenerated}")
     accumulate (numEmbeddingsGenerated,
-      accums(ODAGMasterEngine.AGG_EMBEDDINGS_GENERATED))
-    logInfo (s"Embeddings output: ${numEmbeddingsOutput}")
+      accums(SparkMasterEngine.AGG_EMBEDDINGS_GENERATED))
+    logInfo (s"Accumulator[${partitionId}]" +
+      s"[embeddings_output]: ${numEmbeddingsOutput}")
     accumulate (numEmbeddingsOutput,
-      accums(ODAGMasterEngine.AGG_EMBEDDINGS_OUTPUT))
+      accums(SparkMasterEngine.AGG_EMBEDDINGS_OUTPUT))
   }
 
   /**
@@ -93,7 +99,8 @@ trait SparkEngine [E <: Embedding]
   def flushAggregationsByName(name: String) = {
     // the following function does the final local aggregation
     // e.g. for motifs, turns quick patterns into canonical ones
-    def aggregate[K <: Writable, V <: Writable](agg1: AggregationStorage[K,V], agg2: AggregationStorage[_,_]) = {
+    def aggregate[K <: Writable, V <: Writable](agg1: AggregationStorage[K,V],
+        agg2: AggregationStorage[_,_]) = {
       agg1.finalLocalAggregate (agg2.asInstanceOf[AggregationStorage[K,V]])
       agg1
     }
@@ -127,7 +134,8 @@ trait SparkEngine [E <: Embedding]
    * @param value value to be accounted for key in that aggregator
    * 
    */
-  override def map[K <: Writable, V <: Writable](name: String, key: K, value: V) = {
+  override def map[K <: Writable, V <: Writable](name: String,
+      key: K, value: V) = {
     val aggStorage = getAggregationStorage[K,V] (name)
     aggStorage.aggregateWithReusables (key, value)
   }
@@ -142,18 +150,24 @@ trait SparkEngine [E <: Embedding]
    */
   override def getAggregationStorage[K <: Writable, V <: Writable](name: String)
       : AggregationStorage[K,V] = aggregationStorages.get(name) match {
-    case Some(aggregationStorage : AggregationStorage[K,V] @unchecked) => aggregationStorage
+    case Some(aggregationStorage : AggregationStorage[K,V] @unchecked) =>
+      aggregationStorage
+
     case None =>
-      val aggregationStorage = aggregationStorageFactory.createAggregationStorage (name)
+      val aggregationStorage = aggregationStorageFactory.
+        createAggregationStorage (name)
       aggregationStorages.update (name, aggregationStorage)
       aggregationStorage.asInstanceOf[AggregationStorage[K,V]]
+
     case Some(aggregationStorage) =>
-      val e = new RuntimeException (s"Unexpected type for aggregation ${aggregationStorage}")
+      val e = new RuntimeException (
+        s"Unexpected type for aggregation ${aggregationStorage}")
       logError (s"Wrong type of aggregation storage: ${e.getMessage}")
       throw e
   }
   
-  override def aggregate(name: String, value: LongWritable) = accums.get (name) match {
+  override def aggregate(name: String,
+      value: LongWritable) = accums.get (name) match {
     case Some(accum) =>
       accum.asInstanceOf[Accumulator[Long]] += value.get
     case None => 
@@ -164,15 +178,17 @@ trait SparkEngine [E <: Embedding]
   @transient val outputFunc = {
     import SparkConfiguration.{OUTPUT_PLAIN_TEXT, OUTPUT_SEQUENCE_FILE}
     configuration.getOutputFormat match {
-      case OUTPUT_PLAIN_TEXT if configuration.isOutputActive => (e: Embedding) => {
-        outputPlainText(e)
-        numEmbeddingsOutput += 1
-      }
+      case OUTPUT_PLAIN_TEXT if configuration.isOutputActive =>
+        (e: Embedding) => {
+          outputPlainText(e)
+          numEmbeddingsOutput += 1
+        }
 
-      case OUTPUT_SEQUENCE_FILE if configuration.isOutputActive => (e: Embedding) => {
-        outputSequenceFile(e)
-        numEmbeddingsOutput += 1
-      }
+      case OUTPUT_SEQUENCE_FILE if configuration.isOutputActive =>
+        (e: Embedding) => {
+          outputSequenceFile(e)
+          numEmbeddingsOutput += 1
+        }
 
       case _ => (e: Embedding) => {}
     }
@@ -194,9 +210,10 @@ trait SparkEngine [E <: Embedding]
   /**
    * Output embedding to a sequence file
    */
-  private def outputSequenceFile(embedding: Embedding) = embeddingWriterOpt match {
+  private def outputSequenceFile(
+      embedding: Embedding) = embeddingWriterOpt match {
     case Some(embeddingWriter) =>
-      val resEmbedding = ResultEmbedding (embedding)
+      val resEmbedding = ResultEmbedding (embedding, configuration)
       embeddingWriter.append (NullWritable.get, resEmbedding)
       numEmbeddingsOutput += 1
 
@@ -207,7 +224,7 @@ trait SparkEngine [E <: Embedding]
       else if (embedding.isInstanceOf[VertexInducedEmbedding])
         classOf[VEmbedding]
       else
-        classOf[ResultEmbedding[_]] // not allowed, will crash and should not happen
+        classOf[ResultEmbedding[_]] // not allowed, will crash
 
       // instantiate the embedding writer (sequence file)
       val superstepPath = new Path(outputPath, s"${getSuperstep}")
@@ -219,7 +236,7 @@ trait SparkEngine [E <: Embedding]
 
       embeddingWriterOpt = Some(embeddingWriter)
       
-      val resEmbedding = ResultEmbedding (embedding)
+      val resEmbedding = ResultEmbedding (embedding, configuration)
       embeddingWriter.append (NullWritable.get, resEmbedding)
       numEmbeddingsOutput += 1
   }

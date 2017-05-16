@@ -9,13 +9,15 @@ import io.arabesque.embedding._
  * requires a reusable local variable in order to avoid unnecessary object
  * creation.
  *
- * TODO: provide an example
  */
 
 trait VertexProcessFunc
-    extends Function2[VertexInducedEmbedding, Computation[VertexInducedEmbedding], Unit]
-    with Serializable
+    extends Function2[
+      VertexInducedEmbedding, Computation[VertexInducedEmbedding], Unit
+    ] with Serializable
 
 trait EdgeProcessFunc
-    extends Function2[EdgeInducedEmbedding, Computation[EdgeInducedEmbedding], Unit]
+    extends Function2[
+      EdgeInducedEmbedding, Computation[EdgeInducedEmbedding], Unit
+    ]
     with Serializable

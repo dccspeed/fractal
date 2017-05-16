@@ -26,16 +26,17 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
     public AggregationStorage() {
     }
 
-    public AggregationStorage(String name) {
-        init(name);
+    public AggregationStorage(String name, AggregationStorageMetadata<K,V> metadata) {
+        init(name, metadata);
     }
 
-    public AggregationStorage(String name, Map<K,V> keyValueMap) {
-       init(name);
+    public AggregationStorage(String name, AggregationStorageMetadata<K,V> metadata,
+          Map<K,V> keyValueMap) {
+       init(name, metadata);
        this.keyValueMap = keyValueMap;
     }
 
-    protected void init(String name) {
+    protected void init(String name, AggregationStorageMetadata<K,V> metadata) {
         if (keyValueMap == null) {
             keyValueMap = new HashMap<>();
         }
@@ -43,8 +44,6 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
         reset();
 
         this.name = name;
-
-        AggregationStorageMetadata<K, V> metadata = Configuration.get().getAggregationMetadata(name);
 
         if (metadata == null) {
             return;
@@ -228,7 +227,9 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
 
         name = dataInput.readUTF();
 
-        init(name);
+        AggregationStorageMetadata<K,V> metadata =
+           Configuration.get().getAggregationMetadata(name);
+        init(name, metadata);
 
         try {
             Constructor<K> keyClassConstructor = keyClass.getConstructor();

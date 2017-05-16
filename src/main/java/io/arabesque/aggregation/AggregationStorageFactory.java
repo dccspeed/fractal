@@ -4,9 +4,15 @@ import io.arabesque.conf.Configuration;
 import io.arabesque.pattern.Pattern;
 
 public class AggregationStorageFactory {
+    
+    private Configuration configuration;
+
+    public AggregationStorageFactory(Configuration config) {
+       this.configuration = config;
+    }
 
     public AggregationStorage createAggregationStorage(String name) {
-        AggregationStorageMetadata metadata = Configuration.get().getAggregationMetadata(name);
+        AggregationStorageMetadata metadata = configuration.getAggregationMetadata(name);
 
         return createAggregationStorage(name, metadata);
     }
@@ -19,10 +25,10 @@ public class AggregationStorageFactory {
         Class<?> keyClass = metadata.getKeyClass();
 
         if (Pattern.class.isAssignableFrom(keyClass)) {
-            return new PatternAggregationStorage(name);
+            return new PatternAggregationStorage(name, metadata);
         } else {
-            AggregationStorage aggStorage = Configuration.get().createAggregationStorage(name);
-            aggStorage.init(name);
+            AggregationStorage aggStorage = configuration.createAggregationStorage(name);
+            aggStorage.init(name, metadata);
             return aggStorage;
         }
     }

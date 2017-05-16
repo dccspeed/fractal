@@ -1,5 +1,6 @@
 package io.arabesque.embedding;
 
+import io.arabesque.conf.Configuration;
 import io.arabesque.misc.WritableObject;
 import io.arabesque.pattern.Pattern;
 import io.arabesque.utils.collection.IntArrayList;
@@ -8,6 +9,8 @@ import com.koloboke.collect.IntCollection;
 import java.io.Externalizable;
 
 public interface Embedding extends WritableObject, Externalizable {
+    void init(Configuration configuration);
+
     IntArrayList getWords();
 
     IntArrayList getVertices();

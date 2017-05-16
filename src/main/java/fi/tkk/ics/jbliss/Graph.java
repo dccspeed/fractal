@@ -34,9 +34,10 @@ import java.lang.reflect.Field;
  * @author Tommi Junttila
  */
 public class Graph<V extends Comparable> {
-	protected JBlissPattern pattern;
+    protected JBlissPattern pattern;
     protected Reporter       _reporter;
     protected Object         _reporter_param;
+    private MainGraph mainGraph;
 
 	protected void _report(int[] aut)
 	{
@@ -66,13 +67,12 @@ public class Graph<V extends Comparable> {
     /**
      * Create a new undirected graph with no vertices or edges.
      */
-    public Graph(JBlissPattern pattern)
-    {
-		this.pattern = pattern;
+    public Graph(JBlissPattern pattern, MainGraph mainGraph) {
+        this.pattern = pattern;
+        this.mainGraph = mainGraph;
     }
 
 	private long createBliss() {
-		MainGraph mainGraph = Configuration.get().getMainGraph();
 		IntArrayList vertices = pattern.getVertices();
 		int numVertices = vertices.size();
 		PatternEdgeArrayList edges = pattern.getEdges();

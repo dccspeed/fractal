@@ -14,11 +14,9 @@ import scala.collection.JavaConversions._
 
 class MultiPatternODAG extends BasicODAG {
 
-  def config: SparkConfiguration[_ <: Embedding] =
-    Configuration.get[SparkConfiguration[_ <: Embedding]]
-
+  @transient var configuration: Configuration[_ <: Embedding] = _
   var patterns: Set[Pattern] = Set.empty
-  @transient val reusablePattern: Pattern = config.createPattern
+  @transient lazy val reusablePattern: Pattern = configuration.createPattern
 
   def this(numDomains: Int) = {
     this()
@@ -30,6 +28,11 @@ class MultiPatternODAG extends BasicODAG {
     this()
     serializeAsReadOnly = false
     storage = createDomainStorage (readOnly)
+  }
+
+  override def init(config: Configuration[_ <: Embedding]): MultiPatternODAG = {
+    configuration = config
+    this
   }
 
   def aggregationFilter(computation: Computation[_]): Boolean = {
@@ -64,11 +67,13 @@ class MultiPatternODAG extends BasicODAG {
   }
 
   override def getReader(
+      configuration: Configuration[Embedding],
       computation: Computation[Embedding],
       numPartitions: Int,
       numBlocks: Int,
       maxBlockSize: Int): StorageReader = {
-    storage.getReader(patterns.toArray, computation, numPartitions, numBlocks, maxBlockSize)
+    storage.getReader(patterns.toArray, configuration, computation,
+      numPartitions, numBlocks, maxBlockSize)
   }
 
   override def readExternal(objInput: ObjectInput): Unit = {
@@ -84,9 +89,10 @@ class MultiPatternODAG extends BasicODAG {
   
   override def readFields(dataInput: DataInput): Unit = {
     this.clear
+    init(Configuration.get(dataInput.readInt))
     val numPatterns = dataInput.readInt
     for (i <- 0 until numPatterns) {
-      val pattern = config.createPattern
+      val pattern = configuration.createPattern
       pattern.readFields (dataInput)
       patterns += pattern
     }
@@ -94,6 +100,7 @@ class MultiPatternODAG extends BasicODAG {
   }
 
   override def write(dataOutput: DataOutput): Unit = {
+    dataOutput.writeInt (configuration.getId)
     dataOutput.writeInt (patterns.size)
     patterns.foreach (pattern => pattern.write(dataOutput))
     storage.write(dataOutput)

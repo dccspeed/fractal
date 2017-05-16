@@ -7,7 +7,10 @@ import io.arabesque.utils.WritableObjArrayList;
 import java.util.Collection;
 
 public class PatternEdgeArrayList extends WritableObjArrayList<PatternEdge> implements Comparable<PatternEdgeArrayList> {
-    public PatternEdgeArrayList() {
+    private boolean areEdgesLabelled;
+
+    public PatternEdgeArrayList(boolean areEdgesLabelled) {
+        this.areEdgesLabelled = areEdgesLabelled;
     }
 
     public PatternEdgeArrayList(int capacity) {
@@ -20,12 +23,16 @@ public class PatternEdgeArrayList extends WritableObjArrayList<PatternEdge> impl
 
     @Override
     protected PatternEdge createObject() {
-        return PatternEdgePool.instance().createObject();
+        return PatternEdgePool.instance(areEdgesLabelled).createObject();
     }
 
     @Override
     public void reclaim() {
-        PatternEdgeArrayListPool.instance().reclaimObject(this);
+        PatternEdgeArrayListPool.instance(areEdgesLabelled).reclaimObject(this);
+    }
+
+    public boolean areEdgesLabelled() {
+       return areEdgesLabelled;
     }
 
     public int compareTo(PatternEdgeArrayList other) {

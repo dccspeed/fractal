@@ -1,5 +1,6 @@
 package io.arabesque.embedding;
 
+import io.arabesque.conf.Configuration;
 import io.arabesque.utils.collection.IntArrayList;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.function.IntConsumer;
@@ -16,13 +17,17 @@ public class VertexInducedEmbedding extends BasicEmbedding {
     // Edge tracking for incremental modifications {{
     private IntArrayList numEdgesAddedWithWord;
     // }}
+    //
 
-    @Override
-    protected void init() {
+    public VertexInducedEmbedding() {
+        super();
         updateEdgesConsumer = new UpdateEdgesConsumer();
         numEdgesAddedWithWord = new IntArrayList();
+    }
 
-        super.init();
+    @Override
+    public void init(Configuration config) {
+        super.init(config);
     }
 
     @Override
@@ -71,12 +76,12 @@ public class VertexInducedEmbedding extends BasicEmbedding {
     }
 
     protected IntCollection getValidNeighboursForExpansion(int vertexId) {
-        return mainGraph.getVertexNeighbours(vertexId);
+        return configuration.getMainGraph().getVertexNeighbours(vertexId);
     }
 
     @Override
     protected boolean areWordsNeighbours(int wordId1, int wordId2) {
-        return mainGraph.isNeighborVertex(wordId1, wordId2);
+        return configuration.getMainGraph().isNeighborVertex(wordId1, wordId2);
     }
 
     @Override
@@ -102,6 +107,8 @@ public class VertexInducedEmbedding extends BasicEmbedding {
     @Override
     public void readFields(DataInput in) throws IOException {
         reset();
+        
+        init(Configuration.get(in.readInt()));
 
         vertices.readFields(in);
 
@@ -132,7 +139,8 @@ public class VertexInducedEmbedding extends BasicEmbedding {
             int existingVertexId = vertices.getUnchecked(i);
 
             updateEdgesConsumer.reset();
-            mainGraph.forEachEdgeId(existingVertexId, newVertexId, updateEdgesConsumer);
+            configuration.getMainGraph().
+               forEachEdgeId(existingVertexId, newVertexId, updateEdgesConsumer);
             addedEdges += updateEdgesConsumer.getNumAdded();
         }
 

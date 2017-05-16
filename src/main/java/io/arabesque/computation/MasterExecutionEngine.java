@@ -41,7 +41,7 @@ public class MasterExecutionEngine extends MasterCompute implements CommonMaster
 
     public MasterExecutionEngine() {
         inboundAggregationStorages = new HashMap<>();
-        aggregationStorageFactory = new AggregationStorageFactory();
+        aggregationStorageFactory = new AggregationStorageFactory(Configuration.get());
     }
 
     @Override
@@ -244,7 +244,7 @@ public class MasterExecutionEngine extends MasterCompute implements CommonMaster
 
         Computation<?> computation = conf.createComputation();
 
-        computation.initAggregations();
+        computation.initAggregations(conf);
 
         Map<String, AggregationStorageMetadata> registeredAggregationStorages =
                 conf.getAggregationsMetadata();

@@ -9,6 +9,7 @@ import java.io.*;
 import java.util.Iterator;
 
 public class ByteArrayObjectCache implements ObjectCache {
+    protected Configuration configuration;
     protected ExtendedByteArrayDataOutput byteArrayOutputCache;
     protected ByteArrayObjectCacheIterator byteArrayObjectCacheIterator;
 
@@ -21,7 +22,7 @@ public class ByteArrayObjectCache implements ObjectCache {
         public ByteArrayObjectCacheIterator(ByteArrayObjectCache objectCache) {
             ExtendedByteArrayDataOutput byteArrayOutputCache = objectCache.byteArrayOutputCache;
             byteArrayInputCache = new ExtendedByteArrayDataInput(byteArrayOutputCache.getByteArray(), 0, byteArrayOutputCache.getPos());
-            configuration = Configuration.get();
+            configuration = objectCache.configuration;
         }
 
         @Override
@@ -62,6 +63,11 @@ public class ByteArrayObjectCache implements ObjectCache {
         return byteArrayOutputCache;
     }
 
+    public ByteArrayObjectCache(Configuration config) {
+        this();
+        configuration = config;
+    }
+
     public ByteArrayObjectCache() {
         initialize();
     }
@@ -95,7 +101,7 @@ public class ByteArrayObjectCache implements ObjectCache {
     }
 
     public boolean overThreshold() {
-        return byteArrayOutputCache.getPos() > Configuration.get().getCacheThresholdSize();
+        return byteArrayOutputCache.getPos() > configuration.getCacheThresholdSize();
     }
 
     @Override

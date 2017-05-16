@@ -20,11 +20,11 @@ public class PatternAggregationStorage<K extends Pattern, V extends Writable> ex
     private final ConcurrentHashMap<K, K> quick2CanonicalMap;
 
     public PatternAggregationStorage() {
-        this(null);
+        this(null, null);
     }
 
-    public PatternAggregationStorage(String name) {
-        super(name);
+    public PatternAggregationStorage(String name, AggregationStorageMetadata<K,V> metadata) {
+        super(name, metadata);
         reservations = HashObjByteMaps.getDefaultFactory().withDefaultValue((byte) 0).newMutableMap();
         quick2CanonicalMap = new ConcurrentHashMap<>();
     }

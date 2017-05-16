@@ -15,9 +15,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.StringTokenizer;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class BasicMainGraph implements MainGraph {
     private static final Logger LOG = Logger.getLogger(BasicMainGraph.class);
+
+    // we keep a local (per JVM) pool of configurations potentially
+    // representing several active arabesque applications
+    private static AtomicInteger nextGraphId = new AtomicInteger(0);
+    protected final int id = newGraphId();
 
     private static final int INITIAL_ARRAY_SIZE = 4096;
 
@@ -32,6 +38,15 @@ public class BasicMainGraph implements MainGraph {
     private boolean isEdgeLabelled;
     private boolean isMultiGraph;
     private String name;
+    
+    private static int newGraphId() {
+       return nextGraphId.getAndIncrement();
+    }
+
+    @Override
+    public int getId() {
+       return id;
+    }
 
     private void init(String name, boolean isEdgeLabelled, boolean isMultiGraph) {
         this.name = name;
@@ -57,7 +72,7 @@ public class BasicMainGraph implements MainGraph {
         }
     }
 
-    private void init(Object path) throws IOException {
+    public void init(Object path) throws IOException {
         long start = 0;
 
         if (LOG.isInfoEnabled()) {
@@ -167,13 +182,11 @@ public class BasicMainGraph implements MainGraph {
     public BasicMainGraph(Path filePath, boolean isEdgeLabelled, boolean isMultiGraph)
             throws IOException {
         this(filePath.getFileName().toString(), isEdgeLabelled, isMultiGraph);
-        init(filePath);
     }
 
     public BasicMainGraph(org.apache.hadoop.fs.Path hdfsPath, boolean isEdgeLabelled, boolean isMultiGraph)
             throws IOException {
         this(hdfsPath.getName(), isEdgeLabelled, isMultiGraph);
-        init(hdfsPath);
     }
 
     @Override

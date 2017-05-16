@@ -7,6 +7,7 @@ import io.arabesque.utils.collection.IntArrayList;
 import io.arabesque.utils.collection.IntCollectionAddConsumer;
 import io.arabesque.utils.collection.ObjArrayList;
 import io.arabesque.utils.pool.IntArrayListPool;
+import io.arabesque.utils.pool.HashIntSetPool;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.hash.HashIntSet;
 import com.koloboke.collect.set.hash.HashIntSets;
@@ -19,6 +20,8 @@ import java.io.ObjectOutput;
 import java.util.Objects;
 
 public abstract class BasicEmbedding implements Embedding {
+    protected Configuration configuration;
+
     // Basic structure {{
     protected IntArrayList vertices;
     protected IntArrayList edges;
@@ -43,7 +46,8 @@ public abstract class BasicEmbedding implements Embedding {
         }
     };
 
-    protected IntCollectionAddConsumer intAddConsumer = new IntCollectionAddConsumer();
+    protected IntCollectionAddConsumer intAddConsumer =
+       new IntCollectionAddConsumer();
     // }}
 
     // Pattern {{
@@ -64,25 +68,17 @@ public abstract class BasicEmbedding implements Embedding {
     // Incremental Stuff {{
     // }}
 
-    // Helpers {{
-    protected MainGraph mainGraph;
-    // }}
-
     public BasicEmbedding() {
-        init();
-    }
-
-    protected void init() {
         vertices = new IntArrayList();
         edges = new IntArrayList();
-
-        mainGraph = Configuration.get().getMainGraph();
-
         extensionWordIds = HashIntSets.newMutableSet();
         previousExtensionCalculationVertices = new IntArrayList();
-
         extensionWordIdsPerPos = new ObjArrayList<>();
+    }
 
+    @Override
+    public void init(Configuration config) {
+        configuration = config;
         reset();
     }
 
@@ -122,6 +118,7 @@ public abstract class BasicEmbedding implements Embedding {
 
     @Override
     public void write(DataOutput out) throws IOException {
+        out.writeInt(configuration.getId());
         getWords().write(out);
     }
     
@@ -134,6 +131,7 @@ public abstract class BasicEmbedding implements Embedding {
     public IntCollection getExtensibleWordIds() {
         // If we have to recompute the extensionVertexIds set
         if (dirtyExtensionWordIds) {
+           extensionWordIds = HashIntSets.newMutableSet();
             updateExtensibleWordIdsSimple();
         }
 
@@ -147,7 +145,8 @@ public abstract class BasicEmbedding implements Embedding {
         extensionWordIds.clear();
 
         for (int i = 0; i < numVertices; ++i) {
-            IntCollection neighbourhood = getValidNeighboursForExpansion(vertices.getUnchecked(i));
+            IntCollection neighbourhood = getValidNeighboursForExpansion(
+                  vertices.getUnchecked(i));
 
             if (neighbourhood != null) {
                 neighbourhood.forEach(extensionWordIdsAdder);
@@ -187,8 +186,8 @@ public abstract class BasicEmbedding implements Embedding {
             return false;
         }
 
-        // If we found the first neighbour, all following words should have lower
-        // ids than the one we are trying to add
+        // If we found the first neighbour, all following words should have
+        // lower ids than the one we are trying to add
         i++;
         for (; i < numWords; ++i) {
             // If one of those ids is higher or equal, not canonical
@@ -226,7 +225,7 @@ public abstract class BasicEmbedding implements Embedding {
     public Pattern getPattern() {
         if (dirtyPattern) {
             if (pattern == null) {
-                pattern = Configuration.get().createPattern();
+                pattern = configuration.createPattern();
             }
 
             pattern.setEmbedding(this);

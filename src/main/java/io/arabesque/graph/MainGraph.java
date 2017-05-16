@@ -5,6 +5,8 @@ import com.koloboke.collect.IntCollection;
 import com.koloboke.function.IntConsumer;
 
 public interface MainGraph {
+    int getId();
+
     void reset();
 
     boolean isNeighborVertex(int v1, int v2);

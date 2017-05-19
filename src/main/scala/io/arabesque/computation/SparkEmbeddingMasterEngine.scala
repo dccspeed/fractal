@@ -64,25 +64,20 @@ class SparkEmbeddingMasterEngine[E <: Embedding](
     logInfo (s"HadoopConfiguration estimated size = " +
       s"${SizeEstimator.estimate(config.hadoopConf)} bytes")
 
-    var execEngines = sc.makeRDD(Seq.empty[SparkEngine[E]], numPartitions).cache
+    logInfo (s"Computation starting from ${superstepRDD}," +
+      s", StorageLevel=${superstepRDD.getStorageLevel}")
+
     val _aggAccums = aggAccums
 
-    // save old execution engines for unpersisting
-    val _execEngines = execEngines
-    execEngines = getExecutionEngines (
+    val execEngines = getExecutionEngines (
       superstepRDD = superstepRDD,
       superstep = superstep,
       configBc = configBc,
       aggAccums = _aggAccums,
       previousAggregationsBc = previousAggregationsBc)
 
-    // keep engines (filled with expansions and aggregations) for the rest of
-    // the superstep
-    execEngines.persist (MEMORY_ONLY)
-
     /** [1] We extract and aggregate the *aggregations* globally.
      */
-
     val aggregationsFuture = getAggregations (execEngines, numPartitions)
     // aggregations
     Await.ready (aggregationsFuture, atMost = Duration.Inf)
@@ -97,7 +92,6 @@ class SparkEmbeddingMasterEngine[E <: Embedding](
           map(tup => (tup._1,tup._2.getNumberMappings)).mkString("\n")}
         """)
 
-        previousAggregationsBc.unpersist()
         previousAggregationsBc = sc.broadcast (aggregations)
 
       case Failure(e) =>
@@ -105,15 +99,14 @@ class SparkEmbeddingMasterEngine[E <: Embedding](
         throw e
     }
 
-    // barrier: get rid of the old engines
-    _execEngines.unpersist()
+    logInfo (s"StorageLevel = ${storageLevel}")
 
     /** [2] We shuffle the embeddings and prepare to the next superstep
      */
     superstepRDD = execEngines.
       flatMap (_.flush).asInstanceOf[RDD[(Int,LZ4ObjectCache)]].
       partitionBy (new HashPartitioner (numPartitions)).
-      values.cache()
+      values.persist(storageLevel)
     
     // whether the user chose to customize master computation, executed every
     // superstep

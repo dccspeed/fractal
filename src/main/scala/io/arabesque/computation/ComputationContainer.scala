@@ -11,6 +11,7 @@ import scala.collection.JavaConverters._
 import scala.collection.JavaConversions._
 import scala.collection.mutable.Stack
 
+// TODO: Refactor me!
 sealed trait ComputationContainer [E <: Embedding] extends Computation[E] 
     with Logging {
 

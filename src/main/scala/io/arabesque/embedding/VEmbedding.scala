@@ -1,5 +1,7 @@
 package io.arabesque.embedding
 
+import io.arabesque.conf.SparkConfiguration
+
 import java.io.{DataInput, DataOutput}
 
 /**
@@ -15,6 +17,16 @@ case class VEmbedding(var words: Array[Int]) extends ResultEmbedding[Int] {
   // must have because we are messing around with Writables
   def this() = {
     this(null)
+  }
+  
+  def toInternalEmbedding[E <: Embedding](config: SparkConfiguration[E]): E = {
+    val embedding = config.createEmbedding[E]
+    var i = 0
+    while (i < words.length) {
+      embedding.addWord(words(i))
+      i += 1
+    }
+    embedding
   }
 
   def combinations(k: Int): Iterator[VEmbedding] = {

@@ -17,6 +17,7 @@ import com.koloboke.function.IntPredicate;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.ObjectOutput;
+import java.util.ArrayDeque;
 import java.util.Objects;
 
 public abstract class BasicEmbedding implements Embedding {
@@ -29,20 +30,21 @@ public abstract class BasicEmbedding implements Embedding {
     // Extension helper structures {{
     protected HashIntSet extensionWordIds;
     protected boolean dirtyExtensionWordIds;
-    protected ObjArrayList<IntArrayList> extensionWordIdsPerPos;
-    protected IntArrayList previousExtensionCalculationVertices;
+
+    // Active extensions
+    protected ArrayDeque<HashIntSet> extensionLevels;
 
     private IntConsumer extensionWordIdsAdder = new IntConsumer() {
         @Override
         public void accept(int i) {
-            extensionWordIds.add(i);
+            extensionWordIds().add(i);
         }
     };
 
     private IntPredicate existsInExtensionWordIds = new IntPredicate() {
         @Override
         public boolean test(int i) {
-            return extensionWordIds.contains(i);
+            return extensionWordIds().contains(i);
         }
     };
 
@@ -71,9 +73,8 @@ public abstract class BasicEmbedding implements Embedding {
     public BasicEmbedding() {
         vertices = new IntArrayList();
         edges = new IntArrayList();
-        extensionWordIds = HashIntSets.newMutableSet();
-        previousExtensionCalculationVertices = new IntArrayList();
-        extensionWordIdsPerPos = new ObjArrayList<>();
+        extensionLevels = new ArrayDeque<HashIntSet>();
+        nextEntensionLevel();
     }
 
     @Override
@@ -85,15 +86,29 @@ public abstract class BasicEmbedding implements Embedding {
     public void reset() {
         vertices.clear();
         edges.clear();
-        IntArrayListPool.instance().reclaimObjects(extensionWordIdsPerPos);
-        extensionWordIdsPerPos.clear();
-        previousExtensionCalculationVertices.clear();
+        for (int i = 0; i < extensionLevels.size() - 1; ++i) {
+           previousExtensionLevel();
+        }
         setDirty();
     }
 
     protected void setDirty() {
         dirtyPattern = true;
         dirtyExtensionWordIds = true;
+    }
+
+    private HashIntSet extensionWordIds() {
+        return extensionLevels.peekFirst();
+    }
+
+    @Override
+    public void nextEntensionLevel() {
+        extensionLevels.addFirst(HashIntSetPool.instance().createObject());
+    }
+
+    @Override
+    public void previousExtensionLevel() {
+        HashIntSetPool.instance().reclaimObject(extensionLevels.removeFirst());
     }
 
     @Override
@@ -131,18 +146,17 @@ public abstract class BasicEmbedding implements Embedding {
     public IntCollection getExtensibleWordIds() {
         // If we have to recompute the extensionVertexIds set
         if (dirtyExtensionWordIds) {
-           extensionWordIds = HashIntSets.newMutableSet();
             updateExtensibleWordIdsSimple();
         }
 
-        return extensionWordIds;
+        return extensionWordIds();
     }
 
     protected void updateExtensibleWordIdsSimple() {
         IntArrayList vertices = getVertices();
         int numVertices = getNumVertices();
 
-        extensionWordIds.clear();
+        extensionWordIds().clear();
 
         for (int i = 0; i < numVertices; ++i) {
             IntCollection neighbourhood = getValidNeighboursForExpansion(
@@ -159,7 +173,7 @@ public abstract class BasicEmbedding implements Embedding {
         // Clean the words that are already in the embedding
         for (int i = 0; i < numWords; ++i) {
             int wId = words.getUnchecked(i);
-            extensionWordIds.removeInt(wId);
+            extensionWordIds().removeInt(wId);
         }
     }
 

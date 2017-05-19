@@ -1,19 +1,35 @@
 package io.arabesque.embedding
 
+import io.arabesque.conf.SparkConfiguration
+import io.arabesque.graph.BasicMainGraph
+
 import java.io.{DataInput, DataOutput}
 
 /** An edge induced embedding
   *
-  * Current semantics: Array(a, b, c, d) returns
-  * the embedding induced by the edges (a, b) (c, d)
-  *
   * @param words integer array indicating the embedding edges
   */
-case class EEmbedding(var words: Array[(Int,Int)]) extends ResultEmbedding[(Int,Int)] {
+case class EEmbedding(var words: Array[(Int,Int)])
+    extends ResultEmbedding[(Int,Int)] {
 
   // must have because we are messing around with Writables
   def this() = {
     this(null.asInstanceOf[Array[(Int,Int)]])
+  }
+
+  def toInternalEmbedding[E <: Embedding](config: SparkConfiguration[E]): E = {
+    val mainGraph = config.getMainGraph[BasicMainGraph]
+    val embedding = config.createEmbedding[E]
+    var i = 0
+    while (i < words.length) {
+      val (src, dest) = words(i)
+      val edgeIdsCur = mainGraph.getVertexNeighbourhood(src).
+        getEdgesWithNeighbourVertex(dest).cursor()
+      while (edgeIdsCur.moveNext()) {
+        embedding.addWord(edgeIdsCur.elem())
+      }
+    }
+    embedding
   }
 
   def combinations(k: Int): Iterator[EEmbedding] = {

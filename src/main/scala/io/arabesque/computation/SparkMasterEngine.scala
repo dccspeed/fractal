@@ -12,6 +12,7 @@ import org.apache.hadoop.io.{NullWritable, Writable}
 import org.apache.spark.{Accumulator, SparkContext}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 
 import scala.reflect.ClassTag
 import scala.collection.JavaConversions._
@@ -48,6 +49,8 @@ trait SparkMasterEngine [E <: Embedding]
    *  The following fields are set by specialized engines as an output state
    *  w.r.t a superstep
    */
+
+  var storageLevel: StorageLevel = StorageLevel.NONE
 
   var superstepRDD: RDD[LZ4ObjectCache] = _
 
@@ -93,7 +96,7 @@ trait SparkMasterEngine [E <: Embedding]
         // superstep rdd to simulate parallel computation
         superstepRDD = sc.makeRDD(
           Seq.empty[LZ4ObjectCache], numPartitions
-        ).cache
+        ).persist(storageLevel)
 
         // default accumulators
         aggAccums = Map.empty
@@ -127,6 +130,14 @@ trait SparkMasterEngine [E <: Embedding]
    * Computation cleaning. It does nothing by default.
    */
   def finalizeComputation() = {}
+
+  /**
+   * Select a storage level for this computation
+   */
+  def persist(sl: StorageLevel): this.type = {
+    storageLevel = sl
+    this
+  }
 
   /**
    * Master's computation takes place here, superstep by superstep

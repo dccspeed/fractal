@@ -46,7 +46,8 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
         IntArrayList edges = getEdges();
 
         for (int i = 0; i < numEdges; ++i) {
-            Edge edge = configuration.getMainGraph().getEdge(edges.getUnchecked(i));
+            Edge edge = configuration.getMainGraph().
+               getEdge(edges.getUnchecked(i));
             sb.append(edge.getSourceId());
             sb.append("-");
             sb.append(edge.getDestinationId());
@@ -72,7 +73,8 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
 
     @Override
     protected IntCollection getValidNeighboursForExpansion(int vertexId) {
-        return configuration.getMainGraph().getVertexNeighbourhood(vertexId).getNeighbourEdges();
+        return configuration.getMainGraph().getVertexNeighbourhood(vertexId).
+           getNeighbourEdges();
     }
 
     @Override
@@ -151,7 +153,8 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
     }
 
     @Override
-    public void readExternal(ObjectInput objInput) throws IOException, ClassNotFoundException {
+    public void readExternal(ObjectInput objInput)
+         throws IOException, ClassNotFoundException {
        readFields(objInput);
     }
 }

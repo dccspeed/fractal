@@ -13,6 +13,7 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.Writable
 import org.apache.spark.rdd.RDD
 import org.apache.spark.SparkContext
+import org.apache.spark.storage.StorageLevel
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.Map
@@ -30,10 +31,11 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
     aggFuncs: Map[String,(
       (E,Computation[E]) => _ <: Writable,
       (E,Computation[E]) => _ <: Writable
-    )]) extends Logging {
+    )],
+    storageLevel: StorageLevel) extends Logging {
 
   def this(arabGraph: ArabesqueGraph, config: SparkConfiguration[E]) = {
-    this(arabGraph, true, 0, None, config, Map.empty)
+    this(arabGraph, true, 0, None, config, Map.empty, StorageLevel.NONE)
   }
 
   def sparkContext: SparkContext = arabGraph.arabContext.sparkContext
@@ -73,6 +75,28 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
   }
 
   /**
+   * Mark this result to be persisted in memory only
+   */
+  def cache: ArabesqueResult[E] = persist (StorageLevel.MEMORY_ONLY)
+
+  /**
+   * Mark this result to be persisted according to a specific persistence level
+   */
+  def persist(sl: StorageLevel): ArabesqueResult[E] = {
+    this.copy(storageLevel = sl)
+  }
+
+  /**
+   * Unpersist this result
+   */
+  def unpersist: ArabesqueResult[E] = persist(StorageLevel.NONE)
+
+  /**
+   * Check if this result is marked as persisted in some way
+   */
+  def isPersisted: Boolean = storageLevel != StorageLevel.NONE
+
+  /**
    * Lazy evaluation for the results
    */
   private var masterEngineOpt: Option[SparkMasterEngine[E]] = None
@@ -80,7 +104,6 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
   def masterEngine: SparkMasterEngine[E] = synchronized {
     masterEngineOpt match {
       case None =>
-        logInfo (s"Computing ${this}")
 
         var _masterEngine = parentOpt match {
           case Some(parent) =>
@@ -94,8 +117,11 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
             SparkMasterEngine [E] (sparkContext, config)
         }
 
-        assert (_masterEngine.superstep == this.step)
+        _masterEngine.persist(storageLevel)
 
+        assert (_masterEngine.superstep == this.step)
+        
+        logInfo (s"Computing ${this}")
         _masterEngine = if (stepByStep) {
           _masterEngine.next
           _masterEngine
@@ -273,7 +299,7 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
       for (i <- 0 until target) if (mustSync) {
         // in case of this result cannot be pipelined
         currResult = currResult.copy (step = currResult.step + 1,
-          parentOpt = Some(currResult))
+          parentOpt = Some(currResult), storageLevel = StorageLevel.NONE)
         logInfo (s"Synchronization included after ${this}." +
           s" Result: ${currResult}")
       } else {
@@ -290,7 +316,7 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
       val target = (depth + numComputations) max 0
 
       while (currResult.depth != target) {
-        if (currResult.depth - currResult.numComputations > target) {
+        if (currResult.depth - currResult.numComputations >= target) {
           // in this case the target lies outside the current result
           currResult = currResult.parentOpt.get
           logInfo (s"Target(${target}) not in the current result." +
@@ -387,11 +413,12 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    */
   private def handleNextResult(result: ArabesqueResult[E],
       newConfig: SparkConfiguration[E] = config)
-    : ArabesqueResult[E] = if (mustSync) {
-    logInfo (s"Adding barrier sync barrier between ${parentOpt} and ${this}")
-    result.copy(step = this.step + 1, parentOpt = Some(this))
+    : ArabesqueResult[E] = if (mustSync || isPersisted) {
+    logInfo (s"Adding barrier sync barrier between ${this} and ${result}")
+    result.copy(step = this.step + 1, parentOpt = Some(this),
+      storageLevel = StorageLevel.NONE)
   } else {
-    logInfo (s"Appending filter to ${this}")
+    logInfo (s"Appending ${result} to ${this}")
     val nextContainer = result.getComputationContainer[E]
     withNextComputation (nextContainer, newConfig)
   }
@@ -812,7 +839,7 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
     val _newConfig = newConfig.withNewComputation (
       getComputationContainer[E].withComputationAppended (nextComputation)
     )
-    this.copy (config = _newConfig)
+    this.copy (config = _newConfig, storageLevel = StorageLevel.NONE)
   }
   
   /****** Arabesque Scala API: MasterComputationContainer ******/
@@ -932,7 +959,8 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
 
     s"Arabesque(step=${step}, depth=${depth}, stepByStep=${stepByStep}," +
     s" ${computationToString}," +
-    s" mustSync=${mustSync})"
+    s" mustSync=${mustSync}, storageLevel=${storageLevel}," +
+    s" outputPath=${config.getOutputPath})"
   }
 
   def toDebugString: String = parentOpt match {

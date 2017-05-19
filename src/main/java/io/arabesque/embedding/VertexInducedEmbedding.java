@@ -120,12 +120,14 @@ public class VertexInducedEmbedding extends BasicEmbedding {
     }
 
     @Override
-    public void readExternal(ObjectInput objInput) throws IOException, ClassNotFoundException {
+    public void readExternal(ObjectInput objInput)
+         throws IOException, ClassNotFoundException {
        readFields(objInput);
     }
 
     /**
-     * Updates the list of edges of this embedding based on the addition of a new vertex.
+     * Updates the list of edges of this embedding based on the addition of a
+     * new vertex.
      *
      * @param newVertexId The id of the new vertex that was just added.
      */
@@ -139,8 +141,8 @@ public class VertexInducedEmbedding extends BasicEmbedding {
             int existingVertexId = vertices.getUnchecked(i);
 
             updateEdgesConsumer.reset();
-            configuration.getMainGraph().
-               forEachEdgeId(existingVertexId, newVertexId, updateEdgesConsumer);
+            configuration.getMainGraph().forEachEdgeId(existingVertexId,
+                  newVertexId, updateEdgesConsumer);
             addedEdges += updateEdgesConsumer.getNumAdded();
         }
 

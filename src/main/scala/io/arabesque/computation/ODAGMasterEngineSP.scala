@@ -34,8 +34,10 @@ import scala.util.{Failure, Success}
 class ODAGMasterEngineSP [E <: Embedding] (
     _config: SparkConfiguration[E],
     _parentOpt: Option[SparkMasterEngine[E]])
-    (implicit val oTag: ClassTag[SinglePatternODAG], implicit val cTag: ClassTag[ODAGEngineSP[E]])
-  extends ODAGMasterEngine [Pattern,E,SinglePatternODAG,SinglePatternODAGStash,ODAGEngineSP[E]] {
+    (implicit val oTag: ClassTag[SinglePatternODAG],
+      implicit val cTag: ClassTag[ODAGEngineSP[E]])
+  extends ODAGMasterEngine [
+    Pattern,E,SinglePatternODAG,SinglePatternODAGStash,ODAGEngineSP[E]] {
   
   def config: SparkConfiguration[E] = _config
 
@@ -47,7 +49,8 @@ class ODAGMasterEngineSP [E <: Embedding] (
     init()
   }
   
-  def this(_sc: SparkContext, config: SparkConfiguration[E], parent: SparkMasterEngine[E]) {
+  def this(_sc: SparkContext, config: SparkConfiguration[E],
+      parent: SparkMasterEngine[E]) {
     this (config, Option(parent))
     sc = _sc
     init()
@@ -66,28 +69,31 @@ class ODAGMasterEngineSP [E <: Embedding] (
   }
 
   def getAggregatedOdags(
-      execEngines: RDD[ODAGEngine[E,SinglePatternODAG,SinglePatternODAGStash,ODAGEngineSP[E]]],
-      previousAggregationsBc: Broadcast[_], configBc: Broadcast[SparkConfiguration[E]]) = {
+      execEngines: RDD[ODAGEngine[
+        E,SinglePatternODAG,SinglePatternODAGStash,ODAGEngineSP[E]
+      ]],
+      previousAggregationsBc: Broadcast[_],
+      configBc: Broadcast[SparkConfiguration[E]]) = {
 
     // we choose the flush method for ODAGs: load-balancing vs. overhead
     val aggregatedOdags = config.getOdagFlushMethod match {
       case SparkConfiguration.FLUSH_BY_PATTERN =>
         val odags = execEngines.
-          map (_.withNewAggregations (previousAggregationsBc)). // update previousAggregations
+          map (_.withNewAggregations (previousAggregationsBc)).
           flatMap (_.flush).
           asInstanceOf[RDD[(Pattern,SinglePatternODAG)]]
         aggregatedOdagsByPattern (odags)
 
       case SparkConfiguration.FLUSH_BY_ENTRIES =>
         val odags = execEngines.
-          map (_.withNewAggregations (previousAggregationsBc)). // update previousAggregations
+          map (_.withNewAggregations (previousAggregationsBc)).
           flatMap (_.flush).
           asInstanceOf[RDD[((Pattern,Int,Int), SinglePatternODAG)]]
         aggregatedOdagsByEntries (odags)
 
       case SparkConfiguration.FLUSH_BY_PARTS =>
         val odags = execEngines.
-          map (_.withNewAggregations (previousAggregationsBc)). // update previousAggregations
+          map (_.withNewAggregations (previousAggregationsBc)).
           flatMap (_.flush).
           asInstanceOf[RDD[((Pattern,Int),Array[Byte])]]
         aggregatedOdagsByParts (odags, configBc)
@@ -96,7 +102,8 @@ class ODAGMasterEngineSP [E <: Embedding] (
     aggregatedOdags
   }
 
-  private def aggregatedOdagsByPattern(odags: RDD[(Pattern,SinglePatternODAG)]) = {
+  private def aggregatedOdagsByPattern(
+      odags: RDD[(Pattern,SinglePatternODAG)]) = {
 
     // (flushByPattern)
     val aggregatedOdags = odags.reduceByKey { (odag1, odag2) =>
@@ -111,8 +118,8 @@ class ODAGMasterEngineSP [E <: Embedding] (
     aggregatedOdags
   }
 
-
-  private def aggregatedOdagsByEntries(odags: RDD[((Pattern,Int,Int),SinglePatternODAG)]) = {
+  private def aggregatedOdagsByEntries(
+      odags: RDD[((Pattern,Int,Int),SinglePatternODAG)]) = {
 
     // (flushInEntries) ODAGs' reduction by pattern as a key
     val aggregatedOdags = odags.reduceByKey { (odag1, odag2) =>

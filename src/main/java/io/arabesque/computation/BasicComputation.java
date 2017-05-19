@@ -182,19 +182,28 @@ public abstract class BasicComputation<E extends Embedding>
           nextComp.setExecutionEngine (getExecutionEngine());
           nextComp.init(getConfig());
           nextComp.initAggregations(getConfig());
-       }
-
-       while (expansionsIter.hasNext()) {
-          currentEmbedding = expansionsIter.next();
-          if (filter(currentEmbedding)) {
-             if (shouldExpand(currentEmbedding)) {
-                executionEngine.
-                   processExpansion(currentEmbedding);
-             }
-             numChildrenEvaluated++;
-             process(currentEmbedding);
-             if (nextComp != null) {
+          
+          while (expansionsIter.hasNext()) {
+             currentEmbedding = expansionsIter.next();
+             if (filter(currentEmbedding)) {
+                numChildrenEvaluated++;
+                process(currentEmbedding);
+                currentEmbedding.nextEntensionLevel();
                 nextComp.compute(currentEmbedding);
+                currentEmbedding.previousExtensionLevel();
+             }
+          }
+
+       } else {
+          while (expansionsIter.hasNext()) {
+             currentEmbedding = expansionsIter.next();
+             if (filter(currentEmbedding)) {
+                if (shouldExpand(currentEmbedding)) {
+                   executionEngine.
+                      processExpansion(currentEmbedding);
+                }
+                numChildrenEvaluated++;
+                process(currentEmbedding);
              }
           }
        }

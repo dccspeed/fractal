@@ -38,5 +38,9 @@ public interface Embedding extends WritableObject, Externalizable {
     boolean isCanonicalEmbeddingWithWord(int wordId);
 
     String toOutputString();
+    
+    void nextEntensionLevel();
+    
+    void previousExtensionLevel();
 
 }

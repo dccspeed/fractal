@@ -83,8 +83,7 @@ class SparkArabesqueSuite extends FunSuite with BeforeAndAfterAll {
     val filteredMotifsRes = motifsRes.filter (
       (e,c) => e.getVertices contains 3309
     )
-    println (s"filtered motifs =\n" +
-      s"${filteredMotifsRes.embeddings.collect.mkString("\n")}")
+    assert (filteredMotifsRes.embeddings.count == 35)
   }}
 
   test ("[triangles,filter]", Tag("triangles.filter")) { time {
@@ -92,8 +91,7 @@ class SparkArabesqueSuite extends FunSuite with BeforeAndAfterAll {
     val filteredTrianglesRes = trianglesRes.filter (
       (e,c) => e.getVertices contains 3309
     )
-    println (s"filtered triangles =" +
-      s" ${filteredTrianglesRes.embeddings.collect.mkString("\n")}")
+    assert (filteredTrianglesRes.embeddings.count == 53)
   }}
   
   test ("[triangles,expand,filter]",
@@ -102,8 +100,7 @@ class SparkArabesqueSuite extends FunSuite with BeforeAndAfterAll {
     val filteredTrianglesRes = trianglesRes.filter (
       (e,c) => e.getVertices contains 3309
     )
-    println (s"filtered triangles =" +
-      s" ${filteredTrianglesRes.embeddings.collect.mkString("\n")}")
+    assert (filteredTrianglesRes.embeddings.count == 9099)
   }}
 
   test ("[fsm,motifs,cliques,concurrent]",
@@ -127,7 +124,7 @@ class SparkArabesqueSuite extends FunSuite with BeforeAndAfterAll {
     }
 
     val cliquesFromMotifsFuture = Future {
-      val motifsRes = arabGraph.motifs.explore(2)
+      val motifsRes = arabGraph.motifs.explore(2).cache
       val cliquesRes = motifsRes.cliques.explore(3)
       val trianglesRes = motifsRes.triangles.explore(1)
       assert (cliquesRes.embeddings.count <= cliquesOracle(3))

@@ -64,7 +64,8 @@ trait ODAGMasterEngine [
   }
 
   def getAggregatedOdags(execEngines: RDD[ODAGEngine[E,O,S,C]],
-      previousAggregationsBc: Broadcast[_], configBc: Broadcast[SparkConfiguration[E]])
+      previousAggregationsBc: Broadcast[_],
+      configBc: Broadcast[SparkConfiguration[E]])
     : RDD[(K,O)]
 
   /**
@@ -76,8 +77,6 @@ trait ODAGMasterEngine [
     logInfo (s"SparkConfiguration estimated size = ${SizeEstimator.estimate(config)} bytes")
     logInfo (s"HadoopConfiguration estimated size = ${SizeEstimator.estimate(config.hadoopConf)} bytes")
 
-    logInfo (s"superstepRDD id before: ${superstepRDD.id}")
-
     val execEngines = getExecutionEngines (
       superstepRDD = superstepRDD,
       superstep = superstep,
@@ -85,8 +84,6 @@ trait ODAGMasterEngine [
       aggregatedOdagsBc = aggregatedOdagsBc,
       aggAccums = aggAccums,
       previousAggregationsBc = previousAggregationsBc)
-
-    logInfo (s"execEngines id: ${execEngines.id}")
 
     // keep engines (filled with expansions and aggregations) for the rest of
     // the superstep
@@ -106,14 +103,14 @@ trait ODAGMasterEngine [
     aggregationsFuture.value.get match {
       case Success(previousAggregations) =>
 
-        aggregations = mergeOrReplaceAggregations (aggregations, previousAggregations)
+        aggregations = mergeOrReplaceAggregations (aggregations,
+          previousAggregations)
 
         logInfo (s"""Aggregations and sizes
           ${previousAggregations.
           map(tup => (tup._1,tup._2)).mkString("\n")}
         """)
 
-        previousAggregationsBc.unpersist()
         previousAggregationsBc = sc.broadcast (previousAggregations)
 
       case Failure(e) =>
@@ -127,7 +124,8 @@ trait ODAGMasterEngine [
      *  global aggregation.
      */
 
-    val aggregatedOdags = getAggregatedOdags(execEngines.asInstanceOf[RDD[ODAGEngine[E,O,S,C]]],
+    val aggregatedOdags = getAggregatedOdags(
+      execEngines.asInstanceOf[RDD[ODAGEngine[E,O,S,C]]],
       previousAggregationsBc, configBc)
 
     val odagsFuture = Future { aggregatedOdags.collect.toMap  }

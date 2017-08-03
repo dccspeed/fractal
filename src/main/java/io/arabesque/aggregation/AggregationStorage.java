@@ -5,15 +5,21 @@ import io.arabesque.conf.Configuration;
 import org.apache.giraph.utils.UnsafeByteArrayOutputStream;
 import org.apache.giraph.utils.UnsafeReusableByteArrayInput;
 import org.apache.giraph.utils.WritableUtils;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 
 import java.io.*;
 import java.lang.reflect.Constructor;
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLongArray;
 
 public class AggregationStorage<K extends Writable, V extends Writable> implements Writable, Externalizable {
     private String name;
+    transient protected AtomicLongArray atomicArray;
+    transient protected boolean atomicArrayDirty;
     protected Map<K, V> keyValueMap;
     protected Class<K> keyClass;
     protected Class<V> valueClass;
@@ -76,7 +82,30 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
     public Map<K, V> getMapping() {
         return Collections.unmodifiableMap(keyValueMap);
     }
-    
+
+    public Map<K, V> getModifiableMap() {
+        return keyValueMap;
+    }
+
+    public synchronized void setAtomicArrayDirty() {
+       if (!atomicArrayDirty) {
+          atomicArrayDirty = true;
+       }
+    }
+
+    public synchronized AtomicLongArray asAtomicArray(int length) {
+       if (atomicArrayDirty) {
+          atomicArray = new AtomicLongArray(length);
+          Map<IntWritable, LongWritable> counts =
+             (Map<IntWritable,LongWritable>) keyValueMap;
+          for (Map.Entry<IntWritable, LongWritable> e : counts.entrySet()) {
+             atomicArray.set(e.getKey().get(), e.getValue().get());
+          }
+          atomicArrayDirty = false;
+       }
+       return atomicArray;
+    }
+
     public K getKey(K key) {
         if (keyValueMap.containsKey(key)) {
             return key;
@@ -253,8 +282,6 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
         }
 
     }
-
-    
 
     public void endedAggregation() {
         if (endAggregationFunction != null) {

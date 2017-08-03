@@ -6,11 +6,14 @@ import io.arabesque.aggregation.AggregationStorage;
 import io.arabesque.conf.Configuration;
 import io.arabesque.embedding.Embedding;
 import io.arabesque.pattern.Pattern;
+import io.arabesque.utils.collection.IntArrayList;
 
 import java.util.Iterator;
+import java.util.Map;
 
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
-
 
 public interface Computation<E extends Embedding> {
     // {{{ Initialization, computation and finish hooks
@@ -18,7 +21,7 @@ public interface Computation<E extends Embedding> {
 
     void initAggregations(Configuration<E> config);
 
-    void compute(E embedding);
+    int compute(E embedding);
 
     Computation<E> nextComputation();
 
@@ -49,7 +52,7 @@ public interface Computation<E extends Embedding> {
     Iterator<E> expandCompute(E embedding);
     void handleNoExpansions(E embedding);
 
-    void processCompute(Iterator<E> expansions);
+    int processCompute(Iterator<E> expansions);
     boolean filter(E embedding);
     void process(E embedding);
     boolean shouldExpand(E newEmbedding);
@@ -89,6 +92,11 @@ public interface Computation<E extends Embedding> {
     // {{{ Internal
     void setExecutionEngine(CommonExecutionEngine<E> executionEngine);
     CommonExecutionEngine<E> getExecutionEngine();
+    
+    String computationLabel();
+
+    EmbeddingIterator<E> forkConsumer();
+    void joinConsumer(EmbeddingIterator<E> consumer);
 
     void expand(E embedding);
 

@@ -1,6 +1,7 @@
 package io.arabesque.embedding;
 
 import io.arabesque.conf.Configuration;
+import io.arabesque.computation.Computation;
 import io.arabesque.misc.WritableObject;
 import io.arabesque.pattern.Pattern;
 import io.arabesque.utils.collection.IntArrayList;
@@ -42,5 +43,5 @@ public interface Embedding extends WritableObject, Externalizable {
     void nextEntensionLevel();
     
     void previousExtensionLevel();
-
+    
 }

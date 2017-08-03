@@ -74,8 +74,10 @@ trait ODAGMasterEngine [
   lazy val next: Boolean = {
     val superstepStart = System.currentTimeMillis
 
-    logInfo (s"SparkConfiguration estimated size = ${SizeEstimator.estimate(config)} bytes")
-    logInfo (s"HadoopConfiguration estimated size = ${SizeEstimator.estimate(config.hadoopConf)} bytes")
+    logInfo (s"SparkConfiguration estimated size =" +
+      s" ${SizeEstimator.estimate(config)} bytes")
+    logInfo (s"HadoopConfiguration estimated size =" +
+      s" ${SizeEstimator.estimate(config.hadoopConf)} bytes")
 
     val execEngines = getExecutionEngines (
       superstepRDD = superstepRDD,

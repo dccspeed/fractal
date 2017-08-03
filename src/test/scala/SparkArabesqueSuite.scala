@@ -3,10 +3,11 @@ package io.arabesque
 import io.arabesque.computation._
 import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding._
+import io.arabesque.utils.ClosureParser
 
 import org.apache.spark.{SparkConf, SparkContext}
 
-import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
+import org.scalatest.{BeforeAndAfterAll, ConfigMap, FunSuite, Tag}
 
 class SparkArabesqueSuite extends FunSuite with BeforeAndAfterAll {
 
@@ -20,23 +21,31 @@ class SparkArabesqueSuite extends FunSuite with BeforeAndAfterAll {
   private var arabGraph: ArabesqueGraph = _
 
   /** set up spark context */
-  override def beforeAll: Unit = {
+  override def beforeAll(configMap: ConfigMap): Unit = {
     // spark conf and context
-    val conf = new SparkConf().
-      setMaster(master).
+    var conf = new SparkConf().
+      setMaster(configMap.getWithDefault[String]("spark.master", master)).
       setAppName(appName)
 
-    sc = new SparkContext(conf)
-    arab = new ArabesqueContext(sc, "warn")
+    configMap.iterator.filter(_._1 startsWith "spark.").foreach {
+      case (key,value) =>
+        conf = conf.set(key, value.toString)
+        println(s"${this.getClass.getName}: setting config: ${key} -> ${value}")
+    }
 
+    sc = new SparkContext(conf)
+    arab = new ArabesqueContext(sc, "info")
+
+    val graphPath = configMap.getWithDefault[String](
+      "arabesque.graph", "sample.graph")
     val loader = classOf[SparkArabesqueSuite].getClassLoader
-    val url = loader.getResource("sample.graph")
+    val url = loader.getResource(graphPath)
     sampleGraphPath = url.getPath
     arabGraph = arab.textFile (sampleGraphPath)
   }
 
   /** stop spark context */
-  override def afterAll: Unit = {
+  override def afterAll(configMap: ConfigMap): Unit = {
     if (sc != null) {
       sc.stop()
       arab.stop()
@@ -79,7 +88,7 @@ class SparkArabesqueSuite extends FunSuite with BeforeAndAfterAll {
   /** tests */
 
   test ("[motifs,filter]", Tag("motifs.filter")) { time {
-    val motifsRes = arabGraph.motifs.explore(2)
+    val motifsRes = arabGraph.motifs.explore(1)
     val filteredMotifsRes = motifsRes.filter (
       (e,c) => e.getVertices contains 3309
     )
@@ -87,7 +96,7 @@ class SparkArabesqueSuite extends FunSuite with BeforeAndAfterAll {
   }}
 
   test ("[triangles,filter]", Tag("triangles.filter")) { time {
-    val trianglesRes = arabGraph.triangles.explore(3)
+    val trianglesRes = arabGraph.triangles.explore(2)
     val filteredTrianglesRes = trianglesRes.filter (
       (e,c) => e.getVertices contains 3309
     )
@@ -96,7 +105,7 @@ class SparkArabesqueSuite extends FunSuite with BeforeAndAfterAll {
   
   test ("[triangles,expand,filter]",
       Tag("triangles.expand.filter")) { time {
-    val trianglesRes = arabGraph.triangles.explore(3).expand.explore(2)
+    val trianglesRes = arabGraph.triangles.explore(2).expand.explore(1)
     val filteredTrianglesRes = trianglesRes.filter (
       (e,c) => e.getVertices contains 3309
     )
@@ -124,9 +133,9 @@ class SparkArabesqueSuite extends FunSuite with BeforeAndAfterAll {
     }
 
     val cliquesFromMotifsFuture = Future {
-      val motifsRes = arabGraph.motifs.explore(2).cache
-      val cliquesRes = motifsRes.cliques.explore(3)
-      val trianglesRes = motifsRes.triangles.explore(1)
+      val motifsRes = arabGraph.motifs.explore(1).cache
+      val cliquesRes = motifsRes.cliques.explore(2)
+      val trianglesRes = motifsRes.triangles
       assert (cliquesRes.embeddings.count <= cliquesOracle(3))
       assert (trianglesRes.embeddings.count == cliquesOracle(3))
       assert (arabGraph.cliques(3).embeddings.count == cliquesOracle(3))
@@ -153,9 +162,18 @@ class SparkArabesqueSuite extends FunSuite with BeforeAndAfterAll {
   }}
 
   test ("[motifs,embedding]", Tag("motifs.embedding")) { time {
-    val motifsRes = arabGraph.motifs (3).
-      set ("comm_strategy", COMM_EMBEDDING).
-      set ("num_partitions", 1)
+    val motifsRes = arabGraph.motifs.explore (2).
+      set ("comm_strategy", COMM_EMBEDDING)
+    val embeddings = motifsRes.embeddings
+    assert (embeddings.count == motifsOracle(3))
+    assert (embeddings.distinct.count == motifsOracle(3))
+  }}
+
+  test ("[motifs,gtag]", Tag("motifs.gtag")) { time {
+    val motifsRes = arabGraph.motifs.
+      set ("comm_strategy", COMM_GTAG).
+      copy(mustSync = true).
+      explore(2)
     val embeddings = motifsRes.embeddings
     assert (embeddings.count == motifsOracle(3))
     assert (embeddings.distinct.count == motifsOracle(3))
@@ -177,6 +195,19 @@ class SparkArabesqueSuite extends FunSuite with BeforeAndAfterAll {
     assert (embeddings.distinct.count == fsmOracle((100, 3)))
   }}
 
+  test ("[fsm,gtag]", Tag("fsm.gtag")) { time {
+    import io.arabesque.gmlib.fsm._
+    import io.arabesque.pattern.Pattern
+    var fsmRes = arabGraph.fsm (100).
+      set ("comm_strategy", COMM_GTAG).
+      cache
+    val embeddings1 = fsmRes.embeddings
+    fsmRes = fsmRes.explore(1, 2)
+    val embeddings = fsmRes.embeddings.union(embeddings1)
+    assert (embeddings.count == fsmOracle((100, 3)))
+    assert (embeddings.distinct.count == fsmOracle((100, 3)))
+  }}
+
   test ("[triangles,odag]", Tag("triangles.odag")) { time {
     import org.apache.hadoop.io.{IntWritable, LongWritable}
 
@@ -189,7 +220,6 @@ class SparkArabesqueSuite extends FunSuite with BeforeAndAfterAll {
     triangleMemberships.foreach { case (v,n) =>
       assert (trianglesOracle(v.get) == n.get)
     }
-
   }}
 
   test ("[triangles,embedding]", Tag("triangles.embedding")) { time {

@@ -1,13 +1,12 @@
 package io.arabesque
 
-import io.arabesque.utils.Logging
-
-import java.util.UUID
-
 import io.arabesque.computation._
 import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding._
 import io.arabesque.graph.MainGraph
+import io.arabesque.utils.{ClosureParser, Logging}
+
+import java.util.UUID
 
 import scala.reflect.{classTag, ClassTag}
 
@@ -94,10 +93,10 @@ class ArabesqueGraph(
     import io.arabesque.pattern.Pattern
 
     val AGG_MOTIFS = "motifs"
-    vertexInducedComputation.withAggregationRegistered [Pattern,LongWritable] (
-      AGG_MOTIFS)(
-      (v1, v2) => {v1.set (v1.get + v2.get); v1})
-
+    vertexInducedComputation.
+      withAggregationRegistered [Pattern,LongWritable] (
+        AGG_MOTIFS)(
+          (v1, v2) => {v1.set (v1.get + v2.get); v1})
   }
 
   /**
@@ -140,11 +139,15 @@ class ArabesqueGraph(
   def fsm(support: Int): ArabesqueResult[EdgeInducedEmbedding] = {
     import io.arabesque.gmlib.fsm._
     import io.arabesque.pattern.Pattern
+    import io.arabesque.aggregation.reductions.LongSumReduction
     import io.arabesque.utils.SerializableWritable
     import java.lang.ThreadLocal
-
+    import org.apache.hadoop.io.{IntWritable, LongWritable}
+    import scala.collection.JavaConverters._
+    
     val AGG_SUPPORT = "support"
-    edgeInducedComputation { new EdgeProcessFunc {
+
+    val fsmRes = edgeInducedComputation { new EdgeProcessFunc {
       @transient lazy val domainSupport = new ThreadLocal [DomainSupport] {
         override def initialValue = new DomainSupport(support)
       }
@@ -154,17 +157,31 @@ class ArabesqueGraph(
         c.map(AGG_SUPPORT, e.getPattern, domainSupport.get)
       }
     }}.
-    withPatternAggregationFilter ((p,c) => c.readAggregation(AGG_SUPPORT).
-      containsKey (p)).
     withMasterCompute { c =>
-      if (c.readAggregation (AGG_SUPPORT).getNumberMappings <= 0 &&
+      val freqPatterns = c.readAggregation [Pattern,DomainSupport] (AGG_SUPPORT)
+      if (freqPatterns.getNumberMappings <= 0 &&
         c.getStep > 0) {
+        println (s"Stopping computation ${c} at step ${c.getStep}")
         c.haltComputation()
+      } else {
+        freqPatterns.getMapping().asScala.foreach { case (pattern,support) =>
+          println (s"Frequent pattern(${c.getStep}): ${pattern} -> ${support}")
+        }
       }
     }.
     withAggregationRegistered [Pattern,DomainSupport] (AGG_SUPPORT,
       new DomainSupportReducer(),
-      endAggregationFunction = new DomainSupportEndAggregationFunction())
+      endAggregationFunction = new DomainSupportEndAggregationFunction()).
+    filterByAgg [Pattern,DomainSupport] (AGG_SUPPORT) {
+      (e,a) => 
+        val res = a.containsKey (e.getPattern)
+        res
+    }
+   
+    // The standard behavior is to increment the scope along with the step.
+    // However, because we want to handle fsm within the same scope, we must
+    // decrement one to it
+    fsmRes.copy (scope = fsmRes.scope - 1)
   }
 
   /**
@@ -274,6 +291,9 @@ class ArabesqueGraph(
 
   /** api for custom computations **/
 
+  /**
+   * Build a computation based on the embedding class type
+   */
   def computation [E <: Embedding : ClassTag]: ArabesqueResult[E] = {
     val eClass = classTag[E].runtimeClass
     if (eClass == classOf[VertexInducedEmbedding]) {
@@ -285,6 +305,9 @@ class ArabesqueGraph(
     }
   }
 
+  /**
+   * Create an empty computation with the container cleared
+   */
   def emptyComputation [E <: Embedding : ClassTag]: ArabesqueResult[E] = {
     assert (computation.config.clearComputationContainer)
     computation
@@ -320,7 +343,7 @@ class ArabesqueGraph(
                 Computation[EdgeInducedEmbedding]) => Unit)
     : ArabesqueResult[EdgeInducedEmbedding] = {
     val computation: Computation[EdgeInducedEmbedding] =
-      new EComputationContainer(processOpt = Some(process))
+      new EComputationContainer(processOpt = Option(process))
     val config = new SparkConfiguration[EdgeInducedEmbedding].
       withNewComputation (computation)
     config.set ("input_graph_path", path)
@@ -330,7 +353,7 @@ class ArabesqueGraph(
   }
 
   def edgeInducedComputation: ArabesqueResult[EdgeInducedEmbedding] =
-    edgeInducedComputation ((_,_) => {})
+    edgeInducedComputation (null)
 
   /**
    * Returns a new result with a configurable computation container.
@@ -362,7 +385,7 @@ class ArabesqueGraph(
                 Computation[VertexInducedEmbedding]) => Unit)
     : ArabesqueResult[VertexInducedEmbedding] = {
     val computation: Computation[VertexInducedEmbedding] =
-      new VComputationContainer(processOpt = Some(process))
+      new VComputationContainer(processOpt = Option(process))
     val config = new SparkConfiguration[VertexInducedEmbedding].
       withNewComputation (computation)
     config.set ("input_graph_path", path)
@@ -372,10 +395,10 @@ class ArabesqueGraph(
   }
 
   def vertexInducedComputation: ArabesqueResult[VertexInducedEmbedding] =
-    vertexInducedComputation ((_,_) => {})
+    vertexInducedComputation (null)
 
   def customComputation [E <: Embedding: ClassTag] (
       config: SparkConfiguration[E]): ArabesqueResult[E] = {
-    resultHandler [E] (config)
+    resultHandler [E] (config, true)
   }
 }

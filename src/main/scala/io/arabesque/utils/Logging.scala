@@ -35,5 +35,8 @@ trait Logging {
   protected def setLogLevel(level: String): Unit = {
     LogManager.getLogger(logName).setLevel(Level.toLevel(level))
   }
+}
 
+object Logging {
+  def getLogger(name: String) = LoggerFactory.getLogger (name)
 }

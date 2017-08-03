@@ -1,12 +1,19 @@
 package io.arabesque.computation
 
+import akka.actor._
+import com.typesafe.config.ConfigFactory
+
 import io.arabesque.aggregation.{AggregationStorage, AggregationStorageFactory}
 import io.arabesque.cache.LZ4ObjectCache
 import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding._
-import io.arabesque.utils.SerializableConfiguration
+import io.arabesque.utils.collection.IntArrayList
+import io.arabesque.utils.{Logging, SerializableConfiguration}
 
-import java.io.OutputStreamWriter
+import java.io._
+import java.util.Properties
+import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors}
+import java.util.concurrent.atomic.AtomicInteger
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.{LongWritable, NullWritable, Writable, SequenceFile}
@@ -15,49 +22,51 @@ import org.apache.log4j.{Level, Logger}
 import org.apache.spark.Accumulator
 import org.apache.spark.broadcast.Broadcast
 
-import scala.collection.mutable.Map
+import scala.collection.JavaConversions._
+import scala.collection.mutable.{Map, Set}
+import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 import scala.reflect.ClassTag
+import scala.util.Random
 
 /**
- * Spark engine that works with raw embedding representation
  */
-case class SparkEmbeddingEngine[E <: Embedding](
+case class SparkGtagEngine[E <: Embedding](
     partitionId: Int,
     superstep: Int,
     accums: Map[String,Accumulator[_]],
     previousAggregationsBc: Broadcast[_],
-    configuration: SparkConfiguration[E])
-  extends SparkEngine[E] {
-
-  // embedding caches
-  var embeddingCaches: Array[LZ4ObjectCache] = _
-
+    configuration: SparkConfiguration[E]) extends SparkEngine[E] {
+  
   var currentCache: LZ4ObjectCache = _
 
-  // round robin id
-  var _nextGlobalId: Long = _
-
-  def nextGlobalId: Long = {
-    val id = _nextGlobalId
-    _nextGlobalId += 1
-    id
-  }
+  var gtagActorRef: ActorRef = _
 
   override def init() = {
-    super.init()
-    // embedding caches
-    embeddingCaches = Array.fill (getNumberPartitions) (
-      new LZ4ObjectCache(configuration))
-    currentCache = null
+    val start = System.currentTimeMillis
 
-    // global round-robin id
-    val countersPerPartition = Long.MaxValue / getNumberPartitions
-    _nextGlobalId = countersPerPartition * partitionId
+    super.init()
+
+    // register computation
+    SparkGtagEngine.registerComputation(computation)
+    
+    // initial embedding cache
+    currentCache = null
 
     // accumulators
     numEmbeddingsProcessed = 0
     numEmbeddingsGenerated = 0
     numEmbeddingsOutput = 0
+
+    // gtag actor
+    gtagActorRef = GtagMessagingSystem.createActor(this)
+
+    logInfo(s"Started gtag-actor(step=${superstep}," +
+      s" partitionId=${partitionId}): ${gtagActorRef}")
+
+    val end = System.currentTimeMillis
+
+    logInfo(s"${this} took ${(end - start)}ms to initialize.")
   }
 
   /**
@@ -65,6 +74,8 @@ case class SparkEmbeddingEngine[E <: Embedding](
    */
   override def finalize() = {
     super.finalize()
+    // remove from active computations
+    SparkGtagEngine.unregisterComputation(computation)
     // make sure we close writers
     if (outputStreamOpt.isDefined) outputStreamOpt.get.close
     if (embeddingWriterOpt.isDefined) embeddingWriterOpt.get.close
@@ -89,7 +100,7 @@ case class SparkEmbeddingEngine[E <: Embedding](
    */
   private def expansionCompute(
       inboundCaches: Iterator[LZ4ObjectCache]): Unit = {
-    if (superstep == 0) { // bootstrap
+    if (inboundCaches.isEmpty) { // bootstrap
 
       val initialEmbedd: E = configuration.createEmbedding()
       computation.compute (initialEmbedd)
@@ -125,11 +136,10 @@ case class SparkEmbeddingEngine[E <: Embedding](
     } else {
       if (currentCache.hasNext) {
         val embedding = currentCache.next.asInstanceOf[E]
-        if (computation.aggregationFilter(embedding.getPattern)) {
+        if (computation.aggregationFilter(embedding.getPattern))
           Some(embedding)
-        } else {
+        else
           getNextInboundEmbedding (remainingCaches)
-        }
       } else {
         currentCache = null
         getNextInboundEmbedding (remainingCaches)
@@ -151,16 +161,22 @@ case class SparkEmbeddingEngine[E <: Embedding](
    * @param expansion embedding to be added to the stash of outbound odags
    */
   override def processExpansion(expansion: E) = {
-    val destId = (nextGlobalId % getNumberPartitions).toInt
-    val cache = embeddingCaches(destId)
-    cache.addObject (expansion)
     numEmbeddingsGenerated += 1
   }
 
-  def flush: Iterator[(Int,LZ4ObjectCache)] = {
-    if (numEmbeddingsGenerated > 0)
-      (0 until embeddingCaches.size).iterator.
-        map (i => (i, embeddingCaches(i)))
-    else Iterator.empty
+  def flush: Iterator[(Int,LZ4ObjectCache)] = Iterator.empty
+}
+
+object SparkGtagEngine extends Logging {
+  lazy val activeComputations
+    : ConcurrentHashMap[(Int,Int),Computation[_]] = new ConcurrentHashMap()
+
+  def registerComputation(computation: Computation[_]): Computation[_] = {
+    activeComputations.put(
+      (computation.getStep, computation.getPartitionId), computation)
+  }
+
+  def unregisterComputation(computation: Computation[_]): Computation[_] = {
+    activeComputations.remove((computation.getStep, computation.getPartitionId))
   }
 }

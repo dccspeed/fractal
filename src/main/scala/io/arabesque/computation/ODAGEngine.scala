@@ -73,8 +73,7 @@ trait ODAGEngine[
    *
    * @param inboundStashes iterator of BasicODAG stashes
    */
-  def compute(inboundStashes: Iterator[S]) = {
-    logInfo (s"Computing partition(${partitionId}) of superstep ${superstep}")
+  def compute(inboundStashes: Iterator[S]): Unit = {
     if (computed)
       throw new RuntimeException ("computation must be atomic")
     if (configuration.getEmbeddingClass() == null)
@@ -200,7 +199,8 @@ object ODAGEngine {
   private var poolOpt: Option[ExecutorService] = None
   
   def pool(poolSize: Int) = poolOpt match {
-    case Some(pool) => pool
+    case Some(pool) =>
+      pool
     case None =>
       val pool = Executors.newFixedThreadPool (poolSize)
       poolOpt = Some(pool)

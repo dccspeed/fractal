@@ -5,6 +5,7 @@ import io.arabesque.conf.Configuration;
 import io.arabesque.embedding.Embedding;
 import io.arabesque.graph.MainGraph;
 import io.arabesque.pattern.Pattern;
+import io.arabesque.utils.collection.IntArrayList;
 
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.IntCursor;
@@ -12,63 +13,27 @@ import com.koloboke.collect.set.hash.HashIntSet;
 import com.koloboke.collect.set.hash.HashIntSets;
 import com.koloboke.function.IntConsumer;
 
-import java.util.Iterator;
+import java.lang.Math;
+import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.concurrent.locks.ReentrantLock;
 
+import org.apache.commons.lang.mutable.MutableBoolean;
+import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
 
+import scala.Tuple2;
+
 public abstract class BasicComputation<E extends Embedding> 
       implements Computation<E>, java.io.Serializable {
+
+    private EmbeddingIterator<E> emptyIter;
     
-    class EmbeddingIterator implements Iterator<E> {
-
-       private E embedding;
-
-       private IntCursor cur;
-
-       private boolean shouldRemoveLastWord;
-
-       public Iterator<E> set(E embedding, IntCollection wordIds) {
-          this.embedding = embedding;
-          this.cur = wordIds.cursor();
-          this.shouldRemoveLastWord = false;
-          return this;
-       }
-
-       @Override
-       public boolean hasNext() {
-          // this test is to make sure we do not remove the last word in the
-          // first *hasNext* call
-          if (shouldRemoveLastWord) {
-             embedding.removeLastWord();
-          } else {
-             shouldRemoveLastWord = true;
-          }
-
-          // skip extensions that turn the embedding not canonical
-          while (cur.moveNext()) {
-             if (filter(embedding, cur.elem()))
-                return true;
-          }
-
-          return false;
-       }
-
-       @Override
-       public E next() {
-          embedding.addWord(cur.elem());
-          return embedding;
-       }
-
-       @Override
-       public void remove() {
-          throw new UnsupportedOperationException();
-       }
-    }
-   
-    private EmbeddingIterator emptyIter;
-    private EmbeddingIterator embeddingIterator;
+    private EmbeddingIterator<E> embeddingIterator;
 
     private static final Logger LOG = Logger.getLogger(BasicComputation.class);
 
@@ -78,7 +43,6 @@ public abstract class BasicComputation<E extends Embedding>
     private MainGraph mainGraph;
     private Configuration configuration;
     private IntConsumer expandConsumer;
-    private long numChildrenEvaluated = 0;
     private E currentEmbedding;
 
     @Override
@@ -112,18 +76,17 @@ public abstract class BasicComputation<E extends Embedding>
 
         configuration = config;
         mainGraph = configuration.getMainGraph();
-        numChildrenEvaluated = 0;
 
         outputEnabled = configuration.isOutputActive();
 
-        emptyIter = new EmbeddingIterator() {
+        emptyIter = new EmbeddingIterator<E>() {
            @Override
            public boolean hasNext() {
               return false;
            }
         };
 
-        embeddingIterator = new EmbeddingIterator();
+        embeddingIterator = new EmbeddingIterator<E>();
     }
 
     @Override
@@ -132,12 +95,12 @@ public abstract class BasicComputation<E extends Embedding>
     }
 
     @Override
-    public final void compute(E embedding) {
+    public final int compute(E embedding) {
        if (!aggregationCompute(embedding)) {
-          return;
+          return 0;
        }
 
-       processCompute(expandCompute(embedding));
+       return processCompute(expandCompute(embedding));
     }
 
     @Override
@@ -171,23 +134,23 @@ public abstract class BasicComputation<E extends Embedding>
         }
        
         currentEmbedding = embedding;
-        return embeddingIterator.set(embedding, possibleExtensions);
+        return embeddingIterator.set(this, embedding, possibleExtensions);
     }
 
     @Override
-    public void processCompute(Iterator<E> expansionsIter) {
+    public int processCompute(Iterator<E> expansionsIter) {
        Computation<E> nextComp = nextComputation();
 
        if (nextComp != null) {
           nextComp.setExecutionEngine (getExecutionEngine());
           nextComp.init(getConfig());
           nextComp.initAggregations(getConfig());
-          
+
           while (expansionsIter.hasNext()) {
              currentEmbedding = expansionsIter.next();
              if (filter(currentEmbedding)) {
-                numChildrenEvaluated++;
                 process(currentEmbedding);
+
                 currentEmbedding.nextEntensionLevel();
                 nextComp.compute(currentEmbedding);
                 currentEmbedding.previousExtensionLevel();
@@ -199,14 +162,14 @@ public abstract class BasicComputation<E extends Embedding>
              currentEmbedding = expansionsIter.next();
              if (filter(currentEmbedding)) {
                 if (shouldExpand(currentEmbedding)) {
-                   executionEngine.
-                      processExpansion(currentEmbedding);
+                   executionEngine.processExpansion(currentEmbedding);
                 }
-                numChildrenEvaluated++;
                 process(currentEmbedding);
              }
           }
        }
+
+       return 0;
     }
 
     @Override
@@ -244,7 +207,6 @@ public abstract class BasicComputation<E extends Embedding>
                        processExpansion(currentEmbedding);
                 }
 
-                numChildrenEvaluated++;
                 process(currentEmbedding);
             }
 
@@ -373,9 +335,45 @@ public abstract class BasicComputation<E extends Embedding>
     }
 
     @Override
+    public String computationLabel() {
+       return null;
+    }
+
+    public EmbeddingIterator<E> getEmbeddingIterator() {
+       return this.embeddingIterator;
+    }
+
+    @Override
+    public EmbeddingIterator<E> forkConsumer() {
+       BasicComputation<E> curr = this;
+       EmbeddingIterator<E> consumer = null;
+
+       while (curr != null) {
+          if (curr.embeddingIterator != null &&
+                curr.embeddingIterator.isActive()) {
+             consumer = curr.embeddingIterator.forkConsumer();
+             if (consumer.hasNext()) {
+                return consumer;
+             } else {
+                consumer.joinConsumer();
+             }
+          
+             curr = (BasicComputation<E>) curr.nextComputation();
+          } else {
+             return null;
+          }
+       }
+
+       return null;
+    }
+
+    @Override
+    public void joinConsumer(EmbeddingIterator<E> consumer) {
+       consumer.joinConsumer();
+    }
+
+    @Override
     public void finish() {
-        LongWritable longWritable = new LongWritable();
-        LOG.info("Num children evaluated: " + numChildrenEvaluated);
     }
 
     @Override

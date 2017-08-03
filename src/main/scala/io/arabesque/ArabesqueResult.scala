@@ -17,7 +17,8 @@ import org.apache.spark.storage.StorageLevel
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.Map
-import scala.reflect._
+import scala.reflect.ClassTag
+import scala.reflect.classTag
 
 /**
  * Results of an Arabesque computation.
@@ -25,6 +26,8 @@ import scala.reflect._
 case class ArabesqueResult [E <: Embedding : ClassTag] (
     arabGraph: ArabesqueGraph, 
     stepByStep: Boolean,
+    mustSync: Boolean,
+    scope: Int,
     step: Int,
     parentOpt: Option[ArabesqueResult[E]],
     config: SparkConfiguration[E],
@@ -35,7 +38,8 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
     storageLevel: StorageLevel) extends Logging {
 
   def this(arabGraph: ArabesqueGraph, config: SparkConfiguration[E]) = {
-    this(arabGraph, true, 0, None, config, Map.empty, StorageLevel.NONE)
+    this(arabGraph, false, false, 0, 0,
+      None, config, Map.empty, StorageLevel.NONE)
   }
 
   def sparkContext: SparkContext = arabGraph.arabContext.sparkContext
@@ -101,7 +105,7 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    */
   private var masterEngineOpt: Option[SparkMasterEngine[E]] = None
 
-  def masterEngine: SparkMasterEngine[E] = synchronized {
+  private def masterEngine: SparkMasterEngine[E] = synchronized {
     masterEngineOpt match {
       case None =>
 
@@ -119,9 +123,11 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
 
         _masterEngine.persist(storageLevel)
 
-        assert (_masterEngine.superstep == this.step)
-        
-        logInfo (s"Computing ${this}")
+        assert (_masterEngine.superstep == this.step,
+          s"masterEngineNext=${_masterEngine.next}" +
+          s" masterEngineStep=${_masterEngine.superstep} thisStep=${this.step}")
+
+        logInfo (s"Computing ${this}. Engine: ${_masterEngine}")
         _masterEngine = if (stepByStep) {
           _masterEngine.next
           _masterEngine
@@ -148,7 +154,11 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
   def embeddings(shouldOutput: (E,Computation[E]) => Boolean)
     : RDD[ResultEmbedding[_]] = {
     if (config.confs.contains(SparkConfiguration.COMPUTATION_CONTAINER)) {
-      withOutput(shouldOutput).masterEngine.getEmbeddings
+      val thisWithOutput = withOutput(shouldOutput)
+      thisWithOutput.config.setOutputPath(
+        s"${thisWithOutput.config.getOutputPath}-${step}")
+      logInfo (s"Output to get embeddings: ${this} ${thisWithOutput}")
+      thisWithOutput.masterEngine.getEmbeddings
     } else {
       embeddingsOpt match {
         case None if config.isOutputActive =>
@@ -234,7 +244,7 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    *  embeddings RDD variable, which will force the creation of a new RDD with
    *  the corrected path.
    *
-   * @param path hdfs(hdfs://) or local (file://) path
+   * @param path hdfs (hdfs://) or local (file://) path
    */
   def saveEmbeddingsAsSequenceFile(path: String): Unit = embeddingsOpt match {
     case None =>
@@ -284,9 +294,16 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    * @param numComputations how many times the last computation must be repeated
    *
    * @return new result
+   * TODO: review this function, there are potential inconsistencies 
    */
-  def explore(numComputations: Int): ArabesqueResult[E] = {
+  def explore(numComputations: Int, stepLen: Int = 1): ArabesqueResult[E] = {
+    var results = new Array[ArabesqueResult[E]](stepLen)
     var currResult = this
+    for (i <- (stepLen - 1) to 0 by -1) {
+      results(i) = currResult
+      currResult = currResult.parentOpt.getOrElse(currResult)
+    }
+    currResult = this
 
     // we support forward and backward exploration
     if (numComputations > 0) {
@@ -294,20 +311,37 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
       // target is handled differently at depth 0 because we want the first
       // *explore* to reach the level of embeddings from an empty state, i.e.,
       // an empty embedding.
-      val target = numComputations - 1
-
-      for (i <- 0 until target) if (mustSync) {
+      val target = numComputations
+    
+      for (i <- 0 until target) if (results(0).mustSync) {
         // in case of this result cannot be pipelined
-        currResult = currResult.copy (step = currResult.step + 1,
-          parentOpt = Some(currResult), storageLevel = StorageLevel.NONE)
-        logInfo (s"Synchronization included after ${this}." +
-          s" Result: ${currResult}")
-      } else {
+        val newScope = currResult.scope + 1 
+        for (i <- 0 until results.length) {
+          currResult = results(i).copy (scope = newScope,
+            step = currResult.step + 1,
+            parentOpt = Some(currResult),
+            storageLevel = StorageLevel.NONE)
+          logInfo (s"Synchronization included after ${results(i)}." +
+            s" Result: ${currResult}")
+        }
+      } else if (stepLen <= 1) {
         // in case of this result can be pipelined with the previous computation
         currResult = currResult.withNextComputation (
           getComputationContainer[E].lastComputation
         )
         logInfo (s"Computation appended to ${this}. Result: ${currResult}")
+      } else {
+        currResult = currResult.withNextComputation (
+          results(0).getComputationContainer[E]
+        )
+        for (i <- 1 until results.length) {
+            currResult = results(i).copy (
+              step = currResult.step + 1,
+              parentOpt = Some(currResult),
+              storageLevel = StorageLevel.NONE)
+              logInfo (s"Synchronization included after ${results(i)}." +
+                s" Result: ${currResult}")
+        }
       }
       logInfo (s"Forward exploration from ${this} to ${currResult}")
 
@@ -345,6 +379,8 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
 
   /**
    * This function will handle to the user a new result with a new configuration
+   * NOTE: The configuration will make changes to the current scope, which may
+   * include several steps
    *
    * @param key id of the configuration
    * @param value value of the new configuration
@@ -352,7 +388,22 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    * @return new result
    */
   def set(key: String, value: Any): ArabesqueResult[E] = {
-    this.copy (config = config.withNewConfig (key,value))
+
+    def setRec(curr: ArabesqueResult[E]): ArabesqueResult[E] = {
+      if (curr.scope == this.scope) {
+        val parent = if (curr.parentOpt.isDefined) {
+          setRec(curr.parentOpt.get)
+        } else {
+          null
+        }
+        curr.copy (config = curr.config.withNewConfig (key,value),
+          parentOpt = Option(parent))
+      } else {
+        curr
+      }
+    }
+
+    setRec(this)
   }
 
   /**
@@ -386,41 +437,33 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
   }
   
   /**
-   * Define whether this result must synchronize with its parent or not.
-   *
-   * Synchronize with its parent means: we mark the end of a step, so every next
-   * computation will belong to a new result
-   *
-   * Not synchronize with its parent means: we can append next computations to
-   * the same step as this result belongs to
-   */
-  lazy val mustSync: Boolean = parentOpt match {
-    case Some(parent) =>
-      val c = parent.config.createComputation[E]
-      if (ClosureParser.getInnerClosureClasses(c.compute _) contains
-        classOf[AggregationStorage[_,_]]) {
-        true
-      } else {
-        false
-      }
-
-    case _ =>
-      false
-  }
-
-  /**
    * Handle the creation of a next result.
    */
   private def handleNextResult(result: ArabesqueResult[E],
       newConfig: SparkConfiguration[E] = config)
-    : ArabesqueResult[E] = if (mustSync || isPersisted) {
+    : ArabesqueResult[E] = if (result.mustSync || isPersisted) {
     logInfo (s"Adding barrier sync barrier between ${this} and ${result}")
-    result.copy(step = this.step + 1, parentOpt = Some(this),
+    result.copy(scope = this.scope + 1,
+      step = this.step + 1, parentOpt = Some(this),
       storageLevel = StorageLevel.NONE)
   } else {
-    logInfo (s"Appending ${result} to ${this}")
+    logInfo (s"Next result. Appending ${result} to ${this}")
     val nextContainer = result.getComputationContainer[E]
     withNextComputation (nextContainer, newConfig)
+  }
+
+  /**
+   * Create an empty computation that inherits all this result's configurations
+   * but the computation container itself
+   */
+  private def emptyComputation: ArabesqueResult[E] = {
+    config.confs.get(SparkConfiguration.COMPUTATION_CONTAINER) match {
+      case Some(cc: ComputationContainer[_]) =>
+        this.set(SparkConfiguration.COMPUTATION_CONTAINER,
+          cc.asLastComputation.clear())
+      case _ =>
+        this
+    }
   }
 
   /****** Arabesque Scala API: High Level API ******/
@@ -431,7 +474,7 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    * @return new result
    */
   def expand: ArabesqueResult[E] = {
-    val expandComp = arabGraph.emptyComputation[E].withExpandCompute(null)
+    val expandComp = emptyComputation.withExpandCompute(null)
     handleNextResult(expandComp)
   }
 
@@ -458,7 +501,7 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    */
   def expand(expandCompute: (E,Computation[E]) => Iterator[E])
     : ArabesqueResult[E] = {
-    val expandComp = arabGraph.emptyComputation[E].
+    val expandComp = emptyComputation.
       withExpandCompute(expandCompute)
     handleNextResult(expandComp)
   }
@@ -472,9 +515,33 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    * @return new result
    */
   def filter(filter: (E,Computation[E]) => Boolean): ArabesqueResult[E] = {
-    val filterComp = arabGraph.emptyComputation[E].
+    val filterComp = emptyComputation.
       withExpandCompute((e,c) => Iterator(e)).
       withFilter(filter)
+    handleNextResult(filterComp)
+  }
+
+  /**
+   * Filter the existing embeddings based on a aggregation
+   *
+   * @param filter function that decides whether an embedding should be kept or
+   * discarded
+   *
+   * @return new result
+   */
+  def filterByAgg [K <: Writable : ClassTag, V <: Writable : ClassTag] (
+      agg: String)(
+      filter: (E,AggregationStorage[K,V]) => Boolean): ArabesqueResult[E] = {
+
+    val filterFunc = (e: E, c: Computation[E]) => {
+      filter(e, c.readAggregation(agg))
+    }
+
+    val filterComp = emptyComputation.
+      withExpandCompute((e,c) => Iterator(e)).
+      withFilter(filterFunc).
+      copy(mustSync = true)
+
     handleNextResult(filterComp)
   }
 
@@ -957,7 +1024,8 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
         s"${config.getString(Configuration.CONF_COMPUTATION_CLASS,"")}"
     }
 
-    s"Arabesque(step=${step}, depth=${depth}, stepByStep=${stepByStep}," +
+    s"Arabesque(scope=${scope}, step=${step}, depth=${depth}," + 
+    s" stepByStep=${stepByStep}," +
     s" ${computationToString}," +
     s" mustSync=${mustSync}, storageLevel=${storageLevel}," +
     s" outputPath=${config.getOutputPath})"

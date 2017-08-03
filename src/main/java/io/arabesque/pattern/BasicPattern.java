@@ -139,7 +139,7 @@ public abstract class BasicPattern implements Pattern {
                 setEmbeddingFromScratch(embedding);
             }
         } catch (RuntimeException e) {
-            LOG.error("Embedding: " + embedding);
+            LOG.error("Embedding: " + embedding + " " + e);
             throw e;
         }
     }

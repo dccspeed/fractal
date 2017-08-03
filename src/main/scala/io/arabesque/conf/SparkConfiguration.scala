@@ -19,6 +19,15 @@ import scala.collection.mutable.Map
 case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
     extends Configuration[E] with Logging {
 
+  // master hostname
+  if (!confs.contains(CONF_MASTER_HOSTNAME)) try {
+    confs.update(CONF_MASTER_HOSTNAME,
+      java.net.InetAddress.getLocalHost().getHostAddress())
+  } catch {
+    case e: java.net.UnknownHostException =>
+      throw e
+  }
+
   def this() {
     this (Map.empty)
   }
@@ -178,6 +187,7 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
   }
 
   /**
+   * Auxiliary function that returns an optional computation container
    */
   def computationContainerOpt[E <: Embedding]
     : Option[ComputationContainer[E]] = {
@@ -186,6 +196,7 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
   }
 
   /**
+   * Clears this configuration's container, if it exists
    */
   def clearComputationContainer: Boolean = {
     confs.get(SparkConfiguration.COMPUTATION_CONTAINER) match {
@@ -266,6 +277,10 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
     updateIfExists ("flush_method", CONF_ODAG_FLUSH_METHOD)
     updateIfExists ("num_odag_parts", CONF_EZIP_AGGREGATORS)
 
+    // gtag
+    updateIfExists ("gtag_batch_low", CONF_GTAG_BATCH_SIZE_LOW)
+    updateIfExists ("gtag_batch_high", CONF_GTAG_BATCH_SIZE_HIGH)
+
     // input
     updateIfExists ("input_graph_path", CONF_MAINGRAPH_PATH)
     updateIfExists ("input_graph_local", CONF_MAINGRAPH_LOCAL)
@@ -292,6 +307,8 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
     if (Configuration.isUnset(id)) {
       initializeInstance()
       Configuration.add(this)
+    } else if (!isInitialized) {
+      initializeInstance()
     }
   }
 
@@ -379,6 +396,12 @@ object SparkConfiguration {
   val COMM_ODAG_MP = "odag_mp"
   // pack embeddings with compressed caches (e.g., LZ4)
   val COMM_EMBEDDING = "embedding"
+  // re-enumerates from scratch every superstep
+  val COMM_GTAG = "gtag"
+
+  // gtag
+  val GTAG_BATCH_LOW = "gtag_batch_low"
+  val GTAG_BATCH_HIGH = "gtag_batch_high"
 
   // hadoop conf
   val HADOOP_CONF = "hadoop_conf"

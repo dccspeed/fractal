@@ -18,19 +18,24 @@ object ClosureParser {
     def r = new ScalaRegex(sc.parts.mkString, sc.parts.tail.map(_ => "x"): _*)
   }
 
-  def getInnerClosureClasses(obj: AnyRef): Set[Class[_]] = {
+  def getInnerClosureClassesAndMethods(obj: AnyRef)
+    : (Set[Class[_]], Set[(String,String)]) = {
+    val methods = Set[(String,String)]()
     val seen = Set[Class[_]](obj.getClass)
     val stack = Stack[Class[_]](obj.getClass)
     while (!stack.isEmpty) {
-      val cr = getClassReader(stack.pop())
+      val clazz = stack.pop()
+      val cr = getClassReader(clazz)
       val set = Set[Class[_]]()
-      cr.accept(new InnerClassFinder(set), 0)
+      // println (s"pop: ${clazz}")
+      cr.accept(new InnerClassFinder(set, methods), 0)
       for (cls <- set -- seen) {
 	seen += cls
 	stack.push(cls)
+        // println (s"\tfound: ${cls}")
       }
     }
-    (seen - obj.getClass)
+    ( (seen - obj.getClass), methods )
   }
 
   private def getClassReader(cls: Class[_]): ClassReader = {
@@ -46,8 +51,9 @@ object ClosureParser {
     new ClassReader(new ByteArrayInputStream(baos.toByteArray))
   }
 
-  private class InnerClassFinder(output: Set[Class[_]])
-      extends ClassVisitor(ASM5) {
+  private class InnerClassFinder(classes: Set[Class[_]],
+      methods: Set[(String,String)])
+    extends ClassVisitor(ASM5) {
 
     var myName: String = null
 
@@ -57,17 +63,22 @@ object ClosureParser {
     }
 
     override def visitMethod(access: Int, name: String, desc: String,
-      sig: String, exceptions: Array[String]): MethodVisitor = {
+        sig: String, exceptions: Array[String]): MethodVisitor = {
+
+      methods += ( (name, desc) )
+      println (s"${name} ${desc}")
+
       new MethodVisitor(ASM5) {
         override def visitMethodInsn(
           op: Int, owner: String, name: String, desc: String, itf: Boolean) {
+      
 
           val classTypes = Type.getArgumentTypes(desc) ++
             Array(Type.getReturnType(desc))
           classTypes.map (_.toString).foreach { t =>
             t match {
               case r"L(.*)$classPath;" =>
-                output += Class.forName (
+                classes += Class.forName (
                   classPath.replace("/", "."),
                   true,
                   Thread.currentThread.getContextClassLoader)

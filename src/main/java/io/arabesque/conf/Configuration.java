@@ -126,6 +126,17 @@ public class Configuration<O extends Embedding> implements Serializable {
     public static final String CONF_AGGREGATION_STORAGE_CLASS = "arabesque.aggregation.storage.class";
     public static final String CONF_AGGREGATION_STORAGE_CLASS_DEFAULT = "io.arabesque.aggregation.AggregationStorage";
 
+    public static final String CONF_MASTER_HOSTNAME = "arabesque.master.hostname";
+    public static final String CONF_MASTER_HOSTNAME_DEFAULT = "localhost";
+
+    // gtag
+    public static final String CONF_GTAG_BATCH_SIZE_LOW = "arabesque.gtag.batch.size.low";
+    public static final int CONF_GTAG_BATCH_SIZE_LOW_DEFAULT = 1;
+
+    public static final String CONF_GTAG_BATCH_SIZE_HIGH = "arabesque.gtag.batch.size.high";
+    public static final int CONF_GTAG_BATCH_SIZE_HIGH_DEFAULT = 100;
+
+    private String masterHostname;
     protected static Configuration instance = null;
     protected static ConcurrentHashMap<Integer,Configuration> activeConfigs =
        new ConcurrentHashMap<Integer,Configuration>();
@@ -674,5 +685,18 @@ public class Configuration<O extends Embedding> implements Serializable {
        return getString (CONF_COMM_STRATEGY, CONF_COMM_STRATEGY_DEFAULT);
     }
 
+    public String getMasterHostname() {
+       return getString(CONF_MASTER_HOSTNAME, CONF_MASTER_HOSTNAME_DEFAULT);
+    }
+
+    public int getGtagBatchSizeLow() {
+       return getInteger(CONF_GTAG_BATCH_SIZE_LOW,
+             CONF_GTAG_BATCH_SIZE_LOW_DEFAULT);
+    }
+    
+    public int getGtagBatchSizeHigh() {
+       return getInteger(CONF_GTAG_BATCH_SIZE_HIGH,
+             CONF_GTAG_BATCH_SIZE_HIGH_DEFAULT);
+    }
 }
 

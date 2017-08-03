@@ -64,6 +64,21 @@ trait SparkMasterEngine [E <: Embedding]
   /* */
 
   def init(): Unit = {
+    if (!config.isInitialized()) {
+      config.initialize()
+    }
+
+    // set log level
+    logInfo (s"Setting log level to ${config.getLogLevel}")
+    setLogLevel (config.getLogLevel)
+    sc.setLogLevel (config.getLogLevel.toUpperCase)
+    logInfo (s"Setting num_partitions to " + 
+      s"${config.confs.get("num_partitions").getOrElse(sc.defaultParallelism)}")
+    config.setIfUnset ("num_partitions", sc.defaultParallelism)
+    config.setHadoopConfig (sc.hadoopConfiguration)
+
+
+
     // garantees that outputPath does not exist
     if (config.isOutputActive) {
       val fs = FileSystem.get(sc.hadoopConfiguration)
@@ -83,12 +98,21 @@ trait SparkMasterEngine [E <: Embedding]
     val computation = config.createComputation [E]
     computation.initAggregations(config)
 
+    // default accumulators
+    aggAccums = Map.empty
+    aggAccums.update (AGG_EMBEDDINGS_GENERATED,
+      sc.accumulator [Long] (0L, AGG_EMBEDDINGS_GENERATED))
+    aggAccums.update (AGG_EMBEDDINGS_PROCESSED,
+      sc.accumulator [Long] (0L, AGG_EMBEDDINGS_PROCESSED))
+    aggAccums.update (AGG_EMBEDDINGS_OUTPUT,
+      sc.accumulator [Long] (0L, AGG_EMBEDDINGS_OUTPUT))
+
     // set initial state
     parentOpt match {
       case Some(parent) =>
+        logInfo(s"${this} Setting from parent ${parent} ${parent.previousAggregationsBc.value.asInstanceOf[Map[String,AggregationStorage[_,_]]].get("support")}")
         // start with parent's state
         superstepRDD = parent.superstepRDD
-        aggAccums = parent.aggAccums
         previousAggregationsBc = parent.previousAggregationsBc
         aggregations = Map() ++ parent.aggregations
 
@@ -98,32 +122,18 @@ trait SparkMasterEngine [E <: Embedding]
           Seq.empty[LZ4ObjectCache], numPartitions
         ).persist(storageLevel)
 
-        // default accumulators
-        aggAccums = Map.empty
-        aggAccums.update (AGG_EMBEDDINGS_GENERATED,
-          sc.accumulator [Long] (0L, AGG_EMBEDDINGS_GENERATED))
-        aggAccums.update (AGG_EMBEDDINGS_PROCESSED,
-          sc.accumulator [Long] (0L, AGG_EMBEDDINGS_PROCESSED))
-        aggAccums.update (AGG_EMBEDDINGS_OUTPUT,
-          sc.accumulator [Long] (0L, AGG_EMBEDDINGS_OUTPUT))
-
         // previous aggregation
         previousAggregationsBc = sc.broadcast (
           Map.empty[String,AggregationStorage[_ <: Writable, _ <: Writable]]
         )
+        
+        aggregations = Map()
     }
-    
-    // set log level
-    logInfo (s"Setting log level to ${config.getLogLevel}")
-    setLogLevel (config.getLogLevel)
-    sc.setLogLevel (config.getLogLevel.toUpperCase)
-    config.setIfUnset ("num_partitions", sc.defaultParallelism)
-    config.setHadoopConfig (sc.hadoopConfiguration)
   }
 
   override def haltComputation() = {
-    logInfo ("Halting master computation")
-    sc.stop()
+    //logInfo ("Halting master computation")
+    //sc.stop()
   }
  
   /**
@@ -188,8 +198,20 @@ trait SparkMasterEngine [E <: Embedding]
         AggregationStorage[_ <: Writable, _ <: Writable]])
     : Map[String,AggregationStorage[_ <: Writable,_ <: Writable]] = {
     if (config.isAggregationIncremental) {
+      def aggregate[K <: Writable, V <: Writable](agg1: AggregationStorage[K,V],
+        agg2: AggregationStorage[_,_]) = {
+          agg1.aggregate (agg2.asInstanceOf[AggregationStorage[K,V]])
+          agg1
+      }
       // we compose all entries
-      previousAggregations.foreach {case (k,v) => aggregations.update (k,v)}
+      previousAggregations.foreach { case (name, agg) =>
+        aggregations.get(name) match {
+          case Some(_agg) =>
+            aggregate(_agg, agg)
+          case None =>
+            aggregations.update (name, agg)
+        }
+      }
       aggregations
     } else {
       // we replace with new entries
@@ -306,6 +328,10 @@ trait SparkMasterEngine [E <: Embedding]
       sc.emptyRDD[ResultEmbedding[_]]
     }
   }
+
+  override def toString: String = {
+    s"${this.getClass.getName}(${superstep})"
+  }
 }
 
 object SparkMasterEngine {
@@ -333,5 +359,8 @@ object SparkMasterEngine {
 
     case COMM_EMBEDDING =>
       new SparkEmbeddingMasterEngine [E] (sc, config, parent)
+    
+    case COMM_GTAG =>
+      new SparkGtagMasterEngine [E] (sc, config, parent)
   }
 }

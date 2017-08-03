@@ -38,7 +38,6 @@ public abstract class BasicODAGStash<O extends BasicODAG, S extends BasicODAGSta
    public abstract void clear();
 
    public interface Reader extends Iterator<Embedding> {
-      public <E extends Embedding> E next();
    }
 
    public static class EfficientReader implements Reader {

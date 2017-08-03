@@ -20,8 +20,12 @@ public class ByteArrayObjectCache implements ObjectCache {
         protected Configuration configuration;
 
         public ByteArrayObjectCacheIterator(ByteArrayObjectCache objectCache) {
-            ExtendedByteArrayDataOutput byteArrayOutputCache = objectCache.byteArrayOutputCache;
-            byteArrayInputCache = new ExtendedByteArrayDataInput(byteArrayOutputCache.getByteArray(), 0, byteArrayOutputCache.getPos());
+            ExtendedByteArrayDataOutput byteArrayOutputCache =
+               objectCache.byteArrayOutputCache;
+            byteArrayInputCache = new ExtendedByteArrayDataInput(
+                  byteArrayOutputCache.getByteArray(),
+                  0,
+                  byteArrayOutputCache.getPos());
             configuration = objectCache.configuration;
         }
 
@@ -101,13 +105,16 @@ public class ByteArrayObjectCache implements ObjectCache {
     }
 
     public boolean overThreshold() {
-        return byteArrayOutputCache.getPos() > configuration.getCacheThresholdSize();
+        return byteArrayOutputCache.getPos() >
+           configuration.getCacheThresholdSize();
     }
 
     @Override
     public void write(DataOutput dataOutput) throws IOException {
         dataOutput.writeInt(byteArrayOutputCache.getPos());
-        dataOutput.write(byteArrayOutputCache.getByteArray(), 0, byteArrayOutputCache.getPos());
+        dataOutput.write(byteArrayOutputCache.getByteArray(),
+              0,
+              byteArrayOutputCache.getPos());
     }
 
     @Override
@@ -125,7 +132,8 @@ public class ByteArrayObjectCache implements ObjectCache {
     }
 
     @Override
-    public void readExternal(ObjectInput objInput) throws IOException, ClassNotFoundException {
+    public void readExternal(ObjectInput objInput)
+      throws IOException, ClassNotFoundException {
        readFields(objInput);
     }
 

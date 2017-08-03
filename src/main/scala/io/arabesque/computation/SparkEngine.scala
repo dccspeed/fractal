@@ -28,7 +28,7 @@ trait SparkEngine [E <: Embedding]
   val accums: Map[String,Accumulator[_]]
   val previousAggregationsBc: Broadcast[_]
   val configuration: SparkConfiguration[E]
-  
+
   def flush: Iterator[(_,_)]
 
   setLogLevel (configuration.getLogLevel)
@@ -118,13 +118,14 @@ trait SparkEngine [E <: Embedding]
    * @param name name of the aggregation
    * @return the aggregated value or null if no aggregation was found
    */
-  override def getAggregatedValue[A <: Writable](name: String): A =
+  override def getAggregatedValue[A <: Writable](name: String): A = {
     previousAggregationsBc.value.asInstanceOf[Map[String,A]].get(name) match {
       case Some(aggStorage) => aggStorage
       case None =>
         logWarning (s"Previous aggregation storage $name not found")
         null.asInstanceOf[A]
     }
+  }
 
   /**
    * Maps (key,value) to the respective local aggregator
@@ -265,4 +266,6 @@ trait SparkEngine [E <: Embedding]
 
   override def getSuperstep() = superstep
 
+  def getConfig: SparkConfiguration[E] = configuration
 }
+

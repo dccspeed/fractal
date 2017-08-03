@@ -21,3 +21,11 @@ trait EdgeProcessFunc
       EdgeInducedEmbedding, Computation[EdgeInducedEmbedding], Unit
     ]
     with Serializable
+
+trait WordFilterFunc [E <: Embedding]
+    extends Function3[E, Int, Computation[E], Boolean]
+    with Serializable
+
+trait ProcessComputeFunc [E <: Embedding]
+    extends Function2[java.util.Iterator[E], Computation[E], Int]
+    with Serializable

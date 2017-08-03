@@ -1,6 +1,7 @@
 package io.arabesque.embedding;
 
 import io.arabesque.conf.Configuration;
+import io.arabesque.computation.Computation;
 import io.arabesque.graph.MainGraph;
 import io.arabesque.pattern.Pattern;
 import io.arabesque.utils.collection.IntArrayList;
@@ -19,6 +20,9 @@ import java.io.IOException;
 import java.io.ObjectOutput;
 import java.util.ArrayDeque;
 import java.util.Objects;
+
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
 
 public abstract class BasicEmbedding implements Embedding {
     protected Configuration configuration;
@@ -81,6 +85,10 @@ public abstract class BasicEmbedding implements Embedding {
     public void init(Configuration config) {
         configuration = config;
         reset();
+    }
+
+    public Configuration getConfig() {
+       return configuration;
     }
 
     public void reset() {
@@ -194,7 +202,7 @@ public abstract class BasicEmbedding implements Embedding {
             }
         }
 
-        // if we didn't find any neighbour
+        // if we didn't find any neighbor
         if (i == numWords) {
             // not canonical because it's disconnected
             return false;

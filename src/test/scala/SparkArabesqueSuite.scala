@@ -34,7 +34,7 @@ class SparkArabesqueSuite extends FunSuite with BeforeAndAfterAll {
     }
 
     sc = new SparkContext(conf)
-    arab = new ArabesqueContext(sc, "info")
+    arab = new ArabesqueContext(sc, "warn")
 
     val graphPath = configMap.getWithDefault[String](
       "arabesque.graph", "sample.graph")

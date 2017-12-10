@@ -11,6 +11,8 @@ import io.arabesque.computation.WorkerContext;
 import io.arabesque.computation.comm.CommunicationStrategy;
 import io.arabesque.computation.comm.CommunicationStrategyFactory;
 import io.arabesque.embedding.Embedding;
+import io.arabesque.embedding.VertexInducedEmbedding;
+import io.arabesque.embedding.EdgeInducedEmbedding;
 import io.arabesque.graph.MainGraph;
 import io.arabesque.optimization.OptimizationSet;
 import io.arabesque.optimization.OptimizationSetDescriptor;
@@ -39,7 +41,10 @@ public class Configuration<O extends Embedding> implements Serializable {
     // we keep a local (per JVM) pool of configurations potentially
     // representing several active arabesque applications
     private static AtomicInteger nextConfId = new AtomicInteger(0);
+
     protected final int id = newConfId();
+
+    protected AtomicInteger taskCounter = new AtomicInteger(0);
 
     private static final Logger LOG = Logger.getLogger(Configuration.class);
     public static final int KB = 1024;
@@ -238,6 +243,22 @@ public class Configuration<O extends Embedding> implements Serializable {
        return !activeConfigs.containsKey(id);
     }
 
+    public int taskCheckIn() {
+       return taskCounter.incrementAndGet();
+    }
+    
+    public boolean taskCheckIn(int expect, int ntasks) {
+       return taskCounter.compareAndSet(expect, ntasks);
+    }
+
+    public int taskCheckOut() {
+       return taskCounter.decrementAndGet();
+    }
+
+    public int taskCounter() {
+       return taskCounter.get();
+    }
+
     public Configuration(
           ImmutableClassesGiraphConfiguration giraphConfiguration) {
         this.giraphConfiguration = giraphConfiguration;
@@ -246,6 +267,10 @@ public class Configuration<O extends Embedding> implements Serializable {
     public Configuration() {}
 
     public void initialize() {
+       initialize(false);
+    }
+    
+    public void initialize(boolean isMaster) {
         if (initialized) {
             return;
         }
@@ -553,7 +578,8 @@ public class Configuration<O extends Embedding> implements Serializable {
           Class<? extends AggregationStorage> aggStorageClass,
           Class<K> keyClass, Class<V> valueClass,
           boolean persistent, ReductionFunction<V> reductionFunction,
-          EndAggregationFunction<K, V> endAggregationFunction, int numSplits) {
+          EndAggregationFunction<K, V> endAggregationFunction, int numSplits,
+          boolean isIncremental) {
        if (aggregationsMetadata.containsKey(name)) {
           return;
        }
@@ -561,9 +587,20 @@ public class Configuration<O extends Embedding> implements Serializable {
        AggregationStorageMetadata<K, V> aggregationMetadata =
           new AggregationStorageMetadata<>(aggStorageClass,
                 keyClass, valueClass, persistent, reductionFunction,
-                endAggregationFunction, numSplits);
+                endAggregationFunction, numSplits, isIncremental);
 
        aggregationsMetadata.put(name, aggregationMetadata);
+    }
+
+    public <K extends Writable, V extends Writable>
+    void registerAggregation(String name,
+          Class<? extends AggregationStorage> aggStorageClass,
+          Class<K> keyClass, Class<V> valueClass,
+          boolean persistent, ReductionFunction<V> reductionFunction,
+          EndAggregationFunction<K, V> endAggregationFunction, int numSplits) {
+       registerAggregation(name, aggStorageClass, keyClass, valueClass,
+             persistent, reductionFunction, endAggregationFunction, numSplits,
+             isAggregationIncremental());
     }
 
     public <K extends Writable, V extends Writable>
@@ -572,18 +609,20 @@ public class Configuration<O extends Embedding> implements Serializable {
           boolean persistent, ReductionFunction<V> reductionFunction) {
     	registerAggregation(name,
               getAggregationStorageClass(), keyClass, valueClass, persistent,
-              reductionFunction, null, defaultAggregatorSplits);
+              reductionFunction, null, defaultAggregatorSplits,
+              isAggregationIncremental());
     }
-    
+
     public <K extends Writable, V extends Writable>
     void registerAggregation(String name,
           Class<? extends AggregationStorage> aggStorageClass,
           Class<K> keyClass, Class<V> valueClass,
           boolean persistent, ReductionFunction<V> reductionFunction) {
     	registerAggregation(name, aggStorageClass, keyClass, valueClass,
-              persistent, reductionFunction, null, defaultAggregatorSplits);
+              persistent, reductionFunction, null, defaultAggregatorSplits,
+              isAggregationIncremental());
     }
-
+    
     public <K extends Writable, V extends Writable>
     void registerAggregation(String name,
           Class<K> keyClass, Class<V> valueClass,
@@ -593,7 +632,20 @@ public class Configuration<O extends Embedding> implements Serializable {
     	registerAggregation(name,
               getAggregationStorageClass(), keyClass, valueClass, persistent,
               reductionFunction, endAggregationFunction,
-              defaultAggregatorSplits);
+              defaultAggregatorSplits, isAggregationIncremental());
+    }
+
+    public <K extends Writable, V extends Writable>
+    void registerAggregation(String name,
+          Class<? extends AggregationStorage> aggStorageClass,
+          Class<K> keyClass, Class<V> valueClass,
+          boolean persistent,
+          ReductionFunction<V> reductionFunction,
+          EndAggregationFunction<K, V> endAggregationFunction,
+          boolean isIncremental) {
+    	registerAggregation(name, aggStorageClass, keyClass, valueClass,
+              persistent, reductionFunction, endAggregationFunction,
+              defaultAggregatorSplits, isIncremental);
     }
 
     public <K extends Writable, V extends Writable>
@@ -605,12 +657,14 @@ public class Configuration<O extends Embedding> implements Serializable {
           EndAggregationFunction<K, V> endAggregationFunction) {
     	registerAggregation(name, aggStorageClass, keyClass, valueClass,
               persistent, reductionFunction, endAggregationFunction,
-              defaultAggregatorSplits);
+              defaultAggregatorSplits, isAggregationIncremental());
     }
 
     public <K extends Writable, V extends Writable>
     AggregationStorageMetadata<K, V> getAggregationMetadata(String name) {
-        return (AggregationStorageMetadata<K,V>) aggregationsMetadata.get(name);
+        AggregationStorageMetadata<K,V> metadata =
+           (AggregationStorageMetadata<K, V>) aggregationsMetadata.get(name);
+        return metadata;
     }
 
     public String getAggregationSplitName(String name, int splitId) {
@@ -697,6 +751,26 @@ public class Configuration<O extends Embedding> implements Serializable {
     public int getGtagBatchSizeHigh() {
        return getInteger(CONF_GTAG_BATCH_SIZE_HIGH,
              CONF_GTAG_BATCH_SIZE_HIGH_DEFAULT);
+    }
+
+    public int getNumWords() {
+       Class<? extends Embedding> embeddingClass = getEmbeddingClass();
+       if (embeddingClass == EdgeInducedEmbedding.class) {
+          return getMainGraph().getNumberEdges();
+       } else if (embeddingClass == VertexInducedEmbedding.class) {
+          return getMainGraph().getNumberVertices();
+       } else {
+          throw new RuntimeException(
+                "Unknown embedding type " + embeddingClass);
+       }
+    }
+
+    public int getNumVertices() {
+       return getMainGraph().getNumberVertices();
+    }
+    
+    public int getNumEdges() {
+       return getMainGraph().getNumberEdges();
     }
 }
 

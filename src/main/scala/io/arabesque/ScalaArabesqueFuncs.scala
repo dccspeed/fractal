@@ -11,6 +11,14 @@ import io.arabesque.embedding._
  *
  */
 
+trait SpecializedFunction3[
+    @specialized(Int, Long, Double) -T1,
+    @specialized(Int, Long, Double) -T2,
+    @specialized(Int, Long, Double) -T3,
+    @specialized(Int, Long, Double) +R] {
+  def apply(t1: T1, t2: T2, t3: T3): R
+}
+
 trait VertexProcessFunc
     extends Function2[
       VertexInducedEmbedding, Computation[VertexInducedEmbedding], Unit
@@ -22,10 +30,14 @@ trait EdgeProcessFunc
     ]
     with Serializable
 
-trait WordFilterFunc [E <: Embedding]
-    extends Function3[E, Int, Computation[E], Boolean]
-    with Serializable
+trait WordFilterFunc [E <: Embedding] extends Serializable {
+  def apply(t1: E, t2: Int, t3: Computation[E]): Boolean
+}
 
 trait ProcessComputeFunc [E <: Embedding]
-    extends Function2[java.util.Iterator[E], Computation[E], Int]
+    extends Function2[java.util.Iterator[E], Computation[E], Long]
     with Serializable
+
+trait MasterComputeFunc
+    extends Function1[MasterComputation, Unit]
+    with Serializable 

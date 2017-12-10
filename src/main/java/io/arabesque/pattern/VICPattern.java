@@ -161,7 +161,7 @@ public class VICPattern extends BasicPattern {
             tmpEdges = new ObjArrayList<>(numVertices);
         }
         else {
-            PatternEdgeArrayListPool.instance(configuration.isGraphEdgeLabelled()).
+            PatternEdgeArrayListPool.instance(getConfig().isGraphEdgeLabelled()).
                reclaimObjects(tmpEdges);
             tmpEdges.clear();
             tmpEdges.ensureCapacity(numEdges);
@@ -194,7 +194,7 @@ public class VICPattern extends BasicPattern {
             minEdges = new ObjArrayList<>(numVertices);
         }
         else {
-            PatternEdgeArrayListPool.instance(configuration.isGraphEdgeLabelled()).
+            PatternEdgeArrayListPool.instance(getConfig().isGraphEdgeLabelled()).
                reclaimObjects(minEdges);
             minEdges.clear();
             minEdges.ensureCapacity(numEdges);
@@ -210,7 +210,7 @@ public class VICPattern extends BasicPattern {
         vertexPositionEquivalences.setNumVertices(numVertices);
 
         for (int i = 0; i < numVertices; ++i) {
-            minEdges.add(createPatternEdgeArrayList(configuration.isGraphEdgeLabelled()));
+            minEdges.add(createPatternEdgeArrayList(getConfig().isGraphEdgeLabelled()));
         }
 
         foundMinimum = false;
@@ -225,7 +225,7 @@ public class VICPattern extends BasicPattern {
     @Override
     public Pattern copy() {
         Pattern pattern = new VICPattern(this);
-        pattern.init(this.configuration);
+        pattern.init(getConfig());
         return pattern;
     }
 
@@ -276,7 +276,7 @@ public class VICPattern extends BasicPattern {
             IntSet neighbourUnderlyingPositions = underlyingAdjacencyList.get(underlyingVertexPosToAdd);
             IntCursor neighbourUnderlyingPositionsCursor = neighbourUnderlyingPositions.cursor();
 
-            PatternEdgeArrayList edgesToAdd = createPatternEdgeArrayList(configuration.isGraphEdgeLabelled());
+            PatternEdgeArrayList edgesToAdd = createPatternEdgeArrayList(getConfig().isGraphEdgeLabelled());
 
             // For each neighbour of the new tmp vertex position
             while (neighbourUnderlyingPositionsCursor.moveNext()) {
@@ -426,7 +426,7 @@ public class VICPattern extends BasicPattern {
         int numVertices = tmpLabelling.size();
 
         Pool<PatternEdge> patternEdgePool = PatternEdgePool.
-           instance(configuration.isGraphEdgeLabelled());
+           instance(getConfig().isGraphEdgeLabelled());
 
         for (int i = 0; i < numVertices; ++i) {
             PatternEdgeArrayList tmpEdgesAddedByPos = tmpEdges.get(i);

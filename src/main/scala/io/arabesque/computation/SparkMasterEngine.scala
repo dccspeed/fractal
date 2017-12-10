@@ -1,25 +1,25 @@
 package io.arabesque.computation
 
-import io.arabesque.aggregation.{AggregationStorage, AggregationStorageMetadata}
+import io.arabesque.aggregation._
 import io.arabesque.cache.LZ4ObjectCache
 import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding._
-import io.arabesque.odag._
-import io.arabesque.utils.Logging
-
+import io.arabesque.utils.{Logging, SerializableWritable}
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.{NullWritable, Writable}
-import org.apache.spark.{Accumulator, SparkContext}
+import org.apache.spark.{HashPartitioner, SparkContext}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
+import org.apache.spark.util.LongAccumulator
 
-import scala.reflect.ClassTag
 import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.mutable.Map
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
+import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
 
 trait SparkMasterEngine [E <: Embedding]
@@ -42,7 +42,9 @@ trait SparkMasterEngine [E <: Embedding]
   def parentOpt: Option[SparkMasterEngine[E]]
   
   var masterComputation: MasterComputation = _
-  
+
+  var isComputationHalted: Boolean = false
+
   /* */
 
   /** Computation State
@@ -54,7 +56,7 @@ trait SparkMasterEngine [E <: Embedding]
 
   var superstepRDD: RDD[LZ4ObjectCache] = _
 
-  var aggAccums: Map[String,Accumulator[_]] = _
+  var aggAccums: Map[String,LongAccumulator] = _
 
   var previousAggregationsBc: Broadcast[_] = _
   
@@ -65,7 +67,7 @@ trait SparkMasterEngine [E <: Embedding]
 
   def init(): Unit = {
     if (!config.isInitialized()) {
-      config.initialize()
+      config.initialize(isMaster = true)
     }
 
     // set log level
@@ -101,16 +103,15 @@ trait SparkMasterEngine [E <: Embedding]
     // default accumulators
     aggAccums = Map.empty
     aggAccums.update (AGG_EMBEDDINGS_GENERATED,
-      sc.accumulator [Long] (0L, AGG_EMBEDDINGS_GENERATED))
+      sc.longAccumulator (AGG_EMBEDDINGS_GENERATED))
     aggAccums.update (AGG_EMBEDDINGS_PROCESSED,
-      sc.accumulator [Long] (0L, AGG_EMBEDDINGS_PROCESSED))
+      sc.longAccumulator (AGG_EMBEDDINGS_PROCESSED))
     aggAccums.update (AGG_EMBEDDINGS_OUTPUT,
-      sc.accumulator [Long] (0L, AGG_EMBEDDINGS_OUTPUT))
+      sc.longAccumulator (AGG_EMBEDDINGS_OUTPUT))
 
     // set initial state
     parentOpt match {
       case Some(parent) =>
-        logInfo(s"${this} Setting from parent ${parent} ${parent.previousAggregationsBc.value.asInstanceOf[Map[String,AggregationStorage[_,_]]].get("support")}")
         // start with parent's state
         superstepRDD = parent.superstepRDD
         previousAggregationsBc = parent.previousAggregationsBc
@@ -132,8 +133,8 @@ trait SparkMasterEngine [E <: Embedding]
   }
 
   override def haltComputation() = {
-    //logInfo ("Halting master computation")
-    //sc.stop()
+    logInfo ("Halting master computation")
+    isComputationHalted = true
   }
  
   /**
@@ -197,26 +198,21 @@ trait SparkMasterEngine [E <: Embedding]
       previousAggregations: Map[String,
         AggregationStorage[_ <: Writable, _ <: Writable]])
     : Map[String,AggregationStorage[_ <: Writable,_ <: Writable]] = {
-    if (config.isAggregationIncremental) {
-      def aggregate[K <: Writable, V <: Writable](agg1: AggregationStorage[K,V],
-        agg2: AggregationStorage[_,_]) = {
-          agg1.aggregate (agg2.asInstanceOf[AggregationStorage[K,V]])
-          agg1
-      }
-      // we compose all entries
-      previousAggregations.foreach { case (name, agg) =>
-        aggregations.get(name) match {
-          case Some(_agg) =>
-            aggregate(_agg, agg)
-          case None =>
-            aggregations.update (name, agg)
-        }
-      }
-      aggregations
-    } else {
-      // we replace with new entries
-      previousAggregations
+    def aggregate[K <: Writable, V <: Writable](agg1: AggregationStorage[K,V],
+      agg2: AggregationStorage[_,_]) = {
+        agg1.aggregate (agg2.asInstanceOf[AggregationStorage[K,V]])
+        agg1
     }
+    // we compose all entries
+    previousAggregations.foreach { case (name, agg) =>
+      aggregations.get(name) match {
+        case Some(_agg) if _agg.isIncremental =>
+          aggregate(_agg, agg)
+        case _ =>
+          aggregations.update (name, agg)
+      }
+    }
+    aggregations
   }
 
   /**
@@ -232,6 +228,138 @@ trait SparkMasterEngine [E <: Embedding]
     execEngines: RDD[SparkEngine[E]],
     numPartitions: Int) = Future {
 
+    def reduce5[K <: Writable, V <: Writable](
+        name: String,
+        metadata: AggregationStorageMetadata[K,V])
+      (implicit kt: ClassTag[K], vt: ClassTag[V]) =
+        Future[AggregationStorage[_ <: Writable, _ <: Writable]] {
+
+      import SparkConfiguration._
+
+      val keyValues = execEngines.flatMap (
+        execEngine => execEngine.flushAggregationsByName5[K,V](name)
+      ).partitionBy(new HashPartitioner(execEngines.partitions.length)).values
+
+      val step = superstep
+
+      val aggStorage = keyValues.mapPartitions { aggBinIter =>
+        if (aggBinIter.hasNext) {
+          var aggStorage = deserialize[AggregationStorage[K,V]](aggBinIter.next)
+          while (aggBinIter.hasNext) {
+            val agg = deserialize[AggregationStorage[K,V]](aggBinIter.next)
+            aggStorage.aggregate(agg)
+          }
+          Iterator(aggStorage)
+        } else {
+          Iterator.empty
+        }
+      }.reduce { (agg1, agg2) =>
+        agg1.aggregate(agg2)
+        agg1
+      }
+
+      aggStorage.endedAggregation
+      aggStorage
+    }
+
+    def reduce4[K <: Writable, V <: Writable](
+        name: String,
+        metadata: AggregationStorageMetadata[K,V])
+      (implicit kt: ClassTag[K], vt: ClassTag[V]) =
+        Future[AggregationStorage[_ <: Writable, _ <: Writable]] {
+
+      val _configBc = configBc
+
+      val keyValuesRDD = execEngines.flatMap (execEngine =>
+          execEngine.flushAggregationsByName4(name).
+            asInstanceOf[Iterator[(SerializableWritable[K], SerializableWritable[V])]]
+          )
+
+      val keyValues = keyValuesRDD.reduceByKey { (swValue1,swValue2) =>
+        val (v1, v2) = (swValue1.value, swValue2.value)
+        new SerializableWritable(metadata.getReductionFunction().reduce (v1, v2))
+      }.flatMap { case (swKey, swValue) =>
+        val aggStorageFactory = new AggregationStorageFactory(_configBc.value)
+        val finalAggStorage = aggStorageFactory.
+          createAggregationStorage(name, metadata).asInstanceOf[AggregationStorage[K,V]]
+        val keyValueMap = new java.util.HashMap[K,V]()
+        keyValueMap.put(swKey.value, swValue.value)
+        val tmpAggStorage = new AggregationStorage(name, metadata, keyValueMap)
+        finalAggStorage.finalLocalAggregate(tmpAggStorage)
+        finalAggStorage.getMapping.asScala.iterator.map { case (wKey, wValue) =>
+          (new SerializableWritable(wKey), new SerializableWritable(wValue))
+        }
+      }.reduceByKey { (swValue1, swValue2) =>
+        val (v1, v2) = (swValue1.value, swValue2.value)
+        new SerializableWritable(metadata.getReductionFunction().reduce (v1, v2))
+      }.collect
+
+      val aggStorageFactory = new AggregationStorageFactory(configBc.value)
+      val aggStorage = aggStorageFactory.
+        createAggregationStorage(name, metadata).asInstanceOf[AggregationStorage[K,V]]
+      var i = 0
+      while (i < keyValues.length) {
+        aggStorage.aggregate(keyValues(i)._1.value, keyValues(i)._2.value)
+        i += 1
+      }
+
+      aggStorage.endedAggregation
+      aggStorage
+    }
+
+    def reduce3[K <: Writable, V <: Writable](
+        name: String,
+        metadata: AggregationStorageMetadata[K,V])
+      (implicit kt: ClassTag[K], vt: ClassTag[V]) =
+        Future[AggregationStorage[_ <: Writable, _ <: Writable]] {
+
+      val keyValues = execEngines.flatMap (execEngine =>
+          execEngine.flushAggregationsByName3(name).
+            asInstanceOf[Iterator[AggregationStorage[K,V]]]
+          )
+      val aggStorage = keyValues.reduce { (agg1,agg2) =>
+        agg1.aggregate (agg2)
+        agg1
+      }
+
+      val aggStorageFactory = new AggregationStorageFactory(configBc.value)
+      val finalAggStorage = aggStorageFactory.
+        createAggregationStorage(name, metadata).
+        asInstanceOf[AggregationStorage[K,V]]
+
+      finalAggStorage.aggregate (aggStorage)
+
+      finalAggStorage.endedAggregation
+      finalAggStorage
+    }
+
+    def reduce2[K <: Writable, V <: Writable](
+        name: String,
+        metadata: AggregationStorageMetadata[K,V])
+      (implicit kt: ClassTag[K], vt: ClassTag[V]) =
+        Future[AggregationStorage[_ <: Writable, _ <: Writable]] {
+
+      val keyValuesRDD = execEngines.flatMap (execEngine =>
+          execEngine.flushAggregationsByName2(name).
+            asInstanceOf[Iterator[(SerializableWritable[K], SerializableWritable[V])]]
+          )
+
+      val keyValues = keyValuesRDD.reduceByKey { (swValue1,swValue2) =>
+        val (v1, v2) = (swValue1.value, swValue2.value)
+        new SerializableWritable(metadata.getReductionFunction().reduce (v1, v2))
+      }.collect
+
+      val aggStorage = new AggregationStorage(name, metadata)
+      var i = 0
+      while (i < keyValues.length) {
+        aggStorage.aggregate(keyValues(i)._1.value, keyValues(i)._2.value)
+        i += 1
+      }
+
+      aggStorage.endedAggregation
+      aggStorage
+    }
+
     def reduce[K <: Writable, V <: Writable](
         name: String,
         metadata: AggregationStorageMetadata[K,V])
@@ -246,20 +374,29 @@ trait SparkMasterEngine [E <: Embedding]
         agg1.aggregate (agg2)
         agg1
       }
+      
+      val aggStorageFactory = new AggregationStorageFactory(configBc.value)
+      val finalAggStorage = aggStorageFactory.
+        createAggregationStorage(name, metadata).
+        asInstanceOf[AggregationStorage[K,V]]
 
-      aggStorage.endedAggregation
-      aggStorage
+      finalAggStorage.aggregate (aggStorage)
+
+      logInfo(s"FinalAgg ${aggStorage} ${finalAggStorage}")
+
+      finalAggStorage.endedAggregation
+      finalAggStorage
     }
-
-    val future = Future.sequence (
-      config.getAggregationsMetadata.map { case (name, metadata) =>
-        reduce (name, metadata)
-      }
-    )
-
+    
     val aggregations = Map.empty[
       String,AggregationStorage[_ <: Writable, _ <: Writable]
     ]
+      
+    val future = Future.sequence (
+      config.getAggregationsMetadata.map { case (name, metadata) =>
+        reduce5 (name, metadata)
+      }
+    )
 
     Await.ready (future, Duration.Inf)
     future.value.get match {
@@ -360,7 +497,25 @@ object SparkMasterEngine {
     case COMM_EMBEDDING =>
       new SparkEmbeddingMasterEngine [E] (sc, config, parent)
     
+    case COMM_FROM_SCRATCH =>
+      new SparkFromScratchMasterEngine [E] (sc, config, parent)
+    
     case COMM_GTAG =>
       new SparkGtagMasterEngine [E] (sc, config, parent)
+    
+    case COMM_GTAG_HIER =>
+      new SparkGtagMasterEngineHier [E] (sc, config, parent)
+    
+    case COMM_BTAG =>
+      new SparkBtagMasterEngine [E] (sc, config, parent)
+    
+    case COMM_VETAG =>
+      new SparkVEtagMasterEngine [E] (sc, config, parent)
+    
+    case COMM_VIEWTAG =>
+      new SparkViewTagMasterEngine [E] (sc, config, parent)
+
+    case COMM_CHARAC =>
+      new SparkCharacMasterEngine [E] (sc, config, parent)
   }
 }

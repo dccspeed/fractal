@@ -1,21 +1,20 @@
 package io.arabesque.computation;
 
-import io.arabesque.conf.Configuration;
-import io.arabesque.embedding.Embedding;
-import io.arabesque.utils.collection.IntArrayList;
-
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.IntCursor;
+import io.arabesque.embedding.Embedding;
+import io.arabesque.utils.collection.IntArrayList;
+import io.arabesque.utils.pool.IntArrayListPool;
+import org.apache.log4j.Logger;
 
-import java.io.*;
-import java.util.*;
+import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 
-import scala.Tuple2;
-
-class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
+public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
+   private static final Logger LOG = Logger.getLogger(EmbeddingIterator.class);
 
    protected EmbeddingIterator<E> parent;
 
@@ -39,8 +38,6 @@ class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
 
    protected AtomicBoolean active;
 
-   protected ConcurrentLinkedQueue<EmbeddingIterator<E>> consumerPool;
-
    public String computationLabel() {
       return computation.computationLabel();
    }
@@ -49,11 +46,20 @@ class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
       return active != null && active.get();
    }
 
+   public synchronized void invalidate() {
+      active.set(false);
+      hasNext();
+   }
+
+   public EmbeddingIterator() {
+      this.rlock = new ReentrantLock();
+      this.prefix = IntArrayListPool.instance().createObject();
+   }
+
    public synchronized EmbeddingIterator<E> set(Computation<E> computation,
          E embedding, IntCollection wordIds) {
-      this.rlock = new ReentrantLock();
       this.computation = computation;
-      this.prefix = new IntArrayList(embedding.getNumWords());
+      this.prefix.clear();
       this.prefix.addAll(embedding.getWords());
       this.embedding = embedding;
       this.lastHasNext = false;
@@ -62,50 +68,57 @@ class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
       this.cur = wordIds.cursor();
       this.shouldRemoveLastWord = false;
       this.active = new AtomicBoolean(true);
-      this.consumerPool = new ConcurrentLinkedQueue<EmbeddingIterator<E>>();
       return this;
    }
 
    public synchronized EmbeddingIterator<E> forkConsumer() {
-      //EmbeddingIterator<E> iter = consumerPool.poll();
-      //if (iter != null) {
-      //   return iter;
-      //}
+      // create new consumer
       EmbeddingIterator<E> iter = new EmbeddingIterator<E>();
       iter.parent = this;
       iter.rlock = this.rlock;
       iter.computation = this.computation;
-      iter.prefix = this.prefix;
+      iter.prefix = IntArrayListPool.instance().createObject();
+      iter.prefix.addAll(this.prefix);
 
+      //iter.embedding = this.embedding;
       iter.embedding = computation.getConfig().createEmbedding();
-      for (int i = 0; i < prefix.size(); ++i) {
+      if (prefix.size() > 0) {
+         iter.embedding.addWord(prefix.getUnchecked(0));
+      }
+      for (int i = 1; i < prefix.size(); ++i) {
+         iter.embedding.nextExtensionLevel(this.embedding);
          iter.embedding.addWord(prefix.getUnchecked(i));
       }
 
       iter.lastHasNext = false;
       iter.cur = this.cur;
+      iter.wordIds = this.wordIds;
       iter.shouldRemoveLastWord = false;
       iter.active = this.active;
       return iter;
    }
 
    public synchronized void joinConsumer() {
-      assert !lastHasNext;
-      this.parent.consumerPool.offer(this);
+      IntArrayListPool.instance().reclaimObject(prefix);
+   }
+
+   private void maybeRemoveLastWord() {
+      if (shouldRemoveLastWord) {
+         embedding.removeLastWord();
+         shouldRemoveLastWord = false;
+      }
    }
 
    @Override
    public boolean hasNext() {
+      // if currElem has a valid word to be consumed
       if (lastHasNext) {
          return true;
       }
 
       // this test is to make sure we do not remove the last word in the
       // first *hasNext* call
-      if (shouldRemoveLastWord) {
-         embedding.removeLastWord();
-         shouldRemoveLastWord = false;
-      }
+      maybeRemoveLastWord();
 
       try {
          rlock.lock();
@@ -113,12 +126,15 @@ class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
             // skip extensions that turn the embedding not canonical
             while (cur.moveNext()) {
                currElem = cur.elem();
+               cur.remove();
                if (computation.filter(embedding, currElem)) {
                   lastHasNext = true;
                   return true;
                }
             }
             active.set(false);
+         } else {
+            maybeRemoveLastWord();
          }
          return false;
       } finally {
@@ -127,7 +143,7 @@ class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
    }
 
    @Override
-   public E next() {
+   public synchronized E next() {
       shouldRemoveLastWord = true;
       embedding.addWord(nextElem());
       return embedding;
@@ -147,15 +163,23 @@ class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
       return this.computation;
    }
 
+   public IntArrayList getPrefix() {
+      return prefix;
+   }
+
+   public Embedding getEmbedding() {
+      return embedding;
+   }
+
+   public IntCollection getWordIds() {
+      return wordIds;
+   }
+
    @Override
    public String toString() {
       return "EmbeddingIterator(" +
-         ",computation=" + computation +
-         ",prefix=" + prefix +
-         ",currElem=" + currElem +
-         ",wordIds=" + wordIds +
-         ",shouldRemoveLastWord=" + shouldRemoveLastWord +
-         ")";
+         "active=" + isActive() +
+         ",prefix=" + prefix + ")";
    }
 }
 

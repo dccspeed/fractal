@@ -40,6 +40,8 @@ public class SortNodesGraphByDegree {
     }
 
     public static void main(String[] args) {
+        String input = args[0];
+        String output = args[1];
         File fp = new File(input);
         Map<Integer, Entry<Integer, Set<Integer>>> mapNode = new HashMap<Integer, Map.Entry<Integer, Set<Integer>>>();
         Map<Integer, Integer> mapId = new HashMap<Integer, Integer>();

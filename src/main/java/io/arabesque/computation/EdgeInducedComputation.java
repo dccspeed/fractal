@@ -5,7 +5,7 @@ import io.arabesque.embedding.Embedding;
 
 public abstract class EdgeInducedComputation<E extends EdgeInducedEmbedding> extends BasicComputation<E> {
     @Override
-    protected final int getInitialNumWords() {
+    public final int getInitialNumWords() {
         return getMainGraph().getNumberEdges();
     }
 

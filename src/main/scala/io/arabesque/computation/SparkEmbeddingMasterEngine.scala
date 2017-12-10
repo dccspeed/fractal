@@ -12,8 +12,8 @@ import org.apache.log4j.{Level, Logger}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel._
-import org.apache.spark.{Accumulator, HashPartitioner, SparkContext}
-import org.apache.spark.util.SizeEstimator
+import org.apache.spark.{HashPartitioner, SparkContext}
+import org.apache.spark.util.{LongAccumulator, SizeEstimator}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.Map
@@ -107,6 +107,8 @@ class SparkEmbeddingMasterEngine[E <: Embedding](
       flatMap (_.flush).asInstanceOf[RDD[(Int,LZ4ObjectCache)]].
       partitionBy (new HashPartitioner (numPartitions)).
       values.persist(storageLevel)
+
+    superstepRDD.foreachPartition (_ => {})
     
     // whether the user chose to customize master computation, executed every
     // superstep
@@ -114,8 +116,8 @@ class SparkEmbeddingMasterEngine[E <: Embedding](
     
     // print stats
     aggAccums = aggAccums.map { case (name,accum) =>
-      logInfo (s"Accumulator[$name]: ${accum.value}")
-      (name -> sc.accumulator [Long] (0L, name))
+      logInfo (s"Accumulator[${superstep}][${name}]: ${accum.value}")
+      (name -> sc.longAccumulator (name))
     }
     
     val superstepFinish = System.currentTimeMillis
@@ -134,7 +136,7 @@ class SparkEmbeddingMasterEngine[E <: Embedding](
       superstepRDD: RDD[LZ4ObjectCache],
       superstep: Int,
       configBc: Broadcast[SparkConfiguration[E]],
-      aggAccums: Map[String,Accumulator[_]],
+      aggAccums: Map[String,LongAccumulator],
       previousAggregationsBc: Broadcast[_]): RDD[SparkEngine[E]] = {
 
     // read embeddings from embedding caches, expand, filter and process
@@ -147,7 +149,7 @@ class SparkEmbeddingMasterEngine[E <: Embedding](
         superstep = superstep,
         accums = aggAccums,
         previousAggregationsBc = previousAggregationsBc,
-        configuration = configBc.value
+        configurationId = configBc.value.getId
       )
 
       execEngine.init()

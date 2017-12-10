@@ -19,7 +19,9 @@ public class AggregationStorageFactory {
 
     public AggregationStorage createAggregationStorage(String name, AggregationStorageMetadata metadata) {
         if (metadata == null) {
-            throw new RuntimeException("Attempted to create unregistered aggregation storage");
+            throw new RuntimeException(
+                  "Attempted to create unregistered aggregation storage: " +
+                  name);
         }
 
         Class<?> keyClass = metadata.getKeyClass();

@@ -13,9 +13,9 @@ import org.apache.hadoop.io.Writable
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
-import org.apache.spark.{Accumulator, SparkContext}
+import org.apache.spark.SparkContext
 import org.apache.spark.storage.StorageLevel._
-import org.apache.spark.util.SizeEstimator
+import org.apache.spark.util.{LongAccumulator, SizeEstimator}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.Map

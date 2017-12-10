@@ -7,6 +7,7 @@ import org.apache.giraph.utils.UnsafeReusableByteArrayInput;
 import org.apache.giraph.utils.WritableUtils;
 import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 
@@ -15,12 +16,15 @@ import java.lang.reflect.Constructor;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.ArrayBlockingQueue;
 
 public class AggregationStorage<K extends Writable, V extends Writable> implements Writable, Externalizable {
     private String name;
     transient protected AtomicLongArray atomicArray;
-    transient protected boolean atomicArrayDirty;
-    protected Map<K, V> keyValueMap;
+    protected boolean atomicArrayDirty = true;
+    protected boolean isIncremental;
+    protected AbstractMap<K, V> keyValueMap;
     protected Class<K> keyClass;
     protected Class<V> valueClass;
     protected ReductionFunction<V> reductionFunction;
@@ -37,14 +41,15 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
     }
 
     public AggregationStorage(String name, AggregationStorageMetadata<K,V> metadata,
-          Map<K,V> keyValueMap) {
+          AbstractMap<K,V> keyValueMap) {
        init(name, metadata);
        this.keyValueMap = keyValueMap;
     }
 
     protected void init(String name, AggregationStorageMetadata<K,V> metadata) {
         if (keyValueMap == null) {
-            keyValueMap = new HashMap<>();
+            //keyValueMap = new HashMap<>();
+            keyValueMap = new ConcurrentHashMap<>();
         }
 
         reset();
@@ -59,6 +64,7 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
         valueClass = metadata.getValueClass();
         reductionFunction = metadata.getReductionFunction();
         endAggregationFunction = metadata.getEndAggregationFunction();
+        isIncremental = metadata.isIncremental();
     }
 
     public void reset() {
@@ -83,29 +89,60 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
         return Collections.unmodifiableMap(keyValueMap);
     }
 
-    public Map<K, V> getModifiableMap() {
+    public AbstractMap<K, V> getModifiableMap() {
         return keyValueMap;
     }
 
-    public synchronized void setAtomicArrayDirty() {
+    public synchronized void setAtomicArrayDirty(AtomicLong semaphore) {
+       //for (int i = 0; i < atomicArray.length(); ++i) {
+       //   long count = atomicArray.get(i);
+       //   if (count != 0 && count != -1) {
+       //      throw new RuntimeException("Should be zero. count=" + count);
+       //   }
+       //}
+       semaphore.decrementAndGet();
+       atomicArrayDirty = true;
+    }
+
+    private AtomicLong semaphore;
+
+    public synchronized AtomicLong resetAtomicArray(int length) {
        if (!atomicArrayDirty) {
-          atomicArrayDirty = true;
+          assert semaphore != null;
+          semaphore.incrementAndGet();
+          return semaphore;
        }
+
+       if (atomicArray == null) {
+          atomicArray = new AtomicLongArray(length);
+       }
+
+       semaphore = new AtomicLong(1);
+    
+       AbstractMap<IntWritable, LongWritable> counts =
+          (AbstractMap<IntWritable,LongWritable>) keyValueMap;
+
+       IntWritable reusableKey = new IntWritable();
+       LongWritable reusableValue;
+
+       for (int i = 0; i < atomicArray.length(); ++i) {
+          reusableKey.set(i);
+          reusableValue = counts.get(reusableKey);
+          if (reusableValue == null) {
+             atomicArray.set(i, -1);
+          } else {
+             atomicArray.set(i, reusableValue.get());
+          }
+       }
+       
+       atomicArrayDirty = false;
+       return semaphore;
     }
 
     public synchronized AtomicLongArray asAtomicArray(int length) {
-       if (atomicArrayDirty) {
-          atomicArray = new AtomicLongArray(length);
-          Map<IntWritable, LongWritable> counts =
-             (Map<IntWritable,LongWritable>) keyValueMap;
-          for (Map.Entry<IntWritable, LongWritable> e : counts.entrySet()) {
-             atomicArray.set(e.getKey().get(), e.getValue().get());
-          }
-          atomicArrayDirty = false;
-       }
        return atomicArray;
     }
-
+    
     public K getKey(K key) {
         if (keyValueMap.containsKey(key)) {
             return key;
@@ -171,6 +208,10 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
 
     // Not thread-safe
     public void aggregate(AggregationStorage<K, V> otherStorage) {
+        if (otherStorage == null) {
+           return;
+        }
+
         if (!getName().equals(otherStorage.getName())) {
             throw new RuntimeException("Aggregating storages with different names");
         }
@@ -204,6 +245,7 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
         objOutput.writeObject (valueClass);
         objOutput.writeObject (reductionFunction);
         objOutput.writeObject (endAggregationFunction);
+        objOutput.writeBoolean (isIncremental);
 
         objOutput.writeInt(keyValueMap.size());
         for (Map.Entry<K, V> entry : keyValueMap.entrySet()) {
@@ -222,29 +264,49 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
         valueClass = (Class<V>) objInput.readObject();
         reductionFunction = (ReductionFunction<V>) objInput.readObject();
         endAggregationFunction = (EndAggregationFunction<K,V>) objInput.readObject();
+        isIncremental = objInput.readBoolean();
 
         if (keyValueMap == null) {
-            keyValueMap = new HashMap<>();
+            //keyValueMap = new HashMap<>();
+            keyValueMap = new ConcurrentHashMap<>();
         }
 
         try {
 
-            Constructor<K> keyClassConstructor = keyClass.getConstructor();
-            Constructor<V> valueClassConstructor = valueClass.getConstructor();
+           if (!NullWritable.class.isAssignableFrom(keyClass)) {
+              Constructor<K> keyClassConstructor = keyClass.getConstructor();
+              Constructor<V> valueClassConstructor = valueClass.getConstructor();
 
-            int numEntries = objInput.readInt();
+              int numEntries = objInput.readInt();
 
-            for (int i = 0; i < numEntries; ++i) {
-                K key = keyClassConstructor.newInstance();
+              for (int i = 0; i < numEntries; ++i) {
+                 K key = keyClassConstructor.newInstance();
 
-                key.readFields(objInput);
+                 key.readFields(objInput);
 
-                V value = valueClassConstructor.newInstance();
+                 V value = valueClassConstructor.newInstance();
 
-                value.readFields(objInput);
+                 value.readFields(objInput);
 
-                keyValueMap.put(key, value);
-            }
+                 keyValueMap.put(key, value);
+              }
+           } else {
+              Constructor<V> valueClassConstructor = valueClass.getConstructor();
+
+              int numEntries = objInput.readInt();
+
+              K key = (K) NullWritable.get();
+              for (int i = 0; i < numEntries; ++i) {
+                 key.readFields(objInput);
+
+                 V value = valueClassConstructor.newInstance();
+
+                 value.readFields(objInput);
+
+                 keyValueMap.put(key, value);
+              }
+
+           }
         } catch (Exception e) {
             throw new RuntimeException("Error reading aggregation storage", e);
         }
@@ -289,16 +351,32 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
         }
     }
 
+    private ArrayBlockingQueue<K> keysConsumer;
+
+    public synchronized ArrayBlockingQueue<K> getKeysConsumer() {
+       if (keysConsumer == null) {
+          keysConsumer = new ArrayBlockingQueue<K>(
+                keyValueMap.size() > 0 ? keyValueMap.size() : 1,
+                false,
+                keyValueMap.keySet()
+                );
+       }
+
+       return keysConsumer;
+    }
+
     public void transferKeyFrom(K key, AggregationStorage<K, V> otherAggregationStorage) {
         aggregate(key, otherAggregationStorage.getValue(key));
-        otherAggregationStorage.removeKey(key);
+        //otherAggregationStorage.removeKey(key);
     }
 
     @Override
     public String toString() {
         return "AggregationStorage{" +
                 "name='" + name + '\'' +
-                ", keyValueMap=" + keyValueMap +
+                ",keyValueMapSize=" + keyValueMap.size() +
+                // ", keyValueMap=" + keyValueMap +
+                ",isIncremental=" + isIncremental +
                 '}';
     }
 
@@ -324,5 +402,9 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
 
     public boolean containsKey(K key) {
         return keyValueMap.containsKey(key);
+    }
+
+    public boolean isIncremental() {
+       return isIncremental;
     }
 }

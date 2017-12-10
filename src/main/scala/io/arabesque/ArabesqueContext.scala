@@ -1,5 +1,6 @@
 package io.arabesque
 
+import io.arabesque.computation.GtagMessagingSystem
 import io.arabesque.utils.Logging
 
 import java.util.UUID
@@ -59,6 +60,7 @@ class ArabesqueContext(sc: SparkContext, logLevel: String = "info")
   def stop() = {
     val fs = FileSystem.get (sc.hadoopConfiguration)
     val res = fs.delete (new Path(tmpPath))
+    GtagMessagingSystem.shutdown()
     logInfo (s"Removing arabesque temp directory: ${tmpPath} (exists=${res})")
   }
 }

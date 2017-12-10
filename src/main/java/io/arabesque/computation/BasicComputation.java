@@ -30,20 +30,20 @@ import scala.Tuple2;
 
 public abstract class BasicComputation<E extends Embedding> 
       implements Computation<E>, java.io.Serializable {
-
-    private EmbeddingIterator<E> emptyIter;
     
-    private EmbeddingIterator<E> embeddingIterator;
-
     private static final Logger LOG = Logger.getLogger(BasicComputation.class);
 
-    private boolean outputEnabled;
+    private transient int depth;
+    
+    private transient EmbeddingIterator<E> emptyIter;
+    
+    private transient EmbeddingIterator<E> embeddingIterator;
 
-    private CommonExecutionEngine<E> executionEngine;
-    private MainGraph mainGraph;
-    private Configuration configuration;
-    private IntConsumer expandConsumer;
-    private E currentEmbedding;
+    private transient CommonExecutionEngine<E> executionEngine;
+    private transient MainGraph mainGraph;
+    private transient Configuration configuration;
+    private transient IntConsumer expandConsumer;
+    private transient E currentEmbedding;
 
     @Override
     public final void setExecutionEngine(
@@ -77,8 +77,6 @@ public abstract class BasicComputation<E extends Embedding>
         configuration = config;
         mainGraph = configuration.getMainGraph();
 
-        outputEnabled = configuration.isOutputActive();
-
         emptyIter = new EmbeddingIterator<E>() {
            @Override
            public boolean hasNext() {
@@ -95,12 +93,14 @@ public abstract class BasicComputation<E extends Embedding>
     }
 
     @Override
-    public final int compute(E embedding) {
+    public final long compute(E embedding) {
        if (!aggregationCompute(embedding)) {
           return 0;
        }
 
-       return processCompute(expandCompute(embedding));
+       long ret = processCompute(expandCompute(embedding));
+       // finish();
+       return ret;
     }
 
     @Override
@@ -134,11 +134,12 @@ public abstract class BasicComputation<E extends Embedding>
         }
        
         currentEmbedding = embedding;
-        return embeddingIterator.set(this, embedding, possibleExtensions);
+        return embeddingIterator.
+           set(this, embedding, possibleExtensions);
     }
 
     @Override
-    public int processCompute(Iterator<E> expansionsIter) {
+    public long processCompute(Iterator<E> expansionsIter) {
        Computation<E> nextComp = nextComputation();
 
        if (nextComp != null) {
@@ -151,7 +152,7 @@ public abstract class BasicComputation<E extends Embedding>
              if (filter(currentEmbedding)) {
                 process(currentEmbedding);
 
-                currentEmbedding.nextEntensionLevel();
+                currentEmbedding.nextExtensionLevel();
                 nextComp.compute(currentEmbedding);
                 currentEmbedding.previousExtensionLevel();
              }
@@ -221,42 +222,8 @@ public abstract class BasicComputation<E extends Embedding>
     }
 
     private IntCollection getPossibleExtensions(E embedding) {
-        if (embedding.getNumWords() > 0) {
-            return embedding.getExtensibleWordIds();
-        } else {
-            // TODO: put getInitialExtensions into embedding class
-            return getInitialExtensions();
-        }
+       return embedding.getExtensibleWordIds(this);
     }
-
-    protected HashIntSet getInitialExtensions() {
-        int totalNumWords = getInitialNumWords();
-        int numPartitions = getNumberPartitions();
-        int myPartitionId = getPartitionId();
-        int numWordsPerPartition = Math.max(totalNumWords / numPartitions, 1);
-        int startMyWordRange = myPartitionId * numWordsPerPartition;
-        int endMyWordRange = startMyWordRange + numWordsPerPartition;
-
-        // If we are the last partition or our range end goes over the total
-        // number of vertices, set the range end to the total number of vertices
-        if (myPartitionId == numPartitions - 1 ||
-              endMyWordRange > totalNumWords) {
-            endMyWordRange = totalNumWords;
-        }
-
-        // TODO: Replace this by a list implementing IntCollection.
-        // No need for set.
-        HashIntSet initialExtensions = HashIntSets.newMutableSet(
-              numWordsPerPartition);
-
-        for (int i = startMyWordRange; i < endMyWordRange; ++i) {
-            initialExtensions.add(i);
-        }
-
-        return initialExtensions;
-    }
-
-    protected abstract int getInitialNumWords();
 
     @Override
     public boolean shouldExpand(E embedding) {
@@ -303,9 +270,6 @@ public abstract class BasicComputation<E extends Embedding>
 
     @Override
     public final int getStep() {
-        // When we achieve steps that reach long values, the universe
-        // will probably have ended anyway
-        // ... that's true, doesn't matter
         return (int) executionEngine.getSuperstep();
     }
 
@@ -357,11 +321,8 @@ public abstract class BasicComputation<E extends Embedding>
              } else {
                 consumer.joinConsumer();
              }
-          
-             curr = (BasicComputation<E>) curr.nextComputation();
-          } else {
-             return null;
           }
+          curr = (BasicComputation<E>) curr.nextComputation();
        }
 
        return null;
@@ -379,5 +340,26 @@ public abstract class BasicComputation<E extends Embedding>
     @Override
     public final void output(E embedding) {
        executionEngine.output(embedding);
+    }
+
+    @Override
+    public final int setDepth(int depth) {
+       this.depth = depth;
+       Computation<E> nextComp = nextComputation();
+       if (nextComp != null) {
+          return 1 + nextComp.setDepth(this.depth + 1);
+       } else {
+          return 1;
+       }
+    }
+
+    @Override
+    public final int getDepth() {
+       return this.depth;
+    }
+
+    @Override
+    public E getCurrentEmbedding() {
+       return currentEmbedding;
     }
 }

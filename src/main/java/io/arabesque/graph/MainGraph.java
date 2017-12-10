@@ -1,6 +1,7 @@
 package io.arabesque.graph;
 
 import io.arabesque.utils.collection.ReclaimableIntCollection;
+import io.arabesque.utils.collection.AtomicBitSetArray;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.function.IntConsumer;
 
@@ -43,4 +44,15 @@ public interface MainGraph {
     boolean isMultiGraph();
 
     void forEachEdgeId(int v1, int v2, IntConsumer intConsumer);
+
+    int applyTagVertexes(AtomicBitSetArray tag);
+    
+    int applyTagEdges(AtomicBitSetArray tag);
+    
+    int applyTag();
+
+    int applyTag(AtomicBitSetArray vtag, AtomicBitSetArray etag);
+    
+    void removeVertex(int vertexId);
+
 }

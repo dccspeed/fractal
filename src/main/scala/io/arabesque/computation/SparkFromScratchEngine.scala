@@ -1,46 +1,32 @@
 package io.arabesque.computation
 
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+
 import akka.actor._
-import com.typesafe.config.ConfigFactory
-
-import io.arabesque.aggregation.{AggregationStorage, AggregationStorageFactory}
 import io.arabesque.cache.LZ4ObjectCache
-import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding._
-import io.arabesque.utils.collection.IntArrayList
-import io.arabesque.utils.{Logging, SerializableConfiguration}
-
-import java.io._
-import java.util.Properties
-import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors}
-import java.util.concurrent.atomic.AtomicInteger
-
-import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hadoop.io.{LongWritable, NullWritable, Writable, SequenceFile}
+import io.arabesque.utils.Logging
 import org.apache.hadoop.io.SequenceFile.{Writer => SeqWriter}
-import org.apache.log4j.{Level, Logger}
-import org.apache.spark.Accumulator
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.util.{LongAccumulator, SizeEstimator}
 
-import scala.collection.JavaConversions._
-import scala.collection.mutable.{Map, Set}
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
-import scala.reflect.ClassTag
-import scala.util.Random
+import scala.collection.mutable.Map
 
 /**
  */
-case class SparkGtagEngine[E <: Embedding](
+case class SparkFromScratchEngine[E <: Embedding](
     partitionId: Int,
     superstep: Int,
-    accums: Map[String,Accumulator[_]],
+    accums: Map[String,LongAccumulator],
     previousAggregationsBc: Broadcast[_],
-    configuration: SparkConfiguration[E]) extends SparkEngine[E] {
-  
-  var currentCache: LZ4ObjectCache = _
+    configurationId: Int) extends SparkEngine[E] {
 
-  var gtagActorRef: ActorRef = _
+  @transient var currentCache: LZ4ObjectCache = _
+
+  @transient var gtagActorRef: ActorRef = _
+
+  var validEmbeddings: AtomicLong = _
 
   override def init() = {
     val start = System.currentTimeMillis
@@ -48,8 +34,8 @@ case class SparkGtagEngine[E <: Embedding](
     super.init()
 
     // register computation
-    SparkGtagEngine.registerComputation(computation)
-    
+    SparkFromScratchEngine.registerComputation(computation)
+
     // initial embedding cache
     currentCache = null
 
@@ -64,9 +50,12 @@ case class SparkGtagEngine[E <: Embedding](
     logInfo(s"Started gtag-actor(step=${superstep}," +
       s" partitionId=${partitionId}): ${gtagActorRef}")
 
+    validEmbeddings = new AtomicLong(0)
+
     val end = System.currentTimeMillis
 
-    logInfo(s"${this} took ${(end - start)}ms to initialize.")
+    logInfo(s"SparkGtagEngine(step=${superstep},partitionId=${partitionId}" +
+      s" took ${(end - start)} ms to initialize.")
   }
 
   /**
@@ -74,8 +63,10 @@ case class SparkGtagEngine[E <: Embedding](
    */
   override def finalize() = {
     super.finalize()
+    currentCache = null
+    gtagActorRef = null
     // remove from active computations
-    SparkGtagEngine.unregisterComputation(computation)
+    // SparkFromScratchEngine.unregisterComputation(computation)
     // make sure we close writers
     if (outputStreamOpt.isDefined) outputStreamOpt.get.close
     if (embeddingWriterOpt.isDefined) embeddingWriterOpt.get.close
@@ -88,6 +79,10 @@ case class SparkGtagEngine[E <: Embedding](
    */
   def compute(inboundCaches: Iterator[LZ4ObjectCache]): Unit = {
     expansionCompute (inboundCaches)
+    aggregationStorages.foreach {
+      case (name, agg) =>
+        aggregateAndSplitFinalAggregation(name, agg)
+    }
     flushStatsAccumulators
   }
 
@@ -107,13 +102,15 @@ case class SparkGtagEngine[E <: Embedding](
 
     } else {
       var hasNext = true
-      while (hasNext) getNextInboundEmbedding (inboundCaches) match {
-        case None =>
+      var embedding: E = null.asInstanceOf[E]
+      while (hasNext) {
+        embedding = getNextInboundEmbedding (inboundCaches)
+        if (embedding == null) {
           hasNext = false
-
-        case Some(embedding) =>
+        } else {
           computation.compute (embedding)
           numEmbeddingsProcessed += 1
+        }
       }
     }
   }
@@ -121,23 +118,23 @@ case class SparkGtagEngine[E <: Embedding](
   /**
    * Reads next embedding from previous caches
    *
-   * @param remainingCaches 
+   * @param remainingCaches
    * @return some embedding or none
    */
   @scala.annotation.tailrec
   private def getNextInboundEmbedding(
-      remainingCaches: Iterator[LZ4ObjectCache]): Option[E] = {
+      remainingCaches: Iterator[LZ4ObjectCache]): E = {
     if (currentCache == null) {
       if (remainingCaches.hasNext) {
         currentCache = remainingCaches.next
         currentCache.prepareForIteration
         getNextInboundEmbedding (remainingCaches)
-      } else None
+      } else null.asInstanceOf[E]
     } else {
       if (currentCache.hasNext) {
         val embedding = currentCache.next.asInstanceOf[E]
         if (computation.aggregationFilter(embedding.getPattern))
-          Some(embedding)
+          embedding
         else
           getNextInboundEmbedding (remainingCaches)
       } else {
@@ -167,7 +164,7 @@ case class SparkGtagEngine[E <: Embedding](
   def flush: Iterator[(Int,LZ4ObjectCache)] = Iterator.empty
 }
 
-object SparkGtagEngine extends Logging {
+object SparkFromScratchEngine extends Logging {
   lazy val activeComputations
     : ConcurrentHashMap[(Int,Int),Computation[_]] = new ConcurrentHashMap()
 

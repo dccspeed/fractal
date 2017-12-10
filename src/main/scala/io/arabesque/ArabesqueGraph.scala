@@ -96,6 +96,14 @@ class ArabesqueGraph(
     vertexInducedComputation.
       withAggregationRegistered [Pattern,LongWritable] (
         AGG_MOTIFS)(
+          (e,c) => e.getPattern,
+          new Function2[VertexInducedEmbedding, Computation[VertexInducedEmbedding], LongWritable] with Serializable {
+            @transient lazy val reusableUnit = new LongWritable(1)
+            def apply(e: VertexInducedEmbedding,
+                c: Computation[VertexInducedEmbedding]): LongWritable = {
+              reusableUnit
+            }
+          },
           (v1, v2) => {v1.set (v1.get + v2.get); v1})
   }
 
@@ -157,26 +165,33 @@ class ArabesqueGraph(
         c.map(AGG_SUPPORT, e.getPattern, domainSupport.get)
       }
     }}.
-    withMasterCompute { c =>
-      val freqPatterns = c.readAggregation [Pattern,DomainSupport] (AGG_SUPPORT)
-      if (freqPatterns.getNumberMappings <= 0 &&
-        c.getStep > 0) {
-        println (s"Stopping computation ${c} at step ${c.getStep}")
-        c.haltComputation()
-      } else {
-        freqPatterns.getMapping().asScala.foreach { case (pattern,support) =>
-          println (s"Frequent pattern(${c.getStep}): ${pattern} -> ${support}")
+    withMasterCompute { new MasterComputeFunc {
+      private var numPreviousFrequentPatterns: Int = 0
+      def apply(c: MasterComputation): Unit = {
+        val freqPatterns = c.readAggregation [Pattern,DomainSupport] (AGG_SUPPORT)
+        if (freqPatterns.getNumberMappings <= numPreviousFrequentPatterns &&
+            c.getStep > 0) {
+          println (s"Stopping computation ${c} at step ${c.getStep}")
+          c.haltComputation()
+        } else {
+          freqPatterns.getMapping().asScala.foreach { case (pattern,support) =>
+            println (s"Frequent pattern(${c.getStep}): ${pattern} -> ${support}")
+          }
+          numPreviousFrequentPatterns = freqPatterns.getNumberMappings()
         }
       }
-    }.
+    }}.
     withAggregationRegistered [Pattern,DomainSupport] (AGG_SUPPORT,
       new DomainSupportReducer(),
-      endAggregationFunction = new DomainSupportEndAggregationFunction()).
+      endAggregationFunction = new DomainSupportEndAggregationFunction(),
+      isIncremental = true).
+    copy (mustSync = true).
     filterByAgg [Pattern,DomainSupport] (AGG_SUPPORT) {
       (e,a) => 
         val res = a.containsKey (e.getPattern)
         res
-    }
+    }.
+    copy(mustSync = true)
    
     // The standard behavior is to increment the scope along with the step.
     // However, because we want to handle fsm within the same scope, we must
@@ -271,8 +286,9 @@ class ArabesqueGraph(
    */
   def cliques: ArabesqueResult[VertexInducedEmbedding] = {
     vertexInducedComputation.
-      withFilter ((e,c) =>
-          e.getNumEdgesAddedWithExpansion == e.getNumVertices - 1)
+      withFilter { (e,c) =>
+        e.getNumEdgesAddedWithExpansion == e.getNumVertices - 1
+      }
   }
  
   /**

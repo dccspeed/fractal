@@ -1,5 +1,6 @@
 package io.arabesque.testutils
 
+import io.arabesque.conf.Configuration
 import io.arabesque.embedding.EdgeInducedEmbedding
 import io.arabesque.embedding.Embedding
 import io.arabesque.embedding.VertexInducedEmbedding
@@ -17,7 +18,9 @@ class EmbeddingUtils {
     }
 
     static Embedding createVertexEmbedding(List<Integer> vertexIds) {
-        VertexInducedEmbedding vertexInducedEmbedding = new VertexInducedEmbedding()
+        Configuration.get().setEmbeddingClass(VertexInducedEmbedding.class)
+        VertexInducedEmbedding vertexInducedEmbedding =
+            (VertexInducedEmbedding) Configuration.get().createEmbedding()
 
         for (Integer vertexId : vertexIds) {
             vertexInducedEmbedding.addWord(vertexId)
@@ -27,7 +30,9 @@ class EmbeddingUtils {
     }
 
     static Embedding createEdgeEmbedding(List<Integer> edgeIds) {
-        EdgeInducedEmbedding edgeInducedEmbedding = new EdgeInducedEmbedding()
+        Configuration.get().setEmbeddingClass(EdgeInducedEmbedding.class)
+        EdgeInducedEmbedding edgeInducedEmbedding =
+            (EdgeInducedEmbedding) Configuration.get().createEmbedding()
 
         for (Integer edgeId : edgeIds) {
             edgeInducedEmbedding.addWord(edgeId)

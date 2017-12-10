@@ -13,7 +13,7 @@ import java.io.IOException;
 
 public class PatternEdge implements Comparable<PatternEdge>, Writable {
 
-    protected MainGraph mainGraph;
+    /// protected MainGraph mainGraph;
     private int srcPos;
     private int srcLabel;
     private int destPos;
@@ -29,7 +29,7 @@ public class PatternEdge implements Comparable<PatternEdge>, Writable {
 
     public PatternEdge(MainGraph mainGraph,
           int srcPos, int srcLabel, int destPos, int destLabel) {
-        this.mainGraph = mainGraph;
+        // this.mainGraph = mainGraph;
         this.srcPos = srcPos;
         this.srcLabel = srcLabel;
         this.destPos = destPos;
@@ -41,7 +41,7 @@ public class PatternEdge implements Comparable<PatternEdge>, Writable {
     }
 
     public void setFromOther(PatternEdge edge) {
-        this.mainGraph = edge.mainGraph;
+        // this.mainGraph = edge.mainGraph;
         setSrcPos(edge.getSrcPos());
         setSrcLabel(edge.getSrcLabel());
 
@@ -54,7 +54,7 @@ public class PatternEdge implements Comparable<PatternEdge>, Writable {
     }
 
     public void setFromEdge(MainGraph mainGraph, Edge edge, int srcPos, int dstPos, int srcId) {
-        this.mainGraph = mainGraph;
+        // this.mainGraph = mainGraph;
 
         int srcVertexId = edge.getSourceId();
         int dstVertexId = edge.getDestinationId();

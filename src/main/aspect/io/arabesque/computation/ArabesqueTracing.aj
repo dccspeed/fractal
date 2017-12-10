@@ -15,15 +15,15 @@ import java.util.concurrent.atomic.AtomicLongArray;
 import org.slf4j.Logger;
 
 public aspect ArabesqueTracing {
-   private Logger log = Logging$.MODULE$.getLogger("ArabesqueTracing");
+   private static Logger log = Logging$.MODULE$.getLogger("ArabesqueTracing");
 
-   private HashMap<String,Integer> counterIndexes =
+   private static HashMap<String,Integer> counterIndexes =
       new HashMap<String,Integer>() {{
          put("canonicalFilter", 0);
          put("addWord", 1);
       }};
    
-   private ConcurrentHashMap<Integer,AtomicLongArray> counters =
+   private static ConcurrentHashMap<Integer,AtomicLongArray> counters =
       new ConcurrentHashMap<Integer,AtomicLongArray>() {{
          put(new Integer(-1), new AtomicLongArray(counterIndexes.size()));
       }};

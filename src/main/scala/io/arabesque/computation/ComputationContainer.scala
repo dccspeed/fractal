@@ -1,5 +1,6 @@
 package io.arabesque.computation
 
+import io.arabesque.WordFilterFunc
 import io.arabesque.conf.Configuration
 import io.arabesque.embedding._
 import io.arabesque.pattern.Pattern
@@ -38,7 +39,7 @@ sealed trait ComputationContainer [E <: Embedding] extends Computation[E]
 
   val filterOpt: Option[(E,Computation[E]) => Boolean]
   
-  val wordFilterOpt: Option[(E,Int,Computation[E]) => Boolean]
+  val wordFilterOpt: Option[WordFilterFunc[E]]
 
   val shouldExpandOpt: Option[(E,Computation[E]) => Boolean]
 
@@ -56,9 +57,9 @@ sealed trait ComputationContainer [E <: Embedding] extends Computation[E]
 
   val finishOpt: Option[(Computation[E]) => Unit]
 
-  val expandComputeOpt: Option[(E,Computation[E]) => Iterator[E]]
+  val expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]]
   
-  val processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Int]
+  val processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long]
 
   val nextComputationOpt: Option[Computation[E]]
  
@@ -87,7 +88,7 @@ sealed trait ComputationContainer [E <: Embedding] extends Computation[E]
         processOpt,
       filterOpt: Option[(E,Computation[E]) => Boolean] =
         filterOpt,
-      wordFilterOpt: Option[(E,Int,Computation[E]) => Boolean] =
+      wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
       shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
         shouldExpandOpt,
@@ -105,9 +106,9 @@ sealed trait ComputationContainer [E <: Embedding] extends Computation[E]
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Int] =
+      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
         processComputeOpt,
       nextComputationOpt: Option[Computation[E]] =
         nextComputationOpt
@@ -120,7 +121,7 @@ sealed trait ComputationContainer [E <: Embedding] extends Computation[E]
         processOpt,
       filterOpt: Option[(E,Computation[E]) => Boolean] =
         filterOpt,
-      wordFilterOpt: Option[(E,Int,Computation[E]) => Boolean] =
+      wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
       shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
         shouldExpandOpt,
@@ -138,9 +139,9 @@ sealed trait ComputationContainer [E <: Embedding] extends Computation[E]
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Int] =
+      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
         processComputeOpt
     ): ComputationContainer[E]
 
@@ -151,7 +152,7 @@ sealed trait ComputationContainer [E <: Embedding] extends Computation[E]
         processOpt,
       filterOpt: Option[(E,Computation[E]) => Boolean] =
         filterOpt,
-      wordFilterOpt: Option[(E,Int,Computation[E]) => Boolean] =
+      wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
       shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
         shouldExpandOpt,
@@ -169,9 +170,9 @@ sealed trait ComputationContainer [E <: Embedding] extends Computation[E]
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Int] =
+      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
         processComputeOpt
     ): ComputationContainer[E]
 
@@ -189,17 +190,19 @@ sealed trait ComputationContainer [E <: Embedding] extends Computation[E]
     expandComputeOpt = Some((e,c) => Iterator.empty)
     )
 
+  @transient lazy val computationRepr: Array[String] = {
+    Array(expandComputeOpt.map(_ => "ec").getOrElse("_"),
+      wordFilterOpt.map(_ => "wf").getOrElse("_"),
+      filterOpt.map(_ => "f").getOrElse("_"),
+      processComputeOpt.map(_ => "pc").getOrElse("_"),
+      processOpt.map(_ => "p").getOrElse("_"))
+  }
+
   override def toString: String = {
-    // s"CC[${containerId},${callerSite}]" +
     s"CC[${containerId}]" +
     s"[${computationLabel()}]" +
-    s"(${expandComputeOpt.map(_ => "expandCompute->").getOrElse("")}" +
-    s"${processComputeOpt.map(_ => "processCompute->").getOrElse("")}" +
-    s"${wordFilterOpt.map(_ => "wordFilter->").getOrElse("")}" +
-    s"${filterOpt.map(_ => "filter->").getOrElse("")}" +
-    s"${pAggregationFilterOpt.map(_ => "pAggregationFilter->").getOrElse("")}" +
-    s"${processOpt.map(_ => "process").getOrElse("")})" +
-    s"${nextComputationOpt.map(c => "-->" + c.toString).getOrElse("")}"
+    s"(${computationRepr.mkString(",")})" +
+    s"${nextComputationOpt.map(c => "::" + c.toString).getOrElse("")}"
   }
 }
 
@@ -207,7 +210,7 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
     computationLabelOpt: Option[String] = None,
     processOpt: Option[(E,Computation[E]) => Unit] = None,
     filterOpt: Option[(E,Computation[E]) => Boolean] = None,
-    wordFilterOpt: Option[(E,Int,Computation[E]) => Boolean] = None,
+    wordFilterOpt: Option[WordFilterFunc[E]] = None,
     shouldExpandOpt: Option[(E,Computation[E]) => Boolean] = None,
     aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] = None,
     pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] = None,
@@ -216,8 +219,8 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
     initOpt: Option[(Computation[E]) => Unit] = None,
     initAggregationsOpt: Option[(Computation[E]) => Unit] = None,
     finishOpt: Option[(Computation[E]) => Unit] = None,
-    expandComputeOpt: Option[(E,Computation[E]) => Iterator[E]] = None,
-    processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Int] =
+    expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] = None,
+    processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
       None,
     nextComputationOpt: Option[Computation[E]] = None)
   extends EdgeInducedComputation[E] with ComputationContainer[E] {
@@ -231,9 +234,15 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
   @transient private lazy val _filter: (E,Computation[E]) => Boolean =
     filterOpt.getOrElse ((e: E, c: Computation[E]) => super.filter (e))
   
-  @transient private lazy val _wordFilter: (E,Int,Computation[E]) => Boolean =
+  @transient private lazy val _wordFilter: WordFilterFunc[E] = {
     wordFilterOpt.getOrElse (
-      (e: E, w: Int, c: Computation[E]) => super.filter (e, w))
+      new WordFilterFunc [E] {
+        def apply(e: E, w: Int, c: Computation[E]): Boolean = {
+          e.isCanonicalEmbeddingWithWord(w)
+        }
+      }
+    )
+  }
 
   @transient private lazy val _shouldExpand: (E,Computation[E]) => Boolean =
     shouldExpandOpt.getOrElse (
@@ -301,13 +310,13 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
   }
 
   @transient private lazy val _expandCompute
-    : (E,Computation[E]) => Iterator[E] =
+    : (E,Computation[E]) => java.util.Iterator[E] =
     expandComputeOpt.getOrElse (
       (e: E, c: Computation[E]) => super.expandCompute(e)
     )
 
   @transient private lazy val _processCompute
-    : (java.util.Iterator[E],Computation[E]) => Int =
+    : (java.util.Iterator[E],Computation[E]) => Long =
     processComputeOpt.getOrElse (
       (iter: java.util.Iterator[E], c: Computation[E]) =>
         super.processCompute(iter)
@@ -339,7 +348,7 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
         processOpt,
       filterOpt: Option[(E,Computation[E]) => Boolean] =
         filterOpt,
-      wordFilterOpt: Option[(E,Int,Computation[E]) => Boolean] =
+      wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
       shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
         shouldExpandOpt,
@@ -357,9 +366,9 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Int] =
+      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
         processComputeOpt,
       nextComputationOpt: Option[Computation[E]] =
         nextComputationOpt)
@@ -390,7 +399,7 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
         processOpt,
       filterOpt: Option[(E,Computation[E]) => Boolean] =
         filterOpt,
-      wordFilterOpt: Option[(E,Int,Computation[E]) => Boolean] =
+      wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
       shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
         shouldExpandOpt,
@@ -408,9 +417,9 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Int] =
+      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
         processComputeOpt)
     : ComputationContainer[E] = nextComputationOpt match {
     case Some(nextComputation) =>
@@ -444,7 +453,7 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
         processOpt,
       filterOpt: Option[(E,Computation[E]) => Boolean] =
         filterOpt,
-      wordFilterOpt: Option[(E,Int,Computation[E]) => Boolean] =
+      wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
       shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
         shouldExpandOpt,
@@ -462,9 +471,9 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Int] =
+      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
         processComputeOpt)
     : ComputationContainer[E] = nextComputationOpt match {
     case Some(nextComputation) =>
@@ -562,7 +571,7 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
   override def finish(): Unit = _finish (this)
   
   override def expandCompute(e: E): java.util.Iterator[E] =
-    _expandCompute (e, this).asJava
+    _expandCompute (e, this)
 
   override def processCompute(iter: java.util.Iterator[E]) =
     _processCompute (iter, this)
@@ -576,7 +585,7 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
     computationLabelOpt: Option[String] = None,
     processOpt: Option[(E,Computation[E]) => Unit] = None,
     filterOpt: Option[(E,Computation[E]) => Boolean] = None,
-    wordFilterOpt: Option[(E,Int,Computation[E]) => Boolean] = None,
+    wordFilterOpt: Option[WordFilterFunc[E]] = None,
     shouldExpandOpt: Option[(E,Computation[E]) => Boolean] = None,
     aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] = None,
     pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] = None,
@@ -585,8 +594,8 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
     initOpt: Option[(Computation[E]) => Unit] = None,
     initAggregationsOpt: Option[(Computation[E]) => Unit] = None,
     finishOpt: Option[(Computation[E]) => Unit] = None,
-    expandComputeOpt: Option[(E,Computation[E]) => Iterator[E]] = None,
-    processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Int] =
+    expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] = None,
+    processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
       None,
     nextComputationOpt: Option[Computation[E]] = None)
   extends VertexInducedComputation[E] with ComputationContainer[E] {
@@ -600,9 +609,15 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
   @transient private lazy val _filter: (E,Computation[E]) => Boolean =
     filterOpt.getOrElse ((e: E, c: Computation[E]) => super.filter (e))
   
-  @transient private lazy val _wordFilter: (E,Int,Computation[E]) => Boolean =
+  @transient private lazy val _wordFilter: WordFilterFunc[E] = {
     wordFilterOpt.getOrElse (
-      (e: E, w: Int, c: Computation[E]) => super.filter (e, w))
+      new WordFilterFunc [E] {
+        def apply(e: E, w: Int, c: Computation[E]): Boolean = {
+          e.isCanonicalEmbeddingWithWord(w)
+        }
+      }
+    )
+  }
 
   @transient private lazy val _shouldExpand: (E,Computation[E]) => Boolean =
     shouldExpandOpt.getOrElse (
@@ -660,13 +675,13 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
   }
   
   @transient private lazy val _expandCompute
-    : (E,Computation[E]) => Iterator[E] =
+    : (E,Computation[E]) => java.util.Iterator[E] =
     expandComputeOpt.getOrElse (
       (e: E, c: Computation[E]) => super.expandCompute(e)
     )
   
   @transient private lazy val _processCompute
-    : (java.util.Iterator[E],Computation[E]) => Int =
+    : (java.util.Iterator[E],Computation[E]) => Long =
     processComputeOpt.getOrElse (
       (iter: java.util.Iterator[E], c: Computation[E]) =>
         super.processCompute(iter)
@@ -698,7 +713,7 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
         processOpt,
       filterOpt: Option[(E,Computation[E]) => Boolean] =
         filterOpt,
-      wordFilterOpt: Option[(E,Int,Computation[E]) => Boolean] =
+      wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
       shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
         shouldExpandOpt,
@@ -716,9 +731,9 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Int] =
+      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
         processComputeOpt,
       nextComputationOpt: Option[Computation[E]] =
         nextComputationOpt)
@@ -749,7 +764,7 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
         lastComputation.processOpt,
       filterOpt: Option[(E,Computation[E]) => Boolean] =
         lastComputation.filterOpt,
-      wordFilterOpt: Option[(E,Int,Computation[E]) => Boolean] =
+      wordFilterOpt: Option[WordFilterFunc[E]] =
         lastComputation.wordFilterOpt,
       shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
         lastComputation.shouldExpandOpt,
@@ -767,9 +782,9 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
         lastComputation.initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         lastComputation.finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
         lastComputation.expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Int] =
+      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
         lastComputation.processComputeOpt)
     : ComputationContainer[E] = {
 
@@ -802,7 +817,7 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
         processOpt,
       filterOpt: Option[(E,Computation[E]) => Boolean] =
         filterOpt,
-      wordFilterOpt: Option[(E,Int,Computation[E]) => Boolean] =
+      wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
       shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
         shouldExpandOpt,
@@ -820,9 +835,9 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Int] =
+      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
         processComputeOpt)
     : ComputationContainer[E] = nextComputationOpt match {
     case Some(nextComputation) =>
@@ -920,7 +935,7 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
   override def finish(): Unit = _finish (this)
 
   override def expandCompute(e: E): java.util.Iterator[E] =
-    _expandCompute (e, this).asJava
+    _expandCompute (e, this)
   
   override def processCompute(iter: java.util.Iterator[E]) =
     _processCompute (iter, this)

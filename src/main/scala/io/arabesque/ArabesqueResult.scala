@@ -16,6 +16,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.storage.StorageLevel
 
 import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 import scala.collection.mutable.Map
 import scala.reflect.ClassTag
 import scala.reflect.classTag
@@ -45,7 +46,7 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
   def sparkContext: SparkContext = arabGraph.arabContext.sparkContext
 
   if (!config.isInitialized) {
-    config.initialize()
+    config.initialize(isMaster = true)
   }
 
   /**
@@ -114,7 +115,8 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
             if (parent.masterEngine.next) {
               SparkMasterEngine [E] (sparkContext, config, parent.masterEngine)
             } else {
-              parent.masterEngine
+              masterEngineOpt = Some(parent.masterEngine)
+              return parent.masterEngine
             }
 
           case None =>
@@ -288,6 +290,31 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
     explore(1)
   }
 
+  def exploreExp(n: Int): ArabesqueResult[E] = {
+    var currResult = this
+    var results: List[ArabesqueResult[E]] = List(currResult)
+    var numResults = 1
+    while (currResult.parentOpt.isDefined) {
+      currResult = currResult.parentOpt.get
+      results = currResult :: results
+      numResults += 1
+    }
+
+    var i = 0
+    var j = numResults
+    currResult = this
+    while (i < n) {
+      results.foreach { r =>
+        currResult = currResult.handleNextResult(r).
+          copy(step = j)
+        j += 1
+      }
+      i += 1
+    }
+
+    currResult
+  }
+
   /**
    * Explore *numComputations* times the last computation
    *
@@ -407,6 +434,34 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
   }
 
   /**
+   * This function will handle to the user a new result without a configuration
+   * NOTE: The configuration will make changes to the current scope, which may
+   * include several steps
+   *
+   * @param key id of the configuration
+   *
+   * @return new result
+   */
+  def unset(key: String): ArabesqueResult[E] = {
+
+    def unsetRec(curr: ArabesqueResult[E]): ArabesqueResult[E] = {
+      if (curr.scope == this.scope) {
+        val parent = if (curr.parentOpt.isDefined) {
+          unsetRec(curr.parentOpt.get)
+        } else {
+          null
+        }
+        curr.copy (config = curr.config.withoutConfig (key),
+          parentOpt = Option(parent))
+      } else {
+        curr
+      }
+    }
+
+    unsetRec(this)
+  }
+
+  /**
    * This function will handle to the user a new result with new configurations
    *
    * @param configMap new configurations as a map (configName,configValue)
@@ -442,7 +497,7 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
   private def handleNextResult(result: ArabesqueResult[E],
       newConfig: SparkConfiguration[E] = config)
     : ArabesqueResult[E] = if (result.mustSync || isPersisted) {
-    logInfo (s"Adding barrier sync barrier between ${this} and ${result}")
+    logInfo (s"Adding sync barrier between ${this} and ${result}")
     result.copy(scope = this.scope + 1,
       step = this.step + 1, parentOpt = Some(this),
       storageLevel = StorageLevel.NONE)
@@ -457,13 +512,15 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    * but the computation container itself
    */
   private def emptyComputation: ArabesqueResult[E] = {
-    config.confs.get(SparkConfiguration.COMPUTATION_CONTAINER) match {
+    val ec = config.confs.get(SparkConfiguration.COMPUTATION_CONTAINER) match {
       case Some(cc: ComputationContainer[_]) =>
-        this.set(SparkConfiguration.COMPUTATION_CONTAINER,
+        this.set(
+          SparkConfiguration.COMPUTATION_CONTAINER,
           cc.asLastComputation.clear())
       case _ =>
         this
     }
+    ec.unset(SparkConfiguration.MASTER_COMPUTATION_CONTAINER)
   }
 
   /****** Arabesque Scala API: High Level API ******/
@@ -808,7 +865,8 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
       aggregationKey: (E, Computation[E]) => K =
         (e: E, c: Computation[E]) => null.asInstanceOf[K],
       aggregationValue: (E, Computation[E]) => V =
-        (e: E, c: Computation[E]) => null.asInstanceOf[V])
+        (e: E, c: Computation[E]) => null.asInstanceOf[V],
+      isIncremental: Boolean = false)
     : ArabesqueResult[E] = {
 
     // TODO: check whether this aggregation is already registered and act
@@ -836,7 +894,8 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
     val initAggregations = (c: Computation[E]) => {
       oldInitAggregation (c) // init aggregations so far
       c.getConfig().registerAggregation (name, aggStorageClass, keyClass,
-        valueClass, persistent, reductionFunction, endAggregationFunction)
+        valueClass, persistent, reductionFunction, endAggregationFunction,
+        isIncremental)
     }
 
     withInitAggregations (initAggregations).copy (
@@ -844,6 +903,21 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
     )
   }
   
+  ///**
+  // * Adds a new aggregation to the computation
+  // *
+  // * @param name identifier of this new aggregation
+  // * @param reductionFunction the function that aggregates two values
+  // *
+  // * @return new result
+  // */
+  //def withAggregationRegistered [
+  //    K <: Writable : ClassTag, V <: Writable : ClassTag
+  //    ] (name: String)(reductionFunction: (V,V) => V): ArabesqueResult[E] = {
+  //  withAggregationRegistered [K,V] (name,
+  //    new ReductionFunctionContainer [V] (reductionFunction))
+  //}
+
   /**
    * Adds a new aggregation to the computation
    *
@@ -854,9 +928,16 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    */
   def withAggregationRegistered [
       K <: Writable : ClassTag, V <: Writable : ClassTag
-      ] (name: String)(reductionFunction: (V,V) => V): ArabesqueResult[E] = {
+      ] (name: String)(
+        aggregationKey: (E, Computation[E]) => K,
+        aggregationValue: (E, Computation[E]) => V,
+        reductionFunction: (V,V) => V
+      ): ArabesqueResult[E] = {
     withAggregationRegistered [K,V] (name,
-      new ReductionFunctionContainer [V] (reductionFunction))
+      aggregationKey = aggregationKey,
+      aggregationValue = aggregationValue,
+      reductionFunction = new ReductionFunctionContainer [V] (reductionFunction)
+      )
   }
 
   /**
@@ -890,7 +971,7 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
     : ArabesqueResult[E] = {
     val newConfig = config.withNewComputation (
       getComputationContainer[E].withNewFunctions (
-        expandComputeOpt = Option(expandCompute)
+        expandComputeOpt = Option((e,c) => expandCompute(e,c).asJava)
       )
     )
     this.copy (config = newConfig)

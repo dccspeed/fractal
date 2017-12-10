@@ -12,11 +12,11 @@ import io.arabesque.utils.SerializableConfiguration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.Writable
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.{Accumulator, SparkContext}
+import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel._
-import org.apache.spark.util.SizeEstimator
+import org.apache.spark.util.{LongAccumulator, SizeEstimator}
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.Map
@@ -138,6 +138,7 @@ trait ODAGMasterEngine [
         logInfo (s"Number of aggregated ODAGs = ${aggregatedOdagsLocal.size}")
         aggregatedOdagsBc.unpersist()
         aggregatedOdagsBc = sc.broadcast (aggregatedOdagsLocal)
+        logInfo (s"New odags broadcasted (id=${aggregatedOdagsBc.id})")
 
         /* maybe debug odag stats */
         if (log.isDebugEnabled) {
@@ -170,8 +171,8 @@ trait ODAGMasterEngine [
 
     // print stats
     aggAccums = aggAccums.map { case (name,accum) =>
-      logInfo (s"Accumulator[$name]: ${accum.value}")
-      (name -> sc.accumulator [Long] (0L, name))
+      logInfo (s"Accumulator[${superstep}][${name}]: ${accum.value}")
+      (name -> sc.longAccumulator (name))
     }
     
     val superstepFinish = System.currentTimeMillis
@@ -189,7 +190,7 @@ trait ODAGMasterEngine [
       superstep: Int,
       configBc: Broadcast[SparkConfiguration[E]],
       aggregatedOdagsBc: Broadcast[scala.collection.Map[K,O]],
-      aggAccums: Map[String,Accumulator[_]],
+      aggAccums: Map[String,LongAccumulator],
       previousAggregationsBc: Broadcast[_]): RDD[SparkEngine[E]] = {
 
     // read embeddings from global agg. ODAGs, expand, filter and process

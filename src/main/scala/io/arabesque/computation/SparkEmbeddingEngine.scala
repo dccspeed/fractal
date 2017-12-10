@@ -12,8 +12,8 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.{LongWritable, NullWritable, Writable, SequenceFile}
 import org.apache.hadoop.io.SequenceFile.{Writer => SeqWriter}
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.Accumulator
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.util.LongAccumulator
 
 import scala.collection.mutable.Map
 import scala.reflect.ClassTag
@@ -24,9 +24,9 @@ import scala.reflect.ClassTag
 case class SparkEmbeddingEngine[E <: Embedding](
     partitionId: Int,
     superstep: Int,
-    accums: Map[String,Accumulator[_]],
+    accums: Map[String,LongAccumulator],
     previousAggregationsBc: Broadcast[_],
-    configuration: SparkConfiguration[E])
+    configurationId: Int)
   extends SparkEngine[E] {
 
   // embedding caches

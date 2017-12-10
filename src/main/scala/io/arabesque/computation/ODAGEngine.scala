@@ -16,8 +16,8 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.{LongWritable, NullWritable, SequenceFile, Writable}
 import org.apache.hadoop.io.SequenceFile.{Writer => SeqWriter}
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.Accumulator
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.util.LongAccumulator
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.{ListBuffer, Map}
@@ -182,17 +182,17 @@ object ODAGEngine {
     ] (
       partitionId: Int,
       superstep: Int,
-      accums: Map[String,Accumulator[_]],
+      accums: Map[String,LongAccumulator],
       previousAggregationsBc: Broadcast[_],
       configuration: SparkConfiguration[E]): C = 
     configuration.getString(CONF_COMM_STRATEGY,
       CONF_COMM_STRATEGY_DEFAULT) match {
       case COMM_ODAG_SP =>
         new ODAGEngineSP [E] (partitionId, superstep,
-          accums, previousAggregationsBc, configuration).asInstanceOf[C]
+          accums, previousAggregationsBc, configuration.getId).asInstanceOf[C]
       case COMM_ODAG_MP =>
         new ODAGEngineMP [E] (partitionId, superstep,
-          accums, previousAggregationsBc, configuration).asInstanceOf[C]
+          accums, previousAggregationsBc, configuration.getId).asInstanceOf[C]
   }
 
   // pool related vals

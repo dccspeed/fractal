@@ -1,15 +1,23 @@
 package io.arabesque.conf
 
+import io.arabesque.aggregation._
 import io.arabesque.computation._
 import io.arabesque.conf.Configuration._
-import io.arabesque.embedding.Embedding
+import io.arabesque.embedding._
 import io.arabesque.graph.{BasicMainGraph, MainGraph}
 import io.arabesque.pattern.Pattern
 import io.arabesque.utils.{Logging, SerializableConfiguration}
+import io.arabesque.utils.collection.AtomicBitSetArray
+
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
+import java.io.{ObjectInputStream, ObjectOutputStream}
+import java.util.concurrent.atomic.AtomicInteger
 
 import org.apache.spark.SparkConf
+import org.apache.spark.util.SizeEstimator
 
 import org.apache.hadoop.conf.{Configuration => HadoopConfiguration}
+import org.apache.hadoop.io.Writable
 
 import scala.collection.mutable.Map
 
@@ -18,6 +26,13 @@ import scala.collection.mutable.Map
  */
 case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
     extends Configuration[E] with Logging {
+
+  // from scratch computation must have incremental aggregations
+  fixAssignments
+  if (SparkConfiguration.COMMS_FROM_SCRATCH.contains(getCommStrategy())) {
+    logInfo (s"Switching aggregations to incremental")
+    set("incremental_aggregation", true)
+  }
 
   // master hostname
   if (!confs.contains(CONF_MASTER_HOSTNAME)) try {
@@ -64,6 +79,23 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
    */
   def withNewConfig(configMap: Map[String,Any]): SparkConfiguration[E] = {
     val newConfig = this.copy [E] (confs = confs ++ configMap)
+    newConfig.fixAssignments
+    newConfig.setMainGraph (getMainGraph())
+    newConfig
+  }
+
+  /**
+   * Unsets a configuration (immutable)
+   */
+  def withoutConfig(key: String): SparkConfiguration[E] = {
+    withoutConfig(Set(key))
+  }
+  
+  /**
+   * Unsets a few configurations (immutable)
+   */
+  def withoutConfig(keys: Set[String]): SparkConfiguration[E] = {
+    val newConfig = this.copy [E] (confs = confs -- keys)
     newConfig.fixAssignments
     newConfig.setMainGraph (getMainGraph())
     newConfig
@@ -160,7 +192,9 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
   override def createComputation[E <: Embedding](): Computation[E] = {
     confs.get(SparkConfiguration.COMPUTATION_CONTAINER) match {
       case Some(cc: ComputationContainer[_]) =>
-        cc.shallowCopy().asInstanceOf[Computation[E]]
+        // cc.shallowCopy().asInstanceOf[Computation[E]]
+        val bytes = SparkConfiguration.serialize(cc)
+        SparkConfiguration.deserialize[Computation[E]](bytes)
 
       case Some(c) =>
         throw new RuntimeException (s"Invalid computation type: ${c}")
@@ -298,24 +332,71 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
 
   }
 
+  var tagApplied = false
+
+  def initializeWithTag(
+      vtag: AtomicBitSetArray, etag: AtomicBitSetArray): Unit = synchronized {
+    initialize()
+    if (!tagApplied) {
+      val start = System.currentTimeMillis
+      val ret = getMainGraph[BasicMainGraph].applyTag(vtag, etag)
+      val elapsed = System.currentTimeMillis - start
+      logInfo (s"GraphTagging took ${elapsed} ms. Return: ${ret}")
+      tagApplied = true
+    }
+  }
+
+  def initializeWithTag(tag: AtomicBitSetArray): Unit = synchronized {
+    initialize()
+    if (!tagApplied) {
+      val start = System.currentTimeMillis
+      val ec = createComputation.getEmbeddingClass()
+      val ret = if (ec == classOf[VertexInducedEmbedding]) {
+        getMainGraph[BasicMainGraph].applyTagVertexes(tag)
+      } else if (ec == classOf[EdgeInducedEmbedding]) {
+        getMainGraph[BasicMainGraph].applyTagEdges(tag)
+      } else {
+        throw new RuntimeException(s"Unknown embedding type: ${ec}")
+      }
+      val elapsed = System.currentTimeMillis - start
+      logInfo (s"GraphTagging took ${elapsed} ms. Return: ${ret}")
+      tagApplied = true
+    }
+  }
+
+  def initializeWithTag(): Unit = synchronized {
+    initialize()
+    if (!tagApplied) {
+      val start = System.currentTimeMillis
+      val ret = getMainGraph[BasicMainGraph].applyTag()
+      val elapsed = System.currentTimeMillis - start
+      logInfo (s"GraphTagging took ${elapsed} ms. Return: ${ret}")
+      tagApplied = true
+    }
+  }
+
+  def uninitialize(): Unit = {
+    tagApplied = false
+  }
+
   /**
    * Garantees that arabesque configuration is properly set
    *
    * TODO: generalize the initialization in the superclass Configuration
    */
-  override def initialize(): Unit = synchronized {
+  override def initialize(isMaster: Boolean = false): Unit = synchronized {
     if (Configuration.isUnset(id)) {
-      initializeInstance()
-      Configuration.add(this)
+      initializeInstance(!isMaster)
     } else if (!isInitialized) {
-      initializeInstance()
+      initializeInstance(!isMaster)
     }
+    Configuration.add(this)
   }
 
   /**
    * Called whether no arabesque configuration is set in the running jvm
    */
-  private def initializeInstance(): Unit = {
+  private def initializeInstance(shouldSetGraph: Boolean = true): Unit = {
 
     fixAssignments
 
@@ -345,22 +426,82 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
 
     setOutputPath (getString(CONF_OUTPUT_PATH, CONF_OUTPUT_PATH_DEFAULT))
 
+    if (shouldSetGraph) {
+      setGraph()
+    }
+
+    initialized = true
+  }
+
+  private def setGraph(): Boolean = {
+    var graphRead = false
     // graph may be already set by a parent computation
     if (getMainGraph() == null) {
       setMainGraph (createGraph())
     }
-    
+
     // in case of the mainGraph is empty (no vertices and no edges), we try to
     // read it
     getMainGraph[BasicMainGraph].synchronized {
       if (!isMainGraphRead) {
         logInfo ("MainGraph is empty, gonna try reading it")
         readMainGraph()
+        graphRead = true
       }
     }
 
-    initialized = true
+    graphRead
   }
+
+  /** */
+  @transient lazy val aggStorageFactory = new AggregationStorageFactory(this)
+
+  @transient lazy val finalAggStorages = Map.empty[String,
+    (AtomicInteger, AggregationStorage[_ <: Writable, _ <: Writable])]
+
+  def getOrCreateFinalAggStorage(name: String) = synchronized {
+    finalAggStorages.get(name) match {
+      case Some((_, finalAggStorage)) =>
+        finalAggStorage
+
+      case None =>
+        val finalAggStorage = aggStorageFactory.createAggregationStorage(name)
+        finalAggStorages.update (name,
+          (new AtomicInteger(taskCounter()), finalAggStorage))
+        finalAggStorage
+    }
+  }
+
+  def maybeReclaimFinalAggStorage(step: Int, name: String) = synchronized {
+    finalAggStorages.get(name) match {
+      case Some((barrier, finalAggStorage)) if barrier.get == 1 =>
+        barrier.decrementAndGet
+        finalAggStorages.remove(name)
+        
+        logInfo(s"FinalLocalAggregationStorage name=${name}" +
+          s" step=${step}" +
+          s" taskCounter=${taskCounter()}" +
+          s" barrier=${barrier}" +
+          s" finalAggStorage=${finalAggStorage}")
+
+        finalAggStorage.synchronized {
+          finalAggStorage.notifyAll()
+        }
+
+        (finalAggStorage, barrier)
+
+      case Some((barrier, finalAggStorage)) =>
+        assert (barrier.get > 1,
+          s"taskCounter=${taskCounter()} barrier=${barrier}")
+        barrier.decrementAndGet
+        (finalAggStorage, barrier)
+
+      case None =>
+        throw new RuntimeException(s"Trying to reclaim without registering")
+    }
+  }
+
+  /** */
 
   def getValue(key: String, defaultValue: Any): Any = confs.get(key) match {
     case Some(value) => value
@@ -378,7 +519,7 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
 
 }
 
-object SparkConfiguration {
+object SparkConfiguration extends Logging {
   /** odag flush methods */
 
   // good for regular distributions
@@ -397,7 +538,23 @@ object SparkConfiguration {
   // pack embeddings with compressed caches (e.g., LZ4)
   val COMM_EMBEDDING = "embedding"
   // re-enumerates from scratch every superstep
+  val COMM_FROM_SCRATCH = "scratch"
+  // re-enumerates from scratch every superstep (includes graph tags)
   val COMM_GTAG = "gtag"
+  // re-enumerates from scratch every superstep (hierarchical)
+  val COMM_GTAG_HIER = "gtag_hier"
+  // re-enumerates from scratch every step (includes boolean tags)
+  val COMM_BTAG = "btag"
+  // re-enumerates from scratch every step (includes boolean tags for vertices
+  // and edges)
+  val COMM_VETAG = "vetag"
+  // re-enumerates from scratch every step (includes word edges tags)
+  val COMM_VIEWTAG = "viewtag"
+  // re-enumerates from scratch (used for characterization purposes)
+  val COMM_CHARAC = "charac"
+
+  val COMMS_FROM_SCRATCH = Set(COMM_FROM_SCRATCH, COMM_GTAG,
+    COMM_GTAG_HIER, COMM_BTAG, COMM_VETAG, COMM_VIEWTAG, COMM_CHARAC)
 
   // gtag
   val GTAG_BATCH_LOW = "gtag_batch_low"
@@ -413,4 +570,19 @@ object SparkConfiguration {
   // output format
   val OUTPUT_PLAIN_TEXT = "plain_text"
   val OUTPUT_SEQUENCE_FILE = "sequence_file"
+
+  // auxiliary functions
+  def serialize[T](obj: T): Array[Byte] = {
+    val baos = new ByteArrayOutputStream
+    val oos = new ObjectOutputStream(baos)
+    oos.writeObject(obj)
+    oos.close
+    baos.toByteArray
+  }
+
+  def deserialize[T](bytes: Array[Byte]): T = {
+    val bais = new ByteArrayInputStream(bytes)
+    val ois = new ObjectInputStream(bais)
+    ois.readObject().asInstanceOf[T]
+  }
 }

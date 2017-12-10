@@ -21,7 +21,7 @@ public interface Computation<E extends Embedding> {
 
     void initAggregations(Configuration<E> config);
 
-    int compute(E embedding);
+    long compute(E embedding);
 
     Computation<E> nextComputation();
 
@@ -52,7 +52,7 @@ public interface Computation<E extends Embedding> {
     Iterator<E> expandCompute(E embedding);
     void handleNoExpansions(E embedding);
 
-    int processCompute(Iterator<E> expansions);
+    long processCompute(Iterator<E> expansions);
     boolean filter(E embedding);
     void process(E embedding);
     boolean shouldExpand(E newEmbedding);
@@ -87,6 +87,8 @@ public interface Computation<E extends Embedding> {
     int getNumberPartitions();
 
     Configuration<E> getConfig();
+
+    E getCurrentEmbedding();
     // }}}
 
     // {{{ Internal
@@ -94,6 +96,8 @@ public interface Computation<E extends Embedding> {
     CommonExecutionEngine<E> getExecutionEngine();
     
     String computationLabel();
+    int setDepth(int depth);
+    int getDepth();
 
     EmbeddingIterator<E> forkConsumer();
     void joinConsumer(EmbeddingIterator<E> consumer);
@@ -101,5 +105,7 @@ public interface Computation<E extends Embedding> {
     void expand(E embedding);
 
     Class<? extends Embedding> getEmbeddingClass();
+    
+    int getInitialNumWords();
     // }}}
 }

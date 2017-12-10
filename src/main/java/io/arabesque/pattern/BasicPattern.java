@@ -23,7 +23,7 @@ import java.io.*;
 public abstract class BasicPattern implements Pattern {
     private static final Logger LOG = Logger.getLogger(BasicPattern.class);
 
-    protected Configuration configuration;
+    protected int configurationId;
 
     protected HashIntIntMapFactory positionMapFactory = HashIntIntMaps.getDefaultFactory().withDefaultValue(-1);
 
@@ -69,10 +69,10 @@ public abstract class BasicPattern implements Pattern {
         basicPattern.vertices.forEach(intAddConsumer);
 
         edges = createPatternEdgeArrayList(basicPattern.
-              configuration.isGraphEdgeLabelled());
+              getConfig().isGraphEdgeLabelled());
 
         patternEdgePool = PatternEdgePool.instance(
-              basicPattern.configuration.isGraphEdgeLabelled());
+              basicPattern.getConfig().isGraphEdgeLabelled());
 
         edges.ensureCapacity(basicPattern.edges.size());
 
@@ -85,18 +85,18 @@ public abstract class BasicPattern implements Pattern {
 
     @Override
     public void init(Configuration config) {
-        configuration = config;
+        configurationId = config.getId();
 
         if (edges == null) {
-           edges = createPatternEdgeArrayList(configuration.isGraphEdgeLabelled());
+           edges = createPatternEdgeArrayList(getConfig().isGraphEdgeLabelled());
         }
 
         if (patternEdgePool == null) {
            patternEdgePool = PatternEdgePool.
-              instance(configuration.isGraphEdgeLabelled());
+              instance(getConfig().isGraphEdgeLabelled());
         }
 
-        mainGraph = configuration.getMainGraph();
+        // mainGraph = getConfig().getMainGraph();
     }
 
     @Override
@@ -120,6 +120,10 @@ public abstract class BasicPattern implements Pattern {
         setDirty();
 
         resetIncremental();
+    }
+
+    protected Configuration getConfig() {
+       return Configuration.get(configurationId);
     }
 
     private void resetIncremental() {
@@ -307,7 +311,7 @@ public abstract class BasicPattern implements Pattern {
 
     @Override
     public boolean addEdge(int edgeId) {
-        Edge edge = mainGraph.getEdge(edgeId);
+        Edge edge = getMainGraph().getEdge(edgeId);
 
         return addEdge(edge);
     }
@@ -486,7 +490,7 @@ public abstract class BasicPattern implements Pattern {
 
     @Override
     public void write(DataOutput dataOutput) throws IOException {
-        dataOutput.writeInt(configuration.getId());
+        dataOutput.writeInt(getConfig().getId());
         edges.write(dataOutput);
         vertices.write(dataOutput);
     }
@@ -521,7 +525,7 @@ public abstract class BasicPattern implements Pattern {
     protected PatternEdge createPatternEdge(Edge edge, int srcPos, int dstPos, int srcId) {
         PatternEdge patternEdge = patternEdgePool.createObject();
 
-        patternEdge.setFromEdge(configuration.getMainGraph(),
+        patternEdge.setFromEdge(getConfig().getMainGraph(),
               edge, srcPos, dstPos, srcId);
 
         return patternEdge;
@@ -546,7 +550,7 @@ public abstract class BasicPattern implements Pattern {
             return StringUtils.join(edges, ",");
         }
         else if (getNumberOfVertices() == 1) {
-            Vertex vertex = mainGraph.getVertex(vertices.getUnchecked(0));
+            Vertex vertex = getMainGraph().getVertex(vertices.getUnchecked(0));
 
             return "0(" + vertex.getVertexLabel() + ")";
         }
@@ -591,6 +595,6 @@ public abstract class BasicPattern implements Pattern {
     }
 
     public MainGraph getMainGraph() {
-        return mainGraph;
+        return getConfig().getMainGraph();
     }
 }

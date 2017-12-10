@@ -24,6 +24,8 @@ public class ExecutionEngine<O extends Embedding>
         implements CommonExecutionEngine<O> {
     private static final Logger LOG = Logger.getLogger(ExecutionEngine.class);
 
+    private LongWritable longWritable = new LongWritable();
+
     protected Configuration<O> configuration;
     protected WorkerContext workerContext;
     private CommunicationStrategy<O> communicationStrategy;
@@ -130,7 +132,6 @@ public class ExecutionEngine<O extends Embedding>
             throw e;
         }
 
-        LongWritable longWritable = new LongWritable();
 
         LOG.info("Num embeddings processed: " + numEmbeddingsProcessed);
         longWritable.set(numEmbeddingsProcessed);
@@ -247,5 +248,11 @@ public class ExecutionEngine<O extends Embedding>
     @Override
     public void aggregate(String name, LongWritable value) {
        super.aggregate (name, value);
+    }
+    
+    @Override
+    public void aggregate(String name, long value) {
+       longWritable.set(value);
+       aggregate (name, longWritable);
     }
 }

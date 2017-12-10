@@ -24,13 +24,13 @@ public class JBlissPattern extends BasicPattern {
     @Override
     public void init(Configuration config) {
         super.init(config);
-        jblissGraph = new Graph<>(this, mainGraph);
+        jblissGraph = new Graph<>(this);
     }
 
     @Override
     public Pattern copy() {
         Pattern pattern = new JBlissPattern(this);
-        pattern.init(this.configuration);
+        pattern.init(getConfig());
         return pattern;
     }
 

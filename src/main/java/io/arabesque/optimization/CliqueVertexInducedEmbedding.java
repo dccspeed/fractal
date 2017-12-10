@@ -1,16 +1,17 @@
 package io.arabesque.optimization;
 
+import io.arabesque.computation.Computation;
 import io.arabesque.embedding.VertexInducedEmbedding;
 import io.arabesque.utils.collection.IntArrayList;
 import com.koloboke.collect.IntCollection;
 
 public class CliqueVertexInducedEmbedding extends VertexInducedEmbedding {
     @Override
-    public IntCollection getExtensibleWordIds() {
+    public IntCollection getExtensibleWordIds(Computation computation) {
         if (dirtyExtensionWordIds) {
             extensionWordIds.clear();
 
-            IntCollection lastVertexNeighbours = mainGraph.getVertexNeighbours(getVertices().getLast());
+            IntCollection lastVertexNeighbours = configuration.getMainGraph().getVertexNeighbours(getVertices().getLast());
 
             if (lastVertexNeighbours != null) {
                 intAddConsumer.setCollection(extensionWordIds);

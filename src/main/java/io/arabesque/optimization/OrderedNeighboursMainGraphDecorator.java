@@ -6,6 +6,7 @@ import io.arabesque.graph.Vertex;
 import io.arabesque.graph.VertexNeighbourhood;
 import io.arabesque.utils.collection.IntArrayList;
 import io.arabesque.utils.collection.ReclaimableIntCollection;
+import io.arabesque.utils.collection.AtomicBitSetArray;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.function.IntConsumer;
 
@@ -29,6 +30,36 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
                 orderedNeighbours[i].sort();
             }
         }
+    }
+
+    @Override
+    public int getId() {
+       return underlyingMainGraph.getId();
+    }
+    
+    @Override
+    public int applyTag(AtomicBitSetArray vtag, AtomicBitSetArray etag) {
+       throw new UnsupportedOperationException("Not implemented");
+    }
+    
+    @Override
+    public int applyTag() {
+       throw new UnsupportedOperationException("Not implemented");
+    }
+    
+    @Override
+    public int applyTagVertexes(AtomicBitSetArray tag) {
+       throw new UnsupportedOperationException("Not implemented");
+    }
+    
+    @Override
+    public int applyTagEdges(AtomicBitSetArray tag) {
+       throw new UnsupportedOperationException("Not implemented");
+    }
+
+    @Override
+    public void removeVertex(int vertexId) {
+       throw new UnsupportedOperationException("Not implemented");
     }
 
     @Override

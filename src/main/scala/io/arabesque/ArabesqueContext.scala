@@ -1,5 +1,6 @@
 package io.arabesque
 
+import io.arabesque.computation.GtagMessagingSystem
 import io.arabesque.utils.Logging
 
 import java.util.UUID
@@ -22,7 +23,8 @@ import org.apache.spark.SparkContext
   * @return an [[io.arabesque.ArabesqueContext]]
   *
  */
-class ArabesqueContext(sc: SparkContext, logLevel: String = "info") extends Logging {
+class ArabesqueContext(sc: SparkContext, logLevel: String = "info") 
+    extends Logging {
 
   private val uuid: UUID = UUID.randomUUID
   def tmpPath: String = s"/tmp/arabesque-${uuid}" // TODO: base dir as config
@@ -42,7 +44,8 @@ class ArabesqueContext(sc: SparkContext, logLevel: String = "info") extends Logg
     * @param path a string indicating the path for input graph
     * @param local TODO: Describe local variable
     * @return an [[io.arabesque.ArabesqueGraph]]
-    * @see [[https://github.com/viniciusvdias/Arabesque/blob/master/README.md Arabesque README]] for how to prepare the input file
+    * @see [[https://github.com/viniciusvdias/Arabesque/blob/master/README.md]]
+    * for how to prepare the input file
     */
   def textFile(path: String, local: Boolean = false): ArabesqueGraph = {
     new ArabesqueGraph (path, this, logLevel)
@@ -57,6 +60,7 @@ class ArabesqueContext(sc: SparkContext, logLevel: String = "info") extends Logg
   def stop() = {
     val fs = FileSystem.get (sc.hadoopConfiguration)
     val res = fs.delete (new Path(tmpPath))
-    logInfo (s"Removing arabesque temp directory: ${tmpPath} (${res})")
+    GtagMessagingSystem.shutdown()
+    logInfo (s"Removing arabesque temp directory: ${tmpPath} (exists=${res})")
   }
 }

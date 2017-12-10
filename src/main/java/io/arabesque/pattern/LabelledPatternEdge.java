@@ -2,6 +2,8 @@ package io.arabesque.pattern;
 
 import io.arabesque.graph.Edge;
 import io.arabesque.graph.LabelledEdge;
+import io.arabesque.graph.MainGraph;
+import io.arabesque.pattern.pool.PatternEdgePool;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -23,10 +25,16 @@ public class LabelledPatternEdge extends PatternEdge {
         this.label = edge.label;
     }
 
-    public LabelledPatternEdge(int srcPos, int srcLabel, int destPos, int destLabel, int label) {
-        super(srcPos, srcLabel, destPos, destLabel);
+    public LabelledPatternEdge(MainGraph mainGraph,
+          int srcPos, int srcLabel, int destPos, int destLabel, int label) {
+        super(mainGraph, srcPos, srcLabel, destPos, destLabel);
 
         this.label = label;
+    }
+    
+    @Override
+    public void reclaim() {
+        PatternEdgePool.instance(true).reclaimObject(this);
     }
 
     @Override
@@ -39,8 +47,8 @@ public class LabelledPatternEdge extends PatternEdge {
     }
 
     @Override
-    public void setFromEdge(Edge edge, int srcPos, int dstPos, int srcId) {
-        super.setFromEdge(edge, srcPos, dstPos, srcId);
+    public void setFromEdge(MainGraph mainGraph, Edge edge, int srcPos, int dstPos, int srcId) {
+        super.setFromEdge(mainGraph, edge, srcPos, dstPos, srcId);
 
         if (edge instanceof LabelledEdge) {
             label = ((LabelledEdge) edge).getEdgeLabel();

@@ -33,7 +33,7 @@ public class MultiVertexNeighbourhood extends BasicVertexNeighbourhood {
     }
 
     @Override
-    public IntCollection getNeighbourVertices() {
+    public IntCollection getNeighborVertices() {
         if (neighbourVertices == null) {
             neighbourVertices = new IntCollectionMultiplexer();
             neighbourVertices.addCollection(neighbourhoodMap.keySet());
@@ -44,7 +44,7 @@ public class MultiVertexNeighbourhood extends BasicVertexNeighbourhood {
     }
 
     @Override
-    public IntCollection getNeighbourEdges() {
+    public IntCollection getNeighborEdges() {
         if (neighbourEdges == null) {
             neighbourEdges = new IntCollectionMultiplexer();
             neighbourEdges.addCollection(neighbourhoodMap.values());

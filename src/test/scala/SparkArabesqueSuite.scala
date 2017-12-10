@@ -3,299 +3,282 @@ package io.arabesque
 import io.arabesque.computation._
 import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding._
+import io.arabesque.utils.ClosureParser
 
 import org.apache.spark.{SparkConf, SparkContext}
 
-import org.scalatest.{BeforeAndAfterAll, FunSuite}
+import org.scalatest.{BeforeAndAfterAll, ConfigMap, FunSuite, Tag}
 
 class SparkArabesqueSuite extends FunSuite with BeforeAndAfterAll {
 
   import SparkConfiguration._
- private val master = "local[2]"
- private val appName = "arabesque-spark"
+  private val master = "local[2]"
+  private val appName = "arabesque-spark"
 
- private var sampleGraphPath: String = _
- private var sc: SparkContext = _
- private var arab: ArabesqueContext = _
- private var arabGraph: ArabesqueGraph = _
+  private var sampleGraphPath: String = _
+  private var sc: SparkContext = _
+  private var arab: ArabesqueContext = _
+  private var arabGraph: ArabesqueGraph = _
 
- /** set up spark context */
- override def beforeAll: Unit = {
-   // spark conf and context
-   val conf = new SparkConf().
-     setMaster(master).
-     setAppName(appName)
+  /** set up spark context */
+  override def beforeAll(configMap: ConfigMap): Unit = {
+    // spark conf and context
+    var conf = new SparkConf().
+      setMaster(configMap.getWithDefault[String]("spark.master", master)).
+      setAppName(appName)
 
-   sc = new SparkContext(conf)
-   arab = new ArabesqueContext(sc, "warn")
+    configMap.iterator.filter(_._1 startsWith "spark.").foreach {
+      case (key,value) =>
+        conf = conf.set(key, value.toString)
+        println(s"${this.getClass.getName}: setting config: ${key} -> ${value}")
+    }
 
-   val loader = classOf[SparkArabesqueSuite].getClassLoader
-   val url = loader.getResource("sample.graph")
-   sampleGraphPath = url.getPath
-   arabGraph = arab.textFile (sampleGraphPath)
+    sc = new SparkContext(conf)
+    arab = new ArabesqueContext(sc, "warn")
 
- }
+    val graphPath = configMap.getWithDefault[String](
+      "arabesque.graph", "sample.graph")
+    val loader = classOf[SparkArabesqueSuite].getClassLoader
+    val url = loader.getResource(graphPath)
+    sampleGraphPath = url.getPath
+    arabGraph = arab.textFile (sampleGraphPath)
+  }
 
- /** stop spark context */
- override def afterAll: Unit = {
-   if (sc != null) {
-     sc.stop()
-     arab.stop()
-   }
- }
+  /** stop spark context */
+  override def afterAll(configMap: ConfigMap): Unit = {
+    if (sc != null) {
+      sc.stop()
+      arab.stop()
+    }
+  }
 
- /** tests */
- test("configurations") {
-   // TODO: make this test more simple
-   import scala.collection.mutable.Map
-   val confs: Map[String,Any] = Map(
-     "spark_master" -> "local[2]",
-     "input_graph_path" -> sampleGraphPath,
-     "input_graph_local" -> true,
-     "computation" -> "io.arabesque.computation.BasicComputation"
-     )
-   val sparkConfig = new SparkConfiguration (confs)
+  /** measuring elapsed time */
+  def time[R](block: => R): R = {  
+    val t0 = System.nanoTime()
+    val result = block    // call-by-name
+    val t1 = System.nanoTime()
+    println ("Elapsed time: " + ( (t1 - t0) * 10e-6 ) + " ms")
+    result
+  }
 
-   assert (!sparkConfig.isInitialized)
+  /** expected results */
 
-   sparkConfig.initialize
-   assert (sparkConfig.getComputationClass ==
-     Class.forName("io.arabesque.computation.BasicComputation"))
-   assert (!Configuration.isUnset)
+  val motifsOracle = Map(
+    3 -> 24546
+    )
 
-   val sparkConfBc = sc.broadcast (sparkConfig)
-   val testingRDD = sc.parallelize (Seq.empty, 1)
+  val cliquesOracle = Map(
+    3 -> 1166
+    )
 
-   val conds = testingRDD.mapPartitions { _ =>
-     var bools = List[Boolean]()
-     val sparkConfig = sparkConfBc.value
+  val cliquesPercOracle = Map(
+    3 -> 234
+    )
 
-     bools = sparkConfig.isInitialized :: bools
+  val fsmOracle = Map(
+    (100, 3) -> 31414
+    )
 
-     sparkConfig.initialize
-     bools = (sparkConfig.getMainGraph != null) :: bools
+  val trianglesOracle = scala.io.Source.fromFile (
+    classOf[SparkArabesqueSuite].getClassLoader.
+      getResource("sample-triangles.txt").getPath
+    ).getLines.map (_ split "\\s+").
+    map (a => (a(0).toInt, a(1).toInt)).toMap
+  
+  /** tests */
 
-     bools = (!Configuration.isUnset) :: bools
+  test ("[motifs,filter]", Tag("motifs.filter")) { time {
+    val motifsRes = arabGraph.motifs.explore(1)
+    val filteredMotifsRes = motifsRes.filter (
+      (e,c) => e.getVertices contains 3309
+    )
+    assert (filteredMotifsRes.embeddings.count == 35)
+  }}
 
-     bools.iterator
-   }
+  test ("[triangles,filter]", Tag("triangles.filter")) { time {
+    val trianglesRes = arabGraph.triangles.explore(2)
+    val filteredTrianglesRes = trianglesRes.filter (
+      (e,c) => e.getVertices contains 3309
+    )
+    assert (filteredTrianglesRes.embeddings.count == 53)
+  }}
+  
+  test ("[triangles,expand,filter]",
+      Tag("triangles.expand.filter")) { time {
+    val trianglesRes = arabGraph.triangles.explore(2).expand.explore(1)
+    val filteredTrianglesRes = trianglesRes.filter (
+      (e,c) => e.getVertices contains 3309
+    )
+    assert (filteredTrianglesRes.embeddings.count == 9099)
+  }}
 
-   assert (conds.reduce (_ && _))
+  test ("[fsm,motifs,cliques,concurrent]",
+      Tag("fsm.motifs.cliques.concurrent")) { time {
+    import scala.concurrent._
+    import scala.concurrent.duration.Duration
+    import ExecutionContext.Implicits.global
 
- }
+    val motifsFuture = Future {
+      val motifsRes = arabGraph.motifs(3).exploreAll()
+      val motifsEmbeddings = motifsRes.embeddings
+      assert (motifsEmbeddings.count == motifsOracle(3))
+      assert (motifsEmbeddings.distinct.count == motifsOracle(3))
+    }
 
- val motifsNumEmbeddings = 24546
- test ("[motifs,odag] arabesque API") {
-   val motifsRes = arabGraph.motifs (3).
-     set ("comm_strategy", COMM_ODAG_SP)
-   val odags = motifsRes.odags
-   assert (odags.count != 0)
-   val embeddings = motifsRes.embeddings
-   assert (embeddings.count == motifsNumEmbeddings)
-   assert (embeddings.distinct.count == motifsNumEmbeddings)
- }
- test ("[motifs,embedding] arabesque API") {
-   val motifsRes = arabGraph.motifs (3).
-     set ("comm_strategy", COMM_EMBEDDING)
-   val odags = motifsRes.odags
-   assert (odags.count == 0)
-   val embeddings = motifsRes.embeddings
-   assert (embeddings.count == motifsNumEmbeddings)
-   assert (embeddings.distinct.count == motifsNumEmbeddings)
- }
- test ("[motifs,custom computation equivalence] arabesque API") {
-   import org.apache.hadoop.io.LongWritable
-   import io.arabesque.pattern.Pattern
-   import io.arabesque.utils.SerializableWritable
-   import io.arabesque.aggregation.reductions.LongSumReduction
+    val fsmFuture = Future {
+      val fsmRes = arabGraph.fsm(100, 3).exploreAll()
+      val fsmEmbeddings = fsmRes.embeddings
+      assert (fsmEmbeddings.count == fsmOracle((100, 3)))
+      assert (fsmEmbeddings.distinct.count == fsmOracle((100, 3)))
+    }
 
-   val AGG_MOTIFS = "motifs"
-   val motifsRes: ArabesqueResult[_] = arabGraph.
-     vertexInducedComputation (
-       new VertexProcessFunc {
-         private lazy val longUnit = new LongWritable(1)
-         def apply(e: VertexInducedEmbedding, c: Computation[VertexInducedEmbedding]): Unit = {
-           if (e.getNumWords == 3) {
-             c.output (e)
-             c.map (AGG_MOTIFS, e.getPattern, longUnit)
-           }
-         }
-       }
-     ).
-     withShouldExpand ((e,c) => e.getNumVertices < 3).
-     withAggregation [Pattern,LongWritable] (AGG_MOTIFS)(
-       (v1, v2) => {v1.set (v1.get + v2.get); v1})
+    val cliquesFromMotifsFuture = Future {
+      val motifsRes = arabGraph.motifs.explore(1).cache
+      val cliquesRes = motifsRes.cliques.explore(2)
+      val trianglesRes = motifsRes.triangles
+      assert (cliquesRes.embeddings.count <= cliquesOracle(3))
+      assert (trianglesRes.embeddings.count == cliquesOracle(3))
+      assert (arabGraph.cliques(3).embeddings.count == cliquesOracle(3))
 
-   val odags = motifsRes.odags
-   assert (odags.count != 0)
-   val embeddings = motifsRes.embeddings
-   assert (embeddings.count == motifsNumEmbeddings)
-   assert (embeddings.distinct.count == motifsNumEmbeddings)
+      val backMotifsRes1 = cliquesRes.explore(-3)
+      val backMotifsRes2 = trianglesRes.explore(-1)
+      val backMotifsRes1Count = backMotifsRes1.embeddings.distinct.count
+      val backMotifsRes2Count = backMotifsRes2.embeddings.distinct.count
+      assert (backMotifsRes1Count == backMotifsRes2Count)
+      assert (backMotifsRes2Count == motifsRes.embeddings.count)
+    }
 
- }
+    Await.result(motifsFuture, Duration.Inf)
+    Await.result(fsmFuture, Duration.Inf)
+    Await.result(cliquesFromMotifsFuture, Duration.Inf)
+  }}
+  
+  test ("[motifs,odag]", Tag("motifs.odag")) { time {
+    val motifsRes = arabGraph.motifs (3).
+      set ("comm_strategy", COMM_ODAG_SP)
+    val embeddings = motifsRes.embeddings
+    assert (embeddings.count == motifsOracle(3))
+    assert (embeddings.distinct.count == motifsOracle(3))
+  }}
 
- val fsmNumEmbeddings = 31414
- test ("[fsm,odag] arabesque API") {
-   val fsmRes = arabGraph.fsm (100, 3).
-     set ("comm_strategy", COMM_ODAG_SP)
-   val odags = fsmRes.odags
-   val embeddings = fsmRes.embeddings
-   assert (embeddings.count == fsmNumEmbeddings)
-   assert (embeddings.distinct.count == fsmNumEmbeddings)
- }
- test ("[fsm,embedding] arabesque API") {
-   val fsmRes = arabGraph.fsm (100, 3).
-     set ("comm_strategy", COMM_EMBEDDING)
-   val odags = fsmRes.odags
-   assert (odags.count == 0)
-   val embeddings = fsmRes.embeddings
-   assert (embeddings.count == fsmNumEmbeddings)
-   assert (embeddings.distinct.count == fsmNumEmbeddings)
- }
- test ("[fsm,custom computation equivalence] arabesque API") {
-   import io.arabesque.gmlib.fsm._
-   import io.arabesque.pattern.Pattern
-   import io.arabesque.utils.SerializableWritable
-   import java.lang.ThreadLocal
+  test ("[motifs,embedding]", Tag("motifs.embedding")) { time {
+    val motifsRes = arabGraph.motifs.explore (2).
+      set ("comm_strategy", COMM_EMBEDDING)
+    val embeddings = motifsRes.embeddings
+    assert (embeddings.count == motifsOracle(3))
+    assert (embeddings.distinct.count == motifsOracle(3))
+  }}
 
-   val AGG_SUPPORT = "support"
-   val support = 100
-   val maxSize = 3
-   val fsmRes = arabGraph.
-     edgeInducedComputation { new EdgeProcessFunc {
-       lazy val domainSupport = new ThreadLocal [DomainSupport] {
-         override def initialValue = new DomainSupport(support)
-       }
-       def apply (e: EdgeInducedEmbedding, c: Computation[EdgeInducedEmbedding]): Unit = {
-         domainSupport.get.setFromEmbedding (e)
-         c.map(AGG_SUPPORT, e.getPattern, domainSupport.get)
-       }
-     }}.
-     withShouldExpand ((e,c) => e.getNumWords < maxSize).
-     withPatternAggregationFilter ((p,c) => c.readAggregation(AGG_SUPPORT).containsKey (p)).
-     withAggregationProcess ((e,c) => c.output (e)).
-     withMasterCompute { c =>
-       if (c.readAggregation (AGG_SUPPORT).getNumberMappings <= 0 && c.getStep > 0) {
-         c.haltComputation()
-       }
-     }.
-     withAggregation [Pattern,DomainSupport] (AGG_SUPPORT,
-       new DomainSupportReducer(), endAggregationFunction = new DomainSupportEndAggregationFunction())
-   
-   val odags = fsmRes.odags
-   val embeddings = fsmRes.embeddings
-   assert (embeddings.count == fsmNumEmbeddings)
-   assert (embeddings.distinct.count == fsmNumEmbeddings)
+  test ("[motifs,gtag]", Tag("motifs.gtag")) { time {
+    val motifsRes = arabGraph.motifs.
+      set ("comm_strategy", COMM_GTAG).
+      copy(mustSync = true).
+      explore(2)
+    val embeddings = motifsRes.embeddings
+    assert (embeddings.count == motifsOracle(3))
+    assert (embeddings.distinct.count == motifsOracle(3))
+  }}
 
- }
+  test ("[fsm,odag]", Tag("fsm.odag")) { time {
+    val fsmRes = arabGraph.fsm (100, 3).
+      set ("comm_strategy", COMM_ODAG_SP)
+    val embeddings = fsmRes.embeddings
+    assert (embeddings.count == fsmOracle((100, 3)))
+    assert (embeddings.distinct.count == fsmOracle((100, 3)))
+  }}
+  
+  test ("[fsm,embedding]", Tag("fsm.embedding")) { time {
+    val fsmRes = arabGraph.fsm (100, 3).
+      set ("comm_strategy", COMM_EMBEDDING)
+    val embeddings = fsmRes.embeddings
+    assert (embeddings.count == fsmOracle((100, 3)))
+    assert (embeddings.distinct.count == fsmOracle((100, 3)))
+  }}
 
- val trianglesNumEmbeddings = 0
- test ("[triangles,odag] arabesque API") {
-   val trianglesRes = arabGraph.triangles().
-     set ("comm_strategy", COMM_ODAG_SP)
-   val odags = trianglesRes.odags
-   val embeddings = trianglesRes.embeddings
-   assert (embeddings.count == trianglesNumEmbeddings)
-   assert (embeddings.distinct.count == trianglesNumEmbeddings)
- }
- test ("[triangles,embedding] arabesque API") {
-   val trianglesRes = arabGraph.triangles().
-     set ("comm_strategy", COMM_EMBEDDING)
-   val odags = trianglesRes.odags
-   assert (odags.count == 0)
-   val embeddings = trianglesRes.embeddings
-   assert (embeddings.count == trianglesNumEmbeddings)
-   assert (embeddings.distinct.count == trianglesNumEmbeddings)
- }
- test ("[triangles,custom computation equivalence] arabesque API") {
-   import org.apache.hadoop.io.{IntWritable, LongWritable}
-   import io.arabesque.utils.SerializableWritable
-   import io.arabesque.aggregation.reductions.LongSumReduction
-   import io.arabesque.utils.collection.IntArrayList
+  test ("[fsm,gtag]", Tag("fsm.gtag")) { time {
+    import io.arabesque.gmlib.fsm._
+    import io.arabesque.pattern.Pattern
+    var fsmRes = arabGraph.fsm (100).
+      set ("comm_strategy", COMM_GTAG).
+      cache
+    val embeddings1 = fsmRes.embeddings
+    fsmRes = fsmRes.explore(1, 2)
+    val embeddings = fsmRes.embeddings.union(embeddings1)
+    assert (embeddings.count == fsmOracle((100, 3)))
+    assert (embeddings.distinct.count == fsmOracle((100, 3)))
+  }}
 
-   val longUnitSer = new SerializableWritable (new LongWritable(1))
-   val AGG_OUTPUT = "output"
-   val trianglesRes = arabGraph.
-     vertexInducedComputation { (e,c) =>
-       if (e.getNumVertices == 3) {
-         val vertices = e.getVertices
-         val id = new IntWritable()
-         var i = 0
-         while (i < 3) {
-           id.set (vertices.getUnchecked(i))
-           c.map (AGG_OUTPUT, id, longUnitSer.value)
-           i += 1
-         }
-       }
-     }.
-     withShouldExpand ((e,c) => e.getNumVertices < 3).
-     withFilter ((e,c) => e.getNumVertices < 3 ||
-       (e.getNumVertices == 3 && e.getNumEdges == 3)).
-     withAggregation [IntWritable,LongWritable] (AGG_OUTPUT, new LongSumReduction)
+  test ("[triangles,odag]", Tag("triangles.odag")) { time {
+    import org.apache.hadoop.io.{IntWritable, LongWritable}
 
-   val odags = trianglesRes.odags
-   val embeddings = trianglesRes.embeddings
-   assert (embeddings.count == trianglesNumEmbeddings)
-   assert (embeddings.distinct.count == trianglesNumEmbeddings)
- }
+    val trianglesRes = arabGraph.allStepsTriangles.
+      set ("comm_strategy", COMM_ODAG_SP)
 
- val cliquesNumEmbeddings = 1166
- test ("[cliques,odag] arabesque API") {
-   val cliquesRes = arabGraph.cliques (3).
-     set ("comm_strategy", COMM_ODAG_SP)
-   val odags = cliquesRes.odags
-   val embeddings = cliquesRes.embeddings
-   assert (embeddings.count == cliquesNumEmbeddings)
-   assert (embeddings.distinct.count == cliquesNumEmbeddings)
- }
- test ("[cliques,embedding] arabesque API") {
-   val cliquesRes = arabGraph.cliques (3).
-     set ("comm_strategy", COMM_EMBEDDING)
-   val odags = cliquesRes.odags
-   assert (odags.count == 0)
-   val embeddings = cliquesRes.embeddings
-   assert (embeddings.count == cliquesNumEmbeddings)
-   assert (embeddings.distinct.count == cliquesNumEmbeddings)
- }
- test ("[cliques,custom computation equivalence] arabesque API") {
-   val maxsize = 3
-   val cliquesRes = arabGraph.
-     vertexInducedComputation { (e,c) =>
-       if (e.getNumVertices == maxsize) {
-         c.output (e)
-       }
-     }.
-     withShouldExpand ((e,c) => e.getNumVertices < maxsize).
-     withFilter ((e,c) => e.getNumEdgesAddedWithExpansion == e.getNumVertices - 1)
+    val triangleMemberships = trianglesRes.
+      aggregation [IntWritable,LongWritable] ("membership")
 
-   val odags = cliquesRes.odags
-   val embeddings = cliquesRes.embeddings
-   assert (embeddings.count == cliquesNumEmbeddings)
-   assert (embeddings.distinct.count == cliquesNumEmbeddings)
- }
- 
- test ("[cliques percolation] arabesque API") {
-   import io.arabesque.utils.collection.{IntArrayList, UnionFindOps}
-   import scala.collection.JavaConverters._
-   import org.apache.hadoop.io._
-   val maxsize = 3
-   val cliquepercRes = arabGraph.cliquesPercolation (maxsize)
-   val cliqueAdjacencies = cliquepercRes.aggregationStorage [IntArrayList,IntArrayList] ("membership")
-   val cliqueAdjacenciesBc = sc.broadcast (cliqueAdjacencies)
-   val cliques = cliquepercRes.aggregationRDD [IntArrayList,VertexInducedEmbedding] ("cliques")
-   val communities = cliques.map { case (repr,e) =>
-     val m = cliqueAdjacenciesBc.value
-     val key = UnionFindOps.find [IntArrayList] (
-       v => m.getValue(v),
-       (k,v) => m.aggregateWithReusables (k, v),
-       repr.value
-     )
-     (key, e.value)
-   }.reduceByKey { (e1,e2) =>
-     e2.getVertices.iterator.asScala.foreach (v => if (!(e1.getVertices contains v)) e1.addWord (v))
-     e1
-   }
+    triangleMemberships.foreach { case (v,n) =>
+      assert (trianglesOracle(v.get) == n.get)
+    }
+  }}
 
-   assert (communities.count == 234)
- }
-} 
+  test ("[triangles,embedding]", Tag("triangles.embedding")) { time {
+    import org.apache.hadoop.io.{IntWritable, LongWritable}
+
+    val trianglesRes = arabGraph.triangles.
+      set ("comm_strategy", COMM_EMBEDDING)
+
+    val triangleMemberships = trianglesRes.
+      aggregation [IntWritable,LongWritable] ("membership")
+
+    triangleMemberships.foreach { case (v,n) =>
+      assert (trianglesOracle(v.get) == n.get)
+    }
+  }}
+
+  test ("[cliques,odag]", Tag("cliques.odag")) { time {
+    val cliquesRes = arabGraph.cliques (3).
+      set ("comm_strategy", COMM_ODAG_SP)
+    val embeddings = cliquesRes.embeddings
+    assert (embeddings.count == cliquesOracle(3))
+    assert (embeddings.distinct.count == cliquesOracle(3))
+  }}
+
+  test ("[cliques,embedding]", Tag("cliques.embedding")) { time {
+    val cliquesRes = arabGraph.cliques (3).
+      set ("comm_strategy", COMM_EMBEDDING)
+    val embeddings = cliquesRes.embeddings
+    assert (embeddings.count == cliquesOracle(3))
+    assert (embeddings.distinct.count == cliquesOracle(3))
+  }}
+
+  test ("[cliques percolation]", Tag("cliques.percolation")) { time {
+    import io.arabesque.utils.collection.{IntArrayList, UnionFindOps}
+    import scala.collection.JavaConverters._
+    import org.apache.hadoop.io._
+
+    val maxsize = 3
+    val cliquepercRes = arabGraph.cliquesPercolation (maxsize)
+    val cliqueAdjacencies = cliquepercRes.
+      aggregationStorage [IntArrayList,IntArrayList] ("membership")
+    val cliqueAdjacenciesBc = sc.broadcast (cliqueAdjacencies)
+    val cliques = cliquepercRes.
+      aggregationRDD [IntArrayList,VertexInducedEmbedding] ("cliques")
+
+    val communities = cliques.map { case (repr,e) =>
+      val m = cliqueAdjacenciesBc.value
+      val key = UnionFindOps.find [IntArrayList] (
+        v => m.getValue(v),
+        (k,v) => m.aggregateWithReusables (k, v),
+        repr.value
+      )
+      (key, e.value)
+    }.reduceByKey { (e1,e2) =>
+      e2.getVertices.iterator.asScala.
+        foreach (v => if (!(e1.getVertices contains v)) e1.addWord (v))
+      e1
+    }
+
+    assert (communities.count == cliquesPercOracle(3))
+  }}
+}

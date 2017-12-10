@@ -11,6 +11,8 @@ import io.arabesque.computation.WorkerContext;
 import io.arabesque.computation.comm.CommunicationStrategy;
 import io.arabesque.computation.comm.CommunicationStrategyFactory;
 import io.arabesque.embedding.Embedding;
+import io.arabesque.embedding.VertexInducedEmbedding;
+import io.arabesque.embedding.EdgeInducedEmbedding;
 import io.arabesque.graph.MainGraph;
 import io.arabesque.optimization.OptimizationSet;
 import io.arabesque.optimization.OptimizationSetDescriptor;
@@ -18,21 +20,31 @@ import io.arabesque.pattern.Pattern;
 import io.arabesque.pattern.VICPattern;
 import io.arabesque.utils.pool.Pool;
 import io.arabesque.utils.pool.PoolRegistry;
+
+import java.io.Serializable;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+import java.lang.reflect.InvocationTargetException;
+import java.nio.file.Paths;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.apache.giraph.conf.ImmutableClassesGiraphConfiguration;
 import org.apache.giraph.utils.ReflectionUtils;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
 
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.nio.file.Paths;
-import java.util.*;
-
-public class Configuration<O extends Embedding> implements java.io.Serializable {
+public class Configuration<O extends Embedding> implements Serializable {
     
-    // temp solution to cope with static configurations: changing soon
-    protected UUID uuid = UUID.randomUUID();
+    // we keep a local (per JVM) pool of configurations potentially
+    // representing several active arabesque applications
+    private static AtomicInteger nextConfId = new AtomicInteger(0);
+
+    protected final int id = newConfId();
+
+    protected AtomicInteger taskCounter = new AtomicInteger(0);
 
     private static final Logger LOG = Logger.getLogger(Configuration.class);
     public static final int KB = 1024;
@@ -83,7 +95,7 @@ public class Configuration<O extends Embedding> implements java.io.Serializable 
     public static final String CONF_MASTER_COMPUTATION_CLASS_DEFAULT = "io.arabesque.computation.MasterComputation";
 
     public static final String CONF_COMM_STRATEGY = "arabesque.comm.strategy";
-    public static final String CONF_COMM_STRATEGY_DEFAULT = "odag_sp";
+    public static final String CONF_COMM_STRATEGY_DEFAULT = "embedding";
 
     public static final String CONF_COMM_STRATEGY_ODAGMP_MAX = "arabesque.comm.strategy.odagmp.max";
     public static final int CONF_COMM_STRATEGY_ODAGMP_MAX_DEFAULT = 100;
@@ -119,7 +131,20 @@ public class Configuration<O extends Embedding> implements java.io.Serializable 
     public static final String CONF_AGGREGATION_STORAGE_CLASS = "arabesque.aggregation.storage.class";
     public static final String CONF_AGGREGATION_STORAGE_CLASS_DEFAULT = "io.arabesque.aggregation.AggregationStorage";
 
+    public static final String CONF_MASTER_HOSTNAME = "arabesque.master.hostname";
+    public static final String CONF_MASTER_HOSTNAME_DEFAULT = "localhost";
+
+    // gtag
+    public static final String CONF_GTAG_BATCH_SIZE_LOW = "arabesque.gtag.batch.size.low";
+    public static final int CONF_GTAG_BATCH_SIZE_LOW_DEFAULT = 1;
+
+    public static final String CONF_GTAG_BATCH_SIZE_HIGH = "arabesque.gtag.batch.size.high";
+    public static final int CONF_GTAG_BATCH_SIZE_HIGH_DEFAULT = 100;
+
+    private String masterHostname;
     protected static Configuration instance = null;
+    protected static ConcurrentHashMap<Integer,Configuration> activeConfigs =
+       new ConcurrentHashMap<Integer,Configuration>();
     private ImmutableClassesGiraphConfiguration giraphConfiguration;
 
     private boolean useCompressedCaches;
@@ -131,7 +156,8 @@ public class Configuration<O extends Embedding> implements java.io.Serializable 
     private CommunicationStrategyFactory communicationStrategyFactory;
 
     private Class<? extends MainGraph> mainGraphClass;
-    private Class<? extends OptimizationSetDescriptor> optimizationSetDescriptorClass;
+    private Class<? extends OptimizationSetDescriptor>
+       optimizationSetDescriptorClass;
     private Class<? extends Pattern> patternClass;
     private Class<? extends Computation> computationClass;
     private Class<? extends AggregationStorage> aggregationStorageClass;
@@ -141,14 +167,20 @@ public class Configuration<O extends Embedding> implements java.io.Serializable 
     private String outputPath;
     private int defaultAggregatorSplits;
 
-    private transient Map<String, AggregationStorageMetadata> aggregationsMetadata;
+    private transient Map<String, AggregationStorageMetadata>
+       aggregationsMetadata;
     private transient MainGraph mainGraph;
+    protected int mainGraphId = -1;
     private boolean isGraphEdgeLabelled;
-    protected boolean initialized = false;
+    protected transient boolean initialized = false;
     private boolean isGraphMulti;
 
-    public UUID getUUID() {
-       return uuid;
+    private static int newConfId() {
+       return nextConfId.getAndIncrement();
+    }
+
+    public int getId() {
+       return id;
     }
 
     public static boolean isUnset() {
@@ -159,6 +191,12 @@ public class Configuration<O extends Embedding> implements java.io.Serializable 
         if (instance == null) {
            LOG.error ("instance is null");
             throw new RuntimeException("Oh-oh, Null configuration");
+        }
+
+        if (instance instanceof SparkConfiguration) {
+           LOG.error ("static getter not allowed in Spark mode");
+            throw new RuntimeException(
+                  "Static getter is not allowed in Spark mode");
         }
 
         if (!instance.isInitialized()) {
@@ -181,71 +219,147 @@ public class Configuration<O extends Embedding> implements java.io.Serializable 
     public static void set(Configuration configuration) {
         instance = configuration;
 
-        // Whenever we set configuration, reset all known pools
-        // Since they might have initialized things based on a previous configuration
-        // NOTE: This is essential for the unit tests
+        // Whenever we set configuration, reset all known pools Since they might
+        // have initialized things based on a previous configuration NOTE: This
+        // is essential for the unit tests
         for (Pool pool : PoolRegistry.instance().getPools()) {
             pool.reset();
         }
     }
 
-    public Configuration(ImmutableClassesGiraphConfiguration giraphConfiguration) {
+    public static void add(Configuration configuration) {
+       activeConfigs.put(configuration.getId(), configuration);
+    }
+
+    public static void remove(int id) {
+       activeConfigs.remove(id);
+    }
+
+    public static Configuration get(int id) {
+       return activeConfigs.get(id);
+    }
+
+    public static boolean isUnset(int id) {
+       return !activeConfigs.containsKey(id);
+    }
+
+    public int taskCheckIn() {
+       return taskCounter.incrementAndGet();
+    }
+    
+    public boolean taskCheckIn(int expect, int ntasks) {
+       return taskCounter.compareAndSet(expect, ntasks);
+    }
+
+    public int taskCheckOut() {
+       return taskCounter.decrementAndGet();
+    }
+
+    public int taskCounter() {
+       return taskCounter.get();
+    }
+
+    public Configuration(
+          ImmutableClassesGiraphConfiguration giraphConfiguration) {
         this.giraphConfiguration = giraphConfiguration;
     }
 
     public Configuration() {}
 
     public void initialize() {
+       initialize(false);
+    }
+    
+    public void initialize(boolean isMaster) {
         if (initialized) {
             return;
         }
 
         LOG.info("Initializing Configuration...");
 
-        useCompressedCaches = getBoolean(CONF_COMPRESSED_CACHES, CONF_COMPRESSED_CACHES_DEFAULT);
-        cacheThresholdSize = getInteger(CONF_CACHE_THRESHOLD_SIZE, CONF_CACHE_THRESHOLD_SIZE_DEFAULT);
+        useCompressedCaches = getBoolean(CONF_COMPRESSED_CACHES,
+              CONF_COMPRESSED_CACHES_DEFAULT);
+
+        cacheThresholdSize = getInteger(CONF_CACHE_THRESHOLD_SIZE,
+              CONF_CACHE_THRESHOLD_SIZE_DEFAULT);
+
         infoPeriod = getLong(INFO_PERIOD, INFO_PERIOD_DEFAULT);
-        Class<? extends CommunicationStrategyFactory> communicationStrategyFactoryClass =
-                (Class<? extends CommunicationStrategyFactory>) getClass(CONF_COMM_STRATEGY_FACTORY_CLASS, CONF_COMM_STRATEGY_FACTORY_CLASS_DEFAULT);
-        communicationStrategyFactory = ReflectionUtils.newInstance(communicationStrategyFactoryClass);
-        odagNumAggregators = getInteger(CONF_EZIP_AGGREGATORS, CONF_EZIP_AGGREGATORS_DEFAULT);
-        is2LevelAggregationEnabled = getBoolean(CONF_2LEVELAGG_ENABLED, CONF_2LEVELAGG_ENABLED_DEFAULT);
+
+        Class<? extends CommunicationStrategyFactory> 
+           communicationStrategyFactoryClass =
+                (Class<? extends CommunicationStrategyFactory>) getClass(
+                      CONF_COMM_STRATEGY_FACTORY_CLASS,
+                      CONF_COMM_STRATEGY_FACTORY_CLASS_DEFAULT);
+
+        communicationStrategyFactory = ReflectionUtils.newInstance(
+              communicationStrategyFactoryClass);
+
+        odagNumAggregators = getInteger(CONF_EZIP_AGGREGATORS,
+              CONF_EZIP_AGGREGATORS_DEFAULT);
+
+        is2LevelAggregationEnabled = getBoolean(CONF_2LEVELAGG_ENABLED,
+              CONF_2LEVELAGG_ENABLED_DEFAULT);
+
         forceGC = getBoolean(CONF_FORCE_GC, CONF_FORCE_GC_DEFAULT);
-        mainGraphClass = (Class<? extends MainGraph>) getClass(CONF_MAINGRAPH_CLASS, CONF_MAINGRAPH_CLASS_DEFAULT);
-        isGraphEdgeLabelled = getBoolean(CONF_MAINGRAPH_EDGE_LABELLED, CONF_MAINGRAPH_EDGE_LABELLED_DEFAULT);
-        isGraphMulti = getBoolean(CONF_MAINGRAPH_MULTIGRAPH, CONF_MAINGRAPH_MULTIGRAPH_DEFAULT);
-        optimizationSetDescriptorClass = (Class<? extends OptimizationSetDescriptor>) getClass(CONF_OPTIMIZATIONSETDESCRIPTOR_CLASS, CONF_OPTIMIZATIONSETDESCRIPTOR_CLASS_DEFAULT);
-        patternClass = (Class<? extends Pattern>) getClass(CONF_PATTERN_CLASS, CONF_PATTERN_CLASS_DEFAULT);
+
+        mainGraphClass = (Class<? extends MainGraph>) getClass(
+              CONF_MAINGRAPH_CLASS, CONF_MAINGRAPH_CLASS_DEFAULT);
+
+        isGraphEdgeLabelled = getBoolean(CONF_MAINGRAPH_EDGE_LABELLED,
+              CONF_MAINGRAPH_EDGE_LABELLED_DEFAULT);
+
+        isGraphMulti = getBoolean(CONF_MAINGRAPH_MULTIGRAPH,
+              CONF_MAINGRAPH_MULTIGRAPH_DEFAULT);
+
+        optimizationSetDescriptorClass =
+           (Class<? extends OptimizationSetDescriptor>) getClass(
+                 CONF_OPTIMIZATIONSETDESCRIPTOR_CLASS,
+                 CONF_OPTIMIZATIONSETDESCRIPTOR_CLASS_DEFAULT);
+
+        patternClass = (Class<? extends Pattern>) getClass(CONF_PATTERN_CLASS,
+              CONF_PATTERN_CLASS_DEFAULT);
+
+        // create (empty) graph
+        setMainGraph(createGraph());
 
         // TODO: Make this more flexible
         if (isGraphEdgeLabelled || isGraphMulti) {
             patternClass = VICPattern.class;
         }
 
-        computationClass = (Class<? extends Computation>) getClass(CONF_COMPUTATION_CLASS, CONF_COMPUTATION_CLASS_DEFAULT);
-        masterComputationClass = (Class<? extends MasterComputation>) getClass(CONF_MASTER_COMPUTATION_CLASS, CONF_MASTER_COMPUTATION_CLASS_DEFAULT);
+        computationClass = (Class<? extends Computation>)
+           getClass(CONF_COMPUTATION_CLASS, CONF_COMPUTATION_CLASS_DEFAULT);
+        masterComputationClass = (Class<? extends MasterComputation>)
+           getClass(CONF_MASTER_COMPUTATION_CLASS,
+                 CONF_MASTER_COMPUTATION_CLASS_DEFAULT);
 
         aggregationsMetadata = new HashMap<>();
 
-        outputPath = getString(CONF_OUTPUT_PATH, CONF_OUTPUT_PATH_DEFAULT + "_" + computationClass.getName());
+        outputPath = getString(CONF_OUTPUT_PATH, CONF_OUTPUT_PATH_DEFAULT + "_"
+              + computationClass.getName());
 
-        defaultAggregatorSplits = getInteger(CONF_DEFAULT_AGGREGATOR_SPLITS, CONF_DEFAULT_AGGREGATOR_SPLITS_DEFAULT);
+        defaultAggregatorSplits = getInteger(CONF_DEFAULT_AGGREGATOR_SPLITS,
+              CONF_DEFAULT_AGGREGATOR_SPLITS_DEFAULT);
 
-        Computation<?> computation = createComputation();
-        computation.initAggregations();
+        Computation<O> computation = createComputation();
+        computation.initAggregations(this);
 
-        OptimizationSetDescriptor optimizationSetDescriptor = ReflectionUtils.newInstance(optimizationSetDescriptorClass);
-        OptimizationSet optimizationSet = optimizationSetDescriptor.describe();
+        OptimizationSetDescriptor optimizationSetDescriptor =
+           ReflectionUtils.newInstance(optimizationSetDescriptorClass);
+        OptimizationSet optimizationSet =
+           optimizationSetDescriptor.describe(this);
 
         LOG.info("Active optimizations: " + optimizationSet);
 
         optimizationSet.applyStartup();
 
-        if (mainGraph == null) {
-            // Load graph immediately (try to make it so that everyone loads the graph at the same time)
-            // This prevents imbalances if aggregators use the main graph (which means that master
-            // node would load first on superstep -1) then all the others would load on (superstep 0).
-            mainGraph = createGraph();
+        if (!isMainGraphRead()) {
+            // Load graph immediately (try to make it so that everyone loads the
+            // graph at the same time) This prevents imbalances if aggregators
+            // use the main graph (which means that master node would load first
+            // on superstep -1) then all the others would load on (superstep 0).
+            // mainGraph = createGraph();
+            readMainGraph();
         }
 
         optimizationSet.applyAfterGraphLoad();
@@ -306,7 +420,9 @@ public class Configuration<O extends Embedding> implements java.io.Serializable 
     }
 
     public Pattern createPattern() {
-        return ReflectionUtils.newInstance(getPatternClass());
+       Pattern pattern = ReflectionUtils.newInstance(getPatternClass());
+       pattern.init(this);
+       return pattern;
     }
 
     public Class<? extends MainGraph> getMainGraphClass() {
@@ -338,7 +454,9 @@ public class Configuration<O extends Embedding> implements java.io.Serializable 
     }
 
     public <E extends Embedding> E createEmbedding() {
-        return (E) ReflectionUtils.newInstance(embeddingClass);
+        E embedding = (E) ReflectionUtils.newInstance(embeddingClass);
+        embedding.init(this);
+        return embedding;
     }
 
     public Class<? extends Embedding> getEmbeddingClass() {
@@ -354,24 +472,50 @@ public class Configuration<O extends Embedding> implements java.io.Serializable 
     }
 
     public <G extends MainGraph> void setMainGraph(G mainGraph) {
-        this.mainGraph = mainGraph;
+        if (mainGraph != null) {
+            this.mainGraphId = mainGraph.getId();
+            this.mainGraph = mainGraph;
+        }
     }
 
-    protected MainGraph createGraph() {
-        boolean useLocalGraph = getBoolean(CONF_MAINGRAPH_LOCAL, CONF_MAINGRAPH_LOCAL_DEFAULT);
+    protected boolean isMainGraphRead() {
+       return mainGraph.getNumberVertices() > 0 ||
+          mainGraph.getNumberEdges() > 0;
+    }
+
+    public MainGraph createGraph() {
+        for (Map.Entry<Integer,Configuration> entry: activeConfigs.entrySet()) {
+            if (entry.getValue().mainGraphId == mainGraphId) {
+                return entry.getValue().getMainGraph();
+            }
+        }
 
         try {
             Constructor<? extends MainGraph> constructor;
+            constructor = mainGraphClass.getConstructor(String.class,
+                  boolean.class, boolean.class);
+            return constructor.newInstance(getMainGraphPath(),
+                  isGraphEdgeLabelled, isGraphMulti);
+        } catch (NoSuchMethodException | IllegalAccessException |
+              InstantiationException | InvocationTargetException e) {
+            throw new RuntimeException("Could not create main graph", e);
+        }
+    }
+
+    protected void readMainGraph() {
+        boolean useLocalGraph = getBoolean(CONF_MAINGRAPH_LOCAL,
+              CONF_MAINGRAPH_LOCAL_DEFAULT);
+        try {
+            Method init = mainGraphClass.getMethod("init", Object.class);
 
             if (useLocalGraph) {
-                constructor = mainGraphClass.getConstructor(java.nio.file.Path.class, boolean.class, boolean.class);
-                return constructor.newInstance(Paths.get(getMainGraphPath()), isGraphEdgeLabelled, isGraphMulti);
+                init.invoke(mainGraph, Paths.get(getMainGraphPath()));
             } else {
-                constructor = mainGraphClass.getConstructor(Path.class, boolean.class, boolean.class);
-                return constructor.newInstance(new Path(getMainGraphPath()), isGraphEdgeLabelled, isGraphMulti);
+                init.invoke(mainGraph, new Path(getMainGraphPath()));
             }
-        } catch (NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException e) {
-            throw new RuntimeException("Could not load main graph", e);
+        } catch (NoSuchMethodException | IllegalAccessException |
+              InvocationTargetException e) {
+            throw new RuntimeException("Could not read main graph", e);
         }
     }
 
@@ -403,9 +547,11 @@ public class Configuration<O extends Embedding> implements java.io.Serializable 
         return communicationStrategyFactory.createMessage();
     }
 
-    public CommunicationStrategy<O> createCommunicationStrategy(Configuration<O> configuration,
-            ExecutionEngine<O> executionEngine, WorkerContext workerContext) {
-        CommunicationStrategy<O> commStrategy = communicationStrategyFactory.createCommunicationStrategy();
+    public CommunicationStrategy<O> createCommunicationStrategy(
+          Configuration<O> configuration,
+          ExecutionEngine<O> executionEngine, WorkerContext workerContext) {
+        CommunicationStrategy<O> commStrategy =
+           communicationStrategyFactory.createCommunicationStrategy();
 
         commStrategy.setConfiguration(configuration);
         commStrategy.setExecutionEngine(executionEngine);
@@ -422,46 +568,103 @@ public class Configuration<O extends Embedding> implements java.io.Serializable 
         return Collections.unmodifiableMap(aggregationsMetadata);
     }
 
-    public void setAggregationsMetadata(Map<String,AggregationStorageMetadata> aggregationsMetadata) {
+    public void setAggregationsMetadata(
+          Map<String,AggregationStorageMetadata> aggregationsMetadata) {
        this.aggregationsMetadata = aggregationsMetadata;
     }
 
     public <K extends Writable, V extends Writable>
-    void registerAggregation(String name, Class<? extends AggregationStorage> aggStorageClass,
-          Class<K> keyClass, Class<V> valueClass, boolean persistent, ReductionFunction<V> reductionFunction, EndAggregationFunction<K, V> endAggregationFunction, int numSplits) {
-        if (aggregationsMetadata.containsKey(name)) {
-            return;
-        }
+    void registerAggregation(String name,
+          Class<? extends AggregationStorage> aggStorageClass,
+          Class<K> keyClass, Class<V> valueClass,
+          boolean persistent, ReductionFunction<V> reductionFunction,
+          EndAggregationFunction<K, V> endAggregationFunction, int numSplits,
+          boolean isIncremental) {
+       if (aggregationsMetadata.containsKey(name)) {
+          return;
+       }
 
-        AggregationStorageMetadata<K, V> aggregationMetadata =
-                new AggregationStorageMetadata<>(aggStorageClass,
-                      keyClass, valueClass, persistent, reductionFunction, endAggregationFunction, numSplits);
+       AggregationStorageMetadata<K, V> aggregationMetadata =
+          new AggregationStorageMetadata<>(aggStorageClass,
+                keyClass, valueClass, persistent, reductionFunction,
+                endAggregationFunction, numSplits, isIncremental);
 
-        aggregationsMetadata.put(name, aggregationMetadata);
+       aggregationsMetadata.put(name, aggregationMetadata);
     }
 
     public <K extends Writable, V extends Writable>
-    void registerAggregation(String name, Class<K> keyClass, Class<V> valueClass, boolean persistent, ReductionFunction<V> reductionFunction) {
-    	registerAggregation(name, getAggregationStorageClass(), keyClass, valueClass, persistent, reductionFunction, null, defaultAggregatorSplits);
+    void registerAggregation(String name,
+          Class<? extends AggregationStorage> aggStorageClass,
+          Class<K> keyClass, Class<V> valueClass,
+          boolean persistent, ReductionFunction<V> reductionFunction,
+          EndAggregationFunction<K, V> endAggregationFunction, int numSplits) {
+       registerAggregation(name, aggStorageClass, keyClass, valueClass,
+             persistent, reductionFunction, endAggregationFunction, numSplits,
+             isAggregationIncremental());
+    }
+
+    public <K extends Writable, V extends Writable>
+    void registerAggregation(String name,
+          Class<K> keyClass, Class<V> valueClass,
+          boolean persistent, ReductionFunction<V> reductionFunction) {
+    	registerAggregation(name,
+              getAggregationStorageClass(), keyClass, valueClass, persistent,
+              reductionFunction, null, defaultAggregatorSplits,
+              isAggregationIncremental());
+    }
+
+    public <K extends Writable, V extends Writable>
+    void registerAggregation(String name,
+          Class<? extends AggregationStorage> aggStorageClass,
+          Class<K> keyClass, Class<V> valueClass,
+          boolean persistent, ReductionFunction<V> reductionFunction) {
+    	registerAggregation(name, aggStorageClass, keyClass, valueClass,
+              persistent, reductionFunction, null, defaultAggregatorSplits,
+              isAggregationIncremental());
     }
     
     public <K extends Writable, V extends Writable>
-    void registerAggregation(String name, Class<? extends AggregationStorage> aggStorageClass, Class<K> keyClass, Class<V> valueClass, boolean persistent, ReductionFunction<V> reductionFunction) {
-    	registerAggregation(name, aggStorageClass, keyClass, valueClass, persistent, reductionFunction, null, defaultAggregatorSplits);
+    void registerAggregation(String name,
+          Class<K> keyClass, Class<V> valueClass,
+          boolean persistent,
+          ReductionFunction<V> reductionFunction,
+          EndAggregationFunction<K, V> endAggregationFunction) {
+    	registerAggregation(name,
+              getAggregationStorageClass(), keyClass, valueClass, persistent,
+              reductionFunction, endAggregationFunction,
+              defaultAggregatorSplits, isAggregationIncremental());
     }
 
     public <K extends Writable, V extends Writable>
-    void registerAggregation(String name, Class<K> keyClass, Class<V> valueClass, boolean persistent, ReductionFunction<V> reductionFunction, EndAggregationFunction<K, V> endAggregationFunction) {
-    	registerAggregation(name, getAggregationStorageClass(), keyClass, valueClass, persistent, reductionFunction, endAggregationFunction, defaultAggregatorSplits);
+    void registerAggregation(String name,
+          Class<? extends AggregationStorage> aggStorageClass,
+          Class<K> keyClass, Class<V> valueClass,
+          boolean persistent,
+          ReductionFunction<V> reductionFunction,
+          EndAggregationFunction<K, V> endAggregationFunction,
+          boolean isIncremental) {
+    	registerAggregation(name, aggStorageClass, keyClass, valueClass,
+              persistent, reductionFunction, endAggregationFunction,
+              defaultAggregatorSplits, isIncremental);
     }
 
     public <K extends Writable, V extends Writable>
-    void registerAggregation(String name, Class<? extends AggregationStorage> aggStorageClass, Class<K> keyClass, Class<V> valueClass, boolean persistent, ReductionFunction<V> reductionFunction, EndAggregationFunction<K, V> endAggregationFunction) {
-    	registerAggregation(name, aggStorageClass, keyClass, valueClass, persistent, reductionFunction, endAggregationFunction, defaultAggregatorSplits);
+    void registerAggregation(String name,
+          Class<? extends AggregationStorage> aggStorageClass,
+          Class<K> keyClass, Class<V> valueClass,
+          boolean persistent,
+          ReductionFunction<V> reductionFunction,
+          EndAggregationFunction<K, V> endAggregationFunction) {
+    	registerAggregation(name, aggStorageClass, keyClass, valueClass,
+              persistent, reductionFunction, endAggregationFunction,
+              defaultAggregatorSplits, isAggregationIncremental());
     }
 
-    public <K extends Writable, V extends Writable> AggregationStorageMetadata<K, V> getAggregationMetadata(String name) {
-        return (AggregationStorageMetadata<K, V>) aggregationsMetadata.get(name);
+    public <K extends Writable, V extends Writable>
+    AggregationStorageMetadata<K, V> getAggregationMetadata(String name) {
+        AggregationStorageMetadata<K,V> metadata =
+           (AggregationStorageMetadata<K, V>) aggregationsMetadata.get(name);
+        return metadata;
     }
 
     public String getAggregationSplitName(String name, int splitId) {
@@ -472,8 +675,10 @@ public class Configuration<O extends Embedding> implements java.io.Serializable 
         return ReflectionUtils.newInstance(computationClass);
     }
     
-    public <K extends Writable, V extends Writable> AggregationStorage<K,V> createAggregationStorage(String name) {
-        return ReflectionUtils.newInstance (getAggregationMetadata(name).getAggregationStorageClass());
+    public <K extends Writable, V extends Writable>
+    AggregationStorage<K,V> createAggregationStorage(String name) {
+        return ReflectionUtils.newInstance (
+              getAggregationMetadata(name).getAggregationStorageClass());
     }
 
     public String getOutputPath() {
@@ -505,28 +710,67 @@ public class Configuration<O extends Embedding> implements java.io.Serializable 
     }
     
     public Class<? extends AggregationStorage> getAggregationStorageClass() {
-        return (Class<? extends AggregationStorage>) getClass(CONF_AGGREGATION_STORAGE_CLASS, CONF_AGGREGATION_STORAGE_CLASS_DEFAULT);
+        return (Class<? extends AggregationStorage>) getClass(
+              CONF_AGGREGATION_STORAGE_CLASS,
+              CONF_AGGREGATION_STORAGE_CLASS_DEFAULT);
     }
 
-    public void setMasterComputationClass(Class<? extends MasterComputation> masterComputationClass) {
+    public void setMasterComputationClass(
+          Class<? extends MasterComputation> masterComputationClass) {
        this.masterComputationClass = masterComputationClass;
     }
 
-    public void setComputationClass(Class<? extends Computation> computationClass) {
+    public void setComputationClass(
+          Class<? extends Computation> computationClass) {
        this.computationClass = computationClass;
     }
 
     public boolean isAggregationIncremental() {
-       return getBoolean (CONF_INCREMENTAL_AGGREGATION, CONF_INCREMENTAL_AGGREGATION_DEFAULT);
+       return getBoolean (CONF_INCREMENTAL_AGGREGATION,
+             CONF_INCREMENTAL_AGGREGATION_DEFAULT);
     }
 
     public int getMaxOdags() {
-       return getInteger (CONF_COMM_STRATEGY_ODAGMP_MAX, CONF_COMM_STRATEGY_ODAGMP_MAX_DEFAULT);
+       return getInteger (CONF_COMM_STRATEGY_ODAGMP_MAX,
+             CONF_COMM_STRATEGY_ODAGMP_MAX_DEFAULT);
     }
 
     public String getCommStrategy() {
        return getString (CONF_COMM_STRATEGY, CONF_COMM_STRATEGY_DEFAULT);
     }
 
+    public String getMasterHostname() {
+       return getString(CONF_MASTER_HOSTNAME, CONF_MASTER_HOSTNAME_DEFAULT);
+    }
+
+    public int getGtagBatchSizeLow() {
+       return getInteger(CONF_GTAG_BATCH_SIZE_LOW,
+             CONF_GTAG_BATCH_SIZE_LOW_DEFAULT);
+    }
+    
+    public int getGtagBatchSizeHigh() {
+       return getInteger(CONF_GTAG_BATCH_SIZE_HIGH,
+             CONF_GTAG_BATCH_SIZE_HIGH_DEFAULT);
+    }
+
+    public int getNumWords() {
+       Class<? extends Embedding> embeddingClass = getEmbeddingClass();
+       if (embeddingClass == EdgeInducedEmbedding.class) {
+          return getMainGraph().getNumberEdges();
+       } else if (embeddingClass == VertexInducedEmbedding.class) {
+          return getMainGraph().getNumberVertices();
+       } else {
+          throw new RuntimeException(
+                "Unknown embedding type " + embeddingClass);
+       }
+    }
+
+    public int getNumVertices() {
+       return getMainGraph().getNumberVertices();
+    }
+    
+    public int getNumEdges() {
+       return getMainGraph().getNumberEdges();
+    }
 }
 

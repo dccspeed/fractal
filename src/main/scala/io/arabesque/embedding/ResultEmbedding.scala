@@ -6,12 +6,13 @@ import io.arabesque.graph.BasicMainGraph
 import org.apache.hadoop.io.Writable
 
 /**
-  *
-  */
+ *
+ */
 trait ResultEmbedding[T] extends Writable {
   def words: Array[T]
   def combinations(k: Int): Iterator[ResultEmbedding[T]]
-
+  def toInternalEmbedding[E <: Embedding](config: SparkConfiguration[E]): E
+  
   override def hashCode(): Int = {
     var result = this.words.length
     var i = 0
@@ -52,9 +53,9 @@ object ResultEmbedding {
       VEmbedding (strEmbedding)
   }
 
-  def apply(embedding: Embedding) = {
+  def apply(embedding: Embedding, config: SparkConfiguration[_]) = {
     if (embedding.isInstanceOf[EdgeInducedEmbedding]) {
-      val mainGraph = SparkConfiguration.get.getMainGraph[BasicMainGraph]
+      val mainGraph = config.getMainGraph[BasicMainGraph]
       val edges = new Array [(Int,Int)] (embedding.getNumEdges)
       val edgesIter = embedding.getEdges.iterator
       var i = 0
@@ -64,8 +65,10 @@ object ResultEmbedding {
         i += 1
       }
       new EEmbedding (edges)
-    } else {
+    } else if (embedding.isInstanceOf[VertexInducedEmbedding]) {
       new VEmbedding (embedding.getVertices.toIntArray)
+    } else {
+      throw new RuntimeException(s"Unknown embedding type: ${embedding}")
     }
   }
 }

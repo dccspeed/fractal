@@ -1,5 +1,6 @@
 package io.arabesque.pattern;
 
+import io.arabesque.conf.Configuration;
 import fi.tkk.ics.jbliss.Graph;
 import fi.tkk.ics.jbliss.Reporter;
 import com.koloboke.collect.map.IntIntCursor;
@@ -21,14 +22,16 @@ public class JBlissPattern extends BasicPattern {
     }
 
     @Override
-    protected void init() {
-        super.init();
+    public void init(Configuration config) {
+        super.init(config);
         jblissGraph = new Graph<>(this);
     }
 
     @Override
     public Pattern copy() {
-        return new JBlissPattern(this);
+        Pattern pattern = new JBlissPattern(this);
+        pattern.init(getConfig());
+        return pattern;
     }
 
     protected class VertexPositionEquivalencesReporter implements Reporter {

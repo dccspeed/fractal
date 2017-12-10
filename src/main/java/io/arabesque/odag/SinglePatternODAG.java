@@ -1,6 +1,7 @@
 package io.arabesque.odag;
 
 import io.arabesque.computation.Computation;
+import io.arabesque.conf.Configuration;
 import io.arabesque.embedding.Embedding;
 import io.arabesque.odag.domain.DomainStorage;
 import io.arabesque.odag.domain.DomainStorageReadOnly;
@@ -31,6 +32,13 @@ public class SinglePatternODAG extends BasicODAG {
     }
 
     @Override
+    public SinglePatternODAG init(Configuration config) {
+       // do nothing by now, maybe we will want a reference of 'Configuration'
+       // in here as well (see MultiPatternODAG)
+       return this;
+    }
+
+    @Override
     public void addEmbedding(Embedding embedding) {
         if (pattern == null) {
             throw new RuntimeException("Tried to add an embedding without letting embedding zip know about the pattern");
@@ -47,8 +55,9 @@ public class SinglePatternODAG extends BasicODAG {
     }
 
     @Override
-    public StorageReader getReader(Computation<Embedding> computation, int numPartitions, int numBlocks, int maxBlockSize) {
-        return storage.getReader(pattern, computation, numPartitions, numBlocks, maxBlockSize);
+    public StorageReader getReader(Configuration<Embedding> configuration, Computation<Embedding> computation,
+          int numPartitions, int numBlocks, int maxBlockSize) {
+        return storage.getReader(pattern, configuration, computation, numPartitions, numBlocks, maxBlockSize);
     }
 
     @Override

@@ -9,12 +9,10 @@ public class CliqueOptimization extends BasicOptimization {
 
     @Override
     public void applyAfterGraphLoad() {
-        Configuration conf = Configuration.get();
+        MainGraph mainGraph = configuration.getMainGraph();
 
-        MainGraph mainGraph = conf.getMainGraph();
-
-        conf.setMainGraph(new BiggerNeighboursMainGraphDecorator(mainGraph));
-        conf.setEmbeddingClass(CliqueVertexInducedEmbedding.class);
+        configuration.setMainGraph(new BiggerNeighboursMainGraphDecorator(mainGraph));
+        configuration.setEmbeddingClass(CliqueVertexInducedEmbedding.class);
     }
 
     @Override

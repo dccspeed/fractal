@@ -56,16 +56,18 @@ public class DomainStorageReadOnly extends DomainStorage {
 
     @Override
     public StorageReader getReader(Pattern pattern,
-            Computation<Embedding> computation,
+            Configuration<Embedding> configuration, Computation<Embedding> computation,
             int numPartitions, int numBlocks, int maxBlockSize) {
-        return new Reader(pattern, computation, numPartitions, numBlocks, maxBlockSize);
+        return new Reader(pattern, configuration, computation,
+              numPartitions, numBlocks, maxBlockSize);
     }
 
     @Override
     public StorageReader getReader(Pattern[] patterns,
-            Computation<Embedding> computation,
+            Configuration<Embedding> configuration, Computation<Embedding> computation,
             int numPartitions, int numBlocks, int maxBlockSize) {
-        return new MultiPatternReader(patterns, computation, numPartitions, numBlocks, maxBlockSize);
+        return new MultiPatternReader(patterns, configuration, computation,
+              numPartitions, numBlocks, maxBlockSize);
     }
 
     public class Reader implements StorageReader {
@@ -79,6 +81,7 @@ public class DomainStorageReadOnly extends DomainStorage {
         private final Deque<EnumerationStep> enumerationStack;
         private final HashIntSet singletonExtensionSet;
         private final Pattern pattern;
+        private final Configuration<Embedding> configuration;
         private final Computation<Embedding> computation;
         private final int numPartitions;
 
@@ -87,12 +90,14 @@ public class DomainStorageReadOnly extends DomainStorage {
         private EdgesConsumer edgesConsumer;
         private IntArrayList edgeIds;
 
-        public Reader(Pattern pattern, Computation<Embedding> computation, int numPartitions, int numBlocks, int maxBlockSize) {
+        public Reader(Pattern pattern, Configuration<Embedding> configuration, Computation<Embedding> computation,
+              int numPartitions, int numBlocks, int maxBlockSize) {
             this.pattern = pattern;
+            this.configuration = configuration;
             this.computation = computation;
             this.numPartitions = numPartitions;
-            mainGraph = Configuration.get().getMainGraph();
-            reusableEmbedding = Configuration.get().createEmbedding();
+            mainGraph = configuration.getMainGraph();
+            reusableEmbedding = configuration.createEmbedding();
 
             this.numberOfEnumerations = getNumberOfEnumerations();
 
@@ -109,7 +114,7 @@ public class DomainStorageReadOnly extends DomainStorage {
 
             edgeIds = new IntArrayList();
 
-            edgesConsumer = new EdgesConsumer(Configuration.get().isGraphEdgeLabelled());
+            edgesConsumer = new EdgesConsumer(configuration.isGraphEdgeLabelled());
             edgesConsumer.setCollection(edgeIds);
         }
 
@@ -549,6 +554,7 @@ public class DomainStorageReadOnly extends DomainStorage {
         private final Deque<EnumerationStep> enumerationStack;
         private final HashIntSet singletonExtensionSet;
         private final Pattern[] patterns;
+        private final Configuration<Embedding> configuration;
         private final Computation<Embedding> computation;
         private final int numPartitions;
 
@@ -562,13 +568,15 @@ public class DomainStorageReadOnly extends DomainStorage {
         private long localEnumerations;
         private long numberOfEmbeddingsRead;
 
-        public MultiPatternReader(Pattern[] patterns, Computation<Embedding> computation, int numPartitions, int numBlocks, int maxBlockSize) {
+        public MultiPatternReader(Pattern[] patterns, Configuration<Embedding> configuration, Computation<Embedding> computation,
+              int numPartitions, int numBlocks, int maxBlockSize) {
             this.patterns = patterns;
+            this.configuration = configuration;
             this.computation = computation;
             this.numPartitions = numPartitions;
-            mainGraph = Configuration.get().getMainGraph();
-            reusableEmbedding = Configuration.get().createEmbedding();
-            reusablePattern = Configuration.get().createPattern();
+            mainGraph = configuration.getMainGraph();
+            reusableEmbedding = configuration.createEmbedding();
+            reusablePattern = configuration.createPattern();
 
             this.numberOfEnumerations = getNumberOfEnumerations();
 
@@ -590,7 +598,7 @@ public class DomainStorageReadOnly extends DomainStorage {
             prunedByTheEnd = 0;
             numberOfEmbeddingsRead = 0;
 
-            edgesConsumer = new EdgesConsumer(Configuration.get().isGraphEdgeLabelled());
+            edgesConsumer = new EdgesConsumer(configuration.isGraphEdgeLabelled());
             edgesConsumer.setCollection(edgeIds);
         }
 
@@ -1021,7 +1029,7 @@ public class DomainStorageReadOnly extends DomainStorage {
         public void close() {
             if (LOG.isDebugEnabled()) {
                LOG.debug ("numberOfEmbeddingsRead " + numberOfEmbeddingsRead);
-               LOG.debug (Configuration.get().getCommStrategy() +
+               LOG.debug (configuration.getCommStrategy() +
                   " prunedByTheEnd: " + prunedByTheEnd +
                   " validEmbeddings: " +
                   validEmbeddings/domainEntries.size() +

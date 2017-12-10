@@ -15,8 +15,8 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.{LongWritable, NullWritable, SequenceFile, Writable}
 import org.apache.hadoop.io.SequenceFile.{Writer => SeqWriter}
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.Accumulator
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.util.LongAccumulator
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.{ListBuffer, Map}
@@ -31,18 +31,19 @@ import scala.reflect.ClassTag
 case class ODAGEngineMP [E <: Embedding] (
     partitionId: Int,
     superstep: Int,
-    accums: Map[String,Accumulator[_]],
+    accums: Map[String,LongAccumulator],
     // TODO do not broadcast if user's code does not requires it
-    previousAggregationsBc: Broadcast[_])
+    previousAggregationsBc: Broadcast[_],
+    configurationId: Int)
   extends ODAGEngine[E,MultiPatternODAG,MultiPatternODAGStash,ODAGEngineMP[E]] {
 
   // stashes
-  nextEmbeddingStash = new MultiPatternODAGStash (configuration.getMaxOdags)
+  nextEmbeddingStash = new MultiPatternODAGStash (configuration.getMaxOdags).
+    init(configuration)
 
   /**
    * Returns a new execution engine from this with the aggregations/computation
    * variables updated (immutability)
-    configuration.getInteger (CONF_COMM_STRATEGY_ODAGMP_MAX, CONF_)
    *
    * @param aggregationsBc broadcast variable with aggregations
    * @return the new execution engine, ready for flushing

@@ -12,21 +12,26 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class PatternAggregationStorage<K extends Pattern, V extends Writable> extends AggregationStorage<K, V> {
     private static final Logger LOG = Logger.getLogger(PatternAggregationStorage.class);
 
     private final HashObjByteMap<K> reservations;
+    private final ConcurrentHashMap<K, AtomicBoolean> reservations2;
     private final ConcurrentHashMap<K, K> quick2CanonicalMap;
+    private final ConcurrentHashMap<K, ConcurrentHashMap<K,Boolean>> canonical2quickMap; // Fake map, should be set,
 
     public PatternAggregationStorage() {
-        this(null);
+        this(null, null);
     }
 
-    public PatternAggregationStorage(String name) {
-        super(name);
+    public PatternAggregationStorage(String name, AggregationStorageMetadata<K,V> metadata) {
+        super(name, metadata, new ConcurrentHashMap<K,V>());
         reservations = HashObjByteMaps.getDefaultFactory().withDefaultValue((byte) 0).newMutableMap();
+        reservations2 = new ConcurrentHashMap<>();
         quick2CanonicalMap = new ConcurrentHashMap<>();
+        canonical2quickMap = new ConcurrentHashMap<>();
     }
 
     @Override
@@ -36,9 +41,14 @@ public class PatternAggregationStorage<K extends Pattern, V extends Writable> ex
         if (reservations != null) {
             reservations.clear();
         }
+        
+        if (reservations2 != null) {
+            reservations2.clear();
+        }
 
         if (quick2CanonicalMap != null) {
             quick2CanonicalMap.clear();
+            canonical2quickMap.clear();
         }
     }
 
@@ -130,11 +140,11 @@ public class PatternAggregationStorage<K extends Pattern, V extends Writable> ex
                 }
             }
 
-            try {
-                Thread.sleep(10);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            //try {
+            //    Thread.sleep(10);
+            //} catch (InterruptedException e) {
+            //    e.printStackTrace();
+            //}
         }
     }
 
@@ -239,8 +249,25 @@ public class PatternAggregationStorage<K extends Pattern, V extends Writable> ex
             patternAggregationAwareValue.handleConversionFromQuickToCanonical(quickPattern, canonicalPattern);
         }
 
-        synchronized (this) {
-            aggregate(canonicalPattern, value);
+        V currValue = keyValueMap.get(canonicalPattern);
+
+        // in case it does not exist in the map, we will have to lock the whole
+        // map to prevent bad concurrency
+        if (currValue == null) {
+           synchronized (keyValueMap) {
+              currValue = keyValueMap.get(canonicalPattern);
+              if (currValue == null) {
+                 aggregate(canonicalPattern, value);
+                 return true;
+              }
+           }
+        }
+
+        // in case the key already exists we can change the key in-place, so it
+        // is safe to lock only the key itself, even if the map implementation
+        // does not guarantee thread safety
+        synchronized (currValue) {
+           aggregate(canonicalPattern, value);
         }
 
         return true;
@@ -251,48 +278,106 @@ public class PatternAggregationStorage<K extends Pattern, V extends Writable> ex
         K canonicalPattern = quick2CanonicalMap.get(quickPattern);
 
         if (canonicalPattern == null) {
-            byte currentReservation;
+            AtomicBoolean currentReservation = reservations2.get(quickPattern);
 
-            synchronized (reservations) {
-                currentReservation = reservations.getByte(quickPattern);
-
-                if (currentReservation != 0) {
-                    return null;
-                } else {
-                    reservations.put(quickPattern, (byte) 1);
-                }
-
-                //LOG.info("Quick 2 canonical map: ");
-                //LOG.info(quick2CanonicalMap);
-
-                //LOG.info("Reservations: ");
-                //LOG.info(reservations);
+            if (currentReservation == null) {
+               synchronized (reservations2) {
+                  currentReservation = reservations2.get(quickPattern);
+                  if (currentReservation == null) {
+                     currentReservation = new AtomicBoolean(false);
+                     reservations2.put(quickPattern, currentReservation);
+                  }
+               }
             }
 
+            if (currentReservation.compareAndSet(false, true)) {
+               canonicalPattern = (K) quickPattern.copy();
+               canonicalPattern.turnCanonical();
+               quick2CanonicalMap.put(quickPattern, canonicalPattern);
+               add_to_canonical2Quick(canonicalPattern, quickPattern);
+            } else {
+               return null;
+            }
+
+            //byte currentReservation;
+
+            //synchronized (reservations) {
+            //    currentReservation = reservations.getByte(quickPattern);
+
+            //    if (currentReservation != 0) {
+            //        return null;
+            //    } else {
+            //        reservations.put(quickPattern, (byte) 1);
+            //    }
+
+            //    //LOG.info("Quick 2 canonical map: ");
+            //    //LOG.info(quick2CanonicalMap);
+
+            //    //LOG.info("Reservations: ");
+            //    //LOG.info(reservations);
+            //}
+
             //LOG.info("Calculate canonical pattern of quick pattern: " + quickPattern);
-            canonicalPattern = (K) quickPattern.copy();
-            canonicalPattern.turnCanonical();
+            //canonicalPattern = (K) quickPattern.copy();
+            //canonicalPattern.turnCanonical();
             //LOG.info("Canonical pattern: " + canonicalPattern);
 
-            quick2CanonicalMap.put(quickPattern, canonicalPattern);
+            //quick2CanonicalMap.put(quickPattern, canonicalPattern);
         }
 
         return canonicalPattern;
     }
+    
+    private void add_to_canonical2Quick(K canonicalPattern, K quickPattern) {
+       // Next, populate the inverse...
+       ConcurrentHashMap<K, Boolean> canonicalHM = canonical2quickMap.get(canonicalPattern);
+       if (canonicalHM==null){
+          canonical2quickMap.putIfAbsent(canonicalPattern, new ConcurrentHashMap<K, Boolean>());
+          canonicalHM = canonical2quickMap.get(canonicalPattern);
+       }
+       canonicalHM.put(quickPattern,Boolean.TRUE);
+    }
+
+    //@Override
+    //public void transferKeyFrom(K key, AggregationStorage<K, V> otherAggregationStorage) {
+    //    if (otherAggregationStorage instanceof PatternAggregationStorage) {
+    //        PatternAggregationStorage<K, V> otherPatternAggStorage = (PatternAggregationStorage<K, V>) otherAggregationStorage;
+
+    //        for (Map.Entry<K, K> quick2CanonicalEntry : otherPatternAggStorage.quick2CanonicalMap.entrySet()) {
+    //            K quickPattern = quick2CanonicalEntry.getKey();
+    //            K canonicalPattern = quick2CanonicalEntry.getValue();
+
+    //            if (canonicalPattern.equals(key)) {
+    //                quick2CanonicalMap.put(quickPattern, canonicalPattern);
+    //            }
+    //        }
+    //    }
+
+    //    super.transferKeyFrom(key, otherAggregationStorage);
+    //}
 
     @Override
     public void transferKeyFrom(K key, AggregationStorage<K, V> otherAggregationStorage) {
         if (otherAggregationStorage instanceof PatternAggregationStorage) {
             PatternAggregationStorage<K, V> otherPatternAggStorage = (PatternAggregationStorage<K, V>) otherAggregationStorage;
+            
+            ConcurrentHashMap<K, Boolean> quickPatterns = otherPatternAggStorage.canonical2quickMap.get(key);
 
-            for (Map.Entry<K, K> quick2CanonicalEntry : otherPatternAggStorage.quick2CanonicalMap.entrySet()) {
-                K quickPattern = quick2CanonicalEntry.getKey();
-                K canonicalPattern = quick2CanonicalEntry.getValue();
-
-                if (canonicalPattern.equals(key)) {
-                    quick2CanonicalMap.put(quickPattern, canonicalPattern);
-                }
+            if (quickPatterns == null) {
+                // throw new RuntimeException("Empty quicks?");
+                return;
             }
+
+            // canonical2quickMap.put(key, new ConcurrentHashMap<K,Boolean>(quickPatterns.size()));
+
+            for (K entry: quickPatterns.keySet()) {
+                quick2CanonicalMap.put(entry, key);
+                // canonical2quickMap.get(key).put(entry,Boolean.TRUE);
+                otherPatternAggStorage.quick2CanonicalMap.remove(entry);
+            }
+
+            otherPatternAggStorage.canonical2quickMap.remove(key);
+
         }
 
         super.transferKeyFrom(key, otherAggregationStorage);
@@ -301,7 +386,8 @@ public class PatternAggregationStorage<K extends Pattern, V extends Writable> ex
     @Override
     public String toString() {
         return "PatternAggregationStorage{" +
-                "quick2CanonicalMap=" + quick2CanonicalMap +
+                "quick2CanonicalMapSize=" + quick2CanonicalMap.size() +
+                // ",quick2CanonicalMap=" + quick2CanonicalMap +
                 "} " + super.toString();
     }
 

@@ -3,7 +3,7 @@ package io.arabesque.gmlib.cliqueperc
 import io.arabesque.aggregation.AggregationStorage
 import io.arabesque.aggregation.reductions.ReductionFunctionContainer
 import io.arabesque.computation.VertexInducedComputation
-import io.arabesque.conf.SparkConfiguration
+import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding.{Embedding, VertexInducedEmbedding}
 import io.arabesque.graph.BasicMainGraph
 import io.arabesque.utils.collection.{IntArrayList, UnionFindOps}
@@ -23,20 +23,18 @@ class CliquePercComputation extends VertexInducedComputation[VertexInducedEmbedd
     (k: IntArrayList, v: IntArrayList) => membershipAggStorage.aggregateWithReusables(k,v)
   private val queryCallback = 
     (v: IntArrayList) => membershipAggStorage.getValue(v)
-
-  override def init(): Unit = {
-    super.init()
-    maxsize = SparkConfiguration.get.getInteger (MAXSIZE, MAXSIZE_DEFAULT)
+  
+  override def init(config: Configuration[VertexInducedEmbedding]): Unit = {
+    super.init(config)
+    maxsize = getConfig().getInteger (MAXSIZE, MAXSIZE_DEFAULT)
   }
 
-  override def initAggregations(): Unit = {
-    super.initAggregations()
-    val conf = SparkConfiguration.get
-
+  override def initAggregations(config: Configuration[VertexInducedEmbedding]): Unit = {
+    super.initAggregations(config)
     // aggregation for clique adjacencies.
     // Key: vertice;
     // Value: parent representing the set the vertice belongs according to an union-find structure
-    conf.registerAggregation(MEMBERSHIP, classOf[CliquePercAggregationStorage], classOf[IntArrayList],
+    getConfig().registerAggregation(MEMBERSHIP, classOf[CliquePercAggregationStorage], classOf[IntArrayList],
       classOf[IntArrayList], false,
       new ReductionFunctionContainer [IntArrayList] ((k1, k2) => {k1.set (k2); k1})
     );
@@ -55,7 +53,7 @@ class CliquePercComputation extends VertexInducedComputation[VertexInducedEmbedd
       }
       e1
     }
-    conf.registerAggregation(CLIQUES, classOf[IntArrayList],
+    getConfig().registerAggregation(CLIQUES, classOf[IntArrayList],
       classOf[VertexInducedEmbedding], false, new ReductionFunctionContainer(embeddingReduce))
   }
   

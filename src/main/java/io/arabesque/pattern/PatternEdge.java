@@ -13,20 +13,23 @@ import java.io.IOException;
 
 public class PatternEdge implements Comparable<PatternEdge>, Writable {
 
+    /// protected MainGraph mainGraph;
     private int srcPos;
     private int srcLabel;
     private int destPos;
     private int destLabel;
 
     public PatternEdge() {
-        this(-1, -1, -1, -1);
+        this(null, -1, -1, -1, -1);
     }
 
     public PatternEdge(PatternEdge edge) {
         setFromOther(edge);
     }
 
-    public PatternEdge(int srcPos, int srcLabel, int destPos, int destLabel) {
+    public PatternEdge(MainGraph mainGraph,
+          int srcPos, int srcLabel, int destPos, int destLabel) {
+        // this.mainGraph = mainGraph;
         this.srcPos = srcPos;
         this.srcLabel = srcLabel;
         this.destPos = destPos;
@@ -34,10 +37,11 @@ public class PatternEdge implements Comparable<PatternEdge>, Writable {
     }
 
     public void reclaim() {
-        PatternEdgePool.instance().reclaimObject(this);
+        PatternEdgePool.instance(false).reclaimObject(this);
     }
 
     public void setFromOther(PatternEdge edge) {
+        // this.mainGraph = edge.mainGraph;
         setSrcPos(edge.getSrcPos());
         setSrcLabel(edge.getSrcLabel());
 
@@ -45,12 +49,12 @@ public class PatternEdge implements Comparable<PatternEdge>, Writable {
         setDestLabel(edge.getDestLabel());
     }
 
-    public void setFromEdge(Edge edge, int srcPos, int dstPos) {
-        setFromEdge(edge, srcPos, dstPos, edge.getSourceId());
+    public void setFromEdge(MainGraph mainGraph, Edge edge, int srcPos, int dstPos) {
+        setFromEdge(mainGraph, edge, srcPos, dstPos, edge.getSourceId());
     }
 
-    public void setFromEdge(Edge edge, int srcPos, int dstPos, int srcId) {
-        MainGraph mainGraph = Configuration.get().getMainGraph();
+    public void setFromEdge(MainGraph mainGraph, Edge edge, int srcPos, int dstPos, int srcId) {
+        // this.mainGraph = mainGraph;
 
         int srcVertexId = edge.getSourceId();
         int dstVertexId = edge.getDestinationId();

@@ -5,41 +5,68 @@ import io.arabesque.conf.Configuration;
 import io.arabesque.embedding.Embedding;
 import io.arabesque.graph.MainGraph;
 import io.arabesque.pattern.Pattern;
+import io.arabesque.utils.collection.IntArrayList;
+
 import com.koloboke.collect.IntCollection;
+import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.set.hash.HashIntSet;
 import com.koloboke.collect.set.hash.HashIntSets;
 import com.koloboke.function.IntConsumer;
+
+import java.lang.Math;
+import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.concurrent.locks.ReentrantLock;
+
+import org.apache.commons.lang.mutable.MutableBoolean;
+import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
 
-public abstract class BasicComputation<E extends Embedding> implements Computation<E>, java.io.Serializable {
+import scala.Tuple2;
+
+public abstract class BasicComputation<E extends Embedding> 
+      implements Computation<E>, java.io.Serializable {
+    
     private static final Logger LOG = Logger.getLogger(BasicComputation.class);
 
-    private boolean outputEnabled;
+    private transient int depth;
+    
+    private transient EmbeddingIterator<E> emptyIter;
+    
+    private transient EmbeddingIterator<E> embeddingIterator;
 
-    private CommonExecutionEngine<E> underlyingExecutionEngine;
-    private MainGraph mainGraph;
-    private Configuration configuration;
-    private IntConsumer expandConsumer;
-    private long numChildrenEvaluated = 0;
-    private E currentEmbedding;
+    private transient CommonExecutionEngine<E> executionEngine;
+    private transient MainGraph mainGraph;
+    private transient Configuration configuration;
+    private transient IntConsumer expandConsumer;
+    private transient E currentEmbedding;
 
     @Override
-    public final void setUnderlyingExecutionEngine(CommonExecutionEngine<E> underlyingExecutionEngine) {
-        this.underlyingExecutionEngine = underlyingExecutionEngine;
+    public final void setExecutionEngine(
+          CommonExecutionEngine<E> executionEngine) {
+        this.executionEngine = executionEngine;
+    }
+
+    @Override
+    public final CommonExecutionEngine<E> getExecutionEngine() {
+       return this.executionEngine;
     }
 
     public MainGraph getMainGraph() {
         return mainGraph;
     }
 
-    //public Configuration getConfiguration() {
-    //    return configuration;
-    //}
+    @Override
+    public Configuration getConfig() {
+        return configuration;
+    }
 
     @Override
-    public void init() {
+    public void init(Configuration<E> config) {
         expandConsumer = new IntConsumer() {
             @Override
             public void accept(int wordId) {
@@ -47,15 +74,103 @@ public abstract class BasicComputation<E extends Embedding> implements Computati
             }
         };
 
-        mainGraph = Configuration.get().getMainGraph();
-        numChildrenEvaluated = 0;
+        configuration = config;
+        mainGraph = configuration.getMainGraph();
 
-        outputEnabled = Configuration.get().isOutputActive();
+        emptyIter = new EmbeddingIterator<E>() {
+           @Override
+           public boolean hasNext() {
+              return false;
+           }
+        };
+
+        embeddingIterator = new EmbeddingIterator<E>();
     }
 
     @Override
-    public void initAggregations() {
-        // Empty by default
+    public void initAggregations(Configuration<E> config) {
+        configuration = config;
+    }
+
+    @Override
+    public final long compute(E embedding) {
+       if (!aggregationCompute(embedding)) {
+          return 0;
+       }
+
+       long ret = processCompute(expandCompute(embedding));
+       // finish();
+       return ret;
+    }
+
+    @Override
+    public Computation<E> nextComputation() {
+       return null;
+    }
+
+    @Override
+    public boolean aggregationCompute(E embedding) {
+        if (getStep() > 0) {
+            if (!aggregationFilter(embedding)) {
+                return false;
+            }
+
+            aggregationProcess(embedding);
+        }
+        return true;
+    }
+
+    @Override
+    public Iterator<E> expandCompute(E embedding) {
+        IntCollection possibleExtensions = getPossibleExtensions(embedding);
+        
+        if (possibleExtensions != null) {
+            filter(embedding, possibleExtensions);
+        }
+
+        if (possibleExtensions == null || possibleExtensions.isEmpty()) {
+            handleNoExpansions(embedding);
+            return emptyIter;
+        }
+       
+        currentEmbedding = embedding;
+        return embeddingIterator.
+           set(this, embedding, possibleExtensions);
+    }
+
+    @Override
+    public long processCompute(Iterator<E> expansionsIter) {
+       Computation<E> nextComp = nextComputation();
+
+       if (nextComp != null) {
+          nextComp.setExecutionEngine (getExecutionEngine());
+          nextComp.init(getConfig());
+          nextComp.initAggregations(getConfig());
+
+          while (expansionsIter.hasNext()) {
+             currentEmbedding = expansionsIter.next();
+             if (filter(currentEmbedding)) {
+                process(currentEmbedding);
+
+                currentEmbedding.nextExtensionLevel();
+                nextComp.compute(currentEmbedding);
+                currentEmbedding.previousExtensionLevel();
+             }
+          }
+
+       } else {
+          while (expansionsIter.hasNext()) {
+             currentEmbedding = expansionsIter.next();
+             if (filter(currentEmbedding)) {
+                if (shouldExpand(currentEmbedding)) {
+                   executionEngine.processExpansion(currentEmbedding);
+                }
+                process(currentEmbedding);
+             }
+          }
+       }
+
+       return 0;
     }
 
     @Override
@@ -89,10 +204,10 @@ public abstract class BasicComputation<E extends Embedding> implements Computati
 
             if (filter(currentEmbedding)) {
                 if (shouldExpand(currentEmbedding)) {
-                    underlyingExecutionEngine.processExpansion(currentEmbedding);
+                    executionEngine.
+                       processExpansion(currentEmbedding);
                 }
 
-                numChildrenEvaluated++;
                 process(currentEmbedding);
             }
 
@@ -107,39 +222,8 @@ public abstract class BasicComputation<E extends Embedding> implements Computati
     }
 
     private IntCollection getPossibleExtensions(E embedding) {
-        if (embedding.getNumWords() > 0) {
-            return embedding.getExtensibleWordIds();
-        } else {
-            // TODO: put getInitialExtensions into embedding class
-            return getInitialExtensions();
-        }
+       return embedding.getExtensibleWordIds(this);
     }
-
-    protected HashIntSet getInitialExtensions() {
-        int totalNumWords = getInitialNumWords();
-        int numPartitions = getNumberPartitions();
-        int myPartitionId = getPartitionId();
-        int numWordsPerPartition = Math.max(totalNumWords / numPartitions, 1);
-        int startMyWordRange = myPartitionId * numWordsPerPartition;
-        int endMyWordRange = startMyWordRange + numWordsPerPartition;
-
-        // If we are the last partition or our range end goes over the total number
-        // of vertices, set the range end to the total number of vertices.
-        if (myPartitionId == numPartitions - 1 || endMyWordRange > totalNumWords) {
-            endMyWordRange = totalNumWords;
-        }
-
-        // TODO: Replace this by a list implementing IntCollection. No need for set.
-        HashIntSet initialExtensions = HashIntSets.newMutableSet(numWordsPerPartition);
-
-        for (int i = startMyWordRange; i < endMyWordRange; ++i) {
-            initialExtensions.add(i);
-        }
-
-        return initialExtensions;
-    }
-
-    protected abstract int getInitialNumWords();
 
     @Override
     public boolean shouldExpand(E embedding) {
@@ -155,38 +239,43 @@ public abstract class BasicComputation<E extends Embedding> implements Computati
     public boolean filter(E existingEmbedding, int newWord) {
         return existingEmbedding.isCanonicalEmbeddingWithWord(newWord);
     }
-
+    
     @Override
-    public <K extends Writable, V extends Writable> AggregationStorage<K, V> readAggregation(String name) {
-        return underlyingExecutionEngine.getAggregatedValue(name);
+    public <K extends Writable, V extends Writable>
+    AggregationStorage<K, V> readAggregation(String name) {
+        return executionEngine.getAggregatedValue(name);
     }
     
     @Override
-    public <K extends Writable, V extends Writable> AggregationStorage<K, V> getAggregationStorage(String name) {
-        return underlyingExecutionEngine.getAggregationStorage(name);
+    public <K extends Writable, V extends Writable>
+    AggregationStorage<K, V> getAggregationStorage(String name) {
+        return executionEngine.getAggregationStorage(name);
     }
 
     @Override
-    public <K extends Writable, V extends Writable> void map(String name, K key, V value) {
-        underlyingExecutionEngine.map(name, key, value);
+    public <K extends Writable, V extends Writable>
+    void map(String name, K key, V value) {
+        executionEngine.map(name, key, value);
     }
 
     @Override
     public int getPartitionId() {
-        return underlyingExecutionEngine.getPartitionId();
+        return executionEngine.getPartitionId();
     }
 
     @Override
     public int getNumberPartitions() {
-        return underlyingExecutionEngine.getNumberPartitions();
+        return executionEngine.getNumberPartitions();
     }
 
     @Override
     public final int getStep() {
-        // When we achieve steps that reach long values, the universe
-        // will probably have ended anyway
-        // ... that's true, doesn't matter
-        return (int) underlyingExecutionEngine.getSuperstep();
+        return (int) executionEngine.getSuperstep();
+    }
+
+    @Override
+    public void process(E embedding) {
+       // Empty by default
     }
 
     @Override
@@ -210,19 +299,67 @@ public abstract class BasicComputation<E extends Embedding> implements Computati
     }
 
     @Override
-    public void finish() {
-        LongWritable longWritable = new LongWritable();
+    public String computationLabel() {
+       return null;
+    }
 
-        LOG.info("Num children evaluated: " + numChildrenEvaluated);
-        //longWritable.set(numChildrenEvaluated);
-        //underlyingExecutionEngine.aggregate(MasterExecutionEngine.AGG_CHILDREN_EVALUATED, longWritable);
+    public EmbeddingIterator<E> getEmbeddingIterator() {
+       return this.embeddingIterator;
     }
 
     @Override
-    public void output(Embedding embedding) {
-        if (outputEnabled) {
-            underlyingExecutionEngine.output(embedding);
-        }
+    public EmbeddingIterator<E> forkConsumer() {
+       BasicComputation<E> curr = this;
+       EmbeddingIterator<E> consumer = null;
+
+       while (curr != null) {
+          if (curr.embeddingIterator != null &&
+                curr.embeddingIterator.isActive()) {
+             consumer = curr.embeddingIterator.forkConsumer();
+             if (consumer.hasNext()) {
+                return consumer;
+             } else {
+                consumer.joinConsumer();
+             }
+          }
+          curr = (BasicComputation<E>) curr.nextComputation();
+       }
+
+       return null;
     }
 
+    @Override
+    public void joinConsumer(EmbeddingIterator<E> consumer) {
+       consumer.joinConsumer();
+    }
+
+    @Override
+    public void finish() {
+    }
+
+    @Override
+    public final void output(E embedding) {
+       executionEngine.output(embedding);
+    }
+
+    @Override
+    public final int setDepth(int depth) {
+       this.depth = depth;
+       Computation<E> nextComp = nextComputation();
+       if (nextComp != null) {
+          return 1 + nextComp.setDepth(this.depth + 1);
+       } else {
+          return 1;
+       }
+    }
+
+    @Override
+    public final int getDepth() {
+       return this.depth;
+    }
+
+    @Override
+    public E getCurrentEmbedding() {
+       return currentEmbedding;
+    }
 }

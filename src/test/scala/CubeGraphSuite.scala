@@ -2,7 +2,7 @@ package io.arabesque
 
 import io.arabesque.conf.{Configuration, SparkConfiguration}
 import org.apache.spark.{SparkConf, SparkContext}
-import org.scalatest.{BeforeAndAfterAll, FunSuite}
+import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 
 class CubeGraphSuite extends FunSuite with BeforeAndAfterAll {
 
@@ -39,16 +39,15 @@ class CubeGraphSuite extends FunSuite with BeforeAndAfterAll {
     }
   }
 
-  test ("[motifs] arabesque API") {
+  test ("[cube,motifs]", Tag("cube.motifs")) {
     // Test output for motifs for embedding with size 0 to 3
 
     // Expected output
     val numEmbedding = List(0, 8, 12, 24)
 
-    for(k <- 0 to (numEmbedding.size - 1)) {
+    for (k <- 0 to (numEmbedding.size - 1)) {
       val motifsRes = arabGraph.motifs(k).
         set ("num_partitions", 10)
-      val odags = motifsRes.odags
       val embeddings = motifsRes.embeddings
 
       assert(embeddings.count() == numEmbedding(k))
@@ -56,12 +55,12 @@ class CubeGraphSuite extends FunSuite with BeforeAndAfterAll {
 
   }
 
-  test ("[clique] arabesque API") {
+  test ("[cube,cliques]", Tag("cube.cliques")) {
     // Test output for clique for embeddings with size 1 to 3
     // Expected output
     val numEmbedding = List(0, 8, 12, 0)
 
-    for(k <- 0 to (numEmbedding.size - 1)) {
+    for (k <- 0 to (numEmbedding.size - 1)) {
       val cliqueRes = arabGraph.cliques(k)
 
       val embeddings = cliqueRes.embeddings
@@ -72,7 +71,7 @@ class CubeGraphSuite extends FunSuite with BeforeAndAfterAll {
   }
 
 
-  test ("[fsm] arabesque API") {
+  test ("[cube,fsm]", Tag("cube.fsm")) {
     // Critical test
     // Test output for fsm with support 2 for embeddings with size 2 to 3
     val support = 2
@@ -80,7 +79,7 @@ class CubeGraphSuite extends FunSuite with BeforeAndAfterAll {
     // Expected output
     val numEmbedding = List(0, 0, 9, 24)
 
-    for(k <- 0 to (numEmbedding.size -1)) {
+    for (k <- 0 to (numEmbedding.size -1)) {
       val motifsRes = arabGraph.fsm(support, k)
 
       val embeddings = motifsRes.embeddings
@@ -91,13 +90,13 @@ class CubeGraphSuite extends FunSuite with BeforeAndAfterAll {
   }
 
 
-  test ("[triangles] arabesque API") {
+  test ("[cube,triangles]", Tag("cube.triangles")) {
     // Test output for triangles
 
     // Expected output
     val numTriangles = 0
 
-    val trianglesRes = arabGraph.triangles()
+    val trianglesRes = arabGraph.allStepsTriangles
 
     val embeddings = trianglesRes.embeddings
 

@@ -52,6 +52,10 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
        set(intArray, numElements);
     }
     
+    public IntArrayList(int[] intArray) {
+       set(intArray);
+    }
+    
     public void set(IntArrayList intArrayList) {
         set(intArrayList.backingArray, intArrayList.numElements);
     }
@@ -59,6 +63,11 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
     public void set(int[] intArray, int numElements) {
         this.numElements = numElements;
         backingArray = Arrays.copyOf(intArray, numElements);
+    }
+    
+    public void set(int[] intArray) {
+        this.numElements = intArray.length;
+        backingArray = intArray;
     }
 
     public int getSize() {
@@ -309,6 +318,34 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
         }
     }
 
+    private class IntArrayListReverseCursor implements IntCursor {
+        private int index;
+
+        public IntArrayListReverseCursor() {
+            this.index = numElements;
+        }
+
+        @Override
+        public void forEachForward(@Nonnull IntConsumer intConsumer) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public int elem() {
+            return backingArray[index];
+        }
+
+        @Override
+        public boolean moveNext() {
+            --index;
+            return index >= 0;
+        }
+
+        @Override
+        public void remove() {
+        }
+    }
+
     private class IntArrayListIterator implements IntIterator {
         private int index;
 
@@ -359,7 +396,8 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
     @Nonnull
     @Override
     public IntCursor cursor() {
-        return new IntArrayListCursor();
+        //return new IntArrayListCursor();
+        return new IntArrayListReverseCursor();
     }
 
     @Nonnull
@@ -507,7 +545,7 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
 
     public int remove(int index) {
         if (index < 0 || index >= numElements) {
-            throw new IllegalArgumentException();
+            throw new IllegalArgumentException("Argument: " + this);
         }
 
         int removedElement = backingArray[index];

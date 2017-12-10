@@ -14,10 +14,13 @@ import java.io.*;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 
-public class SinglePatternODAGStash extends BasicODAGStash<SinglePatternODAG,SinglePatternODAGStash> implements Externalizable {
+public class SinglePatternODAGStash
+      extends BasicODAGStash<SinglePatternODAG,SinglePatternODAGStash>
+      implements Externalizable {
     private static final Logger LOG =
             Logger.getLogger(SinglePatternODAGStash.class);
 
+    protected Configuration configuration;
     private Map<Pattern, SinglePatternODAG> compressedEmbeddingsByPattern;
     private Pattern reusablePattern;
 
@@ -25,20 +28,29 @@ public class SinglePatternODAGStash extends BasicODAGStash<SinglePatternODAG,Sin
         this (new HashMap<Pattern,SinglePatternODAG>());
     }
 
-    public SinglePatternODAGStash (Map<Pattern,SinglePatternODAG> odagsByPattern) {
+    public SinglePatternODAGStash(
+          Map<Pattern,SinglePatternODAG> odagsByPattern) {
         this.compressedEmbeddingsByPattern = odagsByPattern;
-        this.reusablePattern = Configuration.get().createPattern();
+    }
+
+    @Override
+    public SinglePatternODAGStash init(Configuration config) {
+       this.configuration = config;
+       this.reusablePattern = configuration.createPattern();
+       return this;
     }
 
     @Override
     public void addEmbedding(Embedding embedding) {
         try {
             reusablePattern.setEmbedding(embedding);
-            SinglePatternODAG embeddingsZip = compressedEmbeddingsByPattern.get(reusablePattern);
+            SinglePatternODAG embeddingsZip =
+               compressedEmbeddingsByPattern.get(reusablePattern);
 
             if (embeddingsZip == null) {
                 Pattern patternCopy = reusablePattern.copy();
-                embeddingsZip = new SinglePatternODAG(patternCopy, embedding.getNumWords());
+                embeddingsZip = new SinglePatternODAG(patternCopy,
+                      embedding.getNumWords());
                 compressedEmbeddingsByPattern.put(patternCopy, embeddingsZip);
             }
 
@@ -55,7 +67,8 @@ public class SinglePatternODAGStash extends BasicODAGStash<SinglePatternODAG,Sin
     public void aggregate(SinglePatternODAG ezip) {
         Pattern pattern = ezip.getPattern();
 
-        SinglePatternODAG existingEzip = compressedEmbeddingsByPattern.get(pattern);
+        SinglePatternODAG existingEzip =
+           compressedEmbeddingsByPattern.get(pattern);
 
         if (existingEzip == null) {
             compressedEmbeddingsByPattern.put(pattern, ezip);
@@ -68,12 +81,14 @@ public class SinglePatternODAGStash extends BasicODAGStash<SinglePatternODAG,Sin
     public void aggregateUsingReusable(SinglePatternODAG ezip) {
         Pattern pattern = ezip.getPattern();
 
-        SinglePatternODAG existingEzip = compressedEmbeddingsByPattern.get(pattern);
+        SinglePatternODAG existingEzip =
+           compressedEmbeddingsByPattern.get(pattern);
 
         if (existingEzip == null) {
             Pattern patternCopy = pattern.copy();
             ezip.setPattern(patternCopy);
-            existingEzip = new SinglePatternODAG(patternCopy, ezip.getNumberOfDomains());
+            existingEzip = new SinglePatternODAG(patternCopy,
+                  ezip.getNumberOfDomains());
             compressedEmbeddingsByPattern.put(patternCopy, existingEzip);
         }
 
@@ -110,6 +125,7 @@ public class SinglePatternODAGStash extends BasicODAGStash<SinglePatternODAG,Sin
 
     @Override
     public void write(DataOutput dataOutput) throws IOException {
+        dataOutput.writeInt(configuration.getId());
         dataOutput.writeInt(compressedEmbeddingsByPattern.size());
         for (Map.Entry<Pattern, SinglePatternODAG> shrunkEmbeddingsByPatternEntry :
                 compressedEmbeddingsByPattern.entrySet()) {
@@ -128,13 +144,11 @@ public class SinglePatternODAGStash extends BasicODAGStash<SinglePatternODAG,Sin
 
     @Override
     public void readFields(DataInput dataInput) throws IOException {
-        //if (true) {
-        //    throw new RuntimeException("Shouldn't be used any more");
-        //}
+        init(Configuration.get(dataInput.readInt()));
         compressedEmbeddingsByPattern.clear();
         int numEntries = dataInput.readInt();
         for (int i = 0; i < numEntries; ++i) {
-            Pattern pattern = Configuration.get().createPattern();
+            Pattern pattern = configuration.createPattern();
             pattern.readFields(dataInput);
             SinglePatternODAG shrunkEmbeddings = new SinglePatternODAG(false);
             shrunkEmbeddings.setPattern(pattern);

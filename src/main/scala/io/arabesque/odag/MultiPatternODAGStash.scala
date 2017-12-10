@@ -4,21 +4,32 @@ import java.util.concurrent.ExecutorService
 import java.io._
 
 import io.arabesque.computation.Computation
+import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding.Embedding
 import io.arabesque.pattern.Pattern
-import io.arabesque.conf.{Configuration, SparkConfiguration}
 
 import scala.collection.JavaConverters._
 
 class MultiPatternODAGStash
-    extends BasicODAGStash[MultiPatternODAG,MultiPatternODAGStash] with Serializable {
+    extends BasicODAGStash[MultiPatternODAG,MultiPatternODAGStash]
+    with Serializable {
 
-  def config: SparkConfiguration[_ <: Embedding] =
-    Configuration.get[SparkConfiguration[_ <: Embedding]]
+  @transient var _configuration: Configuration[_ <: Embedding] = _
+
+  var configId: Int = -1
+
+  def configuration: Configuration[_ <: Embedding] = {
+    if (_configuration == null) {
+      _configuration = Configuration.get(configId)
+    }
+    _configuration
+  }
 
   var odags: Array[MultiPatternODAG] = _
+
   var numOdags: Int = _
-  @transient val reusablePattern: Pattern = config.createPattern
+
+  @transient lazy val reusablePattern: Pattern = configuration.createPattern
 
   def this(maxOdags: Int) = {
     this()
@@ -30,6 +41,12 @@ class MultiPatternODAGStash
     this()
     odags = odagMap.values.toArray
     numOdags = odags.size
+  }
+
+  override def init(config: Configuration[_ <: Embedding])
+    : MultiPatternODAGStash = {
+    _configuration = config
+    this
   }
 
   def aggregationFilter(computation: Computation[_]): Unit = {
@@ -49,7 +66,8 @@ class MultiPatternODAGStash
 
     if (odags(idx) == null) {
       // initialize multi-pattern odag
-      odags(idx) = new MultiPatternODAG (embedding.getNumWords)
+      odags(idx) = new MultiPatternODAG (embedding.getNumWords).
+        init(configuration)
       numOdags += 1
     }
 
@@ -66,7 +84,7 @@ class MultiPatternODAGStash
    
   override def finalizeConstruction(
       pool: ExecutorService, parts: Int): Unit = {
-    assert (odags.size <= config.getMaxOdags)
+    assert (odags.size <= configuration.getMaxOdags)
     for (odag <- odags.iterator if odag != null)
       odag.finalizeConstruction (pool, parts)
   }
@@ -83,46 +101,10 @@ class MultiPatternODAGStash
     for (i <- 0 until odags.size) odags(i) = null
   }
 
-  //override def readExternal(objInput: ObjectInput): Unit = {
-  //  readFields (objInput)
-  //}
-
-  //override def writeExternal(objOutput: ObjectOutput): Unit = {
-  //  write (objOutput)
-  //}
-  
+  /**
+   * TODO: not supporting hadoop writables for now
+   */
   override def readFields(dataInput: DataInput): Unit = ???
   override def write(dataOutput: DataOutput): Unit = ???
   
-  //override def readExternal(objInput: ObjectInput): Unit = {
-  //  odags = new Array(objInput.readInt)
-  //  numOdags = objInput.readInt
-  //  var readOdags = 0
-  //  for (i <- 0 until numOdags) {
-  //    val odag = new MultiPatternODAG
-  //    odag.readExternal (objInput)
-  //    odags(odag.patterns.head.hashCode % odags.size) = odag
-  //    readOdags += 1
-  //  }
-  //  assert (odags.filter(_ != null).size == readOdags)
-  //  assert (numOdags == readOdags)
-  //}
-
-  //override def writeExternal(objOutput: ObjectOutput): Unit = {
-  //  objOutput.writeInt (odags.size)
-  //  objOutput.writeInt (numOdags)
-  //  var writtenOdags = 0
-  //  odags.foreach {
-  //    case odag if odag != null =>
-  //      odag.writeExternal (objOutput)
-  //      writtenOdags += 1
-  //    case _ =>
-  //  }
-  //  assert (odags.filter(_ != null).size == writtenOdags)
-  //  assert (writtenOdags == numOdags)
-  //}
-}
-
-object MultiPatternODAGStash {
-  def apply() = new MultiPatternODAGStash
 }

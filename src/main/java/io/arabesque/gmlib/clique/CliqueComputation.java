@@ -9,11 +9,11 @@ public class CliqueComputation extends VertexInducedComputation<VertexInducedEmb
     private static final int MAXSIZE_DEFAULT = 4;
 
     int maxsize;
-
+    
     @Override
-    public void init() {
-        super.init();
-        maxsize = Configuration.get().getInteger(MAXSIZE, MAXSIZE_DEFAULT);
+    public void init(Configuration config) {
+       super.init(config);
+       maxsize = getConfig().getInteger(MAXSIZE, MAXSIZE_DEFAULT);
     }
 
     @Override
@@ -33,7 +33,7 @@ public class CliqueComputation extends VertexInducedComputation<VertexInducedEmb
     @Override
     public void process(VertexInducedEmbedding embedding) {
         if (embedding.getNumVertices() == maxsize) {
-            output(embedding);
+           output(embedding);
         }
     }
 }

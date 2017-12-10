@@ -1,6 +1,7 @@
 package io.arabesque.odag;
 
 import io.arabesque.computation.Computation;
+import io.arabesque.conf.Configuration;
 import io.arabesque.embedding.Embedding;
 import io.arabesque.odag.domain.DomainStorage;
 import io.arabesque.odag.domain.DomainStorageReadOnly;
@@ -21,9 +22,11 @@ public abstract class BasicODAG implements Writable, Externalizable {
         else return new DomainStorage();
     }
 
+    public abstract BasicODAG init(Configuration config);
     public abstract void addEmbedding(Embedding embedding);
     public abstract Pattern getPattern();
     public abstract StorageReader getReader(
+          Configuration<Embedding> configuration,
           Computation<Embedding> computation,
           int numPartitions,
           int numBlocks,

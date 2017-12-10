@@ -13,13 +13,15 @@ public class AggregationStorageMetadata<K extends Writable, V extends Writable> 
     private ReductionFunction<V> reductionFunction;
     private EndAggregationFunction<K, V> endAggregationFunction;
     private int numSplits;
+    private boolean isIncremental;
 
     public AggregationStorageMetadata(Class<? extends AggregationStorage> aggStorageClass,
             Class<K> keyClass, Class<V> valueClass,
             boolean persistent,
             ReductionFunction<V> reductionFunction,
             EndAggregationFunction<K, V> endAggregationFunction,
-            int numSplits) {
+            int numSplits,
+            boolean isIncremental) {
         this.aggStorageClass = aggStorageClass; 
         this.keyClass = keyClass;
         this.valueClass = valueClass;
@@ -27,6 +29,7 @@ public class AggregationStorageMetadata<K extends Writable, V extends Writable> 
         this.reductionFunction = reductionFunction;
         this.endAggregationFunction = endAggregationFunction;
         this.numSplits = numSplits;
+        this.isIncremental = isIncremental;
     }
 
     public Class<? extends AggregationStorage> getAggregationStorageClass() {
@@ -43,6 +46,10 @@ public class AggregationStorageMetadata<K extends Writable, V extends Writable> 
 
     public boolean isPersistent() {
         return persistent;
+    }
+
+    public boolean isIncremental() {
+        return isIncremental;
     }
 
     public ReductionFunction<V> getReductionFunction() {

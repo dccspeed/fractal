@@ -8,10 +8,9 @@ public class ConfigBasedOptimizationSetDescriptor implements OptimizationSetDesc
     public static final Class[] CONF_OPTMIZATION_CLASSES_DEFAULT = {};
 
     @Override
-    public OptimizationSet describe() {
+    public OptimizationSet describe(Configuration configuration) {
         OptimizationSet optimizationSet = new OptimizationSet();
 
-        Configuration configuration = Configuration.get();
         Class[] optimizationClasses = configuration.getClasses(CONF_OPTIMIZATION_CLASSES);
 
         for (Class optimizationClass : optimizationClasses) {
@@ -20,6 +19,7 @@ public class ConfigBasedOptimizationSetDescriptor implements OptimizationSetDesc
             }
 
             Optimization optimization = (Optimization) ReflectionUtils.newInstance(optimizationClass);
+            optimization.init(configuration);
             optimizationSet.add(optimization);
         }
 

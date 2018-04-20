@@ -104,8 +104,9 @@ public class AtomicBitSetArray implements Externalizable, Writable {
     
    @Override
    public void write(DataOutput dataOutput) throws IOException {
-      dataOutput.writeInt(internalArray.length());
-      for (int i = 0; i < internalArray.length(); ++i) {
+      int length = internalArray != null ? internalArray.length() : 0;
+      dataOutput.writeInt(length);
+      for (int i = 0; i < length; ++i) {
          dataOutput.writeInt(internalArray.get(i));
       }
    }
@@ -113,9 +114,11 @@ public class AtomicBitSetArray implements Externalizable, Writable {
    @Override
    public void readFields(DataInput dataInput) throws IOException {
       int length = dataInput.readInt();
-      internalArray = new AtomicIntegerArray(length); 
-      for (int i = 0; i < length; ++i) {
-         internalArray.set(i, dataInput.readInt());
+      if (length > 0) {
+         internalArray = new AtomicIntegerArray(length); 
+         for (int i = 0; i < length; ++i) {
+            internalArray.set(i, dataInput.readInt());
+         }
       }
    }
    
@@ -139,7 +142,8 @@ public class AtomicBitSetArray implements Externalizable, Writable {
       StringBuilder builder = new StringBuilder();
       builder.append(toString());
       builder.append("[");
-      for (int i = 0; i < internalArray.length() * 32; ++i) {
+      int length = internalArray != null ? internalArray.length() : 0;
+      for (int i = 0; i < length * 32; ++i) {
          if (contains(i)) {
             builder.append("1");
          } else {

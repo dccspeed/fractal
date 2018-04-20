@@ -2,12 +2,17 @@ package io.arabesque.embedding;
 
 import io.arabesque.conf.Configuration;
 import io.arabesque.computation.Computation;
+import io.arabesque.graph.Vertex;
+import io.arabesque.graph.Edge;
+import io.arabesque.graph.LabelledEdge;
 import io.arabesque.misc.WritableObject;
 import io.arabesque.pattern.Pattern;
 import io.arabesque.utils.collection.IntArrayList;
+import io.arabesque.utils.collection.ObjArrayList;
 import io.arabesque.utils.collection.AtomicBitSetArray;
 import io.arabesque.utils.collection.RoaringBitSet;
 import com.koloboke.collect.IntCollection;
+import com.koloboke.collect.set.hash.HashIntSet;
 
 import java.io.Externalizable;
 
@@ -17,11 +22,17 @@ public interface Embedding extends WritableObject, Externalizable {
     IntArrayList getWords();
 
     IntArrayList getVertices();
+    
+    <V> Vertex<V> vertex(int vertexId);
 
     int getNumVertices();
 
     IntArrayList getEdges();
-
+    
+    <E> Edge<E> edge(int edgeId);
+    
+    <E> LabelledEdge<E> labelledEdge(int edgeId);
+    
     int getNumEdges();
 
     int getNumWords();

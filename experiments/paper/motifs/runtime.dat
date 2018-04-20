@@ -1,0 +1,77 @@
+sys graph depth runtime
+
+#arabesque mico-single-label 2 2570
+#arabesque mico-single-label 3 34994
+#arabesque mico-single-label 4 8657548
+#fractal mico-single-label 2 20062
+#fractal mico-single-label 3 35632
+#fractal mico-single-label 4 5021396
+#
+#arabesque mico-multi-label 2 12870
+#arabesque mico-multi-label 3 0 # failure
+#fractal mico-multi-label 2 22636
+#fractal mico-multi-label 3 90409
+#
+#arabesque youtube-single-label 2 21041
+#arabesque youtube-single-label 3 842847
+#fractal youtube-single-label 2 63156
+#fractal youtube-single-label 3 416154
+#
+#arabesque youtube-multi-label 2 17031851
+#fractal youtube-multi-label 2 86319
+
+
+####
+
+arabesque mico-single-label 2 2558
+arabesque mico-single-label 2 2728
+arabesque mico-single-label 2 2394
+arabesque mico-single-label 3 36057
+arabesque mico-single-label 3 35864
+arabesque mico-single-label 3 35767
+arabesque mico-single-label 4 8657534
+arabesque mico-single-label 4 8844978
+arabesque mico-single-label 4 8901801
+
+fractal mico-single-label 2 3991
+fractal mico-single-label 2 3974
+fractal mico-single-label 2 3825
+fractal mico-single-label 3 23611
+fractal mico-single-label 3 26078
+fractal mico-single-label 3 23951
+fractal mico-single-label 4 5216168
+fractal mico-single-label 4 5893375
+fractal mico-single-label 4 5384734
+
+arabesque mico-multi-label 2 13586
+arabesque mico-multi-label 2 13326
+arabesque mico-multi-label 2 13492
+
+fractal mico-multi-label 2 6130
+fractal mico-multi-label 2 6739
+fractal mico-multi-label 2 7106
+fractal mico-multi-label 3 78959
+fractal mico-multi-label 3 78169
+fractal mico-multi-label 3 77253
+
+arabesque youtube-single-label 2 20500
+arabesque youtube-single-label 2 24786
+arabesque youtube-single-label 2 23754
+arabesque youtube-single-label 3 872455
+arabesque youtube-single-label 3 865274
+arabesque youtube-single-label 3 897708
+
+fractal youtube-single-label 2 7790
+fractal youtube-single-label 2 7143
+fractal youtube-single-label 2 7330
+fractal youtube-single-label 3 434141
+fractal youtube-single-label 3 418022
+fractal youtube-single-label 3 422774
+
+arabesque youtube-multi-label 2 16921863
+arabesque youtube-multi-label 2 18274642
+arabesque youtube-multi-label 2 17644229
+
+fractal youtube-multi-label 2 30487
+fractal youtube-multi-label 2 31815
+fractal youtube-multi-label 2 30321

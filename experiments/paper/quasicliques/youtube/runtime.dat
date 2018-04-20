@@ -1,0 +1,62 @@
+# valid embeddings mico,4,0.8     62517064512
+# valid embeddings youtube,3,0.5 218909854429
+# valid embeddings youtube,4,0.8    975926042
+
+db mindensity nworkers runtime
+youtube 0.3 1 1548584
+youtube 0.3 1 1583377
+youtube 0.3 2 807469
+youtube 0.3 2 784017
+youtube 0.3 3 532653
+youtube 0.3 3 532173
+youtube 0.3 4 414111
+youtube 0.3 4 413673
+youtube 0.3 5 350312
+youtube 0.3 5 348441
+youtube 0.3 6 285458
+youtube 0.3 6 298898
+youtube 0.3 7 252796
+youtube 0.3 7 259170
+youtube 0.3 8 233805
+youtube 0.3 8 233226
+youtube 0.3 9 209144
+youtube 0.3 9 214355
+
+youtube 0.6 1 1481120
+youtube 0.6 1 1578586
+youtube 0.6 2 742447
+youtube 0.6 2 800881
+youtube 0.6 3 509367
+youtube 0.6 3 549580
+youtube 0.6 4 394232
+youtube 0.6 4 410710
+youtube 0.6 5 328367
+youtube 0.6 5 341267
+youtube 0.6 6 282276
+youtube 0.6 6 287844
+youtube 0.6 7 247534
+youtube 0.6 7 250901
+youtube 0.6 8 227244
+youtube 0.6 8 226636
+youtube 0.6 9 208716
+youtube 0.6 9 210861
+
+youtube 0.9 1 87780
+youtube 0.9 1 89311
+youtube 0.9 2 65686
+youtube 0.9 2 64849
+youtube 0.9 3 57684
+youtube 0.9 3 57181
+youtube 0.9 4 54941
+youtube 0.9 4 55840
+youtube 0.9 5 53315
+youtube 0.9 5 51441
+youtube 0.9 6 53110
+youtube 0.9 6 52436
+youtube 0.9 7 50655
+youtube 0.9 7 51637
+youtube 0.9 8 51523
+youtube 0.9 8 50657
+youtube 0.9 9 49978
+youtube 0.9 9 49918
+

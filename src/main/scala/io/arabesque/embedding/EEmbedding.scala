@@ -18,7 +18,7 @@ case class EEmbedding(var words: Array[(Int,Int)])
   }
 
   def toInternalEmbedding[E <: Embedding](config: SparkConfiguration[E]): E = {
-    val mainGraph = config.getMainGraph[BasicMainGraph]
+    val mainGraph = config.getMainGraph[BasicMainGraph[_,_]]
     val embedding = config.createEmbedding[E]
     var i = 0
     while (i < words.length) {
@@ -28,6 +28,7 @@ case class EEmbedding(var words: Array[(Int,Int)])
       while (edgeIdsCur.moveNext()) {
         embedding.addWord(edgeIdsCur.elem())
       }
+      i += 1
     }
     embedding
   }

@@ -19,21 +19,27 @@ import java.util.Arrays;
 import java.util.StringTokenizer;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class BasicMainGraph implements MainGraph {
+public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    private static final Logger LOG = Logger.getLogger(BasicMainGraph.class);
 
    // we keep a local (per JVM) pool of configurations potentially
    // representing several active arabesque applications
    private static AtomicInteger nextGraphId = new AtomicInteger(0);
-   protected final int id = newGraphId();
+   protected int id = newGraphId();
 
    private static final int INITIAL_ARRAY_SIZE = 4096;
 
-   private Vertex[] vertexIndexF;
-   private Edge[] edgeIndexF;
+   private Vertex<V>[] vertexIndexF;
+   private Edge<E>[] edgeIndexF;
+   
+   private V[] vertexProperties;
+   private E[] edgeProperties;
 
    private int numVertices;
    private int numEdges;
+   
+   private int numVertexLabels;
+   private int numEdgeLabels;
 
    private VertexNeighbourhood[] vertexNeighbourhoods;
 
@@ -48,6 +54,11 @@ public class BasicMainGraph implements MainGraph {
    @Override
    public int getId() {
       return id;
+   }
+
+   @Override
+   public void setId(int id) {
+      this.id = id;
    }
 
    @Override
@@ -135,7 +146,7 @@ public class BasicMainGraph implements MainGraph {
 
       if (LOG.isInfoEnabled()) {
          start = System.currentTimeMillis();
-         LOG.info("Initializing");
+         LOG.info("Initializing, class: " + getClass());
       }
 
       vertexIndexF = null;
@@ -157,7 +168,7 @@ public class BasicMainGraph implements MainGraph {
       long start = 0;
 
       if (LOG.isInfoEnabled()) {
-         LOG.info("Reading graph");
+         LOG.info("Reading graph, class: " + getClass());
          start = System.currentTimeMillis();
       }
 
@@ -175,10 +186,10 @@ public class BasicMainGraph implements MainGraph {
       for (int i = 0; i < vertexNeighbourhoods.length; ++i) {
          if (vertexNeighbourhoods[i] != null) {
             vertexNeighbourhoods[i].buildSortedNeighborhood();
-            LOG.info("NeighborhoodBitmapSizeInBytesVertices " +
-                  vertexNeighbourhoods[i].getVerticesBitmap().sizeInBytes());
-            LOG.info("NeighborhoodBitmapSizeInBytesEdges " +
-                  vertexNeighbourhoods[i].getEdgesBitmap().sizeInBytes());
+            //LOG.info("NeighborhoodBitmapSizeInBytesVertices " +
+            //      vertexNeighbourhoods[i].getVerticesBitmap().sizeInBytes());
+            //LOG.info("NeighborhoodBitmapSizeInBytesEdges " +
+            //      vertexNeighbourhoods[i].getEdgesBitmap().sizeInBytes());
          }
       }
 
@@ -186,6 +197,32 @@ public class BasicMainGraph implements MainGraph {
          LOG.info("Done in " + (System.currentTimeMillis() - start));
          LOG.info("Number vertices: " + numVertices);
          LOG.info("Number edges: " + numEdges);
+      }
+   }
+
+   public void initProperties(Object path) throws IOException {
+      long start = 0;
+
+      if (LOG.isInfoEnabled()) {
+         LOG.info("Reading graph properties");
+         start = System.currentTimeMillis();
+      }
+
+      if (path instanceof Path) {
+         Path filePath = (Path) path;
+         readPropertiesFromFile(filePath);
+      } else if (path instanceof org.apache.hadoop.fs.Path) {
+         org.apache.hadoop.fs.Path hadoopPath = (org.apache.hadoop.fs.Path) path;
+         readPropertiesFromHdfs(hadoopPath);
+      } else {
+         throw new RuntimeException("Invalid path: " + path);
+      }
+
+      if (LOG.isInfoEnabled()) {
+         LOG.info("Properties read done in " +
+               (System.currentTimeMillis() - start) +
+               " numVertexProperties=" + numVertexLabels +
+               " numEdgeProperties=" + numEdgeLabels);
       }
    }
 
@@ -198,11 +235,35 @@ public class BasicMainGraph implements MainGraph {
    public void reset() {
       numVertices = 0;
       numEdges = 0;
+      numVertexLabels = 0;
+      numEdgeLabels = 0;
+   }
+
+   private <T> T[] maybeExpandArray(T[] currArray, int maxId) {
+      int targetSize = maxId + 1;
+      T[] returnArray;
+
+      if (currArray == null) {
+         returnArray = (T[]) new Object[Math.max(targetSize, INITIAL_ARRAY_SIZE)];
+      } else if (currArray.length < targetSize) {
+         returnArray = Arrays.copyOf(currArray, getSizeWithPaddingWithoutOverflow(targetSize, currArray.length));
+      } else {
+         returnArray = currArray;
+      }
+
+      return returnArray;
+   }
+
+   private void ensureCanStoreNewVertexLabel(int newMaxVertexLabelId) {
+      vertexProperties = maybeExpandArray(vertexProperties, newMaxVertexLabelId);
+   }
+   
+   private void ensureCanStoreNewEdgeLabel(int newMaxEdgeLabelId) {
+      edgeProperties = maybeExpandArray(edgeProperties, newMaxEdgeLabelId);
    }
 
    private void ensureCanStoreNewVertices(int numVerticesToAdd) {
       int newMaxVertexId = numVertices + numVerticesToAdd;
-
       ensureCanStoreUpToVertex(newMaxVertexId);
    }
 
@@ -301,12 +362,12 @@ public class BasicMainGraph implements MainGraph {
    }
 
    @Override
-   public Vertex[] getVertices() {
+   public Vertex<V>[] getVertices() {
       return vertexIndexF;
    }
 
    @Override
-   public Vertex getVertex(int vertexId) {
+   public Vertex<V> getVertex(int vertexId) {
       return vertexIndexF[vertexId];
    }
 
@@ -316,12 +377,12 @@ public class BasicMainGraph implements MainGraph {
    }
 
    @Override
-   public Edge[] getEdges() {
+   public Edge<E>[] getEdges() {
       return edgeIndexF;
    }
 
    @Override
-   public Edge getEdge(int edgeId) {
+   public Edge<E> getEdge(int edgeId) {
       return edgeIndexF[edgeId];
    }
 
@@ -436,9 +497,61 @@ public class BasicMainGraph implements MainGraph {
       is.close();
    }
 
+   protected void readPropertiesFromHdfs(org.apache.hadoop.fs.Path hdfsPath) throws IOException {
+      FileSystem fs = FileSystem.get(new org.apache.hadoop.conf.Configuration());
+      InputStream is = fs.open(hdfsPath);
+      readPropertiesFromInputStream(is);
+      is.close();
+   }
+
+   protected void readPropertiesFromFile(Path filePath) throws IOException {
+      InputStream is = Files.newInputStream(filePath);
+      readPropertiesFromInputStream(is);
+      is.close();
+   }
+
+   protected void readPropertiesFromInputStream(InputStream is) {
+      try {
+         BufferedReader reader = new BufferedReader(
+               new InputStreamReader(new BOMInputStream(is)));
+
+         String line = reader.readLine();
+
+         while (line != null) {
+            StringTokenizer tokenizer = new StringTokenizer(line);
+
+            String type = tokenizer.nextToken();
+            int wordId = Integer.parseInt(tokenizer.nextToken());
+
+            if (type.equals("v")) {
+               V vproperty = parseVertexProperty(tokenizer);
+               ensureCanStoreNewVertexLabel(wordId);
+               vertexProperties[wordId] = vproperty;
+               numVertexLabels = Math.max(numVertexLabels, wordId + 1);
+               // vertexIndexF[wordId].setProperty(vproperty);
+            } else if (type.equals("e")) {
+               E eproperty = parseEdgeProperty(tokenizer);
+               ensureCanStoreNewEdgeLabel(wordId);
+               edgeProperties[wordId] = eproperty;
+               numEdgeLabels = Math.max(numEdgeLabels, wordId + 1);
+               // edgeIndexF[wordId].setProperty(eproperty);
+            } else {
+               throw new RuntimeException("Unknown property type: " + type);
+            }
+
+            line = reader.readLine();
+         }
+
+         reader.close();
+      } catch (IOException e) {
+         throw new RuntimeException(e);
+      }
+   }
+
    protected void readFromInputStream(InputStream is) {
       try {
-         BufferedReader reader = new BufferedReader(new InputStreamReader(new BOMInputStream(is)));
+         BufferedReader reader = new BufferedReader(
+               new InputStreamReader(new BOMInputStream(is)));
 
          String line = reader.readLine();
          boolean firstLine = true;
@@ -504,6 +617,14 @@ public class BasicMainGraph implements MainGraph {
       return createVertex(vertexId, vertexLabel);
    }
 
+   protected V parseVertexProperty(StringTokenizer tokenizer) {
+      return null;
+   }
+   
+   protected E parseEdgeProperty(StringTokenizer tokenizer) {
+      return null;
+   }
+
    @Override
    public String toString() {
       return getName();
@@ -533,7 +654,11 @@ public class BasicMainGraph implements MainGraph {
    }
 
    protected Vertex createVertex(int id, int label) {
-      return new Vertex(id, label);
+      Vertex vertex = new Vertex(id, label);
+      if (vertexProperties != null) {
+         vertex.setProperty(vertexProperties[label]);
+      }
+      return vertex;
    }
 
    protected Edge createEdge(int srcId, int destId) {
@@ -541,7 +666,11 @@ public class BasicMainGraph implements MainGraph {
    }
 
    protected Edge createEdge(int srcId, int destId, int label) {
-      return new LabelledEdge(srcId, destId, label);
+      Edge edge = new LabelledEdge(srcId, destId, label);
+      if (edgeProperties != null) {
+         edge.setProperty(edgeProperties[label]);
+      }
+      return edge;
    }
 
    private VertexNeighbourhood createVertexNeighbourhood() {

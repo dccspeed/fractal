@@ -37,6 +37,8 @@ public abstract class BasicComputation<E extends Embedding>
     
     private transient EmbeddingIterator<E> emptyIter;
     
+    private transient EmbeddingIterator<E> bypassIter;
+    
     private transient EmbeddingIterator<E> embeddingIterator;
 
     private transient CommonExecutionEngine<E> executionEngine;
@@ -84,6 +86,20 @@ public abstract class BasicComputation<E extends Embedding>
            }
         };
 
+        bypassIter = new EmbeddingIterator<E>() {
+           private boolean hasNext = true;
+           @Override
+           public boolean hasNext() {
+              return hasNext;
+           }
+
+           @Override
+           public E next() {
+              hasNext = false;
+              return embedding;
+           }
+        };
+
         embeddingIterator = new EmbeddingIterator<E>();
     }
 
@@ -128,14 +144,22 @@ public abstract class BasicComputation<E extends Embedding>
             filter(embedding, possibleExtensions);
         }
 
-        if (possibleExtensions == null || possibleExtensions.isEmpty()) {
+        if (possibleExtensions == null) {
             handleNoExpansions(embedding);
             return emptyIter;
         }
+        
+        if (possibleExtensions.isEmpty()) {
+           //if (getConfig().shouldKeepMaximal()) {
+           //   return bypassIter.set(this, embedding, possibleExtensions);
+           //} else {
+              handleNoExpansions(embedding);
+              return emptyIter;
+           //}
+        }
        
         currentEmbedding = embedding;
-        return embeddingIterator.
-           set(this, embedding, possibleExtensions);
+        return embeddingIterator.set(this, embedding, possibleExtensions);
     }
 
     @Override
@@ -221,7 +245,8 @@ public abstract class BasicComputation<E extends Embedding>
         // Empty by default
     }
 
-    private IntCollection getPossibleExtensions(E embedding) {
+    @Override
+    public IntCollection getPossibleExtensions(E embedding) {
        return embedding.getExtensibleWordIds(this);
     }
 
@@ -308,22 +333,22 @@ public abstract class BasicComputation<E extends Embedding>
     }
 
     @Override
-    public EmbeddingIterator<E> forkConsumer() {
+    public EmbeddingIterator<E> forkConsumer(boolean local) {
        BasicComputation<E> curr = this;
        EmbeddingIterator<E> consumer = null;
 
        while (curr != null) {
           if (curr.embeddingIterator != null &&
                 curr.embeddingIterator.isActive()) {
-             consumer = curr.embeddingIterator.forkConsumer();
+             consumer = curr.embeddingIterator.forkConsumer(local);
              if (consumer.hasNext()) {
                 return consumer;
              } else {
                 consumer.joinConsumer();
              }
           }
-          curr = (BasicComputation<E>) curr.nextComputation();
-       }
+         curr = (BasicComputation<E>) curr.nextComputation();
+      }
 
        return null;
     }

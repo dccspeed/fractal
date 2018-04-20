@@ -1,40 +1,38 @@
 package io.arabesque.optimization;
 
+import com.koloboke.collect.IntCollection;
+
 import io.arabesque.computation.Computation;
 import io.arabesque.embedding.VertexInducedEmbedding;
+import io.arabesque.graph.VertexNeighbourhood;
 import io.arabesque.utils.collection.IntArrayList;
-import com.koloboke.collect.IntCollection;
+
+import java.util.Arrays;
 
 public class CliqueVertexInducedEmbedding extends VertexInducedEmbedding {
     @Override
     public IntCollection getExtensibleWordIds(Computation computation) {
         if (dirtyExtensionWordIds) {
-            extensionWordIds.clear();
-
-            IntCollection lastVertexNeighbours = configuration.getMainGraph().getVertexNeighbours(getVertices().getLast());
-
-            if (lastVertexNeighbours != null) {
-                intAddConsumer.setCollection(extensionWordIds);
-                lastVertexNeighbours.forEach(intAddConsumer);
-            }
+            extensionWordIds().clear();
 
             int numVertices = getNumVertices();
             IntArrayList vertices = getVertices();
+            int lastVertex = vertices.getLast();
 
-            // Clean the words that are already in the embedding
-            for (int i = 0; i < numVertices; ++i) {
-                int wId = vertices.getUnchecked(i);
-                extensionWordIds.removeInt(wId);
+            VertexNeighbourhood neighbourhood = configuration.getMainGraph().
+               getVertexNeighbourhood(lastVertex);
+
+            if (neighbourhood != null) {
+               int[] orderedVertices = neighbourhood.getOrderedVertices();
+               int fromIdx = Arrays.binarySearch(orderedVertices, lastVertex);
+               fromIdx = (fromIdx < 0) ? (-fromIdx - 1) : fromIdx;
+               for (int j = fromIdx; j < orderedVertices.length; ++j) {
+                  extensionWordIds.add(orderedVertices[j]);
+               }
             }
+
         }
 
-        return extensionWordIds;
-    }
-
-    @Override
-    public boolean isCanonicalEmbeddingWithWord(int wordId) {
-        if (this.getNumVertices() == 0) return true;
-
-        return wordId > getVertices().getLast();
+        return extensionWordIds();
     }
 }

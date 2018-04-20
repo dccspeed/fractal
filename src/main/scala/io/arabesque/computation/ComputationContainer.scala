@@ -1,5 +1,7 @@
 package io.arabesque.computation
 
+import com.koloboke.collect.IntCollection;
+
 import io.arabesque.WordFilterFunc
 import io.arabesque.conf.Configuration
 import io.arabesque.embedding._
@@ -50,6 +52,8 @@ sealed trait ComputationContainer [E <: Embedding] extends Computation[E]
   val aggregationProcessOpt: Option[(E,Computation[E]) => Unit]
 
   val handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit]
+  
+  val getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection]
 
   val initOpt: Option[(Computation[E]) => Unit]
 
@@ -100,6 +104,8 @@ sealed trait ComputationContainer [E <: Embedding] extends Computation[E]
         aggregationProcessOpt,
       handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] =
         handleNoExpansionsOpt,
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
+        getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         initOpt,
       initAggregationsOpt: Option[(Computation[E]) => Unit] =
@@ -133,6 +139,8 @@ sealed trait ComputationContainer [E <: Embedding] extends Computation[E]
         aggregationProcessOpt,
       handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] =
         handleNoExpansionsOpt,
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
+        getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         initOpt,
       initAggregationsOpt: Option[(Computation[E]) => Unit] =
@@ -164,6 +172,8 @@ sealed trait ComputationContainer [E <: Embedding] extends Computation[E]
         aggregationProcessOpt,
       handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] =
         handleNoExpansionsOpt,
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
+        getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         initOpt,
       initAggregationsOpt: Option[(Computation[E]) => Unit] =
@@ -187,6 +197,7 @@ sealed trait ComputationContainer [E <: Embedding] extends Computation[E]
     pAggregationFilterOpt = Some((e,c) => true),
     aggregationProcessOpt = Some((e,c) => {}),
     handleNoExpansionsOpt = Some((e,c) => {}),
+    getPossibleExtensionsOpt = None,
     expandComputeOpt = Some((e,c) => Iterator.empty)
     )
 
@@ -216,6 +227,7 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
     pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] = None,
     aggregationProcessOpt: Option[(E,Computation[E]) => Unit] = None,
     handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = None,
+    getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = None,
     initOpt: Option[(Computation[E]) => Unit] = None,
     initAggregationsOpt: Option[(Computation[E]) => Unit] = None,
     finishOpt: Option[(Computation[E]) => Unit] = None,
@@ -268,6 +280,11 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
   @transient private lazy val _handleNoExpansions: (E,Computation[E]) => Unit =
     handleNoExpansionsOpt.getOrElse (
       (e: E, c: Computation[E]) => super.handleNoExpansions (e)
+    )
+
+  @transient private lazy val _getPossibleExtensions: (E,Computation[E]) => IntCollection =
+    getPossibleExtensionsOpt.getOrElse (
+      (e: E, c: Computation[E]) => super.getPossibleExtensions (e)
     )
   
   @transient private lazy val _init
@@ -360,6 +377,8 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
         aggregationProcessOpt,
       handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = 
         handleNoExpansionsOpt,
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = 
+        getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         initOpt,
       initAggregationsOpt: Option[(Computation[E]) => Unit] =
@@ -383,6 +402,7 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
       pAggregationFilterOpt = pAggregationFilterOpt,
       aggregationProcessOpt = aggregationProcessOpt,
       handleNoExpansionsOpt = handleNoExpansionsOpt,
+      getPossibleExtensionsOpt = getPossibleExtensionsOpt,
       initOpt = initOpt,
       initAggregationsOpt = initAggregationsOpt,
       finishOpt = finishOpt,
@@ -394,56 +414,58 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
 
   def withNewFunctions(
       computationLabelOpt: Option[String] =
-        computationLabelOpt,
+        lastComputation.computationLabelOpt,
       processOpt: Option[(E,Computation[E]) => Unit] =
-        processOpt,
+        lastComputation.processOpt,
       filterOpt: Option[(E,Computation[E]) => Boolean] =
-        filterOpt,
+        lastComputation.filterOpt,
       wordFilterOpt: Option[WordFilterFunc[E]] =
-        wordFilterOpt,
+        lastComputation.wordFilterOpt,
       shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
-        shouldExpandOpt,
+        lastComputation.shouldExpandOpt,
       aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] =
-        aggregationFilterOpt,
+        lastComputation.aggregationFilterOpt,
       pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] =
-        pAggregationFilterOpt,
+        lastComputation.pAggregationFilterOpt,
       aggregationProcessOpt: Option[(E,Computation[E]) => Unit] =
-        aggregationProcessOpt,
+        lastComputation.aggregationProcessOpt,
       handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = 
-        handleNoExpansionsOpt,
+        lastComputation.handleNoExpansionsOpt,
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = 
+        lastComputation.getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
-        initOpt,
+        lastComputation.initOpt,
       initAggregationsOpt: Option[(Computation[E]) => Unit] =
-        initAggregationsOpt,
+        lastComputation.initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
-        finishOpt,
+        lastComputation.finishOpt,
       expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
-        expandComputeOpt,
+        lastComputation.expandComputeOpt,
       processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
-        processComputeOpt)
-    : ComputationContainer[E] = nextComputationOpt match {
-    case Some(nextComputation) =>
-      val nextComp = nextComputation.asInstanceOf[ComputationContainer[E]].
-      withNewFunctions (computationLabelOpt,
-        processOpt, filterOpt, wordFilterOpt,
-        shouldExpandOpt, aggregationFilterOpt,
-        pAggregationFilterOpt, aggregationProcessOpt,
-        handleNoExpansionsOpt, initOpt, initAggregationsOpt,
-        finishOpt, expandComputeOpt, processComputeOpt)
-      this.copy (nextComputationOpt = Some(nextComp))
+        lastComputation.processComputeOpt)
+    : ComputationContainer[E] = {
 
-    case None =>
-      this.copy (computationLabelOpt = computationLabelOpt,
-        processOpt = processOpt, filterOpt = filterOpt,
-        wordFilterOpt = wordFilterOpt,
-        shouldExpandOpt = shouldExpandOpt,
-        aggregationFilterOpt = aggregationFilterOpt,
-        pAggregationFilterOpt = pAggregationFilterOpt,
-        aggregationProcessOpt = aggregationProcessOpt,
-        handleNoExpansionsOpt = handleNoExpansionsOpt,
-        initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
-        finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
-        processComputeOpt = processComputeOpt, nextComputationOpt = None)
+    val comps = new Stack[EComputationContainer[E]]()
+    var currOpt: Option[EComputationContainer[E]] = Option(this)
+    while (currOpt.isDefined) {
+      comps.push(currOpt.get)
+      currOpt = currOpt.get.nextComputationOpt.
+        asInstanceOf[Option[EComputationContainer[E]]]
+    }
+
+    var lastComp = comps.pop()
+    lastComp = lastComp.copy(computationLabelOpt,
+        processOpt, filterOpt, wordFilterOpt, shouldExpandOpt,
+        aggregationFilterOpt, pAggregationFilterOpt, aggregationProcessOpt,
+        handleNoExpansionsOpt, getPossibleExtensionsOpt,
+        initOpt, initAggregationsOpt, finishOpt,
+        expandComputeOpt, processComputeOpt)
+    
+    while (!comps.isEmpty) {
+      lastComp = comps.pop().copy(nextComputationOpt = Some(lastComp))
+    }
+    
+    lastComp
   }
 
   def withNewFunctionsAll(
@@ -465,6 +487,8 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
         aggregationProcessOpt,
       handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = 
         handleNoExpansionsOpt,
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = 
+        getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         initOpt,
       initAggregationsOpt: Option[(Computation[E]) => Unit] =
@@ -482,7 +506,8 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
         processOpt, filterOpt, wordFilterOpt,
         shouldExpandOpt, aggregationFilterOpt,
         pAggregationFilterOpt, aggregationProcessOpt,
-        handleNoExpansionsOpt, initOpt, initAggregationsOpt,
+        handleNoExpansionsOpt, getPossibleExtensionsOpt,
+        initOpt, initAggregationsOpt,
         finishOpt, expandComputeOpt, processComputeOpt)
       this.copy (computationLabelOpt = computationLabelOpt,
         processOpt = processOpt, filterOpt = filterOpt,
@@ -492,6 +517,7 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
         pAggregationFilterOpt = pAggregationFilterOpt,
         aggregationProcessOpt = aggregationProcessOpt,
         handleNoExpansionsOpt = handleNoExpansionsOpt,
+        getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
         processComputeOpt = processComputeOpt,
@@ -506,6 +532,7 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
         pAggregationFilterOpt = pAggregationFilterOpt,
         aggregationProcessOpt = aggregationProcessOpt,
         handleNoExpansionsOpt = handleNoExpansionsOpt,
+        getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
         processComputeOpt = processComputeOpt, nextComputationOpt = None)
@@ -563,6 +590,9 @@ case class EComputationContainer [E <: EdgeInducedEmbedding] (
 
   override def handleNoExpansions(e: E): Unit = _handleNoExpansions (e, this)
 
+  override def getPossibleExtensions(e: E): IntCollection =
+    _getPossibleExtensions (e, this)
+
   override def init(config: Configuration[E]): Unit = _init (config, this)
 
   override def initAggregations(config: Configuration[E]): Unit =
@@ -591,6 +621,7 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
     pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] = None,
     aggregationProcessOpt: Option[(E,Computation[E]) => Unit] = None,
     handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = None,
+    getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = None,
     initOpt: Option[(Computation[E]) => Unit] = None,
     initAggregationsOpt: Option[(Computation[E]) => Unit] = None,
     finishOpt: Option[(Computation[E]) => Unit] = None,
@@ -639,6 +670,10 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
   @transient private lazy val _handleNoExpansions: (E,Computation[E]) => Unit =
     handleNoExpansionsOpt.getOrElse (
       (e: E, c: Computation[E]) => super.handleNoExpansions (e))
+  
+  @transient private lazy val _getPossibleExtensions: (E,Computation[E]) => IntCollection =
+    getPossibleExtensionsOpt.getOrElse (
+      (e: E, c: Computation[E]) => super.getPossibleExtensions (e))
   
   @transient private lazy val _init
     : (Configuration[E], Computation[E]) => Unit = initOpt match {
@@ -725,6 +760,8 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
         aggregationProcessOpt,
       handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = 
         handleNoExpansionsOpt,
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = 
+        getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         initOpt,
       initAggregationsOpt: Option[(Computation[E]) => Unit] =
@@ -748,6 +785,7 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
       pAggregationFilterOpt = pAggregationFilterOpt,
       aggregationProcessOpt = aggregationProcessOpt,
       handleNoExpansionsOpt = handleNoExpansionsOpt,
+      getPossibleExtensionsOpt = getPossibleExtensionsOpt,
       initOpt = initOpt,
       initAggregationsOpt = initAggregationsOpt,
       finishOpt = finishOpt,
@@ -776,6 +814,8 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
         lastComputation.aggregationProcessOpt,
       handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = 
         lastComputation.handleNoExpansionsOpt,
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = 
+        lastComputation.getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         lastComputation.initOpt,
       initAggregationsOpt: Option[(Computation[E]) => Unit] =
@@ -800,7 +840,8 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
     lastComp = lastComp.copy(computationLabelOpt,
         processOpt, filterOpt, wordFilterOpt, shouldExpandOpt,
         aggregationFilterOpt, pAggregationFilterOpt, aggregationProcessOpt,
-        handleNoExpansionsOpt, initOpt, initAggregationsOpt, finishOpt,
+        handleNoExpansionsOpt, getPossibleExtensionsOpt,
+        initOpt, initAggregationsOpt, finishOpt,
         expandComputeOpt, processComputeOpt)
     
     while (!comps.isEmpty) {
@@ -829,6 +870,8 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
         aggregationProcessOpt,
       handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = 
         handleNoExpansionsOpt,
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = 
+        getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         initOpt,
       initAggregationsOpt: Option[(Computation[E]) => Unit] =
@@ -846,7 +889,8 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
         processOpt, filterOpt, wordFilterOpt,
         shouldExpandOpt, aggregationFilterOpt,
         pAggregationFilterOpt, aggregationProcessOpt,
-        handleNoExpansionsOpt, initOpt, initAggregationsOpt,
+        handleNoExpansionsOpt, getPossibleExtensionsOpt,
+        initOpt, initAggregationsOpt,
         finishOpt, expandComputeOpt, processComputeOpt)
       this.copy (computationLabelOpt = computationLabelOpt,
         processOpt = processOpt, filterOpt = filterOpt,
@@ -856,6 +900,7 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
         pAggregationFilterOpt = pAggregationFilterOpt,
         aggregationProcessOpt = aggregationProcessOpt,
         handleNoExpansionsOpt = handleNoExpansionsOpt,
+        getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
         processComputeOpt = processComputeOpt,
@@ -870,6 +915,7 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
         pAggregationFilterOpt = pAggregationFilterOpt,
         aggregationProcessOpt = aggregationProcessOpt,
         handleNoExpansionsOpt = handleNoExpansionsOpt,
+        getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
         processComputeOpt = processComputeOpt, nextComputationOpt = None)
@@ -926,6 +972,9 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
   override def aggregationProcess(e: E): Unit = _aggregationProcess (e, this)
 
   override def handleNoExpansions(e: E): Unit = _handleNoExpansions (e, this)
+  
+  override def getPossibleExtensions(e: E): IntCollection =
+    _getPossibleExtensions (e, this)
 
   override def init(config: Configuration[E]): Unit = _init (config, this)
 

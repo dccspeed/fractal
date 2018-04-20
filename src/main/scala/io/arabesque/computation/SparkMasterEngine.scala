@@ -79,8 +79,6 @@ trait SparkMasterEngine [E <: Embedding]
     config.setIfUnset ("num_partitions", sc.defaultParallelism)
     config.setHadoopConfig (sc.hadoopConfiguration)
 
-
-
     // garantees that outputPath does not exist
     if (config.isOutputActive) {
       val fs = FileSystem.get(sc.hadoopConfiguration)
@@ -98,7 +96,11 @@ trait SparkMasterEngine [E <: Embedding]
 
     // master must know aggregators metadata
     val computation = config.createComputation [E]
-    computation.initAggregations(config)
+    var currComp = computation
+    while (currComp != null) {
+      currComp.initAggregations(config)
+      currComp = currComp.nextComputation()
+    }
 
     // default accumulators
     aggAccums = Map.empty
@@ -118,11 +120,11 @@ trait SparkMasterEngine [E <: Embedding]
         aggregations = Map() ++ parent.aggregations
 
       case None =>
-        // superstep rdd to simulate parallel computation
+        // superstep rdd
         superstepRDD = sc.makeRDD(
           Seq.empty[LZ4ObjectCache], numPartitions
         ).persist(storageLevel)
-
+          
         // previous aggregation
         previousAggregationsBc = sc.broadcast (
           Map.empty[String,AggregationStorage[_ <: Writable, _ <: Writable]]
@@ -228,7 +230,7 @@ trait SparkMasterEngine [E <: Embedding]
     execEngines: RDD[SparkEngine[E]],
     numPartitions: Int) = Future {
 
-    def reduce5[K <: Writable, V <: Writable](
+    def reduce[K <: Writable, V <: Writable](
         name: String,
         metadata: AggregationStorageMetadata[K,V])
       (implicit kt: ClassTag[K], vt: ClassTag[V]) =
@@ -237,10 +239,16 @@ trait SparkMasterEngine [E <: Embedding]
       import SparkConfiguration._
 
       val keyValues = execEngines.flatMap (
-        execEngine => execEngine.flushAggregationsByName5[K,V](name)
+        execEngine => execEngine.flushAggregationsByName[K,V](name)
       ).partitionBy(new HashPartitioner(execEngines.partitions.length)).values
 
       val step = superstep
+      val emptyAggregation = {
+        val _configBc = configBc
+        val factory = new AggregationStorageFactory(_configBc.value)
+        factory.createAggregationStorage(name).
+          asInstanceOf[AggregationStorage[K,V]]
+      }
 
       val aggStorage = keyValues.mapPartitions { aggBinIter =>
         if (aggBinIter.hasNext) {
@@ -253,7 +261,7 @@ trait SparkMasterEngine [E <: Embedding]
         } else {
           Iterator.empty
         }
-      }.reduce { (agg1, agg2) =>
+      }.fold (emptyAggregation) { (agg1, agg2) =>
         agg1.aggregate(agg2)
         agg1
       }
@@ -262,139 +270,13 @@ trait SparkMasterEngine [E <: Embedding]
       aggStorage
     }
 
-    def reduce4[K <: Writable, V <: Writable](
-        name: String,
-        metadata: AggregationStorageMetadata[K,V])
-      (implicit kt: ClassTag[K], vt: ClassTag[V]) =
-        Future[AggregationStorage[_ <: Writable, _ <: Writable]] {
-
-      val _configBc = configBc
-
-      val keyValuesRDD = execEngines.flatMap (execEngine =>
-          execEngine.flushAggregationsByName4(name).
-            asInstanceOf[Iterator[(SerializableWritable[K], SerializableWritable[V])]]
-          )
-
-      val keyValues = keyValuesRDD.reduceByKey { (swValue1,swValue2) =>
-        val (v1, v2) = (swValue1.value, swValue2.value)
-        new SerializableWritable(metadata.getReductionFunction().reduce (v1, v2))
-      }.flatMap { case (swKey, swValue) =>
-        val aggStorageFactory = new AggregationStorageFactory(_configBc.value)
-        val finalAggStorage = aggStorageFactory.
-          createAggregationStorage(name, metadata).asInstanceOf[AggregationStorage[K,V]]
-        val keyValueMap = new java.util.HashMap[K,V]()
-        keyValueMap.put(swKey.value, swValue.value)
-        val tmpAggStorage = new AggregationStorage(name, metadata, keyValueMap)
-        finalAggStorage.finalLocalAggregate(tmpAggStorage)
-        finalAggStorage.getMapping.asScala.iterator.map { case (wKey, wValue) =>
-          (new SerializableWritable(wKey), new SerializableWritable(wValue))
-        }
-      }.reduceByKey { (swValue1, swValue2) =>
-        val (v1, v2) = (swValue1.value, swValue2.value)
-        new SerializableWritable(metadata.getReductionFunction().reduce (v1, v2))
-      }.collect
-
-      val aggStorageFactory = new AggregationStorageFactory(configBc.value)
-      val aggStorage = aggStorageFactory.
-        createAggregationStorage(name, metadata).asInstanceOf[AggregationStorage[K,V]]
-      var i = 0
-      while (i < keyValues.length) {
-        aggStorage.aggregate(keyValues(i)._1.value, keyValues(i)._2.value)
-        i += 1
-      }
-
-      aggStorage.endedAggregation
-      aggStorage
-    }
-
-    def reduce3[K <: Writable, V <: Writable](
-        name: String,
-        metadata: AggregationStorageMetadata[K,V])
-      (implicit kt: ClassTag[K], vt: ClassTag[V]) =
-        Future[AggregationStorage[_ <: Writable, _ <: Writable]] {
-
-      val keyValues = execEngines.flatMap (execEngine =>
-          execEngine.flushAggregationsByName3(name).
-            asInstanceOf[Iterator[AggregationStorage[K,V]]]
-          )
-      val aggStorage = keyValues.reduce { (agg1,agg2) =>
-        agg1.aggregate (agg2)
-        agg1
-      }
-
-      val aggStorageFactory = new AggregationStorageFactory(configBc.value)
-      val finalAggStorage = aggStorageFactory.
-        createAggregationStorage(name, metadata).
-        asInstanceOf[AggregationStorage[K,V]]
-
-      finalAggStorage.aggregate (aggStorage)
-
-      finalAggStorage.endedAggregation
-      finalAggStorage
-    }
-
-    def reduce2[K <: Writable, V <: Writable](
-        name: String,
-        metadata: AggregationStorageMetadata[K,V])
-      (implicit kt: ClassTag[K], vt: ClassTag[V]) =
-        Future[AggregationStorage[_ <: Writable, _ <: Writable]] {
-
-      val keyValuesRDD = execEngines.flatMap (execEngine =>
-          execEngine.flushAggregationsByName2(name).
-            asInstanceOf[Iterator[(SerializableWritable[K], SerializableWritable[V])]]
-          )
-
-      val keyValues = keyValuesRDD.reduceByKey { (swValue1,swValue2) =>
-        val (v1, v2) = (swValue1.value, swValue2.value)
-        new SerializableWritable(metadata.getReductionFunction().reduce (v1, v2))
-      }.collect
-
-      val aggStorage = new AggregationStorage(name, metadata)
-      var i = 0
-      while (i < keyValues.length) {
-        aggStorage.aggregate(keyValues(i)._1.value, keyValues(i)._2.value)
-        i += 1
-      }
-
-      aggStorage.endedAggregation
-      aggStorage
-    }
-
-    def reduce[K <: Writable, V <: Writable](
-        name: String,
-        metadata: AggregationStorageMetadata[K,V])
-      (implicit kt: ClassTag[K], vt: ClassTag[V]) =
-        Future[AggregationStorage[_ <: Writable, _ <: Writable]] {
-
-      val keyValues = execEngines.flatMap (execEngine =>
-          execEngine.flushAggregationsByName(name).
-            asInstanceOf[Iterator[AggregationStorage[K,V]]]
-          )
-      val aggStorage = keyValues.reduce { (agg1,agg2) =>
-        agg1.aggregate (agg2)
-        agg1
-      }
-      
-      val aggStorageFactory = new AggregationStorageFactory(configBc.value)
-      val finalAggStorage = aggStorageFactory.
-        createAggregationStorage(name, metadata).
-        asInstanceOf[AggregationStorage[K,V]]
-
-      finalAggStorage.aggregate (aggStorage)
-
-      logInfo(s"FinalAgg ${aggStorage} ${finalAggStorage}")
-
-      finalAggStorage.endedAggregation
-      finalAggStorage
-    }
-    
     val aggregations = Map.empty[
       String,AggregationStorage[_ <: Writable, _ <: Writable]
     ]
       
     val future = Future.sequence (
       config.getAggregationsMetadata.map { case (name, metadata) =>
-        reduce5 (name, metadata)
+        reduce (name, metadata)
       }
     )
 
@@ -432,37 +314,45 @@ trait SparkMasterEngine [E <: Embedding]
    */
 
   def getEmbeddings: RDD[ResultEmbedding[_]] = {
+    if (!config.isOutputActive) {
+      logWarning (s"Trying to get embeddings but output is not enabled")
+      return sc.emptyRDD[ResultEmbedding[_]]
+    }
 
     val embeddPath = s"${config.getOutputPath}"
     val fs = FileSystem.get (sc.hadoopConfiguration)
+    val outputPath = new Path(embeddPath)
 
-    if (config.isOutputActive && fs.exists (new Path (embeddPath))) {
-      logInfo (s"Reading embedding words from: ${config.getOutputPath}")
-      config.getOutputFormat match {
-        case SparkConfiguration.OUTPUT_PLAIN_TEXT =>
-          sc.textFile (s"${embeddPath}/*").map (ResultEmbedding(_))
+    if (!fs.exists(outputPath)) {
+      logWarning (s"Trying to get embeddings" +
+        s" but output path does not exist: ${embeddPath}")
+      return sc.emptyRDD[ResultEmbedding[_]]
+    }
 
-        case SparkConfiguration.OUTPUT_SEQUENCE_FILE =>
-          // we must decide at runtime the concrete Writable to be used
-          val embeddingClass = config.getEmbeddingClass
-          val resEmbeddingClass = {
-            if (embeddingClass == classOf[EdgeInducedEmbedding])
-              classOf[EEmbedding]
-            else if (embeddingClass == classOf[VertexInducedEmbedding])
-              classOf[VEmbedding]
-            else
-              classOf[ResultEmbedding[_]]
-          }
+    logInfo (s"Reading embedding words from: ${config.getOutputPath}")
 
-          sc.sequenceFile (s"${embeddPath}/*",
-            classOf[NullWritable], resEmbeddingClass).map {
-              case (_,e: EEmbedding) => e.copy()
-              case (_,e: VEmbedding) => e.copy()
-            }. // writables are reused, workaround on that
-            asInstanceOf[RDD[ResultEmbedding[_]]]
-      }
-    } else {
-      sc.emptyRDD[ResultEmbedding[_]]
+    config.getOutputFormat match {
+      case SparkConfiguration.OUTPUT_PLAIN_TEXT =>
+        sc.textFile (s"${embeddPath}/*").map (ResultEmbedding(_))
+
+      case SparkConfiguration.OUTPUT_SEQUENCE_FILE =>
+        // we must decide at runtime the concrete Writable to be used
+        val embeddingClass = config.getEmbeddingClass
+        val resEmbeddingClass = {
+          if (embeddingClass == classOf[EdgeInducedEmbedding])
+            classOf[EEmbedding]
+          else if (embeddingClass == classOf[VertexInducedEmbedding])
+            classOf[VEmbedding]
+          else
+            classOf[ResultEmbedding[_]]
+        }
+
+        sc.sequenceFile (s"${embeddPath}/*",
+          classOf[NullWritable], resEmbeddingClass).map {
+            case (_,e: EEmbedding) => e.copy()
+            case (_,e: VEmbedding) => e.copy()
+          }. // writables are reused, workaround on that
+          asInstanceOf[RDD[ResultEmbedding[_]]]
     }
   }
 

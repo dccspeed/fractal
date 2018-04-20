@@ -1,5 +1,7 @@
 package io.arabesque
 
+import com.koloboke.collect.IntCollection
+
 import io.arabesque.aggregation._
 import io.arabesque.aggregation.reductions._
 import io.arabesque.computation._
@@ -7,7 +9,7 @@ import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding._
 import io.arabesque.odag.{SinglePatternODAG, BasicODAG}
 import io.arabesque.pattern.Pattern
-import io.arabesque.utils.{ClosureParser, Logging, SerializableWritable}
+import io.arabesque.utils._
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.Writable
@@ -33,8 +35,8 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
     parentOpt: Option[ArabesqueResult[E]],
     config: SparkConfiguration[E],
     aggFuncs: Map[String,(
-      (E,Computation[E]) => _ <: Writable,
-      (E,Computation[E]) => _ <: Writable
+      (E,Computation[E],_ <: Writable) => _ <: Writable,
+      (E,Computation[E],_ <: Writable) => _ <: Writable
     )],
     storageLevel: StorageLevel) extends Logging {
 
@@ -106,7 +108,7 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    */
   private var masterEngineOpt: Option[SparkMasterEngine[E]] = None
 
-  private def masterEngine: SparkMasterEngine[E] = synchronized {
+  def masterEngine: SparkMasterEngine[E] = synchronized {
     masterEngineOpt match {
       case None =>
 
@@ -156,9 +158,13 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
   def embeddings(shouldOutput: (E,Computation[E]) => Boolean)
     : RDD[ResultEmbedding[_]] = {
     if (config.confs.contains(SparkConfiguration.COMPUTATION_CONTAINER)) {
-      val thisWithOutput = withOutput(shouldOutput)
-      thisWithOutput.config.setOutputPath(
-        s"${thisWithOutput.config.getOutputPath}-${step}")
+      val thisWithOutput = withOutput(shouldOutput).set(
+        "output_path",
+        s"${config.getOutputPath}-${step}"
+        )
+      //thisWithOutput.config.setOutputPath(
+      //  s"${thisWithOutput.config.getOutputPath}-${step}")
+
       logInfo (s"Output to get embeddings: ${this} ${thisWithOutput}")
       thisWithOutput.masterEngine.getEmbeddings
     } else {
@@ -180,6 +186,24 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
     }
   }
   
+  def internalEmbeddings: RDD[E] = internalEmbeddings((_,_) => true)
+
+  def internalEmbeddings(
+      shouldOutput: (E,Computation[E]) => Boolean): RDD[E] = {
+    if (config.confs.contains(SparkConfiguration.COMPUTATION_CONTAINER)) {
+      val thisWithOutput = withOutput(shouldOutput).set(
+        "output_path",
+        s"${config.getOutputPath}-${step}"
+        )
+      logInfo (s"Output to get internalEmbeddings: ${this} ${thisWithOutput}")
+      val configBc = thisWithOutput.masterEngine.configBc
+      thisWithOutput.masterEngine.getEmbeddings.
+        map (_.toInternalEmbedding [E] (configBc.value))
+    } else {
+      throw new RuntimeException(s"Not supported yet for internal embeddings")
+    }
+  }
+
   /**
    * Registered aggregations
    */
@@ -192,7 +216,7 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    */
   def aggregation [K <: Writable, V <: Writable] (name: String,
       shouldAggregate: (E,Computation[E]) => Boolean): Map[K,V] = {
-    withAggregation (name, shouldAggregate).aggregation (name)
+    withAggregation [K,V] (name, shouldAggregate).aggregation (name)
   }
   
   /**
@@ -305,8 +329,8 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
     currResult = this
     while (i < n) {
       results.foreach { r =>
-        currResult = currResult.handleNextResult(r).
-          copy(step = j)
+        currResult = currResult.handleNextResult(r)
+          //.copy(step = j)
         j += 1
       }
       i += 1
@@ -531,7 +555,9 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    * @return new result
    */
   def expand: ArabesqueResult[E] = {
-    val expandComp = emptyComputation.withExpandCompute(null)
+    val expandComp = emptyComputation.
+      withExpandCompute(null).
+      copy(mustSync = false)
     handleNextResult(expandComp)
   }
 
@@ -544,7 +570,9 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    */
   def expand(n: Int): ArabesqueResult[E] = {
     var curr = this
+    logInfo(s"ExpandBefore ${curr}")
     for (i <- 0 until n) curr = curr.expand
+    logInfo(s"ExpandAfter ${curr}")
     curr
   }
 
@@ -564,6 +592,22 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
   }
 
   /**
+   * Perform a expansion step in a particular way, defined by
+   * *getPossibleExtensions*
+   *
+   * @param getPossibleExtensions function that receives an embedding and
+   * returns zero or more embeddings (collection)
+   *
+   * @return new result
+   */
+  def extend(getPossibleExtensions: (E,Computation[E]) => IntCollection)
+    : ArabesqueResult[E] = {
+    val expandComp = emptyComputation.
+      withGetPossibleExtensions(getPossibleExtensions)
+    handleNextResult(expandComp)
+  }
+
+  /**
    * Filter the existing embeddings based on a function
    *
    * @param filter function that decides whether an embedding should be kept or
@@ -572,10 +616,26 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    * @return new result
    */
   def filter(filter: (E,Computation[E]) => Boolean): ArabesqueResult[E] = {
+    ClosureCleaner.clean(filter)
     val filterComp = emptyComputation.
       withExpandCompute((e,c) => Iterator(e)).
       withFilter(filter)
     handleNextResult(filterComp)
+  }
+
+  /**
+   * Filter the extensions of this computation
+   *
+   * @param efilter function that decides whether an extension is valid or not
+   *
+   * @return new result
+   */
+  def efilter(
+      efilter: (E,Int,Computation[E]) => Boolean): ArabesqueResult[E] = {
+    val filter = new WordFilterFunc [E] {
+      def apply(e: E, w: Int, c: Computation[E]): Boolean = efilter(e, w, c)
+    }
+    withWordFilter(filter)
   }
 
   /**
@@ -616,15 +676,40 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    */
   def aggregate [K <: Writable : ClassTag, V <: Writable : ClassTag] (
       name: String,
-      aggregationKey: (E,Computation[E]) => K,
-      aggregationValue: (E,Computation[E]) => V,
-      reductionFunction: (V,V) => V): ArabesqueResult[E] = {
+      aggregationKey: (E,Computation[E],K) => K,
+      aggregationValue: (E,Computation[E],V) => V,
+      reductionFunction: (V,V) => V,
+      endAggregationFunction: EndAggregationFunction[K,V] = null,
+      isIncremental: Boolean = false
+    ): ArabesqueResult[E] = {
     withAggregationRegistered(
       name,
       aggregationKey = aggregationKey,
       aggregationValue = aggregationValue,
+      reductionFunction = new ReductionFunctionContainer(reductionFunction),
+      endAggregationFunction = endAggregationFunction,
+      isIncremental = isIncremental).
+    withAggregation [K,V] (name, (_,_) => true)
+  }
+
+  /**
+   * Register an aggregation and include the aggregation map to the existing
+   * embeddings.
+   *
+   * @param name custom name of this aggregation --> this is used later for
+   * retrieving the aggregation results
+   * @param reductionFunction function used to reduce the values
+   *
+   * @return new result
+   */
+  def aggregateAll [K <: Writable : ClassTag, V <: Writable : ClassTag] (
+      name: String,
+      func: (E,Computation[E]) => Iterator[(K,V)],
+      reductionFunction: (V,V) => V): ArabesqueResult[E] = {
+    withAggregationRegisteredIterator [K,V] (
+      name,
       reductionFunction = new ReductionFunctionContainer(reductionFunction)).
-    withAggregation(name, (_,_) => true)
+    withAggregationIterator(name, func)
   }
    
   
@@ -638,10 +723,9 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    * @return new result
    */
   def withProcess (process: (E,Computation[E]) => Unit): ArabesqueResult[E] = {
-    val newConfig = config.withNewComputation (
-      getComputationContainer[E].withNewFunctions (
-        processOpt = Option(process))
-      )
+    val newComp = getComputationContainer[E].withNewFunctions (
+      processOpt = Option(process))
+    val newConfig = config.withNewComputation (newComp)
     this.copy (config = newConfig)
   }
 
@@ -683,6 +767,23 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
   }
 
   /**
+   * Updates the word filter function of the underlying computation container.
+   *
+   * @param filter filter function that determines whether an extension must be
+   * further processed or not.
+   *
+   * @return new result
+   */
+  def withWordFilter (
+      filter: WordFilterFunc[E]): ArabesqueResult[E] = {
+    
+    val newConfig = config.withNewComputation (
+      getComputationContainer[E].
+      withNewFunctions (wordFilterOpt = Option(filter)))
+    this.copy (config = newConfig)
+  }
+
+  /**
    * Updates the shouldExpand function of the underlying computation container.
    *
    * @param shouldExpand function that determines whether the embeddings
@@ -718,11 +819,33 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    * Include an aggregation map into the process function
    *
    * @param name aggregation name
+   * @param func function that returns aggregation pairs
+   *
+   * @return new result
+   */
+  def withAggregationIterator [K <: Writable, V <: Writable] (name: String,
+      func: (E,Computation[E]) => Iterator[(K,V)]): ArabesqueResult[E] = {
+
+    withProcessInc (
+      (e: E, c: Computation[E]) => {
+        val iter = func(e, c)
+        while (iter.hasNext()) {
+          val kv = iter.next()
+          c.map(name, kv._1, kv._2)
+        }
+      }
+    )
+  }
+
+  /**
+   * Include an aggregation map into the process function
+   *
+   * @param name aggregation name
    * @param shouldAggregate condition for aggregating an embedding
    *
    * @return new result
    */
-  def withAggregation (name: String,
+  def withAggregation [K <: Writable, V <: Writable] (name: String,
       shouldAggregate: (E,Computation[E]) => Boolean): ArabesqueResult[E] = {
 
     if (!aggFuncs.get(name).isDefined) {
@@ -731,13 +854,22 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
       return this
     }
 
-    val (aggregationKey, aggregationValue) = aggFuncs(name)
+    val (_aggregationKey, _aggregationValue) = aggFuncs(name)
+    val (aggregationKey, aggregationValue) = (
+      _aggregationKey.asInstanceOf[(E,Computation[E],K) => K],
+      _aggregationValue.asInstanceOf[(E,Computation[E],V) => V]
+      )
 
     withProcessInc (
       (e: E, c: Computation[E]) => {
-        if (shouldAggregate(e,c)) {
-          c.map (name, aggregationKey(e,c), aggregationValue(e,c))
-        }
+        // TODO: remove shouldAggregate properly
+        //if (shouldAggregate(e,c)) {
+          val aggStorage = c.getAggregationStorage[K,V](name)
+          val k = aggregationKey(e, c, aggStorage.reusableKey())
+          val v = aggregationValue(e, c, aggStorage.reusableValue())
+          aggStorage.aggregateWithReusables(k, v)
+          //c.map (name, aggregationKey(e,c), aggregationValue(e,c))
+        //}
       }
     )
   }
@@ -807,6 +939,22 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
         handleNoExpansionsOpt = Option(func)))
     this.copy (config = newConfig)
   }
+
+  /**
+   * Updates the getPossibleExtensions function of the underlying computation
+   * container.
+   *
+   * @param func that returns the possible extensions.
+   *
+   * @return new result
+   */
+  def withGetPossibleExtensions (func: (E,Computation[E]) => IntCollection)
+    : ArabesqueResult[E] = {
+    val newConfig = config.withNewComputation (
+      getComputationContainer[E].withNewFunctions (
+        getPossibleExtensionsOpt = Option(func)))
+    this.copy (config = newConfig)
+  }
   
   /**
    * Updates the init function of the underlying computation
@@ -839,6 +987,62 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
     this.copy (config = newConfig)
   }
 
+  /**
+   * Adds a new aggregation to the computation
+   *
+   * @param name identifier of this new aggregation
+   * @param reductionFunction the function that aggregates two values
+   * @param endAggregationFunction the function that is applied at the end of
+   * each local aggregation, in the workers
+   * @param persistent whether this aggregation must be persisted in each
+   * superstep or not
+   * @param aggStorageClass custom aggregation storage implementation
+   *
+   * @return new result
+   */
+  def withAggregationRegisteredIterator [
+        K <: Writable : ClassTag, V <: Writable: ClassTag
+      ] (
+      name: String,
+      reductionFunction: ReductionFunction[V],
+      endAggregationFunction: EndAggregationFunction[K,V] = null,
+      persistent: Boolean = false,
+      aggStorageClass: Class[_ <: AggregationStorage[K,V]] =
+        classOf[AggregationStorage[K,V]],
+      isIncremental: Boolean = false)
+    : ArabesqueResult[E] = {
+
+    // TODO: check whether this aggregation is already registered and act
+    // properly
+
+    // if the user specifies *Pattern* as the key, we must find the concrete
+    // implementation within the Configuration before registering the
+    // aggregation
+    val _keyClass = implicitly[ClassTag[K]].runtimeClass
+    val keyClass = if (_keyClass == classOf[Pattern]) {
+      config.getPatternClass().asInstanceOf[Class[K]]
+    } else {
+      _keyClass.asInstanceOf[Class[K]]
+    }
+    val valueClass = implicitly[ClassTag[V]].runtimeClass.asInstanceOf[Class[V]]
+
+    // get the old init aggregations function in order to compose it
+    val oldInitAggregation = getComputationContainer[E].
+    initAggregationsOpt match {
+      case Some(initAggregations) => initAggregations
+      case None => (c: Computation[E]) => {}
+    }
+
+    // construct an incremental init aggregations function
+    val initAggregations = (c: Computation[E]) => {
+      oldInitAggregation (c) // init aggregations so far
+      c.getConfig().registerAggregation (name, aggStorageClass, keyClass,
+        valueClass, persistent, reductionFunction, endAggregationFunction,
+        isIncremental)
+    }
+
+    withInitAggregations (initAggregations)
+  }
    
   /**
    * Adds a new aggregation to the computation
@@ -862,10 +1066,10 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
       persistent: Boolean = false,
       aggStorageClass: Class[_ <: AggregationStorage[K,V]] =
         classOf[AggregationStorage[K,V]],
-      aggregationKey: (E, Computation[E]) => K =
-        (e: E, c: Computation[E]) => null.asInstanceOf[K],
-      aggregationValue: (E, Computation[E]) => V =
-        (e: E, c: Computation[E]) => null.asInstanceOf[V],
+      aggregationKey: (E, Computation[E], K) => K =
+        (e: E, c: Computation[E], k: K) => null.asInstanceOf[K],
+      aggregationValue: (E, Computation[E], V) => V =
+        (e: E, c: Computation[E], v: V) => null.asInstanceOf[V],
       isIncremental: Boolean = false)
     : ArabesqueResult[E] = {
 
@@ -903,21 +1107,6 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
     )
   }
   
-  ///**
-  // * Adds a new aggregation to the computation
-  // *
-  // * @param name identifier of this new aggregation
-  // * @param reductionFunction the function that aggregates two values
-  // *
-  // * @return new result
-  // */
-  //def withAggregationRegistered [
-  //    K <: Writable : ClassTag, V <: Writable : ClassTag
-  //    ] (name: String)(reductionFunction: (V,V) => V): ArabesqueResult[E] = {
-  //  withAggregationRegistered [K,V] (name,
-  //    new ReductionFunctionContainer [V] (reductionFunction))
-  //}
-
   /**
    * Adds a new aggregation to the computation
    *
@@ -929,8 +1118,8 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
   def withAggregationRegistered [
       K <: Writable : ClassTag, V <: Writable : ClassTag
       ] (name: String)(
-        aggregationKey: (E, Computation[E]) => K,
-        aggregationValue: (E, Computation[E]) => V,
+        aggregationKey: (E, Computation[E], K) => K,
+        aggregationValue: (E, Computation[E], V) => V,
         reductionFunction: (V,V) => V
       ): ArabesqueResult[E] = {
     withAggregationRegistered [K,V] (name,
@@ -969,11 +1158,17 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    */
   def withExpandCompute (expandCompute: (E,Computation[E]) => Iterator[E])
     : ArabesqueResult[E] = {
-    val newConfig = config.withNewComputation (
-      getComputationContainer[E].withNewFunctions (
-        expandComputeOpt = Option((e,c) => expandCompute(e,c).asJava)
+    val newConfig = if (expandCompute != null) {
+      config.withNewComputation (
+        getComputationContainer[E].withNewFunctions (
+          expandComputeOpt = Option((e,c) => expandCompute(e,c).asJava)
+        )
       )
-    )
+    } else {
+      config.withNewComputation (
+        getComputationContainer[E].withNewFunctions (expandComputeOpt = None)
+      )
+    }
     this.copy (config = newConfig)
   }
 
@@ -1107,9 +1302,10 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
 
     s"Arabesque(scope=${scope}, step=${step}, depth=${depth}," + 
     s" stepByStep=${stepByStep}," +
-    s" ${computationToString}," +
+    s" computation=${computationToString}," +
     s" mustSync=${mustSync}, storageLevel=${storageLevel}," +
-    s" outputPath=${config.getOutputPath})"
+    s" outputPath=${config.getOutputPath}," +
+    s" isOutputActive=${config.isOutputActive})"
   }
 
   def toDebugString: String = parentOpt match {

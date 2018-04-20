@@ -4,7 +4,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
-public class LabelledEdge extends Edge {
+public class LabelledEdge<E> extends Edge<E> {
     private int edgeLabel;
 
     public LabelledEdge() {

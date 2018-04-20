@@ -36,10 +36,38 @@ class CliquesApp(val arabGraph: ArabesqueGraph,
     val cliquesRes = arabGraph.cliques.
       set ("comm_strategy", commStrategy).
       set ("num_partitions", numPartitions).
-      copy (mustSync = true).
+      //copy (mustSync = true).
       explore(explorationSteps)
     val embeddings = cliquesRes.embeddings((_,_) => false)
     println (s"num cliques = ${embeddings.count}")
+  }
+}
+
+class ECliquesApp(val arabGraph: ArabesqueGraph,
+    commStrategy: String,
+    numPartitions: Int,
+    explorationSteps: Int) extends ArabesqueSparkApp {
+  def execute: Unit = {
+    val cliquesRes = arabGraph.ecliques.
+      set ("comm_strategy", commStrategy).
+      set ("num_partitions", numPartitions).
+      explore(explorationSteps)
+    val embeddings = cliquesRes.embeddings((_,_) => false)
+    println (s"num cliques = ${embeddings.count}")
+  }
+}
+
+class QuasiCliquesApp(val arabGraph: ArabesqueGraph,
+    commStrategy: String,
+    numPartitions: Int,
+    explorationSteps: Int,
+    minDensity: Double) extends ArabesqueSparkApp {
+  def execute: Unit = {
+    val quasiCliquesRes = arabGraph.quasiCliques(explorationSteps, minDensity).
+      set ("comm_strategy", commStrategy).
+      set ("num_partitions", numPartitions)
+    val embeddings = quasiCliquesRes.embeddings((_,_) => false)
+    println (s"num quasiCliques = ${embeddings.count}")
   }
 }
 
@@ -49,16 +77,17 @@ class FSMApp(val arabGraph: ArabesqueGraph,
     explorationSteps: Int,
     support: Int) extends ArabesqueSparkApp {
   def execute: Unit = {
-    val _fsmRes = arabGraph.fsm(support).
-      set ("comm_strategy", commStrategy).
-      set ("num_partitions", numPartitions)
-    val fsmRes = if (explorationSteps >= 0) {
-      _fsmRes.exploreExp (explorationSteps)
-    } else {
-      _fsmRes.exploreAll()
-    }
-    val embeddings = fsmRes.embeddings((_,_) => false)
-    println (s"num frequent embeddings = ${embeddings.count}")
+    arabGraph.fsm2(support, explorationSteps)
+  }
+}
+
+class KeywordSearchApp(val arabGraph: ArabesqueGraph,
+    commStrategy: String,
+    numPartitions: Int,
+    explorationSteps: Int,
+    queryWords: Array[String]) extends ArabesqueSparkApp {
+  def execute: Unit = {
+    val kwsRes = arabGraph.keywordSearch(numPartitions, queryWords)
   }
 }
 
@@ -80,23 +109,52 @@ object SparkRunner {
 
     val conf = new SparkConf()
     val sc = new SparkContext(conf)
-    val arab = new ArabesqueContext(sc, logLevel)
+
+    // TODO: this is ugly but have to make sure all spark executors are up by
+    // the time we start running things
+    Thread.sleep(3000)
+
+    val arab = new ArabesqueContext(sc, logLevel,
+      "/scratch/dossantosdias.1/tmp/fractal")
     val arabGraph = arab.textFile (graphPath)
 
-    algorithm.toLowerCase match {
+    val app = algorithm.toLowerCase match {
       case "motifs" =>
         new MotifsApp(arabGraph, commStrategy,
-          numPartitions, explorationSteps).execute
+          numPartitions, explorationSteps)
       case "cliques" =>
         new CliquesApp(arabGraph, commStrategy,
-          numPartitions, explorationSteps).execute
+          numPartitions, explorationSteps)
+      case "ecliques" =>
+        new ECliquesApp(arabGraph, commStrategy,
+          numPartitions, explorationSteps)
+      case "quasicliques" =>
+        i += 1
+        val minDensity = args(i).toDouble
+        new QuasiCliquesApp(arabGraph, commStrategy, numPartitions,
+          explorationSteps, minDensity)
       case "fsm" =>
         i += 1
         val support = args(i).toInt
         new FSMApp(arabGraph, commStrategy, numPartitions,
-          explorationSteps, support).execute
-      case _ =>
+          explorationSteps, support)
+      case "kws" =>
+        i += 1
+        val queryWords = args.slice(i, args.length)
+        new KeywordSearchApp(arabGraph, commStrategy,
+          numPartitions, explorationSteps, queryWords)
+      case appName =>
+        throw new RuntimeException(s"Unknown app: ${appName}")
     }
+
+    i += 1
+    while (i < args.length) {
+      val kv = args(i).split(":")
+      arabGraph.set (kv(0), kv(1))
+      i += 1
+    }
+
+    app.execute
 
     arab.stop()
     sc.stop()

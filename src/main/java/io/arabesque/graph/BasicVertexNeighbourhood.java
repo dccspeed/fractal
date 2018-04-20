@@ -24,8 +24,8 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
    public BasicVertexNeighbourhood() {
       this.neighbourhoodMap = HashIntIntMaps.getDefaultFactory().withDefaultValue(-1).newMutableMap();
       this.removedNeighbourhoodMap = HashIntIntMaps.getDefaultFactory().withDefaultValue(-1).newMutableMap();
-      this.verticesBitmap = new RoaringBitSet();
-      this.edgesBitmap = new RoaringBitSet();
+      //this.verticesBitmap = new RoaringBitSet();
+      //this.edgesBitmap = new RoaringBitSet();
    }
 
    @Override
@@ -34,8 +34,8 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
       Arrays.parallelSort(orderedVertices);
       orderedEdges = neighbourhoodMap.values().toIntArray();
       Arrays.parallelSort(orderedEdges);
-      verticesBitmap.shrink();
-      edgesBitmap.shrink();
+      //verticesBitmap.shrink();
+      //edgesBitmap.shrink();
    }
 
    @Override
@@ -83,8 +83,8 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
       while (cur.moveNext()) {
          if (!vtag.contains(cur.key()) || !etag.contains(cur.value())) {
             removedNeighbourhoodMap.put(cur.key(), cur.value());
-            verticesBitmap.remove(cur.key());
-            edgesBitmap.remove(cur.value());
+            //verticesBitmap.remove(cur.key());
+            //edgesBitmap.remove(cur.value());
             cur.remove();
             --numVertices;
             ++removedEdges;
@@ -185,9 +185,13 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
 
    @Override
    public void addEdge(int neighbourVertexId, int edgeId) {
+      //if (neighbourhoodMap.containsKey(neighbourVertexId)) {
+      //   throw new RuntimeException(
+      //         "This edge already exists and this is not a multi-vertex neighbourhood.");
+      //}
       neighbourhoodMap.put(neighbourVertexId, edgeId);
-      verticesBitmap.add(neighbourVertexId);
-      edgesBitmap.add(edgeId);
+      //verticesBitmap.add(neighbourVertexId);
+      //edgesBitmap.add(edgeId);
    }
 
    @Override

@@ -1,16 +1,19 @@
 package io.arabesque.computation
 
 import java.io._
-import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.{ConcurrentLinkedQueue, ThreadLocalRandom}
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.{Properties, Iterator => JavaIterator}
+import java.util.{Arrays, Comparator, Properties, Iterator => JavaIterator}
 
 import akka.actor._
 import akka.dispatch.MessageDispatcher
 import akka.pattern.ask
+import akka.routing._
 import akka.util.Timeout
+
 import com.koloboke.collect.set.hash.HashIntSets
 import com.typesafe.config.{Config, ConfigFactory}
+
 import io.arabesque.conf.Configuration
 import io.arabesque.embedding.Embedding
 import io.arabesque.utils.Logging
@@ -18,7 +21,7 @@ import io.arabesque.utils.collection.IntArrayList
 import io.arabesque.utils.pool.HashIntSetPool
 
 import scala.collection.JavaConversions._
-import scala.collection.mutable.Set
+import scala.collection.mutable.{Map, Set}
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Random, Success}
@@ -29,10 +32,15 @@ import scala.util.{Failure, Random, Success}
 case object Reset
 
 /**
- * Message sent by the master and executors to spread actor references of the
- * peers participating in the communication
+ * Message sent by slaves to the master for registering
  */
-case class Hello(peers: Set[ActorRef])
+case class HelloMaster(partitionId: Int, slaveRef: ActorRef)
+
+/*
+ * Message sent by the master to a slave to inform the references of all other
+ * slaves
+ */
+case class HelloSlave(slaveRefs: Array[ActorRef])
 
 /**
  * Message sent to the local gtag actor to start a remote work-stealing event
@@ -40,11 +48,22 @@ case class Hello(peers: Set[ActorRef])
 case object StealWork
 
 /**
+ * Message sent by a slave to other slaves to indicate a ready state for
+ * termination
+ */
+case object ReadyToFinish
+
+/**
+ * This message is sent externally to the slave, providing a shared queue for
+ * consuming work. In this case, the response is the work to be consumed.
+ */
+case class WorkQueue(q: ConcurrentLinkedQueue[StealWorkResponse])
+
+/**
  * Message passed between the actors participating in a work-stealing event.
  * This message is forwarded until some work could be stealed.
  */
-case class StealWorkRequest(thief: ActorRef,
-  remainingPeers: List[ActorRef], numPeers: Int)
+case class StealWorkRequest(thief: ActorRef, nextPivot: Int, lastPivot: Int)
 
 /**
  * Response message to the sender of a 'StealWork'. If available, the work will
@@ -73,44 +92,47 @@ case class Stats(validEmbeddings: Long)
 abstract class MSActor(masterPath: String) extends Actor with Logging {
   /**
    * Akka reference of the master. Master here is used as a rendevouz point to
-   * spread actor references between peers.
+   * spread actor references between slaves.
    */
-  def gtagMasterRef: ActorRef
-
-  /**
-   * Peers known by this actor.
-   */
-  def peers: Set[ActorRef]
+  def masterRef: ActorRef
 
   logInfo(s"Actor ${self} started")
 }
 
 /**
- * Star master actor
+ * Master actor
  */
-class MasterActor(masterPath: String, numExecutors: Int)
+class MasterActor(masterPath: String, numSlaves: Int)
     extends MSActor(masterPath) {
 
-  override def gtagMasterRef: ActorRef = self
+  override def masterRef: ActorRef = self
 
-  override val peers: Set[ActorRef] = Set[ActorRef]()
+  private var slaves: Array[ActorRef] = new Array[ActorRef](numSlaves)
 
-  var validEmbeddings: Long = 0
-  var nextReportValidEmbeddings: Long = 1000000
+  private var slavesRouter: Router = new Router(new BroadcastRoutingLogic())
+
+  private var registeredSlaves: Int = 0
+
+  private var validEmbeddings: Long = 0
+
+  private var nextReportValidEmbeddings: Long = 1000000
 
   def receive = {
-    case Hello(_peers) =>
-      peers ++= _peers
-      // _peers.foreach (p => context.watch(p))
+    case HelloMaster(partitionId, slaveRef) =>
 
-      if (peers.size >= numExecutors) {
-        val helloMsg = Hello(peers)
-        peers.foreach (p => p ! helloMsg)
-        logInfo(s"Publishing ${numExecutors} peers.")
+      if (slaves(partitionId) == null) {
+        registeredSlaves += 1
+        slavesRouter = slavesRouter.addRoutee(ActorRefRoutee(slaveRef))
       }
+      
+      logInfo(s"${self} knows ${registeredSlaves} slaves.")
 
-      if (!peers.isEmpty) {
-        logInfo(s"${self} knows ${peers.size} peers.")
+      slaves(partitionId) = slaveRef
+
+      if (registeredSlaves == numSlaves) {
+        val helloMsg = HelloSlave(slaves)
+        slavesRouter.route(helloMsg, self)
+        logInfo(s"Publishing ${numSlaves} slaves.")
       }
 
     case Log(msg) =>
@@ -124,57 +146,84 @@ class MasterActor(masterPath: String, numExecutors: Int)
       }
 
     case Reset =>
-      peers.foreach(p => p ! PoisonPill)
-      peers.clear
+      slavesRouter.route(PoisonPill, self)
+      slavesRouter = new Router(new BroadcastRoutingLogic())
+      slaves = new Array[ActorRef](numSlaves)
+      registeredSlaves = 0
 
     case Terminated(p: ActorRef) =>
-      logInfo(s"Removing ${p} from active peers")
-      // context.unwatch(p)
-      peers -= p
 
     case _ =>
   }
 }
 
 /**
- * Gtag executors
+ * Slave actor
  */
 class SlaveActor [E <: Embedding](
     partitionId: Int,
     computation: Computation[E],
     masterPath: String) extends MSActor(masterPath) {
 
-  private var _gtagMasterRef: ActorRef = _
+  private val config: Configuration[E] = computation.getConfig()
 
-  override def gtagMasterRef: ActorRef = _gtagMasterRef
+  private var _masterRef: ActorRef = _
 
-  override val peers: Set[ActorRef] = Set[ActorRef](self)
+  override def masterRef: ActorRef = _masterRef
+
+  private var slaves: Array[ActorRef] = _
+
+  private var pivots: Array[ActorRef] = _
+  
+  private var localPivotIdx: Int = -1
+
+  private var outbox: ConcurrentLinkedQueue[StealWorkResponse] = _
+  
+  private var slavesRouter: Router = new Router(new BroadcastRoutingLogic())
+
+  private var readyToFinishCount: Int = 0
+
+  private val emptyResponse = StealWorkResponse(None, 0)
+
+  private val infoPeriod = computation.getConfig().getInfoPeriod()
+  
+  private val externalWsEnabled = computation.getConfig().externalWsEnabled()
 
   val prefix: String = {
-    val ExecutorPrefix = """gtag-executor-actor-(\d+)-(\d+)-(\d+)-(\d+)""".r
+    val ExecutorPrefix = """slave-actor-(\d+)-(\d+)-(\d+)-(\d+)""".r
     self.path.name match {
       case ExecutorPrefix(configId, step, partitionId, actorId) =>
-        s"gtag-executor-actor-${configId}-${step}"
+        s"slave-actor-${configId}-${step}"
       case other =>
         throw new RuntimeException(s"Invalid path for executor actor: ${other}")
     }
   }
 
-  private val random = new Random(partitionId)
-
+  // register with master
   sendIdentifyRequest()
-  reportStats()
-  // printStats()
+
+  // report execution stats from time to time
+  reportStatsScheduler()
 
   def receive = identifying
 
   def identifying: Actor.Receive = {
     case ActorIdentity(`masterPath`, Some(actor)) =>
-      _gtagMasterRef = actor
-      // context.watch(actor)
+      _masterRef = actor
       context.become(active(actor))
-      gtagMasterRef ! Hello(peers)
-      logInfo(s"${self} knows master: ${gtagMasterRef}")
+      masterRef ! HelloMaster(partitionId, self)
+      reportStats()
+      logInfo(s"${self} knows master: ${masterRef}")
+
+    case WorkQueue(_outbox) =>
+      outbox = _outbox
+      slavesRouter.route(ReadyToFinish, self)
+
+    case ReadyToFinish =>
+      readyToFinishCount += 1
+
+    case StealWork =>
+      sendEmptyResponse(self)
 
     case ActorIdentity(`masterPath`, None) =>
       logDebug(s"Remote actor not available: $masterPath")
@@ -182,90 +231,134 @@ class SlaveActor [E <: Embedding](
     case ReceiveTimeout =>
       sendIdentifyRequest()
 
-    case StealWork =>
-      sender ! StealWorkResponse(None, peers.size)
-      logDebug(s"${self} sending empty response to ${sender}." +
-        s" Reason: actor is currently in the identification state")
-
-    case StealWorkRequest(thief, remainingPeers, numPeers) =>
-      thief ! StealWorkResponse(None, numPeers)
-      logDebug(s"${self} sending empty response to ${thief}." +
-        s" Reason: actor is currently in the identification state")
-
     case other =>
       logDebug(s"${self} is not ready. Ignoring message: ${other}.")
   }
 
   def active(actor: ActorRef): Actor.Receive = {
-    case Hello(_peers) =>
-      peers ++= (_peers.filter(p => p.path.name startsWith prefix))
-      if (!peers.isEmpty) {
-        val numLocalPeers = peers.filter (
-          p => p.path.address.equals(self.path.address)).size()
+    case HelloSlave(_slaves) =>
+      slaves = _slaves
+      if (slaves.length > 0) {
+        val pivotMap: Map[Address,ActorRef] = Map.empty
+        var i = 0
+        var numLocalPeers = 0
+        while (i < slaves.length) {
+          val ref = slaves(i)
+          slavesRouter = slavesRouter.addRoutee(ActorRefRoutee(ref))
+          val refAddr = ref.path.address
+          pivotMap.update (refAddr, ref)
+          if (refAddr.equals(self.path.address)) {
+            numLocalPeers += 1
+          }
+          i += 1
+        }
+
+        pivots = pivotMap.values.toArray
+        Arrays.sort(pivots, GtagMessagingSystem.actorRefComparator)
+
+        // get local pivot index
+        var j = 0
+        while (localPivotIdx < 0 && j < pivots.length) {
+          if (pivots(j).path.address.equals(self.path.address)) {
+            localPivotIdx = j
+          }
+          j += 1
+        }
+
         computation.getConfig().taskCheckIn(0, numLocalPeers)
-        logInfo(s"${self} knows ${peers.size} peers (${numLocalPeers} local).")
+        logInfo(s"${self} knows ${slaves.length} slaves" +
+          s" (${pivots.length} pivots)" +
+          s" (${numLocalPeers} local)" +
+          s" (pivots=${pivots.mkString(",")})")
         self.synchronized {
           self.notify()
         }
       }
+    
+    case WorkQueue(_outbox) =>
+      outbox = _outbox
+      slavesRouter.route(ReadyToFinish, self)
+
+    case ReadyToFinish =>
+      readyToFinishCount += 1
 
     case ReportStats =>
-      val atomicValidEmbeddings = computation.getExecutionEngine().
-        asInstanceOf[SparkFromScratchEngine[E]].validEmbeddings
-
-      if (atomicValidEmbeddings != null) {
-        val validEmbeddings = atomicValidEmbeddings.get()
-        gtagMasterRef ! Stats(validEmbeddings)
-        atomicValidEmbeddings.addAndGet(-validEmbeddings)
-      }
+      reportStats()
 
     case inMsg @ StealWork =>
-      //var remainingPeers = random.shuffle((peers - self).toSeq).toList
-      var remainingPeers = random.shuffle(
-        (peers - self).
-          filter (p => !p.path.address.equals(self.path.address)).toSeq).toList
-
-      if (!remainingPeers.isEmpty) {
-        val aRef = remainingPeers.head
-        remainingPeers = remainingPeers.tail
-        val msg = StealWorkRequest(sender(), remainingPeers, peers.size)
-        aRef ! msg
-        logDebug(s"${inMsg}: ${self} sending ${msg} to ${aRef}. ")
+      if (slaves != null) {
+        if (externalWsEnabled) {
+          val numPivots = pivots.length
+          val nextPivot = (localPivotIdx + 1) % numPivots
+          val lastPivot = (localPivotIdx + numPivots - 1) % numPivots
+          //val nextPivot = ThreadLocalRandom.current().nextInt(numPivots)
+          //val lastPivot = (nextPivot + numPivots - 1) % numPivots
+          val msg = StealWorkRequest(self, nextPivot, lastPivot)
+          val aRef = pivots(nextPivot)
+          aRef ! msg
+          logDebug(s"${inMsg}: ${self} sending ${msg} to ${aRef}")
+        } else {
+          val msg = StealWorkResponse(None, readyToFinishCount)
+          self ! msg
+          logDebug(s"${inMsg}: ${self} sending ${msg} to ${self}")
+        }
       } else {
-        val msg = StealWorkResponse(None, peers.size)
-        sender ! msg
-        logDebug(s"${inMsg}: ${self} sending ${msg} to ${sender}")
+        sendEmptyResponse(self)
       }
 
-    case inMsg @ StealWorkRequest(thief, List(), numPeers) =>
-      val msg = StealWorkResponse(
-        GtagMessagingSystem.tryStealFromLocal(computation, random), numPeers)
-      thief ! msg
-      logDebug(s"${inMsg}: ${self} sending ${msg} to ${thief}")
-
-    case inMsg @ StealWorkRequest(thief, p :: remainingPeers, numPeers) =>
-      val workOpt = GtagMessagingSystem.tryStealFromLocal(computation, random)
-      if (workOpt.isDefined) {
-        val msg = StealWorkResponse(workOpt, numPeers)
-        thief ! msg
-        logDebug(s"${inMsg}: ${self} sending ${msg} to ${thief}")
+    case inMsg @ StealWorkRequest(
+        thief, nextPivot, lastPivot) if nextPivot == lastPivot =>
+      if (slaves != null) {
+        val workOpt = GtagMessagingSystem.tryStealFromLocal(computation)
+        if (workOpt != null &&
+            (workOpt.isDefined || readyToFinishCount == slaves.length)) {
+          val msg = StealWorkResponse(workOpt, slaves.length)
+          thief ! msg
+          logDebug(s"${inMsg}: ${self} sending ${msg} to ${thief}")
+        } else {
+          sendEmptyResponse(thief)
+        }
       } else {
-        val msg = StealWorkRequest(thief, remainingPeers, numPeers)
-        p ! msg
-        logDebug(s"${inMsg}: ${self} forwarded ${msg} to ${p}")
+        sendEmptyResponse(thief)
       }
+     
+    case inMsg @ StealWorkRequest(thief, thisPivot, lastPivot) =>
+      if (slaves != null) {
+        val workOpt = GtagMessagingSystem.tryStealFromLocal(computation)
+        if (workOpt != null && workOpt.isDefined) {
+          val msg = StealWorkResponse(workOpt, slaves.length)
+          thief ! msg
+          logDebug(s"${inMsg}: ${self} sending ${msg} to ${thief}")
+        } else {
+          val numPivots = pivots.length
+          val nextPivot = (thisPivot + 1) % numPivots
+          val msg = StealWorkRequest(thief, nextPivot, lastPivot)
+          val p = pivots(nextPivot)
+          p ! msg
+          logDebug(s"${inMsg}: ${self} forwarded ${msg} to ${p}")
+        }
+      } else {
+        sendEmptyResponse(thief)
+      }
+
+    case inMsg: StealWorkResponse =>
+      outbox.add(inMsg)
 
     case inMsg @ Log(msg) =>
-      gtagMasterRef ! inMsg
+      masterRef ! inMsg
 
     case Terminated(`actor`) =>
-      // context.unwatch(actor)
       sendIdentifyRequest()
       context.become(identifying)
       logInfo(s"Master ${actor} terminated")
 
     case ReceiveTimeout =>
-    // ignore
+      // ignore
+  }
+
+  private def sendEmptyResponse(ref: ActorRef): Unit = {
+    ref ! emptyResponse
+    logDebug(s"Sending empty response ${emptyResponse} to ${ref}.")
   }
 
   private def sendIdentifyRequest(): Unit = {
@@ -275,19 +368,36 @@ class SlaveActor [E <: Embedding](
     context.system.scheduler.scheduleOnce(3 seconds, self, ReceiveTimeout)
   }
 
-  private def reportStats(): Unit = {
+  private def reportStatsScheduler(): Unit = {
     import context.dispatcher
-    context.system.scheduler.schedule(3 seconds, 3 seconds, self, ReportStats)
+    context.system.scheduler.schedule(
+      infoPeriod millis, infoPeriod millis, self, ReportStats)
   }
 
-  override def postStop(): Unit = {
-    logInfo(s"SlaveActor stopped step=${computation.getStep}" +
-      s" partitionId=${partitionId} actor=${self}")
-    computation.getConfig().taskCheckOut()
+  private def reportStats(): Unit = {
+    val engine = computation.getExecutionEngine().
+      asInstanceOf[SparkFromScratchEngine[E]]
+
+    masterRef ! Log(
+      s"StatsReport{" +
+      s"step=${computation.getStep}," +
+      s"partitionId=${computation.getPartitionId}," +
+      s"${engine.getStatsAccumulators}," +
+      reportMemoryStats() + "}")
+    //engine.printStatsAccumulators
+
+    //val atomicValidEmbeddings = engine.validEmbeddings
+
+    //if (atomicValidEmbeddings != null) {
+    //  val validEmbeddings = atomicValidEmbeddings.get()
+    //  masterRef ! Stats(validEmbeddings)
+    //  atomicValidEmbeddings.addAndGet(-validEmbeddings)
+    //}
+
+    // reportMemoryStats()
   }
 
-
-  private def printStats(): Unit = {
+  private def reportMemoryStats(): String = {
     val unit = Configuration.GB
     def scale(n: Double): Double = n / unit
     val runtime = Runtime.getRuntime()
@@ -297,17 +407,25 @@ class SlaveActor [E <: Embedding](
     val usedMemory = totalMemory - freeMemory
     val step = computation.getStep()
 
-    logInfo (s"MemoryStats(GB) step=${step}" +
-      s" partitionId=${partitionId}" +
-      s" maxMemory=${scale(maxMemory)} totalMemory=${scale(totalMemory)}" +
-      s" freeMemory=${scale(freeMemory)} usedMemory=${scale(usedMemory)}")
+    s"maxMemory=${scale(maxMemory)},totalMemory=${scale(totalMemory)}," +
+      s"freeMemory=${scale(freeMemory)},usedMemory=${scale(usedMemory)}"
+  }
 
-    import context.dispatcher
-    context.system.scheduler.scheduleOnce(3 seconds, self, ReceiveTimeout)
+  override def postStop(): Unit = {
+    logInfo(s"SlaveActor stopped step=${computation.getStep}" +
+      s" partitionId=${partitionId} actor=${self}")
+    computation.getConfig().taskCheckOut()
+    SparkFromScratchEngine.unregisterComputation(computation)
   }
 }
 
 object GtagMessagingSystem extends Logging {
+  val actorRefComparator = new Comparator[ActorRef] () {
+    override def compare(a1: ActorRef, a2: ActorRef): Int = {
+      a1.compareTo(a2)
+    }
+  }
+
   private var _akkaSysOpt: Option[ActorSystem] = None
 
   private var _masterAkkaSysOpt: Option[ActorSystem] = None
@@ -350,9 +468,9 @@ object GtagMessagingSystem extends Logging {
 
   private lazy val _executorAkkaSys: ActorSystem = {
     val props = getDefaultProperties
+    // setting "0" means to allocate the first/any OS port available
     props.setProperty("akka.remote.netty.tcp.port", "0")
-    val as = ActorSystem("arabesque-gtag-system",
-      config = Some(getAkkaConfig(props)))
+    val as = ActorSystem("fractal-msgsys", config = Some(getAkkaConfig(props)))
     _akkaSysOpt = Option(as)
     _executorAkkaSysOpt = Option(as)
     logInfo(s"Started akka-sys: ${as} - executor - waiting for messages")
@@ -362,8 +480,7 @@ object GtagMessagingSystem extends Logging {
   private lazy val _masterAkkaSys: ActorSystem = {
     val props = getDefaultProperties
     props.setProperty("akka.remote.netty.tcp.port", "2552")
-    val as = ActorSystem("arabesque-gtag-system",
-      config = Some(getAkkaConfig(props)))
+    val as = ActorSystem("fractal-msgsys", config = Some(getAkkaConfig(props)))
     _akkaSysOpt = Option(as)
     _masterAkkaSysOpt = Option(as)
     logInfo(s"Started akka-sys: ${as} - master - waiting for messages")
@@ -388,65 +505,80 @@ object GtagMessagingSystem extends Logging {
   }
 
   def createActor(engine: SparkMasterEngine[_]): ActorRef = {
-    val remotePath = s"akka.tcp://arabesque-gtag-system@" +
+    val remotePath = s"akka.tcp://fractal-msgsys@" +
       s"${engine.config.getMasterHostname}:2552" +
-      s"/user/gtag-master-actor-${engine.config.getId}-${engine.superstep}"
+      s"/user/master-actor-${engine.config.getId}-${engine.superstep}"
     akkaSys(engine).actorOf(
       Props(classOf[MasterActor], remotePath, engine.numPartitions).
         withDispatcher("akka.actor.default-dispatcher"),
-      s"gtag-master-actor-${engine.config.getId}-${engine.superstep}")
+      s"master-actor-${engine.config.getId}-${engine.superstep}")
   }
 
   def createActor [E <: Embedding] (engine: SparkEngine[E]): ActorRef = {
-    val remotePath = s"akka.tcp://arabesque-gtag-system@" +
+    val remotePath = s"akka.tcp://fractal-msgsys@" +
       s"${engine.configuration.getMasterHostname}:2552" +
-      s"/user/gtag-master-actor-${engine.configuration.getId}" +
+      s"/user/master-actor-${engine.configuration.getId}" +
       s"-${engine.superstep}"
     val slaveActorRef = akkaSys(engine).actorOf(
       Props(classOf[SlaveActor[E]],
         engine.partitionId, engine.computation, remotePath).
         withDispatcher("akka.actor.default-dispatcher"),
-      s"gtag-executor-actor" +
-      s"-${engine.configuration.getId}-${engine.superstep}" +
-      s"-${engine.partitionId}-${getNextActorId}")
+      s"slave-actor" +
+        s"-${engine.configuration.getId}-${engine.superstep}" +
+        s"-${engine.partitionId}-${getNextActorId}")
+
+    // wait for this slave to know the all other slaves before proceed
     slaveActorRef.synchronized {
       while (engine.configuration.taskCounter() == 0) {
         slaveActorRef.wait()
       }
     }
+
+    // ensure that local computation structures are properly created
+    SparkFromScratchEngine.createComputationsMap(
+      engine.superstep, engine.configuration.taskCounter())
+
     slaveActorRef
   }
 
   /**
    */
-  def tryStealFromLocal [E <: Embedding] (c: Computation[E], random: Random)
-    : Option[Array[Byte]] = {
-    val computations = random.shuffle(
-      SparkFromScratchEngine.activeComputations.
-      filter { case ((s,p),_) =>
-        s == c.getStep() && p == c.getPartitionId
-      }.map(_._2).toSeq.asInstanceOf[Seq[Computation[E]]])
-
-    assert (computations.length <= 1)
+  def tryStealFromLocal [E <: Embedding] (
+      c: Computation[E]): Option[Array[Byte]] = {
+    val computations = SparkFromScratchEngine.localComputations[E](c.getStep())
+    val numComputations = computations.length
 
     val gtagBatchLow = c.getConfig().getGtagBatchSizeLow()
     val gtagBatchHigh = c.getConfig().getGtagBatchSizeHigh()
-    val batchSize = random.nextInt(
+    val batchSize = ThreadLocalRandom.current().nextInt(
       gtagBatchHigh - gtagBatchLow + 1) + gtagBatchLow
+    
+    var missingComputation = false
 
-    var i = 0
-    while (i < computations.length) {
-      val currComp = computations(i)
-      val consumer = currComp.forkConsumer()
-      if (consumer != null) {
-        val ebytesOpt = serializeEmbeddingBatch(consumer, batchSize)
-        currComp.joinConsumer(consumer)
-        return ebytesOpt
+    var i = ThreadLocalRandom.current().nextInt(numComputations)
+    val offset = i + numComputations
+    while (i < offset) {
+      val currComp = computations(i % numComputations)
+      if (currComp != null) {
+        val consumer = currComp.forkConsumer(false)
+        if (consumer != null) {
+          val ebytesOpt = serializeEmbeddingBatch(consumer, batchSize)
+          currComp.joinConsumer(consumer)
+          if (ebytesOpt.isDefined) {
+            return ebytesOpt
+          }
+        }
+      } else {
+        missingComputation = true
       }
       i += 1
     }
 
-    None
+    if (!missingComputation) {
+      None
+    } else {
+      null
+    }
   }
 
   /**
@@ -496,19 +628,6 @@ object GtagMessagingSystem extends Logging {
     }
   }
 
-  def tryStealWorkFromRemote [E <: Embedding] (c: Computation[E])
-    : (Int,Future[_]) = {
-    val gtagActorRef = c.getExecutionEngine().
-    asInstanceOf[SparkFromScratchEngine[E]].gtagActorRef
-    val requestId = getNextRequestId
-    //logInfo (s"RequestSent step=${c.getStep} partitionsId=${c.getPartitionId}" +
-    //  s" requestId=${requestId}")
-
-    implicit val executionContext = akkaExecutorContext
-    implicit val timeout = Timeout(15 seconds)
-    (requestId, gtagActorRef ? StealWork)
-  }
-
   def deserializeEmbeddingBatch [E <: Embedding] (buf: Array[Byte],
         c: Computation[E]): EmbeddingIterator[E] = {
     var bis: ByteArrayInputStream = null
@@ -523,7 +642,8 @@ object GtagMessagingSystem extends Logging {
       while (curr != null && curr.computationLabel() != label) {
         curr = curr.nextComputation()
       }
-      assert (curr != null, s"label=${label} ${c}")
+      
+      //assert (curr != null, s"label=${label} ${c}")
 
       // prefix
       val prefixSize = ois.readInt()
@@ -546,7 +666,7 @@ object GtagMessagingSystem extends Logging {
       val currIterator = curr.asInstanceOf[BasicComputation[E]].
         getEmbeddingIterator()
        
-      currIterator.set(curr, embedding, wordIds)
+      currIterator.setFromRemote(curr, embedding, wordIds)
 
     } finally {
       ois.close
@@ -559,14 +679,23 @@ class WorkStealingSystem [E <: Embedding] (
     gtagExecutorActor: ActorRef,
     remoteWorkQueue: ConcurrentLinkedQueue[StealWorkResponse],
     callback: (EmbeddingIterator[E], Long) => Unit =
-      (e: EmbeddingIterator[E], ret: Long) => {}) {
+      (e: EmbeddingIterator[E], ret: Long) => {}) extends Logging {
 
   def workStealingCompute(c: Computation[E]): Unit = {
     implicit val executionContext = GtagMessagingSystem.akkaExecutorContext
-    implicit val timeout = Timeout(15 seconds)
     var workStealed = true
     @volatile var remoteRequestSent = false
+    var requestsBalance = 0
     var remoteCancellable = null.asInstanceOf[Cancellable]
+    val internalWsEnabled = c.getConfig().internalWsEnabled()
+    val externalWsEnabled = c.getConfig().externalWsEnabled()
+    var internalSteals = 0L
+    var externalSteals = 0L
+
+    // the local communication slave must know where to produce request
+    // responses, this is a shared work queue to be consumed by this and
+    // produced by the local slave
+    gtagExecutorActor ! WorkQueue(remoteWorkQueue)
 
     /**
      * This callback is scheduled right after a remote stealing request, as
@@ -574,6 +703,11 @@ class WorkStealingSystem [E <: Embedding] (
      */
     def requestExpirer: Unit = {
       remoteRequestSent = false
+    }
+
+    def terminationTimeout: Unit = {
+      requestsBalance = 0
+      logWarning (s"Terminating slave due termination timeout.")
     }
 
     /**
@@ -586,138 +720,164 @@ class WorkStealingSystem [E <: Embedding] (
           remoteCancellable.cancel()
         }
 
-        val (requestId, requestFuture) =
-          GtagMessagingSystem.tryStealWorkFromRemote(c)
-        requestFuture.onComplete {
-          case Success(response: StealWorkResponse) =>
-            assert (remoteWorkQueue.add(response))
-
-          case Success(response) =>
-            throw new RuntimeException(s"Unknown response: ${response}")
-
-          case Failure(e) =>
-            throw e
-        }
+        // send steal work request, at some point the local work queue should be
+        // populated with the response to this request
+        gtagExecutorActor ! StealWork
+        requestsBalance += 1
         remoteRequestSent = true
 
-        remoteCancellable = akkaSys.scheduler.scheduleOnce(15 seconds)(
+        remoteCancellable = akkaSys.scheduler.scheduleOnce(500 millis)(
           requestExpirer)(executionContext)
 
         case None =>
           // do nothing
     }
 
-    do {
-      val workStealedLocally = workStealingComputeLocal(c)
+    var wastedIterations = 0L
 
-      if (!workStealedLocally && !remoteRequestSent) {
-        handleRemoteSteal
-      }
-
-      val response = remoteWorkQueue.poll()
-      if (response != null) {
-        response.workOpt match {
-          case Some(embeddingBatchBytes) =>
-            val consumer = GtagMessagingSystem.
-            deserializeEmbeddingBatch(embeddingBatchBytes, c)
-            val computation = consumer.getComputation()
-
-            val start = System.currentTimeMillis
-            val numStealedWords = consumer.getWordIds().size()
-            gtagExecutorActor ! Log(s"WorkStealedRemote" +
-              s" step=${c.getStep}" +
-              s" stealedByPartitionId=${computation.getPartitionId}" +
-              s" prefix=${consumer.getPrefix()}" +
-              s" numStealedWords=${numStealedWords}")
-
-            val ret = processCompute(consumer, computation)
-            callback(consumer, ret)
-
-            val end = System.currentTimeMillis
-            gtagExecutorActor ! Log(s"WorkStealedAndProcessedRemote" +
-              s" step=${c.getStep}" +
-              s" stealedByPartitionId=${computation.getPartitionId}" +
-              s" prefix=${consumer.getPrefix()}" +
-              s" numStealedWords=${numStealedWords}" +
-              s" elapsed=${(end - start)}ms")
-
-            if (remoteCancellable != null) {
-              remoteCancellable.cancel()
-            }
-
-            remoteRequestSent = false
-
-          case None =>
-            if (response.numPeers == c.getNumberPartitions) {
-              gtagExecutorActor ! Log(s"AttemptFinishingExecutor" +
-                s" step=${c.getStep}" +
-                s" partitionId=${c.getPartitionId}" +
-                s" responseNumPeers=${response.numPeers}" +
-                s" numPartitionsTotal=${c.getNumberPartitions}")
-              workStealed = false
-            }
-            if (remoteCancellable != null) {
-              remoteCancellable.cancel()
-            }
-            remoteRequestSent = false
+    if (internalWsEnabled && !externalWsEnabled) {
+        internalSteals = workStealingComputeLocal(c)
+    } else {
+      do {
+        var _internalSteals = 0L
+        if (internalWsEnabled) {
+          _internalSteals = workStealingComputeLocal(c)
+          internalSteals += _internalSteals
         }
+
+        if (workStealed && _internalSteals == 0 && !remoteRequestSent) {
+          handleRemoteSteal
+        }
+
+        val response = remoteWorkQueue.poll()
+        if (response != null) {
+          requestsBalance -= 1
+          response.workOpt match {
+            case Some(embeddingBatchBytes) =>
+              val consumer = GtagMessagingSystem.
+              deserializeEmbeddingBatch(embeddingBatchBytes, c)
+              val computation = consumer.getComputation()
+
+              //val start = System.currentTimeMillis
+              //val numStealedWords = consumer.getWordIds().size()
+              //gtagExecutorActor ! Log(s"WorkStealedRemote" +
+              //  s" step=${c.getStep}" +
+              //  s" stealedByPartitionId=${computation.getPartitionId}" +
+              //  s" prefix=${consumer.getPrefix()}" +
+              //  s" numStealedWords=${numStealedWords}")
+
+              val ret = processCompute(consumer, computation)
+              callback(consumer, ret)
+              externalSteals += 1
+
+              //val end = System.currentTimeMillis
+              //gtagExecutorActor ! Log(s"WorkStealedAndProcessedRemote" +
+              //  s" step=${c.getStep}" +
+              //  s" stealedByPartitionId=${computation.getPartitionId}" +
+              //  s" prefix=${consumer.getPrefix()}" +
+              //  s" numStealedWords=${numStealedWords}" +
+              //  s" elapsed=${(end - start)}ms")
+
+              if (remoteCancellable != null) {
+                remoteCancellable.cancel()
+              }
+
+              remoteRequestSent = false
+
+            case None =>
+              if (remoteCancellable != null) {
+                remoteCancellable.cancel()
+              }
+
+              remoteRequestSent = false
+
+              if (response.numPeers == c.getNumberPartitions) {
+                gtagExecutorActor ! Log(s"AttemptFinishingExecutor" +
+                  s" step=${c.getStep}" +
+                  s" partitionId=${c.getPartitionId}" +
+                  s" responseNumPeers=${response.numPeers}" +
+                  s" numPartitionsTotal=${c.getNumberPartitions}" +
+                  s" requestsBalance=${requestsBalance}")
+                workStealed = false
+
+                // we setup a timeout to prevent this slave hanging undefinitely
+                GtagMessagingSystem.akkaSysOpt match {
+                  case Some(akkaSys) =>
+                    remoteCancellable = akkaSys.scheduler.scheduleOnce(
+                      15 seconds)(terminationTimeout)(executionContext)
+                  case None =>
+                }
+              }
+          }
+        } else {
+          if (_internalSteals == 0) wastedIterations += 1
+        }
+      } while (workStealed || !remoteWorkQueue.isEmpty || requestsBalance > 0)
+
+      if (remoteCancellable != null) {
+        remoteCancellable.cancel()
       }
-    } while (workStealed || !remoteWorkQueue.isEmpty)
+    }
 
     gtagExecutorActor ! Log(s"FinishingExecutor" +
       s" step=${c.getStep}" +
       s" partitionId=${c.getPartitionId}" +
-      s" numPartitionsTotal=${c.getNumberPartitions}")
+      s" internalSteals=${internalSteals}" +
+      s" externalSteals=${externalSteals}" +
+      s" requestsBalance=${requestsBalance}" +
+      s" numPartitionsTotal=${c.getNumberPartitions}" + 
+      s" wastedIterations=${wastedIterations}")
   }
 
-  private def workStealingComputeLocal(c: Computation[E]): Boolean = {
-    val random = new Random(c.getPartitionId)
-    val computations = random.shuffle(
-      SparkFromScratchEngine.activeComputations.filter {
-        case ((s,p),_) => s == c.getStep() && p != c.getPartitionId
-      }.map(_._2).toSeq.asInstanceOf[Seq[Computation[E]]]
-    )
+  private def workStealingComputeLocal(c: Computation[E]): Long = {
+    val computations = SparkFromScratchEngine.localComputations[E](c.getStep())
 
-    var stealed = false
-    var i = 0
-    while (i < computations.length) {
-      val currComp = computations(i)
-      val consumer = currComp.forkConsumer()
-      if (consumer != null) {
-        stealed = true
-        val label = consumer.computationLabel()
+    var internalSteals = 0L
+    var _internalSteals = 0L
+    do {
+      _internalSteals = 0L
+      var i = 0
+      while (i < computations.length) {
+        val currComp = computations(i)
+        if (currComp != null) {
+          val consumer = currComp.forkConsumer(true)
+          if (consumer != null) {
+            val label = consumer.computationLabel()
 
-        // reach proper computation depth w.r.t. the stealed work
-        var curr = c
-        while (curr != null && curr.computationLabel() != label) {
-          curr = curr.nextComputation()
+            // reach proper computation depth w.r.t. the stealed work
+            var curr = c
+            while (curr != null && curr.computationLabel() != label) {
+              curr = curr.nextComputation()
+            }
+
+            //assert (curr != null, s"label=${label} ${c}")
+
+            //val start = System.currentTimeMillis
+            //gtagExecutorActor ! Log(s"WorkStealedLocal step=${c.getStep}" +
+            //  s" stealedByPartitionId=${curr.getPartitionId}" +
+            //  s" stealedFromPartitionId=${currComp.getPartitionId}" +
+            //  s" computationPos=${i}/${computations.length}"
+            //  )
+
+            val ret = processCompute(consumer, curr)
+            callback(consumer, ret)
+            _internalSteals += 1
+
+            //val end = System.currentTimeMillis
+            //gtagExecutorActor ! Log(s"WorkStealedAndProcessedLocal" +
+            //  s" step=${c.getStep}" +
+            //  s" stealedByPartitionId=${curr.getPartitionId}" +
+            //  s" stealedFromPartitionId=${currComp.getPartitionId}" +
+            //  s" elapsed=${(end - start)}ms")
+
+            currComp.joinConsumer(consumer)
+          }
         }
-
-        assert (curr != null, s"label=${label} ${c}")
-
-        val start = System.currentTimeMillis
-        //gtagExecutorActor ! Log(s"WorkStealedLocal step=${c.getStep}" +
-        //  s" stealedByPartitionId=${curr.getPartitionId}" +
-        //  s" stealedFromPartitionId=${currComp.getPartitionId}" +
-        //  s" computationPos=${i}/${computations.length}"
-        //  )
-
-        val ret = processCompute(consumer, curr)
-        callback(consumer, ret)
-
-        val end = System.currentTimeMillis
-        //gtagExecutorActor ! Log(s"WorkStealedAndProcessedLocal" +
-        //  s" step=${c.getStep}" +
-        //  s" stealedByPartitionId=${curr.getPartitionId}" +
-        //  s" stealedFromPartitionId=${currComp.getPartitionId}" +
-        //  s" elapsed=${(end - start)}ms")
-
-        currComp.joinConsumer(consumer)
+        i += 1
       }
-      i += 1
-    }
+      internalSteals += _internalSteals
+    } while (_internalSteals > 0)
 
-    // stealed || computations.length < c.getNumberPartitions() - 1
-    stealed
+    internalSteals
   }
 }

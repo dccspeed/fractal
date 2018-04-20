@@ -346,6 +346,8 @@ class SparkViewTagMasterEngine[E <: Embedding](
           val gtagExecutorActor = execEngine.
             asInstanceOf[SparkFromScratchEngine[E]].gtagActorRef
 
+          // this is to account for enabled words when the processing went
+          // through the work-stealing code path
           val callback = {
             val reusableInt = new IntWritable()
             val reusableSet = new IntSet(1)
@@ -358,7 +360,8 @@ class SparkViewTagMasterEngine[E <: Embedding](
                   reusableInt.set(prefix.getUnchecked(i))
                   reusableSet.clear()
                   reusableSet.addInt(prefix.getUnchecked(i + 1))
-                  enabledWordEdges.aggregateWithReusables(reusableInt, reusableSet)
+                  enabledWordEdges.aggregateWithReusables(
+                    reusableInt, reusableSet)
                   i += 1
                 }
               }

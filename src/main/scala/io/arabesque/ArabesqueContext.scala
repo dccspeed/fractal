@@ -23,11 +23,13 @@ import org.apache.spark.SparkContext
   * @return an [[io.arabesque.ArabesqueContext]]
   *
  */
-class ArabesqueContext(sc: SparkContext, logLevel: String = "info") 
+class ArabesqueContext(sc: SparkContext, logLevel: String = "info",
+      tmpDir: String = "/tmp/fractal") 
     extends Logging {
 
   private val uuid: UUID = UUID.randomUUID
-  def tmpPath: String = s"/tmp/arabesque-${uuid}" // TODO: base dir as config
+
+  def tmpPath: String = s"${tmpDir}-${uuid}" // TODO: base dir as config
 
   def sparkContext: SparkContext = sc
 
@@ -47,7 +49,7 @@ class ArabesqueContext(sc: SparkContext, logLevel: String = "info")
     * @see [[https://github.com/viniciusvdias/Arabesque/blob/master/README.md]]
     * for how to prepare the input file
     */
-  def textFile(path: String, local: Boolean = false): ArabesqueGraph = {
+  def textFile (path: String, local: Boolean = false): ArabesqueGraph = {
     new ArabesqueGraph (path, this, logLevel)
   }
 

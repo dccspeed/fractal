@@ -32,7 +32,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
     private HashIntSet domainsReachedSupport;
     private boolean enoughSupport;
     private int support;
-    private int currentSupport;
+    private long currentSupport;
     private int numberOfDomains;
     private IntWriterConsumer intWriterConsumer;
     private IntCollectionAddConsumer intAdderConsumer;
@@ -171,7 +171,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
         }
 
         dataOutput.writeInt(support);
-        dataOutput.writeInt(currentSupport);
+        dataOutput.writeLong(currentSupport);
         dataOutput.writeInt(numberOfDomains);
 
         if (enoughSupport) {
@@ -209,7 +209,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
         this.clear();
 
         support = dataInput.readInt();
-        currentSupport = dataInput.readInt();
+        currentSupport = dataInput.readLong();
         numberOfDomains = dataInput.readInt();
 
         if (dataInput.readBoolean()) {

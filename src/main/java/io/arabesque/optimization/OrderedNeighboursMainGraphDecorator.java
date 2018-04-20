@@ -36,7 +36,12 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
     public int getId() {
        return underlyingMainGraph.getId();
     }
-    
+
+    @Override
+    public void setId(int id) {
+       underlyingMainGraph.setId(id);
+    }
+
     @Override
     public int applyTag(AtomicBitSetArray vtag, AtomicBitSetArray etag) {
        throw new UnsupportedOperationException("Not implemented");

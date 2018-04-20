@@ -21,6 +21,7 @@ import io.arabesque.pattern.VICPattern;
 import io.arabesque.utils.pool.Pool;
 import io.arabesque.utils.pool.PoolRegistry;
 
+import java.io.IOException;
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
@@ -95,7 +96,7 @@ public class Configuration<O extends Embedding> implements Serializable {
     public static final String CONF_MASTER_COMPUTATION_CLASS_DEFAULT = "io.arabesque.computation.MasterComputation";
 
     public static final String CONF_COMM_STRATEGY = "arabesque.comm.strategy";
-    public static final String CONF_COMM_STRATEGY_DEFAULT = "embedding";
+    public static final String CONF_COMM_STRATEGY_DEFAULT = "scratch";
 
     public static final String CONF_COMM_STRATEGY_ODAGMP_MAX = "arabesque.comm.strategy.odagmp.max";
     public static final int CONF_COMM_STRATEGY_ODAGMP_MAX_DEFAULT = 100;
@@ -105,6 +106,9 @@ public class Configuration<O extends Embedding> implements Serializable {
 
     public static final String CONF_PATTERN_CLASS = "arabesque.pattern.class";
     public static final String CONF_PATTERN_CLASS_DEFAULT = "io.arabesque.pattern.JBlissPattern";
+
+    public static final String CONF_EMBEDDING_KEEP_MAXIMAL = "arabesque.embedding.keep.maximal";
+    public static final boolean CONF_EMBEDDING_KEEP_MAXIMAL_DEFAULT = false;
 
     // TODO: maybe we should the name of this configuration in the future, use
     // odag instead of ezip ?
@@ -139,7 +143,12 @@ public class Configuration<O extends Embedding> implements Serializable {
     public static final int CONF_GTAG_BATCH_SIZE_LOW_DEFAULT = 1;
 
     public static final String CONF_GTAG_BATCH_SIZE_HIGH = "arabesque.gtag.batch.size.high";
-    public static final int CONF_GTAG_BATCH_SIZE_HIGH_DEFAULT = 100;
+    public static final int CONF_GTAG_BATCH_SIZE_HIGH_DEFAULT = 10;
+    
+    public static final String CONF_WS_INTERNAL = "arabesque.ws.mode.internal";
+    public static final boolean CONF_WS_MODE_INTERNAL_DEFAULT = true;
+    public static final String CONF_WS_EXTERNAL = "arabesque.ws.mode.external";
+    public static final boolean CONF_WS_MODE_EXTERNAL_DEFAULT = true;
 
     private String masterHostname;
     protected static Configuration instance = null;
@@ -149,7 +158,7 @@ public class Configuration<O extends Embedding> implements Serializable {
 
     private boolean useCompressedCaches;
     private int cacheThresholdSize;
-    private long infoPeriod;
+    protected long infoPeriod;
     private int odagNumAggregators;
     private boolean is2LevelAggregationEnabled;
     private boolean forceGC;
@@ -169,7 +178,7 @@ public class Configuration<O extends Embedding> implements Serializable {
 
     private transient Map<String, AggregationStorageMetadata>
        aggregationsMetadata;
-    private transient MainGraph mainGraph;
+    protected transient MainGraph mainGraph;
     protected int mainGraphId = -1;
     private boolean isGraphEdgeLabelled;
     protected transient boolean initialized = false;
@@ -408,7 +417,26 @@ public class Configuration<O extends Embedding> implements Serializable {
     }
 
     public Class<?>[] getClasses(String key, Class<?>... defaultValues) {
-        return giraphConfiguration.getClasses(key, defaultValues);
+       String classNamesStr = getString(key, null);
+       if (classNamesStr == null) {
+          return defaultValues;
+       }
+
+       String[] classNames = classNamesStr.split(",");
+       if (classNames.length == 0) {
+          return defaultValues;
+       } else {
+          try {
+             Class<?>[] classes = new Class<?>[classNames.length];
+             for (int i = 0; i < classes.length; ++i) {
+                classes[i] = Class.forName(classNames[i]);
+             }
+             return classes;
+          } catch (ClassNotFoundException e) {
+             throw new RuntimeException(e);
+          }
+       }
+       //return giraphConfiguration.getClasses(key, defaultValues);
     }
 
     public Class<? extends Pattern> getPatternClass() {
@@ -448,6 +476,10 @@ public class Configuration<O extends Embedding> implements Serializable {
     public String getMainGraphPath() {
         return getString(CONF_MAINGRAPH_PATH, CONF_MAINGRAPH_PATH_DEFAULT);
     }
+    
+    public String getMainGraphPropertiesPath() {
+        return getMainGraphPath() + ".prop";
+    }
 
     public long getInfoPeriod() {
         return infoPeriod;
@@ -478,6 +510,14 @@ public class Configuration<O extends Embedding> implements Serializable {
         }
     }
 
+    public void setMainGraphId(int mainGraphId) {
+       this.mainGraphId = mainGraphId;
+    }
+
+    public int getMainGraphId() {
+       return mainGraphId;
+    }
+
     protected boolean isMainGraphRead() {
        return mainGraph.getNumberVertices() > 0 ||
           mainGraph.getNumberEdges() > 0;
@@ -485,8 +525,12 @@ public class Configuration<O extends Embedding> implements Serializable {
 
     public MainGraph createGraph() {
         for (Map.Entry<Integer,Configuration> entry: activeConfigs.entrySet()) {
-            if (entry.getValue().mainGraphId == mainGraphId) {
-                return entry.getValue().getMainGraph();
+            if (entry.getValue().mainGraphId == mainGraphId &&
+                  entry.getValue().isMainGraphRead()) {
+                MainGraph graph = entry.getValue().getMainGraph();
+                if (graph != null) {
+                   return graph;
+                }
             }
         }
 
@@ -494,8 +538,12 @@ public class Configuration<O extends Embedding> implements Serializable {
             Constructor<? extends MainGraph> constructor;
             constructor = mainGraphClass.getConstructor(String.class,
                   boolean.class, boolean.class);
-            return constructor.newInstance(getMainGraphPath(),
+            MainGraph graph = constructor.newInstance(getMainGraphPath(),
                   isGraphEdgeLabelled, isGraphMulti);
+            if (this.mainGraphId > -1) {
+               graph.setId(mainGraphId);
+            }
+            return graph;
         } catch (NoSuchMethodException | IllegalAccessException |
               InstantiationException | InvocationTargetException e) {
             throw new RuntimeException("Could not create main graph", e);
@@ -505,6 +553,30 @@ public class Configuration<O extends Embedding> implements Serializable {
     protected void readMainGraph() {
         boolean useLocalGraph = getBoolean(CONF_MAINGRAPH_LOCAL,
               CONF_MAINGRAPH_LOCAL_DEFAULT);
+        
+        // maybe read properties
+        try {
+            Method initProperties = mainGraphClass.getMethod(
+                  "initProperties", Object.class);
+
+            if (useLocalGraph) {
+                initProperties.invoke(mainGraph,
+                      Paths.get(getMainGraphPropertiesPath()));
+            } else {
+                initProperties.invoke(mainGraph,
+                      new Path(getMainGraphPropertiesPath()));
+            }
+        } catch (NoSuchMethodException | IllegalAccessException e) {
+            throw new RuntimeException("Could not read graph properties", e);
+        } catch (InvocationTargetException e) {
+           if (e.getTargetException() instanceof IOException) {
+              LOG.warn("Graph properties file not found: " +
+                    getMainGraphPropertiesPath());
+           } else {
+              throw new RuntimeException("Could not read graph properties", e);
+           }
+        }
+
         try {
             Method init = mainGraphClass.getMethod("init", Object.class);
 
@@ -697,6 +769,10 @@ public class Configuration<O extends Embedding> implements Serializable {
         return ReflectionUtils.newInstance(masterComputationClass);
     }
 
+    public void setIsGraphEdgeLabelled(boolean isGraphEdgeLabelled) {
+       this.isGraphEdgeLabelled = isGraphEdgeLabelled;
+    }
+
     public boolean isGraphEdgeLabelled() {
         return isGraphEdgeLabelled;
     }
@@ -725,9 +801,27 @@ public class Configuration<O extends Embedding> implements Serializable {
        this.computationClass = computationClass;
     }
 
+    public void setOptimizationSetDescriptorClass(
+          Class<? extends OptimizationSetDescriptor> optimizationSetDescriptorClass) {
+       this.optimizationSetDescriptorClass = optimizationSetDescriptorClass;
+    }
+
+    public OptimizationSet getOptimizationSet() {
+       OptimizationSetDescriptor optimizationSetDescriptor =
+          ReflectionUtils.newInstance(optimizationSetDescriptorClass);
+       OptimizationSet optimizationSet =
+          optimizationSetDescriptor.describe(this);
+       return optimizationSet;
+    }
+
     public boolean isAggregationIncremental() {
        return getBoolean (CONF_INCREMENTAL_AGGREGATION,
              CONF_INCREMENTAL_AGGREGATION_DEFAULT);
+    }
+
+    public boolean shouldKeepMaximal() {
+       return getBoolean (CONF_EMBEDDING_KEEP_MAXIMAL,
+             CONF_EMBEDDING_KEEP_MAXIMAL_DEFAULT);
     }
 
     public int getMaxOdags() {
@@ -751,6 +845,18 @@ public class Configuration<O extends Embedding> implements Serializable {
     public int getGtagBatchSizeHigh() {
        return getInteger(CONF_GTAG_BATCH_SIZE_HIGH,
              CONF_GTAG_BATCH_SIZE_HIGH_DEFAULT);
+    }
+
+    public boolean internalWsEnabled() {
+       return getBoolean(CONF_WS_INTERNAL, CONF_WS_MODE_INTERNAL_DEFAULT);
+    }
+    
+    public boolean externalWsEnabled() {
+       return getBoolean(CONF_WS_EXTERNAL, CONF_WS_MODE_EXTERNAL_DEFAULT);
+    }
+
+    public boolean wsEnabled() {
+       return internalWsEnabled() || externalWsEnabled();
     }
 
     public int getNumWords() {

@@ -75,16 +75,17 @@ trait SparkEngine [E <: Embedding]
     numEmbeddingsProcessed = 0
     numEmbeddingsGenerated = 0
     numEmbeddingsOutput = 0
-    previousAggregationsBc.value.asInstanceOf[Map[String,_]].keys.foreach {
-      name => 
-        val agg = aggregationStorageFactory.createAggregationStorage (name)
-        aggregationStorages.update (name, agg)
+    configuration.getAggregationsMetadata.asScala.keys.foreach { name =>
+      val agg = aggregationStorageFactory.createAggregationStorage (name)
+      aggregationStorages.update (name, agg)
     }
   }
 
   override def finalize() = {
     computation = null
     aggregationStorageFactory = null
+    if (outputStreamOpt.isDefined) outputStreamOpt.get.close
+    if (embeddingWriterOpt.isDefined) embeddingWriterOpt.get.close
   }
 
   /**
@@ -103,73 +104,35 @@ trait SparkEngine [E <: Embedding]
     }
   }
 
+  def getStatsAccumulators: String = {
+    accums.map { case (name, accum) =>
+      s"${name}:${accum.value}"
+    }.mkString(",")
+  }
+
   /**
-   * Flushes a given aggregation.
+   * Flush a serialized aggregation by name
    *
-   * @param name name of the aggregation
-   * @return iterator of aggregation storages
-   * TODO: split aggregations before flush them and review the return type
+   * @param name name of the aggregation storage
+   * @return An iterator of key (destination partition) and serialized
+   * aggregation that belongs to key partition
    */
-  def flushAggregationsByName(name: String) = {
-    // the following function does the final local aggregation
-    // e.g. for motifs, turns quick patterns into canonical ones
-    def aggregate[K <: Writable, V <: Writable](agg1: AggregationStorage[K,V],
-        agg2: AggregationStorage[_,_]) = {
-      agg1.finalLocalAggregate (agg2.asInstanceOf[AggregationStorage[K,V]])
-      agg1
-    }
-    val aggStorage = getAggregationStorage(name)
-    val finalAggStorage = aggregate (
-      aggregationStorageFactory.createAggregationStorage (name),
-      aggStorage)
-    logInfo (s"Flushing aggregation storage ${name}" +
-      s", step=${superstep} partitionId=${partitionId}" +
-      s" numberOfMappings=${finalAggStorage.getNumberMappings}" +
-      s" aggregation=${finalAggStorage}" +
-      s" estimatedSize=${SizeEstimator.estimate(finalAggStorage.getMapping)}")
-    Iterator(finalAggStorage)
-  }
-
-  def flushAggregationsByName2(name: String) = {
-    // the following function does the final local aggregation
-    // e.g. for motifs, turns quick patterns into canonical ones
-    def aggregate[K <: Writable, V <: Writable](agg1: AggregationStorage[K,V],
-        agg2: AggregationStorage[_,_]) = {
-      agg1.finalLocalAggregate (agg2.asInstanceOf[AggregationStorage[K,V]])
-      agg1
-    }
-    val aggStorage = getAggregationStorage(name)
-    val finalAggStorage = aggregate (
-      aggregationStorageFactory.createAggregationStorage (name),
-      aggStorage)
-    logInfo (s"Flushing aggregation storage ${name}" +
-      s", step=${superstep} partitionId=${partitionId}" +
-      s" numberOfMappings=${finalAggStorage.getNumberMappings}" +
-      s" estimatedSize=${SizeEstimator.estimate(finalAggStorage.getMapping)}")
-    finalAggStorage.getMapping.asScala.iterator.map { case (wKey, wValue) =>
-      (new SerializableWritable(wKey), new SerializableWritable(wValue))
-    }
-  }
-  
-  def flushAggregationsByName3(name: String) = {
-    val finalAggStorage = getAggregationStorage(name)
-    if (finalAggStorage != null) {
-      Iterator(finalAggStorage)
-    } else {
-      Iterator.empty
-    }
+  def flushAggregationsByName[K <: Writable, V <: Writable](
+      name: String): Iterator[(Int,Array[Byte])] = {
+    aggregationStorageSplits(name).iterator.filter(_ != null)
   }
 
   /**
-   * Flushes a given aggregation.
+   * Aggregates to a single, local storage and then splits again based on the
+   * provided keys
    *
    * @param name name of the aggregation
-   * @return iterator of aggregation storages
-   * TODO: split aggregations before flush them and review the return type
+   * @param aggStorage the actual storage that must be aggregated and splitted
    */
   def aggregateAndSplitFinalAggregation[K <: Writable, V <: Writable](
       name: String, aggStorage: AggregationStorage[K,V]): Unit = {
-    
+   
+    // we lose the unserialized version of this aggregation
     aggregationStorages.remove(name)
     
     // the following function does the final local aggregation
@@ -188,26 +151,32 @@ trait SparkEngine [E <: Embedding]
       configuration.getOrCreateFinalAggStorage(name),
       aggStorage)
 
+    // get a single local (same worker) version of this aggregation
+    // this is a shared reference between every engine in this worker
     val (_finalAggStorage, barrier) = configuration.
         maybeReclaimFinalAggStorage(superstep, name)
 
     val finalAggStorage = _finalAggStorage.asInstanceOf[AggregationStorage[K,V]]
 
+    // wait for the last engine aggregate its content to finalAggStorage
     finalAggStorage.synchronized {
       while (barrier.get != 0) {
         finalAggStorage.wait()
       }
     }
 
+    // at this point the finalAggStorage is complete
+    // the following is a sanity notification for all engines still waiting for
+    // final aggregation completion
     finalAggStorage.synchronized {
       finalAggStorage.notifyAll()
     }
 
     val elapsed = System.currentTimeMillis - start
 
+    // setup splits
     val numPartitions = getNumberPartitions()
     val aggStorageSplits = new Array[AggregationStorage[K,V]](numPartitions)
-
     var i = 0
     while (i < aggStorageSplits.length) {
       aggStorageSplits(i) = aggregationStorageFactory.
@@ -216,7 +185,9 @@ trait SparkEngine [E <: Embedding]
       i += 1
     }
 
-
+    // a key consumer in the single finalAggStorage will allow us to split the
+    // aggregated keys in parallel, i.e., each engine will split some portion of
+    // the keys.
     val keysConsumer = finalAggStorage.getKeysConsumer()
     var key = keysConsumer.poll()
     var numKeysConsumed = 0
@@ -229,40 +200,30 @@ trait SparkEngine [E <: Embedding]
       key = keysConsumer.poll()
     }
 
+    val splitMapStr = aggStorageSplits.map(_.getNumberMappings()).mkString(",")
     logInfo (s"FinalAggregationSplit step=${superstep}" +
       s" partitionId=${partitionId}" +
       s" aggregationName=${name}" +
       s" keysConsumerSize=${keysConsumer.size()}" +
-      s" aggStorageSplit=${aggStorageSplits.filter(_.getNumberMappings() > 0).mkString("[", ",", "]")}")
+      s" aggStorageSplit=${splitMapStr}")
 
+    // setup serialized splits
     val serializedSplits = new Array[(Int,Array[Byte])](numPartitions)
 
+    // serialize the splits between the engines
     i = 0
     while (i < serializedSplits.length) {
-      serializedSplits(i) = (i,
-        SparkConfiguration.serialize(aggStorageSplits(i)))
+      if (aggStorageSplits(i).getNumberMappings() > 0) {
+        serializedSplits(i) = (i,
+          SparkConfiguration.serialize(aggStorageSplits(i)))
+      }
       aggStorageSplits(i) = null
       i += 1
     }
     
+    // update the serialized version of those splits
+    // not that at this point we already lose the unserilized version
     aggregationStorageSplits.update(name, serializedSplits)
-
-  }
-
-  def flushAggregationsByName4(name: String) = {
-    val aggStorage = getAggregationStorage(name).asInstanceOf[AggregationStorage[_ <: Writable, _ <: Writable]]
-    if (aggStorage != null) {
-      aggStorage.getMapping.asScala.iterator.map { case (wKey, wValue) =>
-        (new SerializableWritable(wKey), new SerializableWritable(wValue))
-      }
-    } else {
-      Iterator.empty
-    }
-  }
-
-  def flushAggregationsByName5[K <: Writable, V <: Writable](
-      name: String): Iterator[(Int,Array[Byte])] = {
-    aggregationStorageSplits(name).iterator
   }
 
   /**
@@ -320,9 +281,8 @@ trait SparkEngine [E <: Embedding]
   }
   
   override def aggregate(name: String, value: Long) = {
-    val accum = accums.getOrElse(name, null)
-    if (accum != null) {
-      accum.add(value)
+    if (accums.contains(name)) {
+      accums(name).add(value)
     }
   }
 
@@ -362,14 +322,13 @@ trait SparkEngine [E <: Embedding]
   /**
    * Output embedding to a sequence file
    */
-  private def outputSequenceFile(
-      embedding: Embedding) = embeddingWriterOpt match {
-    case Some(embeddingWriter) =>
+  private def outputSequenceFile(embedding: Embedding) = {
+    if (embeddingWriterOpt.isDefined) {
+      val embeddingWriter = embeddingWriterOpt.get
       val resEmbedding = ResultEmbedding (embedding, configuration)
       embeddingWriter.append (NullWritable.get, resEmbedding)
       numEmbeddingsOutput += 1
-
-    case None =>
+    } else {
       // we must decide at runtime the concrete Writable to be used
       val resEmbeddingClass = if (embedding.isInstanceOf[EdgeInducedEmbedding])
         classOf[EEmbedding]
@@ -381,6 +340,11 @@ trait SparkEngine [E <: Embedding]
       // instantiate the embedding writer (sequence file)
       val superstepPath = new Path(outputPath, s"${getSuperstep}")
       val partitionPath = new Path(superstepPath, s"${partitionId}")
+
+      logInfo (s"Output stream (sequence-file) created: " +
+        s" step=${getSuperstep} partitionId=${partitionId}" +
+        s" partitionPath=${partitionPath}")
+
       val embeddingWriter = SequenceFile.createWriter(configuration.hadoopConf,
         SeqWriter.file(partitionPath),
         SeqWriter.keyClass(classOf[NullWritable]),
@@ -391,25 +355,31 @@ trait SparkEngine [E <: Embedding]
       val resEmbedding = ResultEmbedding (embedding, configuration)
       embeddingWriter.append (NullWritable.get, resEmbedding)
       numEmbeddingsOutput += 1
+    }
   }
 
   /**
    * Output embedding to a plain text
    */
-  private def outputPlainText(embedding: Embedding) = outputStreamOpt match {
-    case Some(outputStream) =>
+  private def outputPlainText(embedding: Embedding) = {
+    if (outputStreamOpt.isDefined) {
+      val outputStream = outputStreamOpt.get
       outputStream.write(embedding.toOutputString)
       outputStream.write("\n")
-
-    case None =>
-      logInfo (s"[partitionId=${getPartitionId}] Creating output stream")
+    } else {
       val fs = FileSystem.get(configuration.hadoopConf)
       val superstepPath = new Path(outputPath, s"${getSuperstep}")
       val partitionPath = new Path(superstepPath, s"${partitionId}")
+
+      logInfo (s"Output stream (text-file) created: " +
+        s" step=${getSuperstep} partitionId=${partitionId}" +
+        s" partitionPath=${partitionPath}")
+
       val outputStream = new OutputStreamWriter(fs.create(partitionPath))
       outputStreamOpt = Some(outputStream)
       outputStream.write(embedding.toOutputString)
       outputStream.write("\n")
+    }
   }
   
   // other functions

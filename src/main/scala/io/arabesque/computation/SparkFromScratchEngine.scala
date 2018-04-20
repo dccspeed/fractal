@@ -1,7 +1,7 @@
 package io.arabesque.computation
 
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic._
 
 import akka.actor._
 import io.arabesque.cache.LZ4ObjectCache
@@ -33,9 +33,6 @@ case class SparkFromScratchEngine[E <: Embedding](
 
     super.init()
 
-    // register computation
-    SparkFromScratchEngine.registerComputation(computation)
-
     // initial embedding cache
     currentCache = null
 
@@ -46,15 +43,18 @@ case class SparkFromScratchEngine[E <: Embedding](
 
     // gtag actor
     gtagActorRef = GtagMessagingSystem.createActor(this)
+    
+    // register computation
+    SparkFromScratchEngine.registerComputation(computation)
 
-    logInfo(s"Started gtag-actor(step=${superstep}," +
+    logInfo(s"Started slave-actor(step=${superstep}," +
       s" partitionId=${partitionId}): ${gtagActorRef}")
 
     validEmbeddings = new AtomicLong(0)
 
     val end = System.currentTimeMillis
 
-    logInfo(s"SparkGtagEngine(step=${superstep},partitionId=${partitionId}" +
+    logInfo(s"SparkFromScratchEngine(step=${superstep},partitionId=${partitionId}" +
       s" took ${(end - start)} ms to initialize.")
   }
 
@@ -65,8 +65,6 @@ case class SparkFromScratchEngine[E <: Embedding](
     super.finalize()
     currentCache = null
     gtagActorRef = null
-    // remove from active computations
-    // SparkFromScratchEngine.unregisterComputation(computation)
     // make sure we close writers
     if (outputStreamOpt.isDefined) outputStreamOpt.get.close
     if (embeddingWriterOpt.isDefined) embeddingWriterOpt.get.close
@@ -78,12 +76,16 @@ case class SparkFromScratchEngine[E <: Embedding](
    * @param inboundCaches
    */
   def compute(inboundCaches: Iterator[LZ4ObjectCache]): Unit = {
+    val start = System.currentTimeMillis
     expansionCompute (inboundCaches)
     aggregationStorages.foreach {
       case (name, agg) =>
         aggregateAndSplitFinalAggregation(name, agg)
     }
     flushStatsAccumulators
+    val elapsed = System.currentTimeMillis - start
+    logInfo(s"SparkFromScratchEngine(step=${superstep},partitionId=${partitionId}" +
+      s" took ${elapsed} ms to compute.")
   }
 
   /**
@@ -165,15 +167,80 @@ case class SparkFromScratchEngine[E <: Embedding](
 }
 
 object SparkFromScratchEngine extends Logging {
-  lazy val activeComputations
-    : ConcurrentHashMap[(Int,Int),Computation[_]] = new ConcurrentHashMap()
+  private val nextIdxs
+    : ConcurrentHashMap[Int, AtomicInteger] = new ConcurrentHashMap()
+  
+  private val activeComputationsIdx
+    : ConcurrentHashMap[Int, ConcurrentHashMap[Int,Int]] = new ConcurrentHashMap()
 
-  def registerComputation(computation: Computation[_]): Computation[_] = {
-    activeComputations.put(
-      (computation.getStep, computation.getPartitionId), computation)
+  private val activeComputations
+    : ConcurrentHashMap[Int, Array[Computation[_]]] = new ConcurrentHashMap()
+
+  def localComputations [E <: Embedding] (step: Int): Array[Computation[E]] = {
+    activeComputations.get(step).asInstanceOf[Array[Computation[E]]]
+  }
+  
+  def localComputation [E <: Embedding] (
+      step: Int, partitionId: Int): Computation[E] = {
+    val stepIdxs = activeComputationsIdx.getOrDefault(step, null)
+    if (stepIdxs == null) return null
+
+    val computationIdx = stepIdxs.getOrDefault(partitionId, -1)
+    if (computationIdx == -1) return null
+    
+    activeComputations.get(step)(computationIdx).asInstanceOf[Computation[E]]
   }
 
-  def unregisterComputation(computation: Computation[_]): Computation[_] = {
-    activeComputations.remove((computation.getStep, computation.getPartitionId))
+  def createComputationsMap(step: Int, numComputations: Int): Unit = {
+    activeComputations.synchronized {
+      if (!activeComputations.containsKey(step)) {
+        logInfo (s"Registering computation map step=${step}" +
+          s" numComputations=${numComputations}")
+
+        val newArr = new Array[Computation[_]](numComputations)
+        activeComputations.put(step, newArr)
+        nextIdxs.put(step, new AtomicInteger(0))
+        activeComputationsIdx.put(step, new ConcurrentHashMap(numComputations))
+
+      } else {
+        val _numComputations = activeComputations.get(step).length
+
+        if (_numComputations != numComputations) {
+          throw new RuntimeException(
+            s"NumberOfComputations current: ${_numComputations}" +
+            s", expected: ${numComputations}")
+        }
+      }
+    }
+  }
+
+  def registerComputation(computation: Computation[_]): Unit = {
+    val step = computation.getStep
+    val partitionId = computation.getPartitionId
+    val computations = activeComputations.get(step)
+    val computationIdx = nextIdxs.get(step).getAndIncrement()
+    activeComputationsIdx.get(step).put(partitionId, computationIdx)
+    computations(computationIdx) = computation
+
+    logInfo (s"Registered computation step=${step} partitionId=${partitionId}" +
+      s" computations=${computations.filter(_ != null).size}" +
+      s" computationsIdx=${activeComputationsIdx.get(step)}" +
+      s" nextIdxs=${nextIdxs.get(step)}")
+  }
+  
+  def unregisterComputation(computation: Computation[_]): Unit = {
+    val step = computation.getStep
+    val partitionId = computation.getPartitionId
+    if (nextIdxs.get(step).decrementAndGet() == 0) {
+      logInfo (s"Unregistering last computation step=${step} partitionId=${partitionId}")
+      activeComputations.remove(step)
+      nextIdxs.remove(step)
+      activeComputationsIdx.remove(step)
+    } else {
+      logInfo (s"Unregistering computation step=${step} partitionId=${partitionId}")
+      val computations = activeComputations.get(step)
+      val computationIdx = activeComputationsIdx.get(step).get(partitionId)
+      computations(computationIdx) = null
+    }
   }
 }

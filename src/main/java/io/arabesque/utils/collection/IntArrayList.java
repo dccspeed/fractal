@@ -20,7 +20,7 @@ import java.util.NoSuchElementException;
 public class IntArrayList implements ReclaimableIntCollection, Writable, Externalizable {
     private static final int INITIAL_SIZE = 16;
 
-    private int[] backingArray;
+    protected int[] backingArray;
     private int numElements;
     private boolean preventReclaim = false;
     private IntConsumer intAdder;
@@ -197,6 +197,10 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
         return ints;
     }
 
+    public int binarySearch(int value) {
+       return Arrays.binarySearch(backingArray, 0, numElements, value);
+    }
+
     /**
      * Removes all elements from the collection that are smaller than the provided value.
      * @param value Reference value.
@@ -231,6 +235,13 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
         }
 
         numElements = targetPosition;
+    }
+
+    public void transferFrom(IntArrayList src, int srcPos, int destPos, int length) {
+       int finalSize = destPos + length;
+       ensureCanAddNElements(finalSize);
+       System.arraycopy(src.backingArray, srcPos, backingArray, destPos, length);
+       numElements = finalSize;
     }
 
     @Override
@@ -396,7 +407,10 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
     @Nonnull
     @Override
     public IntCursor cursor() {
-        //return new IntArrayListCursor();
+        return new IntArrayListCursor();
+    }
+    
+    public IntCursor reverseCursor() {
         return new IntArrayListReverseCursor();
     }
 

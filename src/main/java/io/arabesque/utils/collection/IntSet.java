@@ -29,6 +29,10 @@ public class IntSet implements Externalizable, Writable {
       return internalSet.size();
    }
 
+   public boolean contains(int elem) {
+      return internalSet.contains(elem);
+   }
+
    public boolean addInt(int elem) {
       return internalSet.add(elem);
    }
@@ -40,7 +44,7 @@ public class IntSet implements Externalizable, Writable {
    public boolean removeInt(int elem) {
       return internalSet.removeInt(elem);
    }
-
+   
    public HashIntSet getInternalSet() {
       return internalSet;
    }

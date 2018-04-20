@@ -6,10 +6,11 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
-public class Vertex implements Writable, java.io.Serializable {
+public class Vertex<V> implements Writable, java.io.Serializable {
 
     private int vertexId;
     private int vertexLabel;
+    private V property;
 
     public Vertex() {
         this(0, 0);
@@ -26,6 +27,14 @@ public class Vertex implements Writable, java.io.Serializable {
 
     public int getVertexLabel() {
         return vertexLabel;
+    }
+
+    void setProperty(V property) {
+       this.property = property;
+    }
+
+    public V getProperty() {
+       return property;
     }
 
     @Override

@@ -16,6 +16,17 @@ import java.util.concurrent.locks.ReentrantLock;
 public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
    private static final Logger LOG = Logger.getLogger(EmbeddingIterator.class);
 
+   private static final EmbeddingIterator emptyIter = new EmbeddingIterator() {
+      @Override
+      public boolean isActive() {
+         return false;
+      }
+      @Override
+      public boolean hasNext() {
+         return false;
+      }
+   };
+
    protected EmbeddingIterator<E> parent;
 
    protected ReentrantLock rlock;
@@ -35,6 +46,8 @@ public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
    protected IntCursor cur;
 
    protected boolean shouldRemoveLastWord;
+   
+   protected boolean fromRemote;
 
    protected AtomicBoolean active;
 
@@ -56,6 +69,22 @@ public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
       this.prefix = IntArrayListPool.instance().createObject();
    }
 
+   public synchronized EmbeddingIterator<E> setFromRemote(
+         Computation<E> computation, E embedding, IntCollection wordIds) {
+      this.computation = computation;
+      this.prefix.clear();
+      this.prefix.addAll(embedding.getWords());
+      this.embedding = embedding;
+      this.lastHasNext = false;
+      this.currElem = -1;
+      this.wordIds = wordIds;
+      this.cur = wordIds.cursor();
+      this.shouldRemoveLastWord = false;
+      this.fromRemote = true;
+      this.active = new AtomicBoolean(true);
+      return this;
+   }
+
    public synchronized EmbeddingIterator<E> set(Computation<E> computation,
          E embedding, IntCollection wordIds) {
       this.computation = computation;
@@ -67,11 +96,15 @@ public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
       this.wordIds = wordIds;
       this.cur = wordIds.cursor();
       this.shouldRemoveLastWord = false;
+      this.fromRemote = false;
       this.active = new AtomicBoolean(true);
       return this;
    }
 
-   public synchronized EmbeddingIterator<E> forkConsumer() {
+   public synchronized EmbeddingIterator<E> forkConsumer(boolean local) {
+      //if (!local && fromRemote) {
+      //   return emptyIter;
+      //}
       // create new consumer
       EmbeddingIterator<E> iter = new EmbeddingIterator<E>();
       iter.parent = this;
@@ -86,7 +119,7 @@ public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
          iter.embedding.addWord(prefix.getUnchecked(0));
       }
       for (int i = 1; i < prefix.size(); ++i) {
-         iter.embedding.nextExtensionLevel(this.embedding);
+         iter.embedding.nextExtensionLevel(embedding);
          iter.embedding.addWord(prefix.getUnchecked(i));
       }
 
@@ -126,8 +159,8 @@ public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
             // skip extensions that turn the embedding not canonical
             while (cur.moveNext()) {
                currElem = cur.elem();
-               cur.remove();
-               if (computation.filter(embedding, currElem)) {
+               // cur.remove();
+               if (fromRemote || computation.filter(embedding, currElem)) {
                   lastHasNext = true;
                   return true;
                }

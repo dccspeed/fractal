@@ -406,11 +406,24 @@
          <version>2.5.3</version>
       </dependency>
 
+      <!--<dependency>
+         <groupId>com.github.romix.akka</groupId>
+         <artifactId>akka-kryo-serialization_2.11</artifactId>
+         <version>0.5.0</version>
+      </dependency>-->
+
       <!-- compressed bitmap -->
       <dependency>
          <groupId>org.roaringbitmap</groupId>
          <artifactId>RoaringBitmap</artifactId>
          <version>0.6.51</version>
+      </dependency>
+
+      <!-- natural language processing -->
+      <dependency>
+         <groupId>org.apache.opennlp</groupId>
+         <artifactId>opennlp-tools</artifactId>
+         <version>1.8.3</version>
       </dependency>
 
    </dependencies>

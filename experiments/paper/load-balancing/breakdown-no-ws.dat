@@ -1,0 +1,2513 @@
+breakdown step partitionid runtime
+InitialComputation 0 0 731
+InitialComputation 0 1 620
+InitialComputation 0 2 813
+InitialComputation 0 3 1195
+InitialComputation 0 4 420
+InitialComputation 0 5 1055
+InitialComputation 0 6 474
+InitialComputation 0 7 847
+InitialComputation 0 8 704
+
+InitialComputation 0 9 686
+
+InitialComputation 0 10 607
+
+InitialComputation 0 11 796
+
+InitialComputation 0 12 1201
+
+InitialComputation 0 13 432
+
+InitialComputation 0 14 1063
+
+InitialComputation 0 15 494
+
+InitialComputation 0 16 718
+
+InitialComputation 0 17 698
+
+InitialComputation 0 18 736
+
+InitialComputation 0 19 657
+
+InitialComputation 0 20 728
+
+InitialComputation 0 21 1218
+
+InitialComputation 0 22 444
+
+InitialComputation 0 23 949
+
+InitialComputation 0 24 496
+
+InitialComputation 0 25 851
+
+InitialComputation 0 26 738
+
+InitialComputation 0 27 703
+
+InitialComputation 0 28 668
+
+InitialComputation 0 29 756
+
+InitialComputation 0 30 866
+
+InitialComputation 0 31 457
+
+InitialComputation 0 32 991
+
+InitialComputation 0 33 479
+
+InitialComputation 0 34 874
+
+InitialComputation 0 35 697
+
+InitialComputation 0 36 721
+
+InitialComputation 0 37 656
+
+InitialComputation 0 38 752
+
+InitialComputation 0 39 1106
+
+InitialComputation 0 40 415
+
+InitialComputation 0 41 983
+
+InitialComputation 0 42 448
+
+InitialComputation 0 43 849
+
+InitialComputation 0 44 709
+
+InitialComputation 0 45 722
+
+InitialComputation 0 46 667
+
+InitialComputation 0 47 722
+
+InitialComputation 0 48 1131
+
+InitialComputation 0 49 394
+
+InitialComputation 0 50 1080
+
+InitialComputation 0 51 497
+
+InitialComputation 0 52 797
+
+InitialComputation 0 53 848
+
+InitialComputation 0 54 759
+
+InitialComputation 0 55 659
+
+InitialComputation 0 56 780
+
+InitialComputation 0 57 1135
+
+InitialComputation 0 58 462
+
+InitialComputation 0 59 1083
+
+InitialComputation 0 60 569
+
+InitialComputation 0 61 873
+
+InitialComputation 0 62 707
+
+InitialComputation 0 63 699
+
+InitialComputation 0 64 663
+
+InitialComputation 0 65 884
+
+InitialComputation 0 66 1028
+
+InitialComputation 0 67 489
+
+InitialComputation 0 68 1077
+
+InitialComputation 0 69 575
+
+InitialComputation 0 70 864
+
+InitialComputation 0 71 830
+
+InitialComputation 0 72 742
+
+InitialComputation 0 73 740
+
+InitialComputation 0 74 796
+
+InitialComputation 0 75 1205
+
+InitialComputation 0 76 426
+
+InitialComputation 0 77 1081
+
+InitialComputation 0 78 506
+
+InitialComputation 0 79 811
+
+InitialComputation 0 80 662
+
+InitialComputation 0 81 709
+
+InitialComputation 0 82 652
+
+InitialComputation 0 83 718
+
+InitialComputation 0 84 1121
+
+InitialComputation 0 85 494
+
+InitialComputation 0 86 1015
+
+InitialComputation 0 87 531
+
+InitialComputation 0 88 955
+
+InitialComputation 0 89 653
+
+InitialComputation 0 90 669
+
+InitialComputation 0 91 657
+
+InitialComputation 0 92 784
+
+InitialComputation 0 93 1207
+
+InitialComputation 0 94 452
+
+InitialComputation 0 95 1046
+
+InitialComputation 0 96 527
+
+InitialComputation 0 97 844
+
+InitialComputation 0 98 657
+
+InitialComputation 0 99 693
+
+InitialComputation 0 100 660
+
+InitialComputation 0 101 796
+
+InitialComputation 0 102 1182
+
+InitialComputation 0 103 490
+
+InitialComputation 0 104 1037
+
+InitialComputation 0 105 439
+
+InitialComputation 0 106 858
+
+InitialComputation 0 107 682
+
+InitialComputation 0 108 696
+
+InitialComputation 0 109 693
+
+InitialComputation 0 110 679
+
+InitialComputation 0 111 1023
+
+InitialComputation 0 112 442
+
+InitialComputation 0 113 1088
+
+InitialComputation 0 114 537
+
+InitialComputation 0 115 965
+
+InitialComputation 0 116 596
+
+InitialComputation 0 117 648
+
+InitialComputation 0 118 709
+
+InitialComputation 0 119 730
+
+InitialComputation 0 120 1149
+
+InitialComputation 0 121 446
+
+InitialComputation 0 122 1110
+
+InitialComputation 0 123 546
+
+InitialComputation 0 124 836
+
+InitialComputation 0 125 698
+
+InitialComputation 0 126 717
+
+InitialComputation 0 127 695
+
+InitialComputation 0 128 821
+
+InitialComputation 0 129 1220
+
+InitialComputation 0 130 490
+
+InitialComputation 0 131 1053
+
+InitialComputation 0 132 490
+
+InitialComputation 0 133 774
+
+InitialComputation 0 134 691
+
+InitialComputation 0 135 668
+
+InitialComputation 0 136 658
+
+InitialComputation 0 137 840
+
+InitialComputation 0 138 1122
+
+InitialComputation 0 139 415
+
+InitialComputation 0 140 1077
+
+InitialComputation 0 141 484
+
+InitialComputation 0 142 840
+
+InitialComputation 0 143 662
+
+InitialComputation 0 144 764
+
+InitialComputation 0 145 663
+
+InitialComputation 0 146 912
+
+InitialComputation 0 147 1230
+
+InitialComputation 0 148 447
+
+InitialComputation 0 149 1068
+
+InitialComputation 0 150 527
+
+InitialComputation 0 151 923
+
+InitialComputation 0 152 720
+
+InitialComputation 0 153 693
+
+InitialComputation 0 154 628
+
+InitialComputation 0 155 841
+
+InitialComputation 0 156 1176
+
+InitialComputation 0 157 580
+
+InitialComputation 0 158 919
+
+InitialComputation 0 159 494
+
+InitialComputation 0 160 955
+
+InitialComputation 0 161 740
+
+InitialComputation 0 162 685
+
+InitialComputation 0 163 726
+
+InitialComputation 0 164 763
+
+InitialComputation 0 165 1148
+
+InitialComputation 0 166 417
+
+InitialComputation 0 167 1054
+
+InitialComputation 0 168 470
+
+InitialComputation 0 169 950
+
+InitialComputation 0 170 733
+
+InitialComputation 0 171 691
+
+InitialComputation 0 172 599
+
+InitialComputation 0 173 844
+
+InitialComputation 0 174 1110
+
+InitialComputation 0 175 419
+
+InitialComputation 0 176 1179
+
+InitialComputation 0 177 580
+
+InitialComputation 0 178 847
+
+InitialComputation 0 179 665
+
+InitialComputation 0 180 718
+
+InitialComputation 0 181 686
+
+InitialComputation 0 182 695
+
+InitialComputation 0 183 1136
+
+InitialComputation 0 184 449
+
+InitialComputation 0 185 920
+
+InitialComputation 0 186 516
+
+InitialComputation 0 187 954
+
+InitialComputation 0 188 699
+
+InitialComputation 0 189 627
+
+InitialComputation 0 190 647
+
+InitialComputation 0 191 786
+
+InitialComputation 0 192 1087
+
+InitialComputation 0 193 468
+
+InitialComputation 0 194 890
+
+InitialComputation 0 195 554
+
+InitialComputation 0 196 867
+
+InitialComputation 0 197 602
+
+InitialComputation 0 198 660
+
+InitialComputation 0 199 649
+
+InitialComputation 0 200 786
+
+InitialComputation 0 201 1058
+
+InitialComputation 0 202 458
+
+InitialComputation 0 203 990
+
+InitialComputation 0 204 552
+
+InitialComputation 0 205 819
+
+InitialComputation 0 206 700
+
+InitialComputation 0 207 770
+
+InitialComputation 0 208 671
+
+InitialComputation 0 209 795
+
+InitialComputation 0 210 884
+
+InitialComputation 0 211 462
+
+InitialComputation 0 212 1078
+
+InitialComputation 0 213 439
+
+InitialComputation 0 214 837
+
+InitialComputation 0 215 658
+
+InitialComputation 0 216 674
+
+InitialComputation 0 217 648
+
+InitialComputation 0 218 650
+
+InitialComputation 0 219 1110
+
+InitialComputation 0 220 544
+
+InitialComputation 0 221 1204
+
+InitialComputation 0 222 566
+
+InitialComputation 0 223 775
+
+InitialComputation 0 224 673
+
+InitialComputation 0 225 765
+
+InitialComputation 0 226 684
+
+InitialComputation 0 227 798
+
+InitialComputation 0 228 1197
+
+InitialComputation 0 229 559
+
+InitialComputation 0 230 918
+
+InitialComputation 0 231 446
+
+InitialComputation 0 232 958
+
+InitialComputation 0 233 653
+
+InitialComputation 0 234 743
+
+InitialComputation 0 235 733
+
+InitialComputation 0 236 780
+
+InitialComputation 0 237 1119
+
+InitialComputation 0 238 539
+
+InitialComputation 0 239 1039
+
+InitialComputation 0 240 513
+
+InitialComputation 0 241 863
+
+InitialComputation 0 242 669
+
+InitialComputation 0 243 658
+
+InitialComputation 0 244 650
+
+InitialComputation 0 245 836
+
+InitialComputation 0 246 1178
+
+InitialComputation 0 247 413
+
+InitialComputation 0 248 1081
+
+InitialComputation 0 249 561
+
+InitialComputation 0 250 836
+
+InitialComputation 0 251 729
+
+InitialComputation 1 0 413
+
+InitialComputation 1 1 511
+
+InitialComputation 1 2 456
+
+InitialComputation 1 3 345
+
+InitialComputation 1 4 521
+
+InitialComputation 1 5 395
+
+InitialComputation 1 6 515
+
+InitialComputation 1 7 409
+
+InitialComputation 1 8 355
+
+InitialComputation 1 9 440
+
+InitialComputation 1 10 541
+
+InitialComputation 1 11 450
+
+InitialComputation 1 12 319
+
+InitialComputation 1 13 549
+
+InitialComputation 1 14 406
+
+InitialComputation 1 15 485
+
+InitialComputation 1 16 414
+
+InitialComputation 1 17 375
+
+InitialComputation 1 18 413
+
+InitialComputation 1 19 521
+
+InitialComputation 1 20 440
+
+InitialComputation 1 21 310
+
+InitialComputation 1 22 532
+
+InitialComputation 1 23 403
+
+InitialComputation 1 24 497
+
+InitialComputation 1 25 406
+
+InitialComputation 1 26 365
+
+InitialComputation 1 27 428
+
+InitialComputation 1 28 525
+
+InitialComputation 1 29 450
+
+InitialComputation 1 30 358
+
+InitialComputation 1 31 570
+
+InitialComputation 1 32 396
+
+InitialComputation 1 33 505
+
+InitialComputation 1 34 413
+
+InitialComputation 1 35 419
+
+InitialComputation 1 36 460
+
+InitialComputation 1 37 543
+
+InitialComputation 1 38 435
+
+InitialComputation 1 39 304
+
+InitialComputation 1 40 540
+
+InitialComputation 1 41 388
+
+InitialComputation 1 42 487
+
+InitialComputation 1 43 379
+
+InitialComputation 1 44 375
+
+InitialComputation 1 45 433
+
+InitialComputation 1 46 514
+
+InitialComputation 1 47 432
+
+InitialComputation 1 48 331
+
+InitialComputation 1 49 526
+
+InitialComputation 1 50 402
+
+InitialComputation 1 51 513
+
+InitialComputation 1 52 397
+
+InitialComputation 1 53 358
+
+InitialComputation 1 54 422
+
+InitialComputation 1 55 521
+
+InitialComputation 1 56 441
+
+InitialComputation 1 57 294
+
+InitialComputation 1 58 528
+
+InitialComputation 1 59 376
+
+InitialComputation 1 60 456
+
+InitialComputation 1 61 397
+
+InitialComputation 1 62 335
+
+InitialComputation 1 63 431
+
+InitialComputation 1 64 527
+
+InitialComputation 1 65 445
+
+InitialComputation 1 66 356
+
+InitialComputation 1 67 534
+
+InitialComputation 1 68 390
+
+InitialComputation 1 69 506
+
+InitialComputation 1 70 387
+
+InitialComputation 1 71 335
+
+InitialComputation 1 72 413
+
+InitialComputation 1 73 547
+
+InitialComputation 1 74 430
+
+InitialComputation 1 75 299
+
+InitialComputation 1 76 528
+
+InitialComputation 1 77 383
+
+InitialComputation 1 78 485
+
+InitialComputation 1 79 380
+
+InitialComputation 1 80 406
+
+InitialComputation 1 81 420
+
+InitialComputation 1 82 552
+
+InitialComputation 1 83 420
+
+InitialComputation 1 84 323
+
+InitialComputation 1 85 507
+
+InitialComputation 1 86 395
+
+InitialComputation 1 87 472
+
+InitialComputation 1 88 409
+
+InitialComputation 1 89 352
+
+InitialComputation 1 90 446
+
+InitialComputation 1 91 516
+
+InitialComputation 1 92 427
+
+InitialComputation 1 93 325
+
+InitialComputation 1 94 546
+
+InitialComputation 1 95 404
+
+InitialComputation 1 96 507
+
+InitialComputation 1 97 386
+
+InitialComputation 1 98 326
+
+InitialComputation 1 99 439
+
+InitialComputation 1 100 546
+
+InitialComputation 1 101 435
+
+InitialComputation 1 102 309
+
+InitialComputation 1 103 527
+
+InitialComputation 1 104 405
+
+InitialComputation 1 105 514
+
+InitialComputation 1 106 407
+
+InitialComputation 1 107 352
+
+InitialComputation 1 108 450
+
+InitialComputation 1 109 508
+
+InitialComputation 1 110 469
+
+InitialComputation 1 111 305
+
+InitialComputation 1 112 535
+
+InitialComputation 1 113 400
+
+InitialComputation 1 114 496
+
+InitialComputation 1 115 409
+
+InitialComputation 1 116 401
+
+InitialComputation 1 117 441
+
+InitialComputation 1 118 536
+
+InitialComputation 1 119 423
+
+InitialComputation 1 120 335
+
+InitialComputation 1 121 507
+
+InitialComputation 1 122 390
+
+InitialComputation 1 123 666
+
+InitialComputation 1 124 703
+
+InitialComputation 1 125 728
+
+InitialComputation 1 126 771
+
+InitialComputation 1 127 843
+
+InitialComputation 1 128 737
+
+InitialComputation 1 129 721
+
+InitialComputation 1 130 850
+
+InitialComputation 1 131 712
+
+InitialComputation 1 132 803
+
+InitialComputation 1 133 1268
+
+InitialComputation 1 134 1426
+
+InitialComputation 1 135 1337
+
+InitialComputation 1 136 1390
+
+InitialComputation 1 137 1285
+
+InitialComputation 1 138 1281
+
+InitialComputation 1 139 1455
+
+InitialComputation 1 140 1331
+
+InitialComputation 1 141 1462
+
+InitialComputation 1 142 1473
+
+InitialComputation 1 143 1486
+
+InitialComputation 1 144 1457
+
+InitialComputation 1 145 1549
+
+InitialComputation 1 146 1464
+
+InitialComputation 1 147 1384
+
+InitialComputation 1 148 1611
+
+InitialComputation 1 149 1441
+
+InitialComputation 1 150 1583
+
+InitialComputation 1 151 1419
+
+InitialComputation 1 152 1452
+
+InitialComputation 1 153 1492
+
+InitialComputation 1 154 1507
+
+InitialComputation 1 155 1457
+
+InitialComputation 1 156 1427
+
+InitialComputation 1 157 1498
+
+InitialComputation 1 158 1330
+
+InitialComputation 1 159 1478
+
+InitialComputation 1 160 1502
+
+InitialComputation 1 161 1446
+
+InitialComputation 1 162 1451
+
+InitialComputation 1 163 1579
+
+InitialComputation 1 164 1533
+
+InitialComputation 1 165 1474
+
+InitialComputation 1 166 1451
+
+InitialComputation 1 167 1374
+
+InitialComputation 1 168 1633
+
+InitialComputation 1 169 1379
+
+InitialComputation 1 170 1403
+
+InitialComputation 1 171 1427
+
+InitialComputation 1 172 1494
+
+InitialComputation 1 173 1430
+
+InitialComputation 1 174 1347
+
+InitialComputation 1 175 1556
+
+InitialComputation 1 176 1512
+
+InitialComputation 1 177 1421
+
+InitialComputation 1 178 1347
+
+InitialComputation 1 179 1363
+
+InitialComputation 1 180 1401
+
+InitialComputation 1 181 1420
+
+InitialComputation 1 182 1395
+
+InitialComputation 1 183 1286
+
+InitialComputation 1 184 1479
+
+InitialComputation 1 185 1345
+
+InitialComputation 1 186 1415
+
+InitialComputation 1 187 1429
+
+InitialComputation 1 188 1403
+
+InitialComputation 1 189 1367
+
+InitialComputation 1 190 1360
+
+InitialComputation 1 191 1291
+
+InitialComputation 1 192 1294
+
+InitialComputation 1 193 1451
+
+InitialComputation 1 194 1227
+
+InitialComputation 1 195 1417
+
+InitialComputation 1 196 1297
+
+InitialComputation 1 197 1308
+
+InitialComputation 1 198 1334
+
+InitialComputation 1 199 1385
+
+InitialComputation 1 200 1346
+
+InitialComputation 1 201 1203
+
+InitialComputation 1 202 1421
+
+InitialComputation 1 203 1346
+
+InitialComputation 1 204 1320
+
+InitialComputation 1 205 1253
+
+InitialComputation 1 206 1215
+
+InitialComputation 1 207 1312
+
+InitialComputation 1 208 1310
+
+InitialComputation 1 209 1268
+
+InitialComputation 1 210 1138
+
+InitialComputation 1 211 1383
+
+InitialComputation 1 212 1168
+
+InitialComputation 1 213 1265
+
+InitialComputation 1 214 1191
+
+InitialComputation 1 215 1159
+
+InitialComputation 1 216 1234
+
+InitialComputation 1 217 1268
+
+InitialComputation 1 218 1158
+
+InitialComputation 1 219 1084
+
+InitialComputation 1 220 1228
+
+InitialComputation 1 221 1174
+
+InitialComputation 1 222 1165
+
+InitialComputation 1 223 1147
+
+InitialComputation 1 224 1132
+
+InitialComputation 1 225 1138
+
+InitialComputation 1 226 1199
+
+InitialComputation 1 227 1134
+
+InitialComputation 1 228 1036
+
+InitialComputation 1 229 1136
+
+InitialComputation 1 230 964
+
+InitialComputation 1 231 1115
+
+InitialComputation 1 232 945
+
+InitialComputation 1 233 979
+
+InitialComputation 1 234 1032
+
+InitialComputation 1 235 1063
+
+InitialComputation 1 236 992
+
+InitialComputation 1 237 869
+
+InitialComputation 1 238 1042
+
+InitialComputation 1 239 872
+
+InitialComputation 1 240 925
+
+InitialComputation 1 241 824
+
+InitialComputation 1 242 812
+
+InitialComputation 1 243 833
+
+InitialComputation 1 244 888
+
+InitialComputation 1 245 760
+
+InitialComputation 1 246 642
+
+InitialComputation 1 247 795
+
+InitialComputation 1 248 612
+
+InitialComputation 1 249 691
+
+InitialComputation 1 250 563
+
+InitialComputation 1 251 478
+
+InitialComputation 2 0 107
+
+InitialComputation 2 1 241
+
+InitialComputation 2 2 154
+
+InitialComputation 2 3 171
+
+InitialComputation 2 4 160
+
+InitialComputation 2 5 51
+
+InitialComputation 2 6 223
+
+InitialComputation 2 7 51
+
+InitialComputation 2 8 140
+
+InitialComputation 2 9 113
+
+InitialComputation 2 10 200
+
+InitialComputation 2 11 145
+
+InitialComputation 2 12 72
+
+InitialComputation 2 13 238
+
+InitialComputation 2 14 76
+
+InitialComputation 2 15 209
+
+InitialComputation 2 16 69
+
+InitialComputation 2 17 104
+
+InitialComputation 2 18 134
+
+InitialComputation 2 19 217
+
+InitialComputation 2 20 128
+
+InitialComputation 2 21 61
+
+InitialComputation 2 22 183
+
+InitialComputation 2 23 106
+
+InitialComputation 2 24 197
+
+InitialComputation 2 25 53
+
+InitialComputation 2 26 100
+
+InitialComputation 2 27 121
+
+InitialComputation 2 28 219
+
+InitialComputation 2 29 121
+
+InitialComputation 2 30 71
+
+InitialComputation 2 31 176
+
+InitialComputation 2 32 68
+
+InitialComputation 2 33 211
+
+InitialComputation 2 34 60
+
+InitialComputation 2 35 121
+
+InitialComputation 2 36 136
+
+InitialComputation 2 37 238
+
+InitialComputation 2 38 99
+
+InitialComputation 2 39 70
+
+InitialComputation 2 40 212
+
+InitialComputation 2 41 65
+
+InitialComputation 2 42 219
+
+InitialComputation 2 43 53
+
+InitialComputation 2 44 108
+
+InitialComputation 2 45 135
+
+InitialComputation 2 46 223
+
+InitialComputation 2 47 128
+
+InitialComputation 2 48 128
+
+InitialComputation 2 49 210
+
+InitialComputation 2 50 83
+
+InitialComputation 2 51 182
+
+InitialComputation 2 52 51
+
+InitialComputation 2 53 99
+
+InitialComputation 2 54 123
+
+InitialComputation 2 55 212
+
+InitialComputation 2 56 82
+
+InitialComputation 2 57 107
+
+InitialComputation 2 58 211
+
+InitialComputation 2 59 54
+
+InitialComputation 2 60 184
+
+InitialComputation 2 61 48
+
+InitialComputation 2 62 100
+
+InitialComputation 2 63 112
+
+InitialComputation 2 64 193
+
+InitialComputation 2 65 130
+
+InitialComputation 2 66 132
+
+InitialComputation 2 67 139
+
+InitialComputation 2 68 65
+
+InitialComputation 2 69 185
+
+InitialComputation 2 70 41
+
+InitialComputation 2 71 98
+
+InitialComputation 2 72 132
+
+InitialComputation 2 73 219
+
+InitialComputation 2 74 91
+
+InitialComputation 2 75 130
+
+InitialComputation 2 76 215
+
+InitialComputation 2 77 56
+
+InitialComputation 2 78 203
+
+InitialComputation 2 79 50
+
+InitialComputation 2 80 100
+
+InitialComputation 2 81 112
+
+InitialComputation 2 82 216
+
+InitialComputation 2 83 119
+
+InitialComputation 2 84 60
+
+InitialComputation 2 85 173
+
+InitialComputation 2 86 54
+
+InitialComputation 2 87 194
+
+InitialComputation 2 88 48
+
+InitialComputation 2 89 121
+
+InitialComputation 2 90 131
+
+InitialComputation 2 91 218
+
+InitialComputation 2 92 125
+
+InitialComputation 2 93 124
+
+InitialComputation 2 94 138
+
+InitialComputation 2 95 49
+
+InitialComputation 2 96 202
+
+InitialComputation 2 97 41
+
+InitialComputation 2 98 94
+
+InitialComputation 2 99 113
+
+InitialComputation 2 100 222
+
+InitialComputation 2 101 102
+
+InitialComputation 2 102 150
+
+InitialComputation 2 103 198
+
+InitialComputation 2 104 104
+
+InitialComputation 2 105 197
+
+InitialComputation 2 106 44
+
+InitialComputation 2 107 116
+
+InitialComputation 2 108 165
+
+InitialComputation 2 109 236
+
+InitialComputation 2 110 140
+
+InitialComputation 2 111 151
+
+InitialComputation 2 112 221
+
+InitialComputation 2 113 49
+
+InitialComputation 2 114 190
+
+InitialComputation 2 115 46
+
+InitialComputation 2 116 206
+
+InitialComputation 2 117 106
+
+InitialComputation 2 118 232
+
+InitialComputation 2 119 137
+
+InitialComputation 2 120 125
+
+InitialComputation 2 121 239
+
+InitialComputation 2 122 80
+
+InitialComputation 2 123 381
+
+InitialComputation 2 124 344
+
+InitialComputation 2 125 512
+
+InitialComputation 2 126 456
+
+InitialComputation 2 127 533
+
+InitialComputation 2 128 455
+
+InitialComputation 2 129 467
+
+InitialComputation 2 130 564
+
+InitialComputation 2 131 431
+
+InitialComputation 2 132 600
+
+InitialComputation 2 133 794
+
+InitialComputation 2 134 1019
+
+InitialComputation 2 135 951
+
+InitialComputation 2 136 1047
+
+InitialComputation 2 137 961
+
+InitialComputation 2 138 1079
+
+InitialComputation 2 139 1146
+
+InitialComputation 2 140 1035
+
+InitialComputation 2 141 1194
+
+InitialComputation 2 142 1009
+
+InitialComputation 2 143 1127
+
+InitialComputation 2 144 1158
+
+InitialComputation 2 145 1250
+
+InitialComputation 2 146 1030
+
+InitialComputation 2 147 1120
+
+InitialComputation 2 148 1273
+
+InitialComputation 2 149 1072
+
+InitialComputation 2 150 1273
+
+InitialComputation 2 151 1012
+
+InitialComputation 2 152 1151
+
+InitialComputation 2 153 1104
+
+InitialComputation 2 154 1190
+
+InitialComputation 2 155 1191
+
+InitialComputation 2 156 1627
+
+InitialComputation 2 157 1162
+
+InitialComputation 2 158 1067
+
+InitialComputation 2 159 1222
+
+InitialComputation 2 160 1113
+
+InitialComputation 2 161 1081
+
+InitialComputation 2 162 1096
+
+InitialComputation 2 163 1309
+
+InitialComputation 2 164 1086
+
+InitialComputation 2 165 1153
+
+InitialComputation 2 166 1153
+
+InitialComputation 2 167 1033
+
+InitialComputation 2 168 1355
+
+InitialComputation 2 169 1035
+
+InitialComputation 2 170 1166
+
+InitialComputation 2 171 1061
+
+InitialComputation 2 172 1246
+
+InitialComputation 2 173 1092
+
+InitialComputation 2 174 1036
+
+InitialComputation 2 175 5456
+
+InitialComputation 2 176 16995
+
+InitialComputation 2 177 17484
+
+InitialComputation 2 178 14302
+
+InitialComputation 2 179 15903
+
+InitialComputation 2 180 15762
+
+InitialComputation 2 181 16296
+
+InitialComputation 2 182 14624
+
+InitialComputation 2 183 14846
+
+InitialComputation 2 184 16798
+
+InitialComputation 2 185 17900
+
+InitialComputation 2 186 15499
+
+InitialComputation 2 187 16674
+
+InitialComputation 2 188 19963
+
+InitialComputation 2 189 16708
+
+InitialComputation 2 190 15658
+
+InitialComputation 2 191 16758
+
+InitialComputation 2 192 14189
+
+InitialComputation 2 193 16320
+
+InitialComputation 2 194 16657
+
+InitialComputation 2 195 17998
+
+InitialComputation 2 196 14573
+
+InitialComputation 2 197 15858
+
+InitialComputation 2 198 16672
+
+InitialComputation 2 199 17568
+
+InitialComputation 2 200 17318
+
+InitialComputation 2 201 17907
+
+InitialComputation 2 202 19367
+
+InitialComputation 2 203 20716
+
+InitialComputation 2 204 17281
+
+InitialComputation 2 205 18976
+
+InitialComputation 2 206 21028
+
+InitialComputation 2 207 19110
+
+InitialComputation 2 208 17848
+
+InitialComputation 2 209 19369
+
+InitialComputation 2 210 18665
+
+InitialComputation 2 211 22186
+
+InitialComputation 2 212 21845
+
+InitialComputation 2 213 25553
+
+InitialComputation 2 214 22224
+
+InitialComputation 2 215 20367
+
+InitialComputation 2 216 19771
+
+InitialComputation 2 217 19152
+
+InitialComputation 2 218 18391
+
+InitialComputation 2 219 16111
+
+InitialComputation 2 220 18149
+
+InitialComputation 2 221 17735
+
+InitialComputation 2 222 14683
+
+InitialComputation 2 223 15943
+
+InitialComputation 2 224 15503
+
+InitialComputation 2 225 15701
+
+InitialComputation 2 226 18853
+
+InitialComputation 2 227 15584
+
+InitialComputation 2 228 14773
+
+InitialComputation 2 229 14381
+
+InitialComputation 2 230 12701
+
+InitialComputation 2 231 12446
+
+InitialComputation 2 232 10656
+
+InitialComputation 2 233 12487
+
+InitialComputation 2 234 11503
+
+InitialComputation 2 235 10634
+
+InitialComputation 2 236 8058
+
+InitialComputation 2 237 7866
+
+InitialComputation 2 238 7762
+
+InitialComputation 2 239 7884
+
+InitialComputation 2 240 6830
+
+InitialComputation 2 241 6403
+
+InitialComputation 2 242 6740
+
+InitialComputation 2 243 5140
+
+InitialComputation 2 244 4658
+
+InitialComputation 2 245 4865
+
+InitialComputation 2 246 3600
+
+InitialComputation 2 247 2207
+
+InitialComputation 2 248 1525
+
+InitialComputation 2 249 1378
+
+InitialComputation 2 250 484
+
+InitialComputation 2 251 330
+
+InitialComputation 3 0 145
+
+InitialComputation 3 1 93
+
+InitialComputation 3 2 81
+
+InitialComputation 3 3 103
+
+InitialComputation 3 4 66
+
+InitialComputation 3 5 101
+
+InitialComputation 3 6 67
+
+InitialComputation 3 7 94
+
+InitialComputation 3 8 58
+
+InitialComputation 3 9 122
+
+InitialComputation 3 10 86
+
+InitialComputation 3 11 50
+
+InitialComputation 3 12 64
+
+InitialComputation 3 13 59
+
+InitialComputation 3 14 88
+
+InitialComputation 3 15 57
+
+InitialComputation 3 16 61
+
+InitialComputation 3 17 62
+
+InitialComputation 3 18 133
+
+InitialComputation 3 19 86
+
+InitialComputation 3 20 54
+
+InitialComputation 3 21 83
+
+InitialComputation 3 22 62
+
+InitialComputation 3 23 91
+
+InitialComputation 3 24 54
+
+InitialComputation 3 25 53
+
+InitialComputation 3 26 65
+
+InitialComputation 3 27 118
+
+InitialComputation 3 28 70
+
+InitialComputation 3 29 56
+
+InitialComputation 3 30 69
+
+InitialComputation 3 31 63
+
+InitialComputation 3 32 83
+
+InitialComputation 3 33 61
+
+InitialComputation 3 34 60
+
+InitialComputation 3 35 58
+
+InitialComputation 3 36 156
+
+InitialComputation 3 37 89
+
+InitialComputation 3 38 61
+
+InitialComputation 3 39 89
+
+InitialComputation 3 40 59
+
+InitialComputation 3 41 75
+
+InitialComputation 3 42 57
+
+InitialComputation 3 43 64
+
+InitialComputation 3 44 58
+
+InitialComputation 3 45 134
+
+InitialComputation 3 46 81
+
+InitialComputation 3 47 66
+
+InitialComputation 3 48 79
+
+InitialComputation 3 49 56
+
+InitialComputation 3 50 57
+
+InitialComputation 3 51 48
+
+InitialComputation 3 52 57
+
+InitialComputation 3 53 50
+
+InitialComputation 3 54 123
+
+InitialComputation 3 55 48
+
+InitialComputation 3 56 49
+
+InitialComputation 3 57 78
+
+InitialComputation 3 58 63
+
+InitialComputation 3 59 49
+
+InitialComputation 3 60 46
+
+InitialComputation 3 61 63
+
+InitialComputation 3 62 44
+
+InitialComputation 3 63 124
+
+InitialComputation 3 64 75
+
+InitialComputation 3 65 49
+
+InitialComputation 3 66 74
+
+InitialComputation 3 67 68
+
+InitialComputation 3 68 63
+
+InitialComputation 3 69 51
+
+InitialComputation 3 70 63
+
+InitialComputation 3 71 46
+
+InitialComputation 3 72 124
+
+InitialComputation 3 73 49
+
+InitialComputation 3 74 52
+
+InitialComputation 3 75 69
+
+InitialComputation 3 76 45
+
+InitialComputation 3 77 83
+
+InitialComputation 3 78 43
+
+InitialComputation 3 79 48
+
+InitialComputation 3 80 52
+
+InitialComputation 3 81 123
+
+InitialComputation 3 82 64
+
+InitialComputation 3 83 51
+
+InitialComputation 3 84 60
+
+InitialComputation 3 85 41
+
+InitialComputation 3 86 81
+
+InitialComputation 3 87 49
+
+InitialComputation 3 88 47
+
+InitialComputation 3 89 57
+
+InitialComputation 3 90 137
+
+InitialComputation 3 91 73
+
+InitialComputation 3 92 56
+
+InitialComputation 3 93 82
+
+InitialComputation 3 94 61
+
+InitialComputation 3 95 55
+
+InitialComputation 3 96 48
+
+InitialComputation 3 97 49
+
+InitialComputation 3 98 67
+
+InitialComputation 3 99 139
+
+InitialComputation 3 100 78
+
+InitialComputation 3 101 47
+
+InitialComputation 3 102 97
+
+InitialComputation 3 103 50
+
+InitialComputation 3 104 58
+
+InitialComputation 3 105 45
+
+InitialComputation 3 106 58
+
+InitialComputation 3 107 54
+
+InitialComputation 3 108 111
+
+InitialComputation 3 109 69
+
+InitialComputation 3 110 60
+
+InitialComputation 3 111 70
+
+InitialComputation 3 112 70
+
+InitialComputation 3 113 58
+
+InitialComputation 3 114 61
+
+InitialComputation 3 115 58
+
+InitialComputation 3 116 661
+
+InitialComputation 3 117 75
+
+InitialComputation 3 118 96
+
+InitialComputation 3 119 48
+
+InitialComputation 3 120 80
+
+InitialComputation 3 121 50
+
+InitialComputation 3 122 85
+
+InitialComputation 3 123 242
+
+InitialComputation 3 124 353
+
+InitialComputation 3 125 357
+
+InitialComputation 3 126 439
+
+InitialComputation 3 127 360
+
+InitialComputation 3 128 393
+
+InitialComputation 3 129 415
+
+InitialComputation 3 130 386
+
+InitialComputation 3 131 376
+
+InitialComputation 3 132 376
+
+InitialComputation 3 133 792
+
+InitialComputation 3 134 914
+
+InitialComputation 3 135 1003
+
+InitialComputation 3 136 944
+
+InitialComputation 3 137 949
+
+InitialComputation 3 138 878
+
+InitialComputation 3 139 890
+
+InitialComputation 3 140 911
+
+InitialComputation 3 141 894
+
+InitialComputation 3 142 1013
+
+InitialComputation 3 143 948
+
+InitialComputation 3 144 1165
+
+InitialComputation 3 145 1078
+
+InitialComputation 3 146 1104
+
+InitialComputation 3 147 1009
+
+InitialComputation 3 148 972
+
+InitialComputation 3 149 951
+
+InitialComputation 3 150 1014
+
+InitialComputation 3 151 1016
+
+InitialComputation 3 152 970
+
+InitialComputation 3 153 1245
+
+InitialComputation 3 154 965
+
+InitialComputation 3 155 1073
+
+InitialComputation 3 156 41518
+
+InitialComputation 3 157 940
+
+InitialComputation 3 158 1024
+
+InitialComputation 3 159 1137
+
+InitialComputation 3 160 1080
+
+InitialComputation 3 161 931
+
+InitialComputation 3 162 1110
+
+InitialComputation 3 163 1176
+
+InitialComputation 3 164 1205
+
+InitialComputation 3 165 1102
+
+InitialComputation 3 166 918
+
+InitialComputation 3 167 982
+
+InitialComputation 3 168 1144
+
+InitialComputation 3 169 961
+
+InitialComputation 3 170 1050
+
+InitialComputation 3 171 1491
+
+InitialComputation 3 172 1019
+
+InitialComputation 3 173 983
+
+InitialComputation 3 174 1071
+
+InitialComputation 3 175 6266
+
+InitialComputation 3 176 26836
+
+InitialComputation 3 177 25679
+
+InitialComputation 3 178 21250
+
+InitialComputation 3 179 22131
+
+InitialComputation 3 180 22469
+
+InitialComputation 3 181 26538
+
+InitialComputation 3 182 21872
+
+InitialComputation 3 183 23790
+
+InitialComputation 3 184 27103
+
+InitialComputation 3 185 31018
+
+InitialComputation 3 186 21545
+
+InitialComputation 3 187 26053
+
+InitialComputation 3 188 35877
+
+InitialComputation 3 189 27845
+
+InitialComputation 3 190 24250
+
+InitialComputation 3 191 32482
+
+InitialComputation 3 192 23413
+
+InitialComputation 3 193 24144
+
+InitialComputation 3 194 28054
+
+InitialComputation 3 195 37509
+
+InitialComputation 3 196 21824
+
+InitialComputation 3 197 22214
+
+InitialComputation 3 198 43028
+
+InitialComputation 3 199 111439
+
+InitialComputation 3 200 102911
+
+InitialComputation 3 201 116300
+
+InitialComputation 3 202 89710
+
+InitialComputation 3 203 153647
+
+InitialComputation 3 204 90051
+
+InitialComputation 3 205 97487
+
+InitialComputation 3 206 96305
+
+InitialComputation 3 207 97765
+
+InitialComputation 3 208 121605
+
+InitialComputation 3 209 242708
+
+InitialComputation 3 210 273630
+
+InitialComputation 3 211 192391
+
+InitialComputation 3 212 244087
+
+InitialComputation 3 213 240179
+
+InitialComputation 3 214 303906
+
+InitialComputation 3 215 196857
+
+InitialComputation 3 216 286037
+
+InitialComputation 3 217 238102
+
+InitialComputation 3 218 212027
+
+InitialComputation 3 219 353796
+
+InitialComputation 3 220 574802
+
+InitialComputation 3 221 395217
+
+InitialComputation 3 222 255075
+
+InitialComputation 3 223 272452
+
+InitialComputation 3 224 242034
+
+InitialComputation 3 225 247813
+
+InitialComputation 3 226 461085
+
+InitialComputation 3 227 339924
+
+InitialComputation 3 228 475222
+
+InitialComputation 3 229 457893
+
+InitialComputation 3 230 341560
+
+InitialComputation 3 231 312789
+
+InitialComputation 3 232 234693
+
+InitialComputation 3 233 297923
+
+InitialComputation 3 234 253650
+
+InitialComputation 3 235 248327
+
+InitialComputation 3 236 186536
+
+InitialComputation 3 237 211419
+
+InitialComputation 3 238 106122
+
+InitialComputation 3 239 191176
+
+InitialComputation 3 240 135289
+
+InitialComputation 3 241 130924
+
+InitialComputation 3 242 96637
+
+InitialComputation 3 243 85845
+
+InitialComputation 3 244 82113
+
+InitialComputation 3 245 59138
+
+InitialComputation 3 246 29810
+
+InitialComputation 3 247 7081
+
+InitialComputation 3 248 1628
+
+InitialComputation 3 249 1289
+
+InitialComputation 3 250 483
+
+InitialComputation 3 251 168
+
+InitialComputation 4 0 68
+
+InitialComputation 4 1 67
+
+InitialComputation 4 2 69
+
+InitialComputation 4 3 48
+
+InitialComputation 4 4 54
+
+InitialComputation 4 5 100
+
+InitialComputation 4 6 66
+
+InitialComputation 4 7 50
+
+InitialComputation 4 8 69
+
+InitialComputation 4 9 51
+
+InitialComputation 4 10 52
+
+InitialComputation 4 11 67
+
+InitialComputation 4 12 52
+
+InitialComputation 4 13 109
+
+InitialComputation 4 14 72
+
+InitialComputation 4 15 52
+
+InitialComputation 4 16 52
+
+InitialComputation 4 17 54
+
+InitialComputation 4 18 47
+
+InitialComputation 4 19 59
+
+InitialComputation 4 20 55
+
+InitialComputation 4 21 66
+
+InitialComputation 4 22 78
+
+InitialComputation 4 23 63
+
+InitialComputation 4 24 54
+
+InitialComputation 4 25 49
+
+InitialComputation 4 26 70
+
+InitialComputation 4 27 57
+
+InitialComputation 4 28 60
+
+InitialComputation 4 29 75
+
+InitialComputation 4 30 63
+
+InitialComputation 4 31 66
+
+InitialComputation 4 32 81
+
+InitialComputation 4 33 62
+
+InitialComputation 4 34 60
+
+InitialComputation 4 35 74
+
+InitialComputation 4 36 60
+
+InitialComputation 4 37 65
+
+InitialComputation 4 38 74
+
+InitialComputation 4 39 66
+
+InitialComputation 4 40 63
+
+InitialComputation 4 41 77
+
+InitialComputation 4 42 69
+
+InitialComputation 4 43 57
+
+InitialComputation 4 44 58
+
+InitialComputation 4 45 70
+
+InitialComputation 4 46 58
+
+InitialComputation 4 47 69
+
+InitialComputation 4 48 61
+
+InitialComputation 4 49 74
+
+InitialComputation 4 50 62
+
+InitialComputation 4 51 45
+
+InitialComputation 4 52 48
+
+InitialComputation 4 53 48
+
+InitialComputation 4 54 42
+
+InitialComputation 4 55 51
+
+InitialComputation 4 56 69
+
+InitialComputation 4 57 46
+
+InitialComputation 4 58 59
+
+InitialComputation 4 59 66
+
+InitialComputation 4 60 42
+
+InitialComputation 4 61 44
+
+InitialComputation 4 62 63
+
+InitialComputation 4 63 45
+
+InitialComputation 4 64 43
+
+InitialComputation 4 65 61
+
+InitialComputation 4 66 52
+
+InitialComputation 4 67 49
+
+InitialComputation 4 68 63
+
+InitialComputation 4 69 53
+
+InitialComputation 4 70 42
+
+InitialComputation 4 71 57
+
+InitialComputation 4 72 45
+
+InitialComputation 4 73 47
+
+InitialComputation 4 74 53
+
+InitialComputation 4 75 47
+
+InitialComputation 4 76 49
+
+InitialComputation 4 77 56
+
+InitialComputation 4 78 60
+
+InitialComputation 4 79 47
+
+InitialComputation 4 80 52
+
+InitialComputation 4 81 46
+
+InitialComputation 4 82 49
+
+InitialComputation 4 83 59
+
+InitialComputation 4 84 52
+
+InitialComputation 4 85 72
+
+InitialComputation 4 86 92
+
+InitialComputation 4 87 46
+
+InitialComputation 4 88 58
+
+InitialComputation 4 89 60
+
+InitialComputation 4 90 56
+
+InitialComputation 4 91 47
+
+InitialComputation 4 92 47
+
+InitialComputation 4 93 58
+
+InitialComputation 4 94 68
+
+InitialComputation 4 95 64
+
+InitialComputation 4 96 47
+
+InitialComputation 4 97 61
+
+InitialComputation 4 98 54
+
+InitialComputation 4 99 45
+
+InitialComputation 4 100 44
+
+InitialComputation 4 101 48
+
+InitialComputation 4 102 97
+
+InitialComputation 4 103 53
+
+InitialComputation 4 104 53
+
+InitialComputation 4 105 49
+
+InitialComputation 4 106 50
+
+InitialComputation 4 107 57
+
+InitialComputation 4 108 45
+
+InitialComputation 4 109 49
+
+InitialComputation 4 110 52
+
+InitialComputation 4 111 64
+
+InitialComputation 4 112 46
+
+InitialComputation 4 113 85
+
+InitialComputation 4 114 61
+
+InitialComputation 4 115 46
+
+InitialComputation 4 116 984
+
+InitialComputation 4 117 45
+
+InitialComputation 4 118 89
+
+InitialComputation 4 119 46
+
+InitialComputation 4 120 61
+
+InitialComputation 4 121 50
+
+InitialComputation 4 122 92
+
+InitialComputation 4 123 237
+
+InitialComputation 4 124 341
+
+InitialComputation 4 125 388
+
+InitialComputation 4 126 347
+
+InitialComputation 4 127 376
+
+InitialComputation 4 128 359
+
+InitialComputation 4 129 413
+
+InitialComputation 4 130 407
+
+InitialComputation 4 131 377
+
+InitialComputation 4 132 390
+
+InitialComputation 4 133 918
+
+InitialComputation 4 134 1131
+
+InitialComputation 4 135 868
+
+InitialComputation 4 136 1153
+
+InitialComputation 4 137 873
+
+InitialComputation 4 138 866
+
+InitialComputation 4 139 1159
+
+InitialComputation 4 140 991
+
+InitialComputation 4 141 951
+
+InitialComputation 4 142 1194
+
+InitialComputation 4 143 1157
+
+InitialComputation 4 144 977
+
+InitialComputation 4 145 1288
+
+InitialComputation 4 146 976
+
+InitialComputation 4 147 1035
+
+InitialComputation 4 148 1261
+
+InitialComputation 4 149 997
+
+InitialComputation 4 150 1066
+
+InitialComputation 4 151 1266
+
+InitialComputation 4 152 1212
+
+InitialComputation 4 153 971
+
+InitialComputation 4 154 1224
+
+InitialComputation 4 155 1044
+
+InitialComputation 4 156 679027
+
+InitialComputation 4 157 1217
+
+InitialComputation 4 158 1066
+
+InitialComputation 4 159 1038
+
+InitialComputation 4 160 1361
+
+InitialComputation 4 161 1209
+
+InitialComputation 4 162 1038
+
+InitialComputation 4 163 1304
+
+InitialComputation 4 164 1031
+
+InitialComputation 4 165 1171
+
+InitialComputation 4 166 1152
+
+InitialComputation 4 167 1060
+
+InitialComputation 4 168 1201
+
+InitialComputation 4 169 1314
+
+InitialComputation 4 170 1247
+
+InitialComputation 4 171 971
+
+InitialComputation 4 172 1199
+
+InitialComputation 4 173 1013
+
+InitialComputation 4 174 928
+
+InitialComputation 4 175 6475
+
+InitialComputation 4 176 26861
+
+InitialComputation 4 177 26925
+
+InitialComputation 4 178 23669
+
+InitialComputation 4 179 24402
+
+InitialComputation 4 180 23428
+
+InitialComputation 4 181 24699
+
+InitialComputation 4 182 22568
+
+InitialComputation 4 183 22521
+
+InitialComputation 4 184 26356
+
+InitialComputation 4 185 30733
+
+InitialComputation 4 186 21891
+
+InitialComputation 4 187 27633
+
+InitialComputation 4 188 39363
+
+InitialComputation 4 189 27728
+
+InitialComputation 4 190 22867
+
+InitialComputation 4 191 32943
+
+InitialComputation 4 192 22965
+
+InitialComputation 4 193 23933
+
+InitialComputation 4 194 27492
+
+InitialComputation 4 195 35190
+
+InitialComputation 4 196 23053
+
+InitialComputation 4 197 24566
+
+InitialComputation 4 198 56227
+
+InitialComputation 4 199 111094
+
+InitialComputation 4 200 78253
+
+InitialComputation 4 201 105224
+
+InitialComputation 4 202 91834
+
+InitialComputation 4 203 144832
+
+InitialComputation 4 204 91653
+
+InitialComputation 4 205 100272
+
+InitialComputation 4 206 105848
+
+InitialComputation 4 207 98875
+
+InitialComputation 4 208 113473
+
+InitialComputation 4 209 733502
+
+InitialComputation 4 210 779040
+
+InitialComputation 4 211 328631
+
+InitialComputation 4 212 439677
+
+InitialComputation 4 213 660300
+
+InitialComputation 4 214 867179
+
+InitialComputation 4 215 412032
+
+InitialComputation 4 216 882579
+
+InitialComputation 4 217 619544
+
+InitialComputation 4 218 491546
+
+InitialComputation 4 219 2329808
+
+InitialComputation 4 220 2933779
+
+InitialComputation 4 221 2901100
+
+InitialComputation 4 222 1306556
+
+InitialComputation 4 223 1190052
+
+InitialComputation 4 224 1567459
+
+InitialComputation 4 225 1478396
+
+InitialComputation 4 226 4087807
+
+InitialComputation 4 227 2967595
+
+InitialComputation 4 228 7697305
+
+InitialComputation 4 229 8335232
+
+InitialComputation 4 230 6133091
+
+InitialComputation 4 231 5547772
+
+InitialComputation 4 232 3139083
+
+InitialComputation 4 233 5554118
+
+InitialComputation 4 234 3425040
+
+InitialComputation 4 235 3280112
+
+InitialComputation 4 236 2734684
+
+InitialComputation 4 237 4187194
+
+InitialComputation 4 238 1169607
+
+InitialComputation 4 239 3489178
+
+InitialComputation 4 240 2427216
+
+InitialComputation 4 241 2417815
+
+InitialComputation 4 242 1597649
+
+InitialComputation 4 243 815692
+
+InitialComputation 4 244 789361
+
+InitialComputation 4 245 509860
+
+InitialComputation 4 246 145428
+
+InitialComputation 4 247 15133
+
+InitialComputation 4 248 1638
+
+InitialComputation 4 249 1320
+
+InitialComputation 4 250 621
+
+InitialComputation 4 251 193
+

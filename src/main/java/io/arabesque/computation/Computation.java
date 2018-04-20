@@ -50,6 +50,7 @@ public interface Computation<E extends Embedding> {
     void aggregationProcess(E embedding);
    
     Iterator<E> expandCompute(E embedding);
+    IntCollection getPossibleExtensions(E embedding);
     void handleNoExpansions(E embedding);
 
     long processCompute(Iterator<E> expansions);
@@ -99,7 +100,7 @@ public interface Computation<E extends Embedding> {
     int setDepth(int depth);
     int getDepth();
 
-    EmbeddingIterator<E> forkConsumer();
+    EmbeddingIterator<E> forkConsumer(boolean local);
     void joinConsumer(EmbeddingIterator<E> consumer);
 
     void expand(E embedding);

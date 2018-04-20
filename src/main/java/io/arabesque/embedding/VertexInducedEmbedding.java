@@ -42,6 +42,12 @@ public class VertexInducedEmbedding extends BasicEmbedding {
    
    private ValidWordIdAdderPrevious previousExtensionWordIdsAdder =
       new ValidWordIdAdderPrevious();
+
+   private RoaringAdderPrevious roaringAdderPrevious =
+      new RoaringAdderPrevious();
+   
+   private RoaringAdderLast roaringAdderLast =
+      new RoaringAdderLast();
    
    private IntWritable reusableInt = new IntWritable();
 
@@ -195,30 +201,6 @@ public class VertexInducedEmbedding extends BasicEmbedding {
    //   IntArrayList vertices = getVertices();
    //   int numVertices = getNumVertices();
 
-   //   neighborhoodWordIds().clear();
-
-   //   int firstWordId = vertices.getUnchecked(0);
-   //   int lastWordId = vertices.getUnchecked(numVertices - 1);
-
-   //   //if (numVertices > 1) {
-   //   //   if (unvisitedNeighborhood != null) {
-   //   //      unvisitedNeighborhood.forEach(previousExtensionWordIdsAdder);
-   //   //   }
-   //   //}
-
-   //   IntCollection neighbourhood = getValidNeighboursForExpansion(lastWordId);
-   //   if (neighbourhood != null) {
-   //      neighbourhood.forEach(
-   //            lastExtensionWordIdsAdder.setBound(firstWordId));
-   //   }
-
-   //}
-
-   //@Override
-   //protected void updateExtensibleWordIdsSimple(Computation computation) {
-   //   IntArrayList vertices = getVertices();
-   //   int numVertices = getNumVertices();
-
    //   extensionWordIds().clear();
 
    //   int wordId;
@@ -237,254 +219,57 @@ public class VertexInducedEmbedding extends BasicEmbedding {
    //   }
    //}
 
-   //@Override
-   //protected void updateExtensibleWordIdsSimple(Computation computation) {
-   //   IntArrayList vertices = getVertices();
-   //   int numVertices = getNumVertices();
-   //   HashIntSet extensionWordIds = extensionWordIds();
-   //   long neighborhoodLookups = 0;
-
-   //   extensionWordIds.clear();
-
-   //   int wordId;
-   //   int lowerBound = vertices.getUnchecked(0);
-   //   int[] orderedVertices = null;
-   //   VertexNeighbourhood neighbourhood = null;
-
-   //   for (int i = numVertices - 1; i >= 0; --i) {
-   //      wordId = vertices.getUnchecked(i);
-   //      neighbourhood = configuration.getMainGraph().
-   //         getVertexNeighbourhood(wordId);
-
-   //      if (neighbourhood == null) {
-   //         continue;
-   //      }
-
-   //      orderedVertices = neighbourhood.getOrderedVertices();
-   //      int fromIdx = neighborhoodCuts.getUnchecked(i);
-   //      if (fromIdx < 0) {
-   //         fromIdx = Arrays.binarySearch(orderedVertices,
-   //                 vertices.getUnchecked(0));
-   //         fromIdx = (fromIdx < 0) ? (-fromIdx - 1) : fromIdx;
-   //         neighborhoodCuts.setUnchecked(i, fromIdx);
-   //      }
-
-   //      for (int j = fromIdx; j < orderedVertices.length; ++j) {
-   //         int w = orderedVertices[j];
-   //         if (w > lowerBound) {
-   //            extensionWordIds.add(w);
-   //         } else {
-   //            extensionWordIds.removeInt(w);
-   //         }
-   //      }
-
-   //      neighborhoodLookups += (orderedVertices.length - fromIdx);
-
-   //      lowerBound = Math.max(wordId, lowerBound);
-   //   }
-
-   //   computation.getExecutionEngine().aggregate(
-   //         SparkFromScratchMasterEngine.NEIGHBORHOOD_LOOKUPS(getNumWords()),
-   //         neighborhoodLookups);
-   //}
-   //
-
    @Override
    protected void updateExtensibleWordIdsSimple(Computation computation) {
       IntArrayList vertices = getVertices();
       int numVertices = getNumVertices();
-      int totalNumWords = computation.getInitialNumWords();
+      HashIntSet extensionWordIds = extensionWordIds();
+      long neighborhoodLookups = 0;
 
+      extensionWordIds.clear();
+
+      int wordId;
+      int lowerBound = vertices.getUnchecked(0);
+      int[] orderedVertices = null;
       VertexNeighbourhood neighbourhood = null;
 
-      wordBitmaps().clear();
-      cummulativeWordBitmaps().clear();
-
-      if (numVertices == 1) {
-         int firstWord = vertices.getUnchecked(0);
-
+      for (int i = numVertices - 1; i >= 0; --i) {
+         wordId = vertices.getUnchecked(i);
          neighbourhood = configuration.getMainGraph().
-            getVertexNeighbourhood(firstWord);
+            getVertexNeighbourhood(wordId);
 
-         if (neighbourhood == null) return;
+         if (neighbourhood == null) {
+            continue;
+         }
 
-         wordBitmaps().mutableUnion(neighbourhood.getVerticesBitmap());
-         wordBitmaps().mutableRemove(0, firstWord + 1);
-         
-         cummulativeWordBitmaps().mutableUnion(wordBitmaps());
+         orderedVertices = neighbourhood.getOrderedVertices();
+         int fromIdx = neighborhoodCuts.getUnchecked(i);
+         if (fromIdx < 0) {
+            fromIdx = Arrays.binarySearch(orderedVertices,
+                    vertices.getUnchecked(0));
+            fromIdx = (fromIdx < 0) ? (-fromIdx - 1) : fromIdx;
+            neighborhoodCuts.setUnchecked(i, fromIdx);
+         }
 
-      } else {
-         int firstWord = vertices.getUnchecked(0);
-         int lastWord = vertices.getLast();
-         
-         neighbourhood = configuration.getMainGraph().
-            getVertexNeighbourhood(lastWord);
-         
-         cummulativeWordBitmaps().mutableUnion(neighbourhood.getVerticesBitmap());
-         cummulativeWordBitmaps().mutableRemove(0, firstWord + 1);
-
-         if (previousCummulativeWordBitmaps().isEmpty()) {
-            for (int i = 0; i < numVertices - 1; ++i) {
-               neighbourhood = configuration.getMainGraph().
-                  getVertexNeighbourhood(vertices.getUnchecked(i));
-               previousCummulativeWordBitmaps().mutableUnion(
-                     neighbourhood.getVerticesBitmap());
+         for (int j = fromIdx; j < orderedVertices.length; ++j) {
+            int w = orderedVertices[j];
+            if (w > lowerBound) {
+               extensionWordIds.add(w);
+            } else {
+               extensionWordIds.removeInt(w);
             }
-            previousCummulativeWordBitmaps().mutableRemove(0, firstWord + 1);
          }
 
-         cummulativeWordBitmaps().mutableUnion(
-               previousCummulativeWordBitmaps());
+         neighborhoodLookups += (orderedVertices.length - fromIdx);
 
-         int lastLastWord = getLastLastWord();
-
-         if (lastLastWord == -1) {
-            // incremental information is empty
-            invalidWordBitmaps().transferFrom(
-                  previousCummulativeWordBitmaps().
-                  iremove(lastWord, totalNumWords));
-         } else {
-            // build invalids incrementally
-            invalidWordBitmaps().mutableRemove(lastWord, lastLastWord);
-         }
-            
-         setLastLastWord(lastWord);
-
-         wordBitmaps().mutableUnion(cummulativeWordBitmaps());
-         wordBitmaps().mutableDifference(invalidWordBitmaps());
-
-         IntArrayList words = getWords();
-         int numWords = getNumWords();
-
-         // Clean the words that are already in the embedding
-         for (int i = 0; i < numWords; ++i) {
-            int wId = words.getUnchecked(i);
-            wordBitmaps().remove(wId);
-         }
+         lowerBound = Math.max(wordId, lowerBound);
       }
 
-      wordBitmaps().shrink();
+      computation.getExecutionEngine().aggregate(
+            SparkFromScratchMasterEngine.NEIGHBORHOOD_LOOKUPS(getNumWords()),
+            neighborhoodLookups);
    }
    
-   //@Override
-   //protected void updateExtensibleWordIdsSimple(Computation computation) {
-   //   IntArrayList vertices = getVertices();
-   //   int numVertices = getNumVertices();
-   //   int totalNumWords = computation.getInitialNumWords();
-
-   //   VertexNeighbourhood neighbourhood = null;
-
-   //   wordBitmaps().clear();
-   //   cummulativeWordBitmaps().clear();
-
-   //   if (numVertices == 1) {
-   //      int firstWord = vertices.getUnchecked(0);
-
-   //      neighbourhood = configuration.getMainGraph().
-   //         getVertexNeighbourhood(firstWord);
-
-   //      if (neighbourhood == null) return;
-
-   //      bitmaps.clear();
-   //      bitmaps.add(neighbourhood.getVerticesBitmap().getInternalBitmap());
-   //      wordBitmaps().setInternalBitmap(RoaringBitmap.or(
-   //               bitmaps.iterator(),
-   //               firstWord + 1,
-   //               totalNumWords));
-   //      
-   //      cummulativeWordBitmaps().setInternalBitmap(RoaringBitmap.or(
-   //               bitmaps.iterator(),
-   //               firstWord + 1,
-   //               totalNumWords));
-
-   //   } else {
-   //      int firstWord = vertices.getUnchecked(0);
-   //      int lastWord = vertices.getLast();
-   //      
-   //      if (previousCummulativeWordBitmaps().isEmpty()) {
-   //         bitmaps.clear();
-   //         for (int i = 0; i < numVertices - 1; ++i) {
-   //            neighbourhood = configuration.getMainGraph().
-   //               getVertexNeighbourhood(vertices.getUnchecked(i));
-   //            bitmaps.add(
-   //                  neighbourhood.getVerticesBitmap().getInternalBitmap());
-   //         }
-   //         previousCummulativeWordBitmaps().setInternalBitmap(
-   //               RoaringBitmap.or(bitmaps.iterator(),
-   //                  firstWord + 1,
-   //                  totalNumWords)
-   //               );
-   //         previousCummulativeWordBitmaps().runOptimize();
-   //      }
-
-   //      neighbourhood = configuration.getMainGraph().
-   //         getVertexNeighbourhood(lastWord);
-
-   //      bitmaps.clear();
-   //      bitmaps.add(neighbourhood.getVerticesBitmap().getInternalBitmap());
-   //      bitmaps.add(previousCummulativeWordBitmaps().getInternalBitmap());
-   //      cummulativeWordBitmaps().setInternalBitmap(RoaringBitmap.or(
-   //               bitmaps.iterator(),
-   //               firstWord + 1,
-   //               totalNumWords));
-
-   //      int lastLastWord = getLastLastWord();
-
-   //      if (lastLastWord == -1) {
-   //         // incremental information is empty
-   //         invalidWordBitmaps().setInternalBitmap(
-   //               RoaringBitmap.remove(
-   //                  previousCummulativeWordBitmaps().getInternalBitmap(),
-   //                  lastWord,
-   //                  totalNumWords)
-   //               );
-   //      } else {
-   //         // build invalids incrementally
-   //         invalidWordBitmaps().mutableRemove(lastWord, lastLastWord);
-   //      }
-
-   //      cummulativeWordBitmaps().runOptimize();
-   //      invalidWordBitmaps().runOptimize();
-   //         
-   //      setLastLastWord(lastWord);
-
-   //      wordBitmaps().setInternalBitmap(
-   //            RoaringBitmap.andNot(
-   //               cummulativeWordBitmaps().getInternalBitmap(),
-   //               invalidWordBitmaps().getInternalBitmap()
-   //               )
-   //            );
-
-   //      IntArrayList words = getWords();
-   //      int numWords = getNumWords();
-
-   //      // Clean the words that are already in the embedding
-   //      for (int i = 0; i < numWords; ++i) {
-   //         int wId = words.getUnchecked(i);
-   //         wordBitmaps().remove(wId);
-   //      }
-
-   //      wordBitmaps().runOptimize();
-   //   }
-   //}
-
-   @Override
-   public IntCollection getExtensibleWordIds(Computation computation) {
-      IntCollection extensions = null;
-      // If we have to recompute the extensionVertexIds set
-      if (dirtyExtensionWordIds) {
-         if (getNumWords() > 0) {
-            updateExtensibleWordIdsSimple(computation);
-            extensions = wordBitmaps();
-         } else {
-            updateInitExtensibleWordIds(computation);
-            extensions = extensionWordIds();
-         }
-      }
-
-      return extensions;
-   }
-
    private class UpdateEdgesConsumer implements IntConsumer {
       private int numAdded;
 
@@ -541,6 +326,31 @@ public class VertexInducedEmbedding extends BasicEmbedding {
       private int lowerBound;
 
       public ValidWordIdAdder setBound(int lowerBound) {
+         this.lowerBound = lowerBound;
+         return this;
+      }
+
+      @Override
+      public void accept(int w) {
+         if (w > lowerBound) {
+            extensionWordIds().add(w);
+         } else {
+            extensionWordIds().removeInt(w);
+         }
+      }
+   }
+
+   private class RoaringAdderLast implements org.roaringbitmap.IntConsumer {
+      @Override
+      public void accept(int w) {
+         extensionWordIds().add(w);
+      }
+   }
+
+   private class RoaringAdderPrevious implements org.roaringbitmap.IntConsumer {
+      private int lowerBound;
+
+      public RoaringAdderPrevious setBound(int lowerBound) {
          this.lowerBound = lowerBound;
          return this;
       }

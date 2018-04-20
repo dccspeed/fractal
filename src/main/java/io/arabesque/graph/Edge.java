@@ -6,12 +6,13 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
-public class Edge implements Writable, java.io.Serializable {
+public class Edge<E> implements Writable, java.io.Serializable {
     public static final int DEFAULT_EDGE_ID = -1;
 
     private int edgeId;
     private int sourceVertexId;
     private int destinationVertexId;
+    private E property;
 
     public Edge() {
         this(DEFAULT_EDGE_ID, -1, -1);
@@ -41,6 +42,14 @@ public class Edge implements Writable, java.io.Serializable {
 
     public int getDestinationId() {
         return destinationVertexId;
+    }
+
+    void setProperty(E property) {
+       this.property = property;
+    }
+
+    public E getProperty() {
+       return property;
     }
 
     @Override

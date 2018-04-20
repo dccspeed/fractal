@@ -9,7 +9,7 @@ public class IntIntMapPool extends Pool<IntIntMap> {
     private static final Factory<IntIntMap> factory = new BasicFactory<IntIntMap>() {
         @Override
         public IntIntMap createObject() {
-            return HashIntIntMaps.getDefaultFactory().withDefaultValue(-1).newMutableMap();
+            return HashIntIntMaps.newMutableMap();
         }
     };
 
@@ -19,6 +19,19 @@ public class IntIntMapPool extends Pool<IntIntMap> {
 
     public IntIntMapPool() {
         super(factory);
+    }
+
+    private class ObjCollectionReclaimer extends ObjReclaimer {
+        @Override
+        public void accept(IntIntMap o) {
+            o.clear();
+            super.accept(o);
+        }
+    }
+
+    @Override
+    protected ObjReclaimer createObjReclaimer() {
+        return new ObjCollectionReclaimer();
     }
 
     /*

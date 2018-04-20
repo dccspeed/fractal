@@ -81,7 +81,6 @@ class SparkFromScratchMasterEngine[E <: Embedding](
    */
   lazy val next: Boolean = {
 
-    val superstepStart = System.currentTimeMillis
     
     logInfo (s"${this} Computation starting from ${superstepRDD}," +
       s", StorageLevel=${superstepRDD.getStorageLevel}")
@@ -125,6 +124,12 @@ class SparkFromScratchMasterEngine[E <: Embedding](
       i += 1
     }
 
+    // debug accumulators
+    aggAccums.update("kws-filter", sc.longAccumulator("kws-filter"))
+    aggAccums.update("kws-filter-outerLoop", sc.longAccumulator("kws-filter-outerLoop"))
+    aggAccums.update("kws-filter-innerLoop", sc.longAccumulator("kws-filter-innerLoop"))
+    //
+
     // we will contruct the pipeline in this var
     var cc = originalContainer.withComputationLabel("last_step_begins")
 
@@ -143,8 +148,10 @@ class SparkFromScratchMasterEngine[E <: Embedding](
         case Some(c) =>
           val ncc = withCustomFuncs(c.asInstanceOf[ComputationContainer[E]],
             depth + 1)
-          cc.shallowCopy(processComputeOpt = Option(processComputeFunc),
-            nextComputationOpt = Option(ncc))
+          cc.shallowCopy(
+            processComputeOpt = Option(processComputeFunc),
+            nextComputationOpt = Option(ncc),
+            processOpt = None)
 
         case None =>
           cc.shallowCopy(processComputeOpt = Option(processComputeFunc))
@@ -169,6 +176,21 @@ class SparkFromScratchMasterEngine[E <: Embedding](
     logInfo (s"HadoopConfiguration estimated size = " +
       s"${SizeEstimator.estimate(config.hadoopConf)} bytes")
 
+    val initStart = System.currentTimeMillis
+    val _configBc = configBc
+    superstepRDD.mapPartitions { iter =>
+      _configBc.value.initialize(isMaster = false)
+      iter
+    }.foreachPartition(_ => {})
+
+    val initElapsed = System.currentTimeMillis - initStart
+
+    logInfo (s"Initialization took ${initElapsed} ms")
+    
+    val superstepStart = System.currentTimeMillis
+
+    val enumerationStart = System.currentTimeMillis
+    
     val _aggAccums = aggAccums
 
     val execEngines = getExecutionEngines (
@@ -181,7 +203,7 @@ class SparkFromScratchMasterEngine[E <: Embedding](
     execEngines.persist(MEMORY_ONLY_SER)
     execEngines.foreachPartition (_ => {})
     
-    val enumerationElapsed = System.currentTimeMillis - superstepStart
+    val enumerationElapsed = System.currentTimeMillis - enumerationStart
     
     logInfo(s"Enumeration step=${superstep} took ${enumerationElapsed} ms")
 
@@ -199,8 +221,8 @@ class SparkFromScratchMasterEngine[E <: Embedding](
           val mapping = agg.getMapping
           val numMappings = agg.getNumberMappings
           logInfo (s"Aggregation[${name}][numMappings=${numMappings}][${agg}]\n" +
-            s"${mapping.map(t => s"Aggregation[${name}][${superstep}]" +
-            s" ${t._1}: ${t._2}").mkString("\n")}")
+            s"${mapping.take(10).map(t => s"Aggregation[${name}][${superstep}]" +
+            s" ${t._1}: ${t._2}").mkString("\n")}\n...")
         }
 
         previousAggregationsBc = sc.broadcast (aggregations)
@@ -309,13 +331,30 @@ class SparkFromScratchMasterEngine[E <: Embedding](
 
           validEmbeddings = execEngine.validEmbeddings
 
-          // setup work-stealing system
-          val gtagExecutorActor = execEngine.gtagActorRef
-          workStealingSys = new WorkStealingSystem[E](
-            processCompute, gtagExecutorActor, new ConcurrentLinkedQueue())
-
+          var start = System.currentTimeMillis
           val ret = processCompute(iter, c)
-          workStealingSys.workStealingCompute(c)
+          var elapsed = System.currentTimeMillis - start
+
+          logInfo (s"WorkStealingMode internal=${config.internalWsEnabled()}" +
+            s" external=${config.externalWsEnabled()}")
+
+          logInfo (s"InitialComputation step=${c.getStep}" +
+            s" partitionId=${c.getPartitionId} took ${elapsed} ms")
+
+          // setup work-stealing system
+          start = System.currentTimeMillis
+          if (config.wsEnabled()) {
+            val gtagExecutorActor = execEngine.gtagActorRef
+            workStealingSys = new WorkStealingSystem[E](
+              processCompute, gtagExecutorActor, new ConcurrentLinkedQueue())
+
+            workStealingSys.workStealingCompute(c)
+          }
+          elapsed = System.currentTimeMillis - start
+          
+          logInfo (s"WorkStealingComputation step=${c.getStep}" +
+            s" partitionId=${c.getPartitionId} took ${elapsed} ms")
+
           ret
         } else {
           processCompute(iter, c)

@@ -30,6 +30,9 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
     protected ReductionFunction<V> reductionFunction;
     protected EndAggregationFunction<K, V> endAggregationFunction;
 
+    protected K reusableKey;
+    protected V reusableValue;
+
     private UnsafeByteArrayOutputStream reusedOut;
     private UnsafeReusableByteArrayInput reusedIn;
 
@@ -65,6 +68,19 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
         reductionFunction = metadata.getReductionFunction();
         endAggregationFunction = metadata.getEndAggregationFunction();
         isIncremental = metadata.isIncremental();
+
+        try {
+           if (org.apache.hadoop.io.NullWritable.class.isAssignableFrom(keyClass)) {
+              reusableKey = (K) NullWritable.get();
+           } else if (!io.arabesque.pattern.Pattern.class.isAssignableFrom(keyClass)) {
+              reusableKey = keyClass.newInstance();
+           }
+           reusableValue = valueClass.newInstance();
+        } catch (InstantiationException e) {
+           throw new RuntimeException("No-arg constructor not found", e);
+        } catch (IllegalAccessException e) {
+           throw new RuntimeException("Illegal access while instantiating resuables", e);
+        }
     }
 
     public void reset() {
@@ -185,6 +201,9 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
         } else {
             reductionFunction.reduce(myValue, value);
         }
+
+        reusableKey = key;
+        reusableValue = value;
     }
 
     private <W extends Writable> W copyWritable(W writable) {
@@ -368,6 +387,14 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
     public void transferKeyFrom(K key, AggregationStorage<K, V> otherAggregationStorage) {
         aggregate(key, otherAggregationStorage.getValue(key));
         //otherAggregationStorage.removeKey(key);
+    }
+
+    public K reusableKey() {
+       return reusableKey;
+    }
+
+    public V reusableValue() {
+       return reusableValue;
     }
 
     @Override

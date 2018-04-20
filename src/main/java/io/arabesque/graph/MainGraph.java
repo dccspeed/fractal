@@ -5,8 +5,10 @@ import io.arabesque.utils.collection.AtomicBitSetArray;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.function.IntConsumer;
 
-public interface MainGraph {
+public interface MainGraph<V,E> {
     int getId();
+    
+    void setId(int id);
 
     void reset();
 

@@ -5,6 +5,8 @@ import io.arabesque.computation._
 import io.arabesque.conf.Configuration._
 import io.arabesque.embedding._
 import io.arabesque.graph.{BasicMainGraph, MainGraph}
+import io.arabesque.optimization.OptimizationSet
+import io.arabesque.optimization.OptimizationSetDescriptor
 import io.arabesque.pattern.Pattern
 import io.arabesque.utils.{Logging, SerializableConfiguration}
 import io.arabesque.utils.collection.AtomicBitSetArray
@@ -297,8 +299,12 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
       case Some(value) => confs.update (config, value)
       case None =>
     }
+
     // log level
     updateIfExists ("log_level", CONF_LOG_LEVEL)
+
+    // info period
+    updateIfExists ("info_period", INFO_PERIOD)
     
     // computation classes
     updateIfExists ("master_computation", CONF_MASTER_COMPUTATION_CLASS)
@@ -315,9 +321,18 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
     updateIfExists ("gtag_batch_low", CONF_GTAG_BATCH_SIZE_LOW)
     updateIfExists ("gtag_batch_high", CONF_GTAG_BATCH_SIZE_HIGH)
 
+    // work stealing
+    updateIfExists ("ws_internal", CONF_WS_INTERNAL)
+    updateIfExists ("ws_external", CONF_WS_EXTERNAL)
+
     // input
+    updateIfExists ("input_graph_class", CONF_MAINGRAPH_CLASS)
     updateIfExists ("input_graph_path", CONF_MAINGRAPH_PATH)
     updateIfExists ("input_graph_local", CONF_MAINGRAPH_LOCAL)
+    updateIfExists ("edge_labelled", CONF_MAINGRAPH_EDGE_LABELLED)
+
+    // embedding
+    updateIfExists ("keep_maximal", CONF_EMBEDDING_KEEP_MAXIMAL)
  
     // output
     updateIfExists ("output_active", CONF_OUTPUT_ACTIVE)
@@ -339,7 +354,8 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
     initialize()
     if (!tagApplied) {
       val start = System.currentTimeMillis
-      val ret = getMainGraph[BasicMainGraph].applyTag(vtag, etag)
+      val ret = getMainGraph[BasicMainGraph[_,_]].applyTag(vtag, etag)
+      System.gc()
       val elapsed = System.currentTimeMillis - start
       logInfo (s"GraphTagging took ${elapsed} ms. Return: ${ret}")
       tagApplied = true
@@ -352,9 +368,9 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
       val start = System.currentTimeMillis
       val ec = createComputation.getEmbeddingClass()
       val ret = if (ec == classOf[VertexInducedEmbedding]) {
-        getMainGraph[BasicMainGraph].applyTagVertexes(tag)
+        getMainGraph[BasicMainGraph[_,_]].applyTagVertexes(tag)
       } else if (ec == classOf[EdgeInducedEmbedding]) {
-        getMainGraph[BasicMainGraph].applyTagEdges(tag)
+        getMainGraph[BasicMainGraph[_,_]].applyTagEdges(tag)
       } else {
         throw new RuntimeException(s"Unknown embedding type: ${ec}")
       }
@@ -368,7 +384,7 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
     initialize()
     if (!tagApplied) {
       val start = System.currentTimeMillis
-      val ret = getMainGraph[BasicMainGraph].applyTag()
+      val ret = getMainGraph[BasicMainGraph[_,_]].applyTag()
       val elapsed = System.currentTimeMillis - start
       logInfo (s"GraphTagging took ${elapsed} ms. Return: ${ret}")
       tagApplied = true
@@ -390,6 +406,20 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
     } else if (!isInitialized) {
       initializeInstance(!isMaster)
     }
+    
+    if (getMainGraph == null || !isMainGraphRead()) {
+      logInfo(s"Creating graph configId=${id} mainGraphId=${mainGraphId}")
+      setMainGraph(createGraph())
+    }
+
+    if (!isMaster && !isMainGraphRead()) {
+      logInfo(s"Reading graph configId=${id} mainGraphId=${mainGraphId}")
+      setGraph()
+      val optimizationSet = getOptimizationSet()
+      logInfo (s"Active optimizations (applyAfterGraphLoad): ${optimizationSet}")
+      optimizationSet.applyAfterGraphLoad()
+    }
+
     Configuration.add(this)
   }
 
@@ -399,12 +429,18 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
   private def initializeInstance(shouldSetGraph: Boolean = true): Unit = {
 
     fixAssignments
+    
+    // periodic information about execution
+    infoPeriod = getLong(INFO_PERIOD, INFO_PERIOD_DEFAULT)
 
     // common configs
     setMainGraphClass (
       getClass (CONF_MAINGRAPH_CLASS, CONF_MAINGRAPH_CLASS_DEFAULT).
-      asInstanceOf[Class[_ <: MainGraph]]
+      asInstanceOf[Class[_ <: MainGraph[_,_]]]
     )
+
+    setIsGraphEdgeLabelled (getBoolean (CONF_MAINGRAPH_EDGE_LABELLED,
+      CONF_MAINGRAPH_EDGE_LABELLED_DEFAULT))
 
     setMasterComputationClass (
       getClass (CONF_MASTER_COMPUTATION_CLASS,
@@ -422,27 +458,30 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
       asInstanceOf[Class[_ <: Pattern]]
     )
 
+    // optimizations
+    setOptimizationSetDescriptorClass (
+      getClass (CONF_OPTIMIZATIONSETDESCRIPTOR_CLASS,
+        CONF_OPTIMIZATIONSETDESCRIPTOR_CLASS_DEFAULT).
+      asInstanceOf[Class[_ <: OptimizationSetDescriptor]]
+    )
+
+    val optimizationSet = getOptimizationSet()
+    logInfo (s"Active optimizations (applyStartup): ${optimizationSet}")
+    optimizationSet.applyStartup()
+
     setAggregationsMetadata (new java.util.HashMap())
 
     setOutputPath (getString(CONF_OUTPUT_PATH, CONF_OUTPUT_PATH_DEFAULT))
-
-    if (shouldSetGraph) {
-      setGraph()
-    }
-
+    
     initialized = true
   }
 
   private def setGraph(): Boolean = {
     var graphRead = false
-    // graph may be already set by a parent computation
-    if (getMainGraph() == null) {
-      setMainGraph (createGraph())
-    }
 
     // in case of the mainGraph is empty (no vertices and no edges), we try to
     // read it
-    getMainGraph[BasicMainGraph].synchronized {
+    getMainGraph[BasicMainGraph[_,_]].synchronized {
       if (!isMainGraphRead) {
         logInfo ("MainGraph is empty, gonna try reading it")
         readMainGraph()
@@ -510,13 +549,23 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
 
   override def getInteger(key: String, defaultValue: Integer) =
     getValue(key, defaultValue).asInstanceOf[Int]
+  
+  override def getLong(key: String, defaultValue: java.lang.Long) =
+    getValue(key, defaultValue).asInstanceOf[Long]
 
   override def getString(key: String, defaultValue: String) =
     getValue(key, defaultValue).asInstanceOf[String]
   
-  override def getBoolean(key: String, defaultValue: java.lang.Boolean) =
-    getValue(key, defaultValue).asInstanceOf[Boolean]
-
+  override def getBoolean(key: String, defaultValue: java.lang.Boolean) = {
+    val value = getValue(key, defaultValue)
+    if (value.isInstanceOf[java.lang.Boolean]) {
+      value.asInstanceOf[java.lang.Boolean]
+    } else if (value.isInstanceOf[String]) {
+      new java.lang.Boolean(value.asInstanceOf[String])
+    } else {
+      throw new RuntimeException(s"Invalid boolean for (${key}, ${value})")
+    }
+  }
 }
 
 object SparkConfiguration extends Logging {

@@ -6,6 +6,9 @@ import com.koloboke.function.IntConsumer;
 import io.arabesque.computation.Computation;
 import io.arabesque.computation.SparkFromScratchMasterEngine;
 import io.arabesque.conf.Configuration;
+import io.arabesque.graph.Vertex;
+import io.arabesque.graph.Edge;
+import io.arabesque.graph.LabelledEdge;
 import io.arabesque.pattern.Pattern;
 import io.arabesque.utils.collection.AtomicBitSetArray;
 import io.arabesque.utils.collection.RoaringBitSet;
@@ -32,9 +35,6 @@ public abstract class BasicEmbedding implements Embedding {
    protected boolean dirtyExtensionWordIds;
 
    // Active extensions
-   protected ObjArrayList<RoaringBitSet> wordBitmaps;
-   protected ObjArrayList<RoaringBitSet> cummulativeWordBitmaps;
-   protected ObjArrayList<RoaringBitSet> invalidWordBitmaps;
    protected ObjArrayList<HashIntSet> extensionLevels;
    protected IntArrayList neighborhoodCuts;
    protected IntArrayList lastWords;
@@ -72,13 +72,8 @@ public abstract class BasicEmbedding implements Embedding {
    public BasicEmbedding() {
       vertices = new IntArrayList();
       edges = new IntArrayList();
-      extensionWordIds = HashIntSetPool.instance().createObject();
       extensionLevels = new ObjArrayList<HashIntSet>();
-      wordBitmaps = new ObjArrayList<RoaringBitSet>();
-      cummulativeWordBitmaps = new ObjArrayList<RoaringBitSet>();
-      invalidWordBitmaps = new ObjArrayList<RoaringBitSet>();
       neighborhoodCuts = new IntArrayList();
-      lastWords = new IntArrayList();
       nextExtensionLevel();
    }
 
@@ -106,38 +101,6 @@ public abstract class BasicEmbedding implements Embedding {
       dirtyExtensionWordIds = true;
    }
 
-   protected RoaringBitSet invalidWordBitmaps() {
-      return invalidWordBitmaps.getLast();
-   }
-
-   protected int getLastLastWord() {
-      return lastWords.getLast();
-   }
-   
-   protected void setLastLastWord(int lastLastWord) {
-      lastWords.setUnchecked(lastWords.size() - 1, lastLastWord);
-   }
-
-   protected RoaringBitSet wordBitmaps() {
-      return wordBitmaps.getLast();
-   }
-   
-   protected RoaringBitSet wordBitmaps(int level) {
-      return wordBitmaps.get(level);
-   }
-
-   protected RoaringBitSet cummulativeWordBitmaps() {
-      return cummulativeWordBitmaps.getLast();
-   }
-   
-   protected RoaringBitSet cummulativeWordBitmaps(int level) {
-      return cummulativeWordBitmaps.get(level);
-   }
-   
-   protected RoaringBitSet previousCummulativeWordBitmaps() {
-      return cummulativeWordBitmaps.get(cummulativeWordBitmaps.size() - 2);
-   }
-
    protected HashIntSet extensionWordIds() {
       return extensionLevels.getLast();
    }
@@ -153,47 +116,27 @@ public abstract class BasicEmbedding implements Embedding {
    @Override
    public void nextExtensionLevel() {
       extensionLevels.add(HashIntSetPool.instance().createObject());
-      wordBitmaps.add(RoaringBitSetPool.instance().createObject());
-      cummulativeWordBitmaps.add(RoaringBitSetPool.instance().createObject());
-      invalidWordBitmaps.add(RoaringBitSetPool.instance().createObject());
-      lastWords.add(-1);
    }
 
    @Override
    public void previousExtensionLevel() {
       HashIntSetPool.instance().reclaimObject(
             extensionLevels.remove(extensionLevels.size() - 1));
-      RoaringBitSetPool.instance().reclaimObject(
-            wordBitmaps.remove(wordBitmaps.size() - 1));
-      RoaringBitSetPool.instance().reclaimObject(
-            cummulativeWordBitmaps.remove(cummulativeWordBitmaps.size() - 1));
-      RoaringBitSetPool.instance().reclaimObject(
-            invalidWordBitmaps.remove(invalidWordBitmaps.size() - 1));
-      lastWords.remove(lastWords.size() - 1);
    }
 
    @Override
    public void nextExtensionLevel(Embedding other) {
-      BasicEmbedding basicOther = (BasicEmbedding) other;
-      int level = extensionLevels.size();
-
-      //extensionLevels.add(
-      //      basicOther.extensionLevels.getUnchecked(level));
-      //wordBitmaps.add(
-      //      basicOther.wordBitmaps.getUnchecked(level));
       extensionLevels.add(HashIntSetPool.instance().createObject());
-      wordBitmaps.add(RoaringBitSetPool.instance().createObject());
-      cummulativeWordBitmaps.add(
-            basicOther.cummulativeWordBitmaps.getUnchecked(level).clone());
-      invalidWordBitmaps.add(
-            basicOther.invalidWordBitmaps.getUnchecked(level).clone());
-      lastWords.add(
-            basicOther.lastWords.getUnchecked(level));
    }
 
    @Override
    public IntArrayList getVertices() {
       return vertices;
+   }
+
+   @Override
+   public <V> Vertex<V> vertex(int vertexId) {
+      return (Vertex<V>) configuration.getMainGraph().getVertex(vertexId);
    }
 
    @Override
@@ -204,6 +147,16 @@ public abstract class BasicEmbedding implements Embedding {
    @Override
    public IntArrayList getEdges() {
       return edges;
+   }
+
+   @Override
+   public <E> Edge<E> edge(int edgeId) {
+      return (Edge<E>) configuration.getMainGraph().getEdge(edgeId);
+   }
+   
+   @Override
+   public <E> LabelledEdge<E> labelledEdge(int edgeId) {
+      return (LabelledEdge<E>) configuration.getMainGraph().getEdge(edgeId);
    }
 
    @Override
@@ -252,7 +205,9 @@ public abstract class BasicEmbedding implements Embedding {
       }
 
       for (int i = startMyWordRange; i < endMyWordRange; ++i) {
-         extensionWordIds().add(i);
+         if (computation.filter(this, i)) {
+            extensionWordIds().add(i);
+         }
       }
 
       computation.getExecutionEngine().aggregate(

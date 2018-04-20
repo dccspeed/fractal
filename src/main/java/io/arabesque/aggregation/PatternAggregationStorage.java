@@ -131,7 +131,7 @@ public class PatternAggregationStorage<K extends Pattern, V extends Writable> ex
     public void finalLocalAggregate(AggregationStorage<K, V> otherStorage) {
         while (!otherStorage.keyValueMap.isEmpty()) {
             Iterator<Map.Entry<K, V>> entryIterator = otherStorage.keyValueMap.entrySet().iterator();
-
+            
             while (entryIterator.hasNext()) {
                 Map.Entry<K, V> entry = entryIterator.next();
 
@@ -139,12 +139,6 @@ public class PatternAggregationStorage<K extends Pattern, V extends Writable> ex
                     entryIterator.remove();
                 }
             }
-
-            //try {
-            //    Thread.sleep(10);
-            //} catch (InterruptedException e) {
-            //    e.printStackTrace();
-            //}
         }
     }
 
@@ -298,31 +292,6 @@ public class PatternAggregationStorage<K extends Pattern, V extends Writable> ex
             } else {
                return null;
             }
-
-            //byte currentReservation;
-
-            //synchronized (reservations) {
-            //    currentReservation = reservations.getByte(quickPattern);
-
-            //    if (currentReservation != 0) {
-            //        return null;
-            //    } else {
-            //        reservations.put(quickPattern, (byte) 1);
-            //    }
-
-            //    //LOG.info("Quick 2 canonical map: ");
-            //    //LOG.info(quick2CanonicalMap);
-
-            //    //LOG.info("Reservations: ");
-            //    //LOG.info(reservations);
-            //}
-
-            //LOG.info("Calculate canonical pattern of quick pattern: " + quickPattern);
-            //canonicalPattern = (K) quickPattern.copy();
-            //canonicalPattern.turnCanonical();
-            //LOG.info("Canonical pattern: " + canonicalPattern);
-
-            //quick2CanonicalMap.put(quickPattern, canonicalPattern);
         }
 
         return canonicalPattern;

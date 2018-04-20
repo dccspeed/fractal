@@ -1,6 +1,6 @@
 package io.arabesque.embedding
 
-import io.arabesque.conf.SparkConfiguration
+import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.graph.BasicMainGraph
 
 import org.apache.hadoop.io.Writable
@@ -53,9 +53,9 @@ object ResultEmbedding {
       VEmbedding (strEmbedding)
   }
 
-  def apply(embedding: Embedding, config: SparkConfiguration[_]) = {
+  def apply(embedding: Embedding, config: Configuration[_]) = {
     if (embedding.isInstanceOf[EdgeInducedEmbedding]) {
-      val mainGraph = config.getMainGraph[BasicMainGraph]
+      val mainGraph = config.getMainGraph[BasicMainGraph[_,_]]
       val edges = new Array [(Int,Int)] (embedding.getNumEdges)
       val edgesIter = embedding.getEdges.iterator
       var i = 0

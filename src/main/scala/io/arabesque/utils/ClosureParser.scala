@@ -91,7 +91,7 @@ object ClosureParser {
   }
 
   // TODO: make this method cleaner 
-  private def copyStream(in: InputStream, out: OutputStream,
+  def copyStream(in: InputStream, out: OutputStream,
       closeStreams: Boolean = false, transferToEnabled: Boolean = false
     ): Long = {
     var count = 0L

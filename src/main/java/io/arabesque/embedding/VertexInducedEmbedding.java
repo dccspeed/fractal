@@ -6,11 +6,9 @@ import com.koloboke.function.IntConsumer;
 import io.arabesque.aggregation.AggregationStorage;
 import io.arabesque.computation.Computation;
 import io.arabesque.computation.BasicComputation;
-import io.arabesque.computation.SparkFromScratchMasterEngine;
 import io.arabesque.conf.Configuration;
 import io.arabesque.graph.VertexNeighbourhood;
 import io.arabesque.utils.collection.AtomicBitSetArray;
-import io.arabesque.utils.collection.RoaringBitSet;
 import io.arabesque.utils.collection.IntArrayList;
 import io.arabesque.utils.collection.ObjArrayList;
 import io.arabesque.utils.collection.IntSet;
@@ -23,7 +21,6 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.log4j.Logger;
 import org.apache.hadoop.io.IntWritable;
-import org.roaringbitmap.RoaringBitmap;
 
 public class VertexInducedEmbedding extends BasicEmbedding {
    private static final Logger LOG = Logger.getLogger(VertexInducedEmbedding.class);
@@ -43,21 +40,12 @@ public class VertexInducedEmbedding extends BasicEmbedding {
    private ValidWordIdAdderPrevious previousExtensionWordIdsAdder =
       new ValidWordIdAdderPrevious();
 
-   private RoaringAdderPrevious roaringAdderPrevious =
-      new RoaringAdderPrevious();
-   
-   private RoaringAdderLast roaringAdderLast =
-      new RoaringAdderLast();
-   
    private IntWritable reusableInt = new IntWritable();
 
-   private ObjArrayList<RoaringBitmap> bitmaps;
-   
    public VertexInducedEmbedding() {
       super();
       updateEdgesConsumer = new UpdateEdgesConsumer();
       numEdgesAddedWithWord = new IntArrayList();
-      bitmaps = new ObjArrayList<>();
    }
 
    @Override
@@ -230,7 +218,7 @@ public class VertexInducedEmbedding extends BasicEmbedding {
 
       int wordId;
       int lowerBound = vertices.getUnchecked(0);
-      int[] orderedVertices = null;
+      IntArrayList orderedVertices = null;
       VertexNeighbourhood neighbourhood = null;
 
       for (int i = numVertices - 1; i >= 0; --i) {
@@ -243,16 +231,16 @@ public class VertexInducedEmbedding extends BasicEmbedding {
          }
 
          orderedVertices = neighbourhood.getOrderedVertices();
+         int numOrderedVertices = orderedVertices.size();
          int fromIdx = neighborhoodCuts.getUnchecked(i);
          if (fromIdx < 0) {
-            fromIdx = Arrays.binarySearch(orderedVertices,
-                    vertices.getUnchecked(0));
+            fromIdx = orderedVertices.binarySearch(vertices.getUnchecked(0));
             fromIdx = (fromIdx < 0) ? (-fromIdx - 1) : fromIdx;
             neighborhoodCuts.setUnchecked(i, fromIdx);
          }
 
-         for (int j = fromIdx; j < orderedVertices.length; ++j) {
-            int w = orderedVertices[j];
+         for (int j = fromIdx; j < numOrderedVertices; ++j) {
+            int w = orderedVertices.getUnchecked(j);
             if (w > lowerBound) {
                extensionWordIds.add(w);
             } else {
@@ -260,13 +248,13 @@ public class VertexInducedEmbedding extends BasicEmbedding {
             }
          }
 
-         neighborhoodLookups += (orderedVertices.length - fromIdx);
+         neighborhoodLookups += (numOrderedVertices - fromIdx);
 
          lowerBound = Math.max(wordId, lowerBound);
       }
 
       computation.getExecutionEngine().aggregate(
-            SparkFromScratchMasterEngine.NEIGHBORHOOD_LOOKUPS(getNumWords()),
+            Configuration.NEIGHBORHOOD_LOOKUPS(getNumWords()),
             neighborhoodLookups);
    }
    
@@ -340,34 +328,9 @@ public class VertexInducedEmbedding extends BasicEmbedding {
       }
    }
 
-   private class RoaringAdderLast implements org.roaringbitmap.IntConsumer {
-      @Override
-      public void accept(int w) {
-         extensionWordIds().add(w);
-      }
-   }
-
-   private class RoaringAdderPrevious implements org.roaringbitmap.IntConsumer {
-      private int lowerBound;
-
-      public RoaringAdderPrevious setBound(int lowerBound) {
-         this.lowerBound = lowerBound;
-         return this;
-      }
-
-      @Override
-      public void accept(int w) {
-         if (w > lowerBound) {
-            extensionWordIds().add(w);
-         } else {
-            extensionWordIds().removeInt(w);
-         }
-      }
-   }
-
    @Override
-   public void applyTagFrom(AtomicBitSetArray vtag, AtomicBitSetArray etag,
-         int pos) {
+   public void applyTagFrom(Computation computation,
+         AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos) {
 
       int numVertices = vertices.size();
       int numEdges = edges.size();
@@ -388,8 +351,8 @@ public class VertexInducedEmbedding extends BasicEmbedding {
    }
 
    @Override
-   public void applyTagTo(AtomicBitSetArray vtag, AtomicBitSetArray etag,
-         int pos) {
+   public void applyTagTo(Computation computation,
+         AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos) {
 
       int lowerIdx = 0;
 

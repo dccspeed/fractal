@@ -1,8 +1,13 @@
 package io.arabesque.utils;
 
+import com.koloboke.collect.IntCollection;
+
+import io.arabesque.utils.collection.IntArrayList;
+
 import java.util.*;
 
 import java.util.concurrent.ThreadLocalRandom;
+
 
 public class Utils {
   // Implementing Fisher–Yates shuffle
@@ -15,5 +20,85 @@ public class Utils {
       ar[index] = ar[i];
       ar[i] = a;
     }
+  }
+
+  public static int sintersect(IntArrayList arr1, IntArrayList arr2,
+        int i1, int size1, int i2, int size2, IntCollection target) {
+     int cost = 0;
+     while (i1 < size1 && i2 < size2) {
+        int v1 = arr1.getUnchecked(i1);
+        int v2 = arr2.getUnchecked(i2);
+        if (v1 == v2) {
+           target.add(v1);
+           ++i1;
+           ++i2;
+        } else if (v1 < v2) {
+           ++i1;
+        } else {
+           ++i2;
+        }
+        ++cost;
+     }
+
+     return cost;
+  }
+
+  public static int sdifference(IntArrayList arr1, IntArrayList arr2,
+        int i1, int size1, int i2, int size2, IntCollection target) {
+     int cost = 0;
+     while (i1 < size1 && i2 < size2) {
+        int v1 = arr1.getUnchecked(i1);
+        int v2 = arr2.getUnchecked(i2);
+        if (v1 == v2) {
+           ++i1;
+           ++i2;
+        } else if (v1 < v2) {
+           target.add(v1);
+           ++i1;
+        } else {
+           ++i2;
+        }
+        ++cost;
+     }
+
+     while (i1 < size1) {
+        target.add(arr1.getUnchecked(i1));
+        ++i1;
+     }
+
+     return cost;
+  }
+
+  public static int sunion(IntArrayList arr1, IntArrayList arr2,
+        int i1, int size1, int i2, int size2, IntCollection target) {
+     int cost = 0;
+     while (i1 < size1 && i2 < size2) {
+        int v1 = arr1.getUnchecked(i1);
+        int v2 = arr2.getUnchecked(i2);
+        if (v1 == v2) {
+           target.add(v1);
+           ++i1;
+           ++i2;
+        } else if (v1 < v2) {
+           target.add(v1);
+           ++i1;
+        } else {
+           target.add(v2);
+           ++i2;
+        }
+        ++cost;
+     }
+     
+     while (i1 < size1) {
+        target.add(arr1.getUnchecked(i1));
+        ++i1;
+     }
+     
+     while (i2 < size2) {
+        target.add(arr2.getUnchecked(i2));
+        ++i2;
+     }
+
+     return cost;
   }
 }

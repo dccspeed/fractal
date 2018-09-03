@@ -115,6 +115,19 @@ public class PatternEdge implements Comparable<PatternEdge>, Writable {
         this.destLabel = destLabel;
     }
 
+    public int getLabel() {
+       int firstLabel, secondLabel;
+       if (srcLabel < destLabel) {
+          firstLabel = srcLabel;
+          secondLabel = destLabel;
+       } else {
+          firstLabel = destLabel;
+          secondLabel = srcLabel;
+       }
+
+       return 10 * firstLabel + secondLabel;
+    }
+
     public String toString() {
         return ("[" + srcPos + "," + srcLabel + "-" + destPos + "," + destLabel + "]");
     }

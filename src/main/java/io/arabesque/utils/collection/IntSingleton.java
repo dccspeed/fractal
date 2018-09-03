@@ -3,13 +3,15 @@ package io.arabesque.utils.collection;
 import io.arabesque.utils.pool.IntSingletonPool;
 import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.IntIterator;
-import com.koloboke.function.IntConsumer;
-import com.koloboke.function.IntPredicate;
 
 import javax.annotation.Nonnull;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.NoSuchElementException;
+import java.util.function.IntConsumer;
+import java.util.function.Consumer;
+import java.util.function.IntPredicate;
+import java.util.function.Predicate;
 
 public class IntSingleton implements ReclaimableIntCollection {
     private int value;
@@ -160,6 +162,11 @@ public class IntSingleton implements ReclaimableIntCollection {
                 ++numMoves;
             }
         }
+        
+        @Override
+        public void forEachRemaining(@Nonnull Consumer<? super Integer> intConsumer) {
+           throw new UnsupportedOperationException();
+        }
 
         @Override
         public boolean hasNext() {
@@ -186,6 +193,11 @@ public class IntSingleton implements ReclaimableIntCollection {
     @Override
     public void forEach(@Nonnull IntConsumer intConsumer) {
         intConsumer.accept(value);
+    }
+    
+    @Override
+    public void forEach(@Nonnull Consumer<? super Integer> intConsumer) {
+       throw new UnsupportedOperationException();
     }
 
     @Override
@@ -246,6 +258,11 @@ public class IntSingleton implements ReclaimableIntCollection {
 
     @Override
     public boolean removeIf(@Nonnull IntPredicate intPredicate) {
+        throw new UnsupportedOperationException();
+    }
+    
+    @Override
+    public boolean removeIf(@Nonnull Predicate<? super Integer> intPredicate) {
         throw new UnsupportedOperationException();
     }
 }

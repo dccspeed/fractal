@@ -602,9 +602,10 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    */
   def extend(getPossibleExtensions: (E,Computation[E]) => IntCollection)
     : ArabesqueResult[E] = {
-    val expandComp = emptyComputation.
-      withGetPossibleExtensions(getPossibleExtensions)
-    handleNextResult(expandComp)
+    val newConfig = config.withNewComputation (
+      getComputationContainer[E].
+      withNewFunctions (getPossibleExtensionsOpt = Option(getPossibleExtensions)))
+    this.copy (config = newConfig)
   }
 
   /**
@@ -979,7 +980,7 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
    *
    * @return new result
    */
-  private def withInitAggregations (initAggregations: (Computation[E]) => Unit)
+  def withInitAggregations (initAggregations: (Computation[E]) => Unit)
     : ArabesqueResult[E] = {
     val newConfig = config.withNewComputation (
       getComputationContainer[E].withNewFunctions (

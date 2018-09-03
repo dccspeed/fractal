@@ -4,7 +4,6 @@ import io.arabesque.utils.collection.IntArrayList;
 import io.arabesque.utils.pool.IntArrayListPool;
 
 import com.koloboke.collect.IntCursor;
-import com.koloboke.function.IntConsumer;
 
 import java.io.Externalizable;
 import java.io.ObjectInput;
@@ -12,6 +11,7 @@ import java.io.DataInput;
 import java.io.ObjectOutput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.function.IntConsumer;
 
 import org.apache.hadoop.io.Writable;
 

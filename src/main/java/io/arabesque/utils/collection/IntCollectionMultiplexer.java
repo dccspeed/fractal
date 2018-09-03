@@ -4,10 +4,12 @@ import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.IntIterator;
 import com.koloboke.collect.ObjCollection;
-import com.koloboke.function.IntConsumer;
-import com.koloboke.function.IntPredicate;
 
 import javax.annotation.Nonnull;
+import java.util.function.IntConsumer;
+import java.util.function.Consumer;
+import java.util.function.IntPredicate;
+import java.util.function.Predicate;
 import java.util.Collection;
 
 public class IntCollectionMultiplexer implements IntCollection {
@@ -186,6 +188,11 @@ public class IntCollectionMultiplexer implements IntCollection {
                 intConsumer.accept(next());
             }
         }
+        
+        @Override
+        public void forEachRemaining(@Nonnull Consumer<? super Integer> intConsumer) {
+            throw new UnsupportedOperationException();
+        }
 
         @Override
         public boolean hasNext() {
@@ -236,6 +243,11 @@ public class IntCollectionMultiplexer implements IntCollection {
         while (intCursor.moveNext()) {
             intConsumer.accept(intCursor.elem());
         }
+    }
+
+    @Override
+    public void forEach(@Nonnull Consumer<? super Integer> intConsumer) {
+        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -305,6 +317,11 @@ public class IntCollectionMultiplexer implements IntCollection {
 
     @Override
     public boolean removeIf(@Nonnull IntPredicate intPredicate) {
+        throw new UnsupportedOperationException();
+    }
+    
+    @Override
+    public boolean removeIf(@Nonnull Predicate<? super Integer> intPredicate) {
         throw new UnsupportedOperationException();
     }
 }

@@ -49,8 +49,8 @@ summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
 
 require(ggplot2)
 
-# original data
 data <- read.table(header=T, file="runtime.dat")
+data <- data[data$graph == "patents",]
 data$runtime <- data$runtime / 1000
 datac <- summarySE(data, measurevar="runtime", groupvars=c("sys", "graph", "supp"))
 
@@ -72,4 +72,34 @@ plot <- ggplot(datac, aes(x=factor(supp), y=runtime, fill=factor(sys))) +
 
 ggsave(file="fsm-patents-multi-label.pdf", family="serif", heigh=4, width=6)
 ggsave(file="fsm-patents-multi-label.png", family="serif", heigh=4, width=6)
+
+data <- read.table(header=T, file="runtime.dat")
+data <- data[data$graph == "youtube",]
+data$runtime <- data$runtime / 1000
+datac <- summarySE(data, measurevar="runtime", groupvars=c("sys", "graph", "supp"))
+
+datac$status <- ""
+datac$status[datac$runtime == 0] <- "MEMORY ERROR"
+
+print(datac)
+
+lgLabels <- c("Arabesque", "Fractal", "ScaleMine")
+lgBreaks <- c("arabesque", "fractal", "scalemine")
+lgValues <- c("#7570b3", "#1b9e77", "#d95f02")
+
+plot <- ggplot(datac, aes(x=factor(supp), y=runtime, fill=factor(sys))) + 
+    geom_bar(position=position_dodge(), size=10, stat="identity") +
+    geom_errorbar(aes(ymin=(runtime-se), ymax=(runtime+se)),
+                  colour="black", width=.005,
+                  position=position_dodge(.9)) +
+    geom_text(aes(label=status),
+              position = position_dodge(width = 1), vjust = 0.8, hjust = -0.05,
+              size = 4, angle = 90, color = "#7570b3") +
+    labs(x="Support", y="Runtime (seconds)") +
+    scale_fill_manual(breaks = lgBreaks, labels = lgLabels, values = lgValues) +
+    theme_minimal(base_size = 18) +
+    theme(legend.title=element_blank(), legend.position=c(0.8,0.8))
+
+ggsave(file="fsm-youtube-multi-label.pdf", family="serif", heigh=4, width=6)
+ggsave(file="fsm-youtube-multi-label.png", family="serif", heigh=4, width=6)
 

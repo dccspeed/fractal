@@ -14,13 +14,7 @@ trait ResultEmbedding[T] extends Writable {
   def toInternalEmbedding[E <: Embedding](config: SparkConfiguration[E]): E
   
   override def hashCode(): Int = {
-    var result = this.words.length
-    var i = 0
-    while (i < this.words.length) {
-      result = 31 * result + this.words(i).hashCode
-      i += 1
-    }
-    result
+    words.toSet.hashCode()
   }
 
   override def equals(_other: Any): Boolean = {
@@ -32,14 +26,7 @@ trait ResultEmbedding[T] extends Writable {
     if (other == null) return false
 
     if (this.words.length != other.words.length) return false
-
-    var i = 0
-    while (i < this.words.length) {
-      if (this.words(i) != other.words(i)) return false
-      i += 1
-    }
-
-    return true
+    return this.words.toSet == other.words.toSet
   }
 
 }

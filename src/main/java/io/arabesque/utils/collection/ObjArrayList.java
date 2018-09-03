@@ -4,10 +4,10 @@ import com.koloboke.collect.Equivalence;
 import com.koloboke.collect.ObjCollection;
 import com.koloboke.collect.ObjCursor;
 import com.koloboke.collect.ObjIterator;
-import com.koloboke.function.Consumer;
-import com.koloboke.function.Predicate;
 
 import javax.annotation.Nonnull;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.*;
 
 public class ObjArrayList<O> implements ReclaimableObjCollection<O>, List<O> {

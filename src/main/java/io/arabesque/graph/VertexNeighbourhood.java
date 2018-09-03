@@ -2,10 +2,11 @@ package io.arabesque.graph;
 
 import io.arabesque.utils.collection.ReclaimableIntCollection;
 import io.arabesque.utils.collection.AtomicBitSetArray;
-import io.arabesque.utils.collection.RoaringBitSet;
+import io.arabesque.utils.collection.IntArrayList;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.function.IntConsumer;
+import com.koloboke.function.IntIntConsumer;
 
 public interface VertexNeighbourhood {
     IntCollection getNeighborVertices();
@@ -17,6 +18,11 @@ public interface VertexNeighbourhood {
     void addEdge(int neighbourVertexId, int edgeId);
 
     void forEachEdgeId(int nId, IntConsumer intConsumer);
+    
+    void forEachVertexEdge(IntIntConsumer consumer);
+   
+    int forEachVertexEdgeLowerBound(
+         IntIntConsumer consumer, int lowerBound);
     
     int applyTagVertexes(AtomicBitSetArray tag);
     
@@ -30,11 +36,7 @@ public interface VertexNeighbourhood {
 
     void buildSortedNeighborhood();
 
-    int[] getOrderedVertices();
+    IntArrayList getOrderedVertices();
     
-    int[] getOrderedEdges();
-
-    RoaringBitSet getVerticesBitmap();
-    
-    RoaringBitSet getEdgesBitmap();
+    IntArrayList getOrderedEdges();
 }

@@ -206,7 +206,7 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
         reusableValue = value;
     }
 
-    private <W extends Writable> W copyWritable(W writable) {
+    protected <W extends Writable> W copyWritable(W writable) {
         if (reusedOut == null) {
             reusedOut = new UnsafeByteArrayOutputStream();
         }
@@ -402,7 +402,7 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
         return "AggregationStorage{" +
                 "name='" + name + '\'' +
                 ",keyValueMapSize=" + keyValueMap.size() +
-                // ", keyValueMap=" + keyValueMap +
+                 //", keyValueMap=" + keyValueMap +
                 ",isIncremental=" + isIncremental +
                 '}';
     }

@@ -32,8 +32,22 @@ public interface Pattern extends Writable, Externalizable {
     PatternEdgeArrayList getEdges();
 
     VertexPositionEquivalences getVertexPositionEquivalences();
+    
+    VertexPositionEquivalences getVertexPositionEquivalences(IntArrayList vertexLabels);
+    
+    EdgePositionEquivalences getEdgePositionEquivalences();
+    
+    EdgePositionEquivalences getEdgePositionEquivalences(IntArrayList edgeLabels);
 
     IntIntMap getCanonicalLabeling();
+
+    public boolean testSymmetryBreakerExt(Embedding embedding, int targetVertex);
+
+    public boolean testSymmetryBreakerPos(Embedding embedding, int pos);
+    
+    public int sbLowerBound(Embedding embedding, int pos);
+    
+    public Configuration getConfig();
 
     String toOutputString();
    

@@ -29,6 +29,10 @@ public class Vertex<V> implements Writable, java.io.Serializable {
         return vertexLabel;
     }
 
+    public void setVertexLabel(int vertexLabel) {
+       this.vertexLabel = vertexLabel;
+    }
+
     void setProperty(V property) {
        this.property = property;
     }
@@ -72,7 +76,7 @@ public class Vertex<V> implements Writable, java.io.Serializable {
     public String toString() {
         return "Vertex{" +
                 "vertexId=" + vertexId +
-                "vertexLabel=" + vertexLabel +
+                ",vertexLabel=" + vertexLabel +
                 '}';
     }
 }

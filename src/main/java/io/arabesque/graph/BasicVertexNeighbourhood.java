@@ -5,10 +5,11 @@ import com.koloboke.collect.map.IntIntCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
 import com.koloboke.function.IntConsumer;
+import com.koloboke.function.IntIntConsumer;
 import io.arabesque.utils.collection.AtomicBitSetArray;
-import io.arabesque.utils.collection.RoaringBitSet;
 import io.arabesque.utils.collection.ReclaimableIntCollection;
 import io.arabesque.utils.pool.IntSingletonPool;
+import io.arabesque.utils.collection.IntArrayList;
 
 import java.util.Arrays;
 
@@ -16,46 +17,30 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
    // Key = neighbour vertex id, Value = edge id that connects owner of neighbourhood with Key
    protected IntIntMap neighbourhoodMap;
    private IntIntMap removedNeighbourhoodMap;
-   private int[] orderedVertices;
-   private int[] orderedEdges;
-   private RoaringBitSet verticesBitmap;
-   private RoaringBitSet edgesBitmap;
+   private IntArrayList orderedVertices;
+   private IntArrayList orderedEdges;
 
    public BasicVertexNeighbourhood() {
       this.neighbourhoodMap = HashIntIntMaps.getDefaultFactory().withDefaultValue(-1).newMutableMap();
       this.removedNeighbourhoodMap = HashIntIntMaps.getDefaultFactory().withDefaultValue(-1).newMutableMap();
-      //this.verticesBitmap = new RoaringBitSet();
-      //this.edgesBitmap = new RoaringBitSet();
    }
 
    @Override
    public void buildSortedNeighborhood() {
-      orderedVertices = neighbourhoodMap.keySet().toIntArray();
-      Arrays.parallelSort(orderedVertices);
-      orderedEdges = neighbourhoodMap.values().toIntArray();
-      Arrays.parallelSort(orderedEdges);
-      //verticesBitmap.shrink();
-      //edgesBitmap.shrink();
+      orderedVertices = new IntArrayList(neighbourhoodMap.keySet().toIntArray());
+      orderedVertices.sort();
+      orderedEdges = new IntArrayList(neighbourhoodMap.values().toIntArray());
+      orderedEdges.sort();
    }
 
    @Override
-   public int[] getOrderedVertices() {
+   public IntArrayList getOrderedVertices() {
       return orderedVertices;
    }
 
    @Override
-   public int[] getOrderedEdges() {
+   public IntArrayList getOrderedEdges() {
       return orderedEdges;
-   }
-
-   @Override
-   public RoaringBitSet getVerticesBitmap() {
-      return verticesBitmap;
-   }
-
-   @Override
-   public RoaringBitSet getEdgesBitmap() {
-      return edgesBitmap;
    }
 
    @Override
@@ -179,6 +164,25 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
    }
 
    @Override
+   public int forEachVertexEdgeLowerBound(
+         IntIntConsumer consumer, int lowerBound) {
+      int numVertices = orderedVertices.size();
+      int fromIdx = orderedVertices.binarySearch(lowerBound);
+      fromIdx = (fromIdx < 0) ? (-fromIdx - 1) : fromIdx;
+      for (int i = fromIdx; i < numVertices; ++i) {
+         int vIdx = orderedVertices.getUnchecked(i);
+         consumer.accept(vIdx, neighbourhoodMap.get(vIdx));
+      }
+
+      return (numVertices - fromIdx);
+   }
+   
+   @Override
+   public void forEachVertexEdge(IntIntConsumer consumer) {
+      neighbourhoodMap.forEach(consumer);
+   }
+
+   @Override
    public boolean isNeighbourVertex(int vertexId) {
       return neighbourhoodMap.containsKey(vertexId);
    }
@@ -190,8 +194,6 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
       //         "This edge already exists and this is not a multi-vertex neighbourhood.");
       //}
       neighbourhoodMap.put(neighbourVertexId, edgeId);
-      //verticesBitmap.add(neighbourVertexId);
-      //edgesBitmap.add(edgeId);
    }
 
    @Override

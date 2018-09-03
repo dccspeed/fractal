@@ -11,8 +11,7 @@ import io.arabesque.pattern.Pattern
 import io.arabesque.utils.{Logging, SerializableConfiguration}
 import io.arabesque.utils.collection.AtomicBitSetArray
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
-import java.io.{ObjectInputStream, ObjectOutputStream}
+import java.io._
 import java.util.concurrent.atomic.AtomicInteger
 
 import org.apache.spark.SparkConf
@@ -35,6 +34,8 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
     logInfo (s"Switching aggregations to incremental")
     set("incremental_aggregation", true)
   }
+
+  logInfo (s"Created config (id=${id}) ${this}")
 
   // master hostname
   if (!confs.contains(CONF_MASTER_HOSTNAME)) try {
@@ -349,9 +350,28 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
 
   var tagApplied = false
 
-  def initializeWithTag(
+
+  def initializeWithTag(isMaster: Boolean): Unit = synchronized {
+    initialize(isMaster)
+    if (!tagApplied) {
+      val start = System.currentTimeMillis
+      (confs.get("vtag"), confs.get("etag")) match {
+        case (Some(vtag : AtomicBitSetArray), Some(etag : AtomicBitSetArray)) =>
+          val ret = getMainGraph[BasicMainGraph[_,_]].applyTag(vtag, etag)
+          System.gc()
+          val elapsed = System.currentTimeMillis - start
+          logInfo (s"GraphTagging took ${elapsed} ms. Return: ${ret}")
+          tagApplied = true
+
+        case other =>
+          logWarning (s"Ignoring tags ${other}")
+      }
+    }
+  }
+
+  def initializeWithTag(isMaster: Boolean,
       vtag: AtomicBitSetArray, etag: AtomicBitSetArray): Unit = synchronized {
-    initialize()
+    initialize(isMaster)
     if (!tagApplied) {
       val start = System.currentTimeMillis
       val ret = getMainGraph[BasicMainGraph[_,_]].applyTag(vtag, etag)
@@ -401,6 +421,9 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
    * TODO: generalize the initialization in the superclass Configuration
    */
   override def initialize(isMaster: Boolean = false): Unit = synchronized {
+    logInfo(s"Initializing config, id=${id} config=${this}" +
+      s" mainGraph=${getMainGraph()} isMainGraphRead=${isMainGraphRead()}" +
+      s" isMaster=${isMaster} activeConfigs=${Configuration.activeConfigs}")
     if (Configuration.isUnset(id)) {
       initializeInstance(!isMaster)
     } else if (!isInitialized) {
@@ -408,16 +431,17 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
     }
     
     if (getMainGraph == null || !isMainGraphRead()) {
-      logInfo(s"Creating graph configId=${id} mainGraphId=${mainGraphId}")
-      setMainGraph(createGraph())
+      val graph = createGraph()
+      setMainGraph(graph)
+      logInfo(s"Graph created, configId=${id} graph=${graph}")
     }
 
     if (!isMaster && !isMainGraphRead()) {
-      logInfo(s"Reading graph configId=${id} mainGraphId=${mainGraphId}")
       setGraph()
       val optimizationSet = getOptimizationSet()
-      logInfo (s"Active optimizations (applyAfterGraphLoad): ${optimizationSet}")
       optimizationSet.applyAfterGraphLoad()
+      logInfo(s"Graph read, configId=${id} graph=${getMainGraph()}" +
+        s" optimizationSet= ${optimizationSet}")
     }
 
     Configuration.add(this)
@@ -631,7 +655,11 @@ object SparkConfiguration extends Logging {
 
   def deserialize[T](bytes: Array[Byte]): T = {
     val bais = new ByteArrayInputStream(bytes)
-    val ois = new ObjectInputStream(bais)
+    deserialize(bais)
+  }
+
+  def deserialize[T](is: InputStream): T = {
+    val ois = new ObjectInputStream(is)
     ois.readObject().asInstanceOf[T]
   }
 }

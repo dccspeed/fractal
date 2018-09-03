@@ -7,25 +7,30 @@ import io.arabesque.graph.MainGraph;
 import io.arabesque.graph.Vertex;
 import io.arabesque.pattern.pool.PatternEdgePool;
 import io.arabesque.utils.collection.IntArrayList;
+import io.arabesque.utils.collection.ObjArrayList;
 import io.arabesque.utils.collection.IntCollectionAddConsumer;
+import com.koloboke.collect.IntCursor;
+import com.koloboke.collect.ObjCursor;
 import com.koloboke.collect.map.IntIntCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMapFactory;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
+import com.koloboke.collect.set.IntSet;
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 
 import java.io.*;
-
-// TODO: use murmur hash to do pattern hashing
-//import com.google.common.hash.Hashing;
+import java.util.Arrays;
 
 public abstract class BasicPattern implements Pattern {
     private static final Logger LOG = Logger.getLogger(BasicPattern.class);
 
     protected int configurationId;
+    protected Configuration configuration;
+    protected boolean isGraphEdgeLabelled;
 
-    protected HashIntIntMapFactory positionMapFactory = HashIntIntMaps.getDefaultFactory().withDefaultValue(-1);
+    protected HashIntIntMapFactory positionMapFactory = 
+       HashIntIntMaps.getDefaultFactory().withDefaultValue(-1);
 
     // Basic structure {{
     private IntArrayList vertices;
@@ -42,14 +47,17 @@ public abstract class BasicPattern implements Pattern {
 
     // Isomorphisms {{
     private VertexPositionEquivalences vertexPositionEquivalences;
+    private EdgePositionEquivalences edgePositionEquivalences;
     private IntIntMap canonicalLabelling;
+    private ObjArrayList<IntArrayList> vsymmetryBreaker;
+    private ObjArrayList<IntArrayList> esymmetryBreaker;
     // }}
 
     // Others {{
-    protected transient MainGraph mainGraph;
     private PatternEdgePool patternEdgePool;
 
     protected volatile boolean dirtyVertexPositionEquivalences;
+    protected volatile boolean dirtyEdgePositionEquivalences;
     protected volatile boolean dirtyCanonicalLabelling;
 
     protected IntCollectionAddConsumer intAddConsumer = new IntCollectionAddConsumer();
@@ -68,11 +76,11 @@ public abstract class BasicPattern implements Pattern {
         intAddConsumer.setCollection(vertices);
         basicPattern.vertices.forEach(intAddConsumer);
 
-        edges = createPatternEdgeArrayList(basicPattern.
-              getConfig().isGraphEdgeLabelled());
+        isGraphEdgeLabelled = basicPattern.getConfig().isGraphEdgeLabelled();
 
-        patternEdgePool = PatternEdgePool.instance(
-              basicPattern.getConfig().isGraphEdgeLabelled());
+        edges = createPatternEdgeArrayList(isGraphEdgeLabelled);
+
+        patternEdgePool = PatternEdgePool.instance(isGraphEdgeLabelled);
 
         edges.ensureCapacity(basicPattern.edges.size());
 
@@ -87,16 +95,15 @@ public abstract class BasicPattern implements Pattern {
     public void init(Configuration config) {
         configurationId = config.getId();
 
+        configuration = config;
+
         if (edges == null) {
-           edges = createPatternEdgeArrayList(getConfig().isGraphEdgeLabelled());
+           edges = createPatternEdgeArrayList(isGraphEdgeLabelled);
         }
 
         if (patternEdgePool == null) {
-           patternEdgePool = PatternEdgePool.
-              instance(getConfig().isGraphEdgeLabelled());
+           patternEdgePool = PatternEdgePool.instance(isGraphEdgeLabelled);
         }
-
-        // mainGraph = getConfig().getMainGraph();
     }
 
     @Override
@@ -122,8 +129,10 @@ public abstract class BasicPattern implements Pattern {
         resetIncremental();
     }
 
-    protected Configuration getConfig() {
-       return Configuration.get(configurationId);
+    @Override
+    public Configuration getConfig() {
+       //return Configuration.get(configurationId);
+       return configuration;
     }
 
     private void resetIncremental() {
@@ -355,6 +364,7 @@ public abstract class BasicPattern implements Pattern {
     protected void setDirty() {
         dirtyCanonicalLabelling = true;
         dirtyVertexPositionEquivalences = true;
+        dirtyEdgePositionEquivalences = true;
     }
 
     @Override
@@ -374,6 +384,11 @@ public abstract class BasicPattern implements Pattern {
 
     @Override
     public VertexPositionEquivalences getVertexPositionEquivalences() {
+        return getVertexPositionEquivalences(null);
+    }
+
+    @Override
+    public VertexPositionEquivalences getVertexPositionEquivalences(IntArrayList vertexLabels) {
         if (dirtyVertexPositionEquivalences) {
             synchronized (this) {
                 if (dirtyVertexPositionEquivalences) {
@@ -384,7 +399,7 @@ public abstract class BasicPattern implements Pattern {
                     vertexPositionEquivalences.setNumVertices(getNumberOfVertices());
                     vertexPositionEquivalences.clear();
 
-                    fillVertexPositionEquivalences(vertexPositionEquivalences);
+                    fillVertexPositionEquivalences(vertexPositionEquivalences, vertexLabels);
 
                     dirtyVertexPositionEquivalences = false;
                 }
@@ -394,15 +409,272 @@ public abstract class BasicPattern implements Pattern {
         return vertexPositionEquivalences;
     }
 
-    protected abstract void fillVertexPositionEquivalences(VertexPositionEquivalences vertexPositionEquivalences);
+    @Override
+    public EdgePositionEquivalences getEdgePositionEquivalences() {
+        return getEdgePositionEquivalences(null);
+    }
 
+    @Override
+    public EdgePositionEquivalences getEdgePositionEquivalences(IntArrayList edgeLabels) {
+       if (dirtyEdgePositionEquivalences) {
+          synchronized (this) {
+             if (dirtyEdgePositionEquivalences) {
+                if (edgePositionEquivalences == null) {
+                   edgePositionEquivalences = new EdgePositionEquivalences();
+                }
+
+                edgePositionEquivalences.setNumEdges(getNumberOfEdges());
+                edgePositionEquivalences.clear();
+
+                fillEdgePositionEquivalences(edgePositionEquivalences, edgeLabels);
+
+                dirtyEdgePositionEquivalences = false;
+             }
+          }
+       }
+
+       return edgePositionEquivalences;
+    }
+
+    private int[][] vsymmetryBreakerMatrix() {
+       int numVertices = getNumberOfVertices();
+       int[][] symmetryBreaker = new int[numVertices][numVertices];
+       IntArrayList vertexLabels = new IntArrayList(numVertices);
+
+       IntCursor vertexCursor = vertices.cursor();
+       while (vertexCursor.moveNext()) {
+          vertexLabels.add(getConfig().getMainGraph().
+                getVertex(vertexCursor.elem()).getVertexLabel());
+       }
+
+       vsymmetryBreakerRec(this.copy(), symmetryBreaker, vertexLabels, -1);
+
+       StringBuffer sb = new StringBuffer();
+       sb.append("symmetryBreaker {");
+       for (int i = 0; i < numVertices; ++i) {
+          for (int j = 0; j < numVertices; ++j) {
+             sb.append(String.format("%2s ", symmetryBreaker[i][j]));
+          }
+          sb.append("\n");
+       }
+       sb.append("}");
+
+       LOG.info(sb.toString());
+
+       return symmetryBreaker;
+    }
+
+    public ObjArrayList<IntArrayList> vsymmetryBreaker() {
+       if (vsymmetryBreaker == null) {
+          synchronized (this) {
+             if (vsymmetryBreaker == null) {
+                int[][] symmetryBreaker = vsymmetryBreakerMatrix();
+
+                vsymmetryBreaker = new ObjArrayList<IntArrayList>(
+                      symmetryBreaker.length);
+
+                for (int i = 0; i < symmetryBreaker.length; ++i) {
+                   vsymmetryBreaker.add(new IntArrayList());
+                   for (int j = 0; j < i; ++j) {
+                      if (symmetryBreaker[i][j] == 1) {
+                         vsymmetryBreaker.get(i).add(j);
+                      }
+                   }
+                }
+             }
+          }
+
+          LOG.info("vsymmetryBreaker " + vsymmetryBreaker);
+       }
+
+       return vsymmetryBreaker;
+    }
+
+    public boolean testSymmetryBreaker(Embedding embedding) {
+       ObjArrayList<IntArrayList> symmetryBreaker = vsymmetryBreaker();
+       IntArrayList vertices = embedding.getVertices();
+       int numVertices = vertices.size();
+       for (int i = 0; i < numVertices; ++i) {
+          int targetVertex = vertices.get(i);
+          IntCursor sbCur = symmetryBreaker.get(i).cursor();
+          while (sbCur.moveNext()) {
+             if (targetVertex < vertices.get(sbCur.elem())) {
+                return false;
+             }
+          }
+       }
+       return true;
+    }
+
+    @Override
+    public boolean testSymmetryBreakerPos(Embedding embedding, int i) {
+       ObjArrayList<IntArrayList> symmetryBreaker = vsymmetryBreaker();
+       IntArrayList vertices = embedding.getVertices();
+       int targetVertex = vertices.get(i);
+       IntCursor sbCur = symmetryBreaker.get(i).cursor();
+       while (sbCur.moveNext()) {
+          if (targetVertex < vertices.get(sbCur.elem())) {
+             return false;
+          }
+       }
+       return true;
+    }
+
+    @Override
+    public boolean testSymmetryBreakerExt(
+          Embedding embedding, int targetVertex) {
+       ObjArrayList<IntArrayList> symmetryBreaker = vsymmetryBreaker();
+       IntArrayList vertices = embedding.getVertices();
+       IntCursor sbCur = symmetryBreaker.get(embedding.getNumVertices()).cursor();
+       while (sbCur.moveNext()) {
+          if (targetVertex < vertices.get(sbCur.elem())) {
+             return false;
+          }
+       }
+       return true;
+    }
+
+    @Override
+    public int sbLowerBound(Embedding embedding, int pos) {
+       IntArrayList conditions = vsymmetryBreaker().get(pos);
+       IntArrayList vertices = embedding.getVertices();
+       int numConditions = conditions.size();
+       int lowerBound = Integer.MIN_VALUE;
+       for (int i = 0; i < numConditions; ++i) {
+          lowerBound = Math.max(lowerBound, vertices.get(conditions.get(i)));
+       }
+
+       return lowerBound;
+    }
+
+    private static void vsymmetryBreakerRec(Pattern pattern, int[][] sbreaker,
+          IntArrayList vertexLabels, int nextLabel) {
+       int numVertices = sbreaker.length;
+       VertexPositionEquivalences vertexPositionEquivalences =
+          pattern.getVertexPositionEquivalences(vertexLabels);
+
+       LOG.info(String.format(
+                "symmetryBreakerRec{pattern=%s,vertices=%s,vertexLabels=%s," +
+                "vertexEquivalences=%s,nextLabel=%s}\n",
+                pattern, pattern.getVertices(), vertexLabels,
+                vertexPositionEquivalences, nextLabel));
+
+       IntSet equivalenceToBreakSet = null;
+       for (int i = 0; i < numVertices; ++i) {
+          IntSet eq = vertexPositionEquivalences.getEquivalences(i);
+          if (equivalenceToBreakSet == null ||
+                eq.size() > equivalenceToBreakSet.size()) {
+             equivalenceToBreakSet = eq;
+          }
+       }
+
+       if (equivalenceToBreakSet.size() > 1) {
+          IntArrayList equivalenceToBreak = new IntArrayList(
+                equivalenceToBreakSet.size());
+          equivalenceToBreak.addAll(equivalenceToBreakSet);
+          equivalenceToBreak.sort();
+          IntCursor cur = equivalenceToBreak.cursor();
+          cur.moveNext();
+          int fixed = cur.elem();
+          while (cur.moveNext()) {
+             int elem = cur.elem();
+             sbreaker[fixed][elem] = -1;
+             sbreaker[elem][fixed] = 1;
+          }
+
+          vertexLabels.set(fixed, nextLabel);
+
+          // recursive call
+          vsymmetryBreakerRec(pattern.copy(), sbreaker, vertexLabels, --nextLabel);
+       }
+    }
+
+
+    public int[][] esymmetryBreaker() {
+       int numEdges = getNumberOfEdges();
+       int[][] symmetryBreaker = new int[numEdges][numEdges];
+       IntArrayList edgeLabels = new IntArrayList(numEdges);
+
+       ObjCursor<PatternEdge> edgeCursor = edges.cursor();
+       while (edgeCursor.moveNext()) {
+          edgeLabels.add(edgeCursor.elem().getLabel());
+       }
+    
+       esymmetryBreakerRec(this.copy(), symmetryBreaker, edgeLabels, -1);
+
+       StringBuffer sb = new StringBuffer();
+       sb.append("symmetryBreaker {");
+       for (int i = 0; i < numEdges; ++i) {
+          for (int j = 0; j < numEdges; ++j) {
+             sb.append(String.format("%2s ", symmetryBreaker[i][j]));
+          }
+          sb.append("\n");
+       }
+       sb.append("}");
+
+       LOG.info(sb.toString());
+
+       return symmetryBreaker;
+    }
+
+    private static void esymmetryBreakerRec(Pattern pattern, int[][] sbreaker,
+          IntArrayList edgeLabels, int nextLabel) {
+       int numEdges = sbreaker.length;
+       EdgePositionEquivalences edgePositionEquivalences =
+          pattern.getEdgePositionEquivalences(edgeLabels);
+
+       LOG.info(String.format(
+                "symmetryBreakerRec{pattern=%s,vertices=%s,edgeLabels=%s," +
+                "edgeEquivalences=%s,nextLabel=%s}\n",
+                pattern, pattern.getVertices(), edgeLabels,
+                edgePositionEquivalences, nextLabel));
+
+       IntSet equivalenceToBreakSet = null;
+       for (int i = 0; i < numEdges; ++i) {
+          IntSet eq = edgePositionEquivalences.getEquivalences(i);
+          if (equivalenceToBreakSet == null || eq.size() > equivalenceToBreakSet.size()) {
+             equivalenceToBreakSet = eq;
+          }
+       }
+
+
+       if (equivalenceToBreakSet.size() > 1) {
+          IntArrayList equivalenceToBreak = new IntArrayList(
+                equivalenceToBreakSet.size());
+          equivalenceToBreak.addAll(equivalenceToBreakSet);
+          equivalenceToBreak.sort();
+          IntCursor cur = equivalenceToBreak.cursor();
+          cur.moveNext();
+          int fixed = cur.elem();
+          while (cur.moveNext()) {
+             int elem = cur.elem();
+             sbreaker[fixed][elem] = -1;
+             sbreaker[elem][fixed] = 1;
+          }
+
+          edgeLabels.set(fixed, nextLabel);
+
+          // recursive call
+          esymmetryBreakerRec(pattern.copy(), sbreaker, edgeLabels, --nextLabel);
+       }
+    }
+
+    protected abstract void fillVertexPositionEquivalences(
+          VertexPositionEquivalences vertexPositionEquivalences,
+          IntArrayList vertexLabels);
+    
+    protected abstract void fillEdgePositionEquivalences(
+          EdgePositionEquivalences edgePositionEquivalences,
+          IntArrayList edgeLabels);
+    
     @Override
     public IntIntMap getCanonicalLabeling() {
         if (dirtyCanonicalLabelling) {
             synchronized (this) {
                 if (dirtyCanonicalLabelling) {
                     if (canonicalLabelling == null) {
-                        canonicalLabelling = HashIntIntMaps.newMutableMap(getNumberOfVertices());
+                        canonicalLabelling = HashIntIntMaps.newMutableMap(
+                              getNumberOfVertices());
                     }
 
                     canonicalLabelling.clear();
@@ -490,7 +762,8 @@ public abstract class BasicPattern implements Pattern {
 
     @Override
     public void write(DataOutput dataOutput) throws IOException {
-        dataOutput.writeInt(getConfig().getId());
+        dataOutput.writeBoolean(isGraphEdgeLabelled);
+        dataOutput.writeInt(configurationId);
         edges.write(dataOutput);
         vertices.write(dataOutput);
     }
@@ -504,7 +777,18 @@ public abstract class BasicPattern implements Pattern {
     public void readFields(DataInput dataInput) throws IOException {
         reset();
 
-        init(Configuration.get(dataInput.readInt()));
+        isGraphEdgeLabelled = dataInput.readBoolean();
+
+        //init(Configuration.get(dataInput.readInt()));
+        configurationId = dataInput.readInt();
+
+        if (edges == null) {
+           edges = createPatternEdgeArrayList(isGraphEdgeLabelled);
+        }
+
+        if (patternEdgePool == null) {
+           patternEdgePool = PatternEdgePool.instance(isGraphEdgeLabelled);
+        }
 
         edges.readFields(dataInput);
         vertices.readFields(dataInput);

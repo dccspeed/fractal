@@ -7,12 +7,13 @@ import io.arabesque.graph.Edge;
 import io.arabesque.graph.LabelledEdge;
 import io.arabesque.misc.WritableObject;
 import io.arabesque.pattern.Pattern;
+import io.arabesque.pattern.PatternEdge;
 import io.arabesque.utils.collection.IntArrayList;
 import io.arabesque.utils.collection.ObjArrayList;
 import io.arabesque.utils.collection.AtomicBitSetArray;
-import io.arabesque.utils.collection.RoaringBitSet;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.hash.HashIntSet;
+import com.koloboke.collect.map.hash.HashIntObjMap;
 
 import java.io.Externalizable;
 
@@ -51,6 +52,12 @@ public interface Embedding extends WritableObject, Externalizable {
 
     IntCollection getExtensibleWordIds(Computation computation);
     
+    IntCollection extensions();
+    
+    IntCollection extensions(Computation computation);
+    
+    IntCollection extensions(Computation computation, Pattern pattern);
+    
     boolean isCanonicalEmbeddingWithWord(int wordId);
 
     String toOutputString();
@@ -61,7 +68,11 @@ public interface Embedding extends WritableObject, Externalizable {
     
     void previousExtensionLevel();
 
-    void applyTagFrom(AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos);
+    void applyTagFrom(Computation computation,
+          AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos);
     
-    void applyTagTo(AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos);
+    void applyTagTo(Computation computation,
+          AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos);
+
+   HashIntObjMap cacheStore();
 }

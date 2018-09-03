@@ -387,4 +387,9 @@ public abstract class BasicComputation<E extends Embedding>
     public E getCurrentEmbedding() {
        return currentEmbedding;
     }
+
+    @Override
+    public Pattern getPattern() {
+       return null;
+    }
 }

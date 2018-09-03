@@ -4,6 +4,8 @@ import io.arabesque.utils.collection.ReclaimableIntCollection;
 import io.arabesque.utils.collection.AtomicBitSetArray;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.IntCursor;
+import com.koloboke.collect.map.IntIntMap;
+import com.koloboke.collect.map.hash.HashIntIntMaps;
 import com.koloboke.function.IntConsumer;
 import org.apache.commons.io.input.BOMInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -28,9 +30,12 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    protected int id = newGraphId();
 
    private static final int INITIAL_ARRAY_SIZE = 4096;
+   
+   protected IntIntMap vertexIdMap = 
+      HashIntIntMaps.getDefaultFactory().withDefaultValue(-1).newMutableMap();
 
-   private Vertex<V>[] vertexIndexF;
-   private Edge<E>[] edgeIndexF;
+   protected Vertex<V>[] vertexIndexF;
+   protected Edge<E>[] edgeIndexF;
    
    private V[] vertexProperties;
    private E[] edgeProperties;
@@ -43,8 +48,8 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
    private VertexNeighbourhood[] vertexNeighbourhoods;
 
-   private boolean isEdgeLabelled;
-   private boolean isMultiGraph;
+   protected boolean isEdgeLabelled;
+   protected boolean isMultiGraph;
    private String name;
 
    private static int newGraphId() {
@@ -146,7 +151,12 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
       if (LOG.isInfoEnabled()) {
          start = System.currentTimeMillis();
-         LOG.info("Initializing, class: " + getClass());
+         LOG.info("Initializing graph," +
+               " id=" + id +
+               " name=" + name +
+               " isEdgeLabelled=" + isEdgeLabelled +
+               " isMultiGraph=" + isMultiGraph +
+               " class=" + getClass());
       }
 
       vertexIndexF = null;
@@ -160,7 +170,13 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       this.isMultiGraph = isMultiGraph;
 
       if (LOG.isInfoEnabled()) {
-         LOG.info("Done in " + (System.currentTimeMillis() - start));
+         LOG.info("Done initializing graph," +
+               " id=" + id +
+               " name=" + name +
+               " isEdgeLabelled=" + isEdgeLabelled +
+               " isMultiGraph=" + isMultiGraph +
+               " class=" + getClass() +
+               " elapsed=" + (System.currentTimeMillis() - start) + " ms");
       }
    }
 
@@ -168,7 +184,13 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       long start = 0;
 
       if (LOG.isInfoEnabled()) {
-         LOG.info("Reading graph, class: " + getClass());
+         LOG.info("Reading graph," +
+               " id=" + id +
+               " name=" + name +
+               " path=" + path +
+               " isEdgeLabelled=" + isEdgeLabelled +
+               " isMultiGraph=" + isMultiGraph +
+               " class=" + getClass());
          start = System.currentTimeMillis();
       }
 
@@ -186,17 +208,20 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       for (int i = 0; i < vertexNeighbourhoods.length; ++i) {
          if (vertexNeighbourhoods[i] != null) {
             vertexNeighbourhoods[i].buildSortedNeighborhood();
-            //LOG.info("NeighborhoodBitmapSizeInBytesVertices " +
-            //      vertexNeighbourhoods[i].getVerticesBitmap().sizeInBytes());
-            //LOG.info("NeighborhoodBitmapSizeInBytesEdges " +
-            //      vertexNeighbourhoods[i].getEdgesBitmap().sizeInBytes());
          }
       }
 
       if (LOG.isInfoEnabled()) {
-         LOG.info("Done in " + (System.currentTimeMillis() - start));
-         LOG.info("Number vertices: " + numVertices);
-         LOG.info("Number edges: " + numEdges);
+         LOG.info("Done reading graph," +
+               " id=" + id +
+               " name=" + name +
+               " path=" + path +
+               " isEdgeLabelled=" + isEdgeLabelled +
+               " isMultiGraph=" + isMultiGraph +
+               " class=" + getClass() +
+               " numVertices=" + numVertices +
+               " numEdges=" + numEdges +
+               " elapsed=" + (System.currentTimeMillis() - start));
       }
    }
 
@@ -246,7 +271,8 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       if (currArray == null) {
          returnArray = (T[]) new Object[Math.max(targetSize, INITIAL_ARRAY_SIZE)];
       } else if (currArray.length < targetSize) {
-         returnArray = Arrays.copyOf(currArray, getSizeWithPaddingWithoutOverflow(targetSize, currArray.length));
+         returnArray = Arrays.copyOf(currArray,
+               getSizeWithPaddingWithoutOverflow(targetSize, currArray.length));
       } else {
          returnArray = currArray;
       }
@@ -357,7 +383,6 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    public MainGraph addVertex(Vertex vertex) {
       ensureCanStoreNewVertex();
       vertexIndexF[numVertices++] = vertex;
-
       return this;
    }
 
@@ -581,13 +606,11 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
             }
 
             Vertex vertex = parseVertex(tokenizer);
-            addVertex(vertex);
 
             int vertexId = vertex.getVertexId();
 
             while (tokenizer.hasMoreTokens()) {
-               Edge edge = parseEdge(tokenizer, vertexId);
-               addEdge(edge);
+               parseEdge(tokenizer, vertexId);
             }
 
             line = reader.readLine();
@@ -602,19 +625,56 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    protected Edge parseEdge(StringTokenizer tokenizer, int vertexId) {
       int neighborId = Integer.parseInt(tokenizer.nextToken());
 
+      int neighborIdx = vertexIdMap.get(neighborId);
+      if (neighborIdx == -1) {
+         neighborIdx = vertexIdMap.size();
+         vertexIdMap.put(neighborId, neighborIdx);
+         addVertex(createVertex(neighborIdx, -1));
+      }
+
+      Edge edge;
+
       if (isEdgeLabelled) {
          int edgeLabel = Integer.parseInt(tokenizer.nextToken());
-         return createEdge(vertexId, neighborId, edgeLabel);
+         edge = createEdge(vertexId, neighborIdx, edgeLabel);
       } else {
-         return createEdge(vertexId, neighborId);
+         edge = createEdge(vertexId, neighborIdx);
       }
+
+      addEdge(edge);
+
+      return edge;
    }
 
    protected Vertex parseVertex(StringTokenizer tokenizer) {
       int vertexId = Integer.parseInt(tokenizer.nextToken());
-      int vertexLabel = Integer.parseInt(tokenizer.nextToken());
+      int vertexLabel = parseVertexLabel(tokenizer);
 
-      return createVertex(vertexId, vertexLabel);
+      int vertexIdx = vertexIdMap.get(vertexId);
+      if (vertexIdx == -1) {
+         vertexIdx = vertexIdMap.size();
+         vertexIdMap.put(vertexId, vertexIdx);
+         Vertex vertex = createVertex(vertexIdx, vertexLabel);
+         addVertex(vertex);
+         return vertex;
+      } else {
+         Vertex vertex = vertexIndexF[vertexIdx];
+         int currVertexLabel = vertex.getVertexLabel();
+         if (currVertexLabel == -1) {
+            vertex.setVertexLabel(vertexLabel);
+         } else if (currVertexLabel != vertexLabel) {
+            throw new RuntimeException("Invalid state vertexLabel=" +
+                  vertexLabel + " vertexId=" + vertexId +
+                  " vertexIdx=" + vertexIdx + " vertex=" + vertex +
+                  " numVertices=" + numVertices +
+                  " vertexIdMapSize=" + vertexIdMap.size());
+         }
+         return vertex;
+      }
+   }
+
+   protected int parseVertexLabel(StringTokenizer tokenizer) {
+      return Integer.parseInt(tokenizer.nextToken());
    }
 
    protected V parseVertexProperty(StringTokenizer tokenizer) {
@@ -627,7 +687,10 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
    @Override
    public String toString() {
-      return getName();
+      return "Graph(id=" + id + ", name=" + name +
+         ", isEdgeLabelled=" + isEdgeLabelled +
+         ", isMultiGraph=" + isMultiGraph +
+         ", class=" + getClass() + ")";
    }
 
    public String toDetailedString() {

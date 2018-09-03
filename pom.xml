@@ -122,7 +122,9 @@
           <version>3.2.2</version>
           <configuration>
              <outputDir>${project.build.directory}/unwoven-classes</outputDir>
-             <useIncrementalCompilation>false</useIncrementalCompilation>
+             <useIncrementalCompilation>true</useIncrementalCompilation>
+             <recompileMode>incremental</recompileMode>
+             <useZincServer>true</useZincServer>
           </configuration>
           <executions>
             <execution>
@@ -331,6 +333,12 @@
          <scope>${spark.scope}</scope>
       </dependency>
       <dependency>
+         <groupId>org.apache.spark</groupId>
+         <artifactId>spark-graphx_2.11</artifactId>
+         <version>${spark.version}</version>
+         <scope>${spark.scope}</scope>
+      </dependency>
+      <dependency>
          <groupId>org.apache.hadoop</groupId>
          <artifactId>hadoop-common</artifactId>
          <version>${hadoop.version}</version>
@@ -361,12 +369,12 @@
       </dependency>
       <dependency>
          <groupId>com.koloboke</groupId>
-         <artifactId>koloboke-api-jdk6-7</artifactId>
+         <artifactId>koloboke-api-jdk8</artifactId>
          <version>1.0.0</version>
       </dependency>
       <dependency>
          <groupId>com.koloboke</groupId>
-         <artifactId>koloboke-impl-jdk6-7</artifactId>
+         <artifactId>koloboke-impl-jdk8</artifactId>
          <version>1.0.0</version>
          <scope>runtime</scope>
       </dependency>
@@ -392,38 +400,12 @@
          <version>1.0-groovy-2.4</version>
          <scope>test</scope>
       </dependency>
-      <!-- tracing dependencies -->
-      <dependency>
-         <groupId>org.aspectj</groupId>
-         <artifactId>aspectjrt</artifactId>
-         <version>1.8.7</version>
-      </dependency>
 
       <!-- akka dependencies -->
       <dependency>
          <groupId>com.typesafe.akka</groupId>
          <artifactId>akka-remote_2.11</artifactId>
          <version>2.5.3</version>
-      </dependency>
-
-      <!--<dependency>
-         <groupId>com.github.romix.akka</groupId>
-         <artifactId>akka-kryo-serialization_2.11</artifactId>
-         <version>0.5.0</version>
-      </dependency>-->
-
-      <!-- compressed bitmap -->
-      <dependency>
-         <groupId>org.roaringbitmap</groupId>
-         <artifactId>RoaringBitmap</artifactId>
-         <version>0.6.51</version>
-      </dependency>
-
-      <!-- natural language processing -->
-      <dependency>
-         <groupId>org.apache.opennlp</groupId>
-         <artifactId>opennlp-tools</artifactId>
-         <version>1.8.3</version>
       </dependency>
 
    </dependencies>

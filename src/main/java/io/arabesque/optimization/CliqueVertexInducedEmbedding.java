@@ -11,7 +11,7 @@ import java.util.Arrays;
 
 public class CliqueVertexInducedEmbedding extends VertexInducedEmbedding {
     @Override
-    public IntCollection getExtensibleWordIds(Computation computation) {
+    protected void updateExtensibleWordIdsSimple(Computation computation) {
         if (dirtyExtensionWordIds) {
             extensionWordIds().clear();
 
@@ -23,16 +23,14 @@ public class CliqueVertexInducedEmbedding extends VertexInducedEmbedding {
                getVertexNeighbourhood(lastVertex);
 
             if (neighbourhood != null) {
-               int[] orderedVertices = neighbourhood.getOrderedVertices();
-               int fromIdx = Arrays.binarySearch(orderedVertices, lastVertex);
+               IntArrayList orderedVertices = neighbourhood.getOrderedVertices();
+               int numOrderedVertices = orderedVertices.size();
+               int fromIdx = orderedVertices.binarySearch(lastVertex);
                fromIdx = (fromIdx < 0) ? (-fromIdx - 1) : fromIdx;
-               for (int j = fromIdx; j < orderedVertices.length; ++j) {
-                  extensionWordIds.add(orderedVertices[j]);
+               for (int j = fromIdx; j < numOrderedVertices; ++j) {
+                  extensionWordIds().add(orderedVertices.getUnchecked(j));
                }
             }
-
         }
-
-        return extensionWordIds();
     }
 }

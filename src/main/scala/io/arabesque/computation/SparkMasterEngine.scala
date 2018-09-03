@@ -205,6 +205,8 @@ trait SparkMasterEngine [E <: Embedding]
         agg1.aggregate (agg2.asInstanceOf[AggregationStorage[K,V]])
         agg1
     }
+    logInfo (s"CurrentAggregations = ${aggregations};" + 
+      s" PreviousAggregations=${previousAggregations}")
     // we compose all entries
     previousAggregations.foreach { case (name, agg) =>
       aggregations.get(name) match {
@@ -343,6 +345,8 @@ trait SparkMasterEngine [E <: Embedding]
             classOf[EEmbedding]
           else if (embeddingClass == classOf[VertexInducedEmbedding])
             classOf[VEmbedding]
+          else if (embeddingClass == classOf[VertexEdgeInducedEmbedding])
+            classOf[VEEmbedding]
           else
             classOf[ResultEmbedding[_]]
         }

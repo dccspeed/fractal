@@ -67,12 +67,11 @@ ggplot(datac, aes(x=factor(query, labels=c("q1", "q2", "q3", "q4", "q5", "q6", "
     geom_errorbar(aes(ymin=(runtime-se)/1000, ymax=(runtime+se)/1000),
                   colour="black", width=.005,
                   position=position_dodge(.9)) +
-    labs(x="Query", y="Runtime (seconds)\nlog-scale") +
+    labs(x="Query", y="Runtime (s) -- log-scale") +
     scale_fill_manual(values=lgValues, labels=lgLabels, breaks=lgBreaks) +
-    theme_minimal(base_size = 22) +
     scale_y_log10() +
-    #theme_minimal() +
-    theme(legend.title=element_blank(), legend.position=c(0.1,0.9))
+    theme_classic(base_size = 20) +
+    theme(legend.title=element_blank(), legend.position=c(0.22,0.90))
 
 ggsave(file="gmatching_youtube_runtime.pdf", family="serif", heigh=4, width=6)
 ggsave(file="gmatching_youtube_runtime.png", family="serif", heigh=4, width=6)

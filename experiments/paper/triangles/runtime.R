@@ -62,7 +62,7 @@ lgLabels <- c("GraphFrames","GraphX", "Arabesque", "Fractal")
 lgValues <- c("#ca0020", "#d95f02", "#7570b3", "#1b9e77")
 lgBreaks <- c("graphframes","graphx", "arabesque", "fractalcliques")
 
-ggplot(datac, aes(x=factor(db, levels=c("mico", "patent", "youtube", "orkut")),
+ggplot(datac, aes(x=factor(db, levels=c("mico", "patent", "youtube", "orkut"), labels=c("Mico-SL", "Patent-SL", "Youtube-SL", "Orkut-SL")),
                   y=runtime/1000,
                   fill=factor(sys, levels = c("graphframes","graphx", "arabesque", "fractalcliques")))) + 
     geom_bar(position=position_dodge(), size=10, stat="identity") +

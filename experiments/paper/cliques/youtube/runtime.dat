@@ -1,8 +1,8 @@
 sys depth runtime
 
-fractal 2 4009
-fractal 2 4904
-fractal 2 4671
+#fractal 2 4009
+#fractal 2 4904
+#fractal 2 4671
 fractal 3 7095
 fractal 3 7132
 fractal 3 6225
@@ -25,9 +25,9 @@ fractal 9 203917
 fractal 9 200963
 fractal 9 201165
 
-arabesque 2 24295
-arabesque 2 20410
-arabesque 2 25930
+#arabesque 2 24295
+#arabesque 2 20410
+#arabesque 2 25930
 arabesque 3 46749
 arabesque 3 48476
 arabesque 3 47458

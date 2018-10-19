@@ -81,15 +81,12 @@ plot.log <- ggplot(datac, aes(x=factor(depth + 1), y=runtime/1000, fill=factor(s
     geom_errorbar(aes(ymin=(runtime-se)/1000, ymax=(runtime+se)/1000),
                   colour="black", width=.005,
                   position=position_dodge(.9)) +
-    labs(x="# Vertices", y="Runtime (seconds)\nlog-scale") +
+    labs(x="# Vertices", y="Runtime (s) -- log-scale") +
     scale_fill_manual(values=lgValues, labels=lgLabels, breaks=lgBreaks) +
     scale_y_log10() +
     # theme_minimal(base_size = 20) +
-    theme_minimal() +
-    theme(legend.title=element_blank(), legend.position=c(0.1,0.9))
+    theme_classic(base_size = 20) +
+    theme(legend.title=element_blank(), legend.position=c(0.18,0.85))
     
 ggsave(file="cliques_youtube_runtime_log.pdf", family="serif", heigh=4, width=6)
 ggsave(file="cliques_youtube_runtime_log.png", family="serif", heigh=4, width=6)
-
-ggsave(file="cliques_youtube_runtime_log_red.pdf", plot.log + theme_minimal(base_size=22) + theme(legend.title=element_blank(), legend.position=c(0.2,0.9)), family="serif", heigh=4, width=6)
-ggsave(file="cliques_youtube_runtime_log_red.png", plot.log + theme_minimal(base_size=22) + theme(legend.title=element_blank(), legend.position=c(0.2,0.9)), family="serif", heigh=4, width=6)

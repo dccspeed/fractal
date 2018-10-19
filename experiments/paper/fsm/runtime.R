@@ -65,10 +65,10 @@ plot <- ggplot(datac, aes(x=factor(supp), y=runtime, fill=factor(sys))) +
     geom_errorbar(aes(ymin=(runtime-se), ymax=(runtime+se)),
                   colour="black", width=.005,
                   position=position_dodge(.9)) +
-    labs(x="Support", y="Runtime (seconds)") +
+    labs(x="Support", y="Runtime (s)") +
     scale_fill_manual(breaks = lgBreaks, labels = lgLabels, values = lgValues) +
-    theme_minimal(base_size = 18) +
-    theme(legend.title=element_blank(), legend.position=c(0.8,0.8))
+    theme_classic(base_size = 20) +
+    theme(legend.title=element_blank(), legend.position=c(0.85,0.85))
 
 ggsave(file="fsm-patents-multi-label.pdf", family="serif", heigh=4, width=6)
 ggsave(file="fsm-patents-multi-label.png", family="serif", heigh=4, width=6)
@@ -79,7 +79,8 @@ data$runtime <- data$runtime / 1000
 datac <- summarySE(data, measurevar="runtime", groupvars=c("sys", "graph", "supp"))
 
 datac$status <- ""
-datac$status[datac$runtime == 0] <- "MEMORY ERROR"
+datac$status[datac$runtime == 0] <- "out of memory"
+datac$runtime[datac$runtime == 0] <- log(0)
 
 print(datac)
 
@@ -93,12 +94,12 @@ plot <- ggplot(datac, aes(x=factor(supp), y=runtime, fill=factor(sys))) +
                   colour="black", width=.005,
                   position=position_dodge(.9)) +
     geom_text(aes(label=status),
-              position = position_dodge(width = 1), vjust = 0.8, hjust = -0.05,
-              size = 4, angle = 90, color = "#7570b3") +
-    labs(x="Support", y="Runtime (seconds)") +
+              position = position_dodge(width = 1), vjust = 0.5, hjust = -0.2,
+              size = 5, angle = 90, color = "black") +
+    labs(x="Support", y="Runtime (s)") +
     scale_fill_manual(breaks = lgBreaks, labels = lgLabels, values = lgValues) +
-    theme_minimal(base_size = 18) +
-    theme(legend.title=element_blank(), legend.position=c(0.8,0.8))
+    theme_classic(base_size = 20) +
+    theme(legend.title=element_blank(), legend.position=c(0.85,0.85))
 
 ggsave(file="fsm-youtube-multi-label.pdf", family="serif", heigh=4, width=6)
 ggsave(file="fsm-youtube-multi-label.png", family="serif", heigh=4, width=6)

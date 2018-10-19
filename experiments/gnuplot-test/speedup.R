@@ -48,36 +48,12 @@ summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
 }
 
 # original data
-data <- read.table(header=T, file="runtime.dat")
-datac <- summarySE(data, measurevar="runtime", groupvars=c("sys", "db"))
+data <- read.table(header=T, file="speedup.dat")
+data$speedup = min(data[data$nworkers == 1,]$runtime) / data$runtime
+data[data$nworkers == 1,]$speedup = 1
+datac <- summarySE(data, measurevar="speedup", groupvars=c("sys", "alg", "graph", "size", "nworkers"))
+datac[datac$nworkers == 1,]$se = 0
 
-datac$status <- ""
-datac$status[datac$runtime == 0] <- "out of memory"
+speedupdata = datac[,c("nworkers", "speedup", "se")]
 
-print(datac)
-
-require(ggplot2)
-
-lgLabels <- c("GraphFrames","GraphX", "Arabesque", "Fractal")
-lgValues <- c("#ca0020", "#d95f02", "#7570b3", "#1b9e77")
-lgBreaks <- c("graphframes","graphx", "arabesque", "fractalcliques")
-
-ggplot(datac, aes(x=factor(db, levels=c("mico", "patent", "youtube", "orkut")),
-                  y=runtime/1000,
-                  fill=factor(sys, levels = c("graphframes","graphx", "arabesque", "fractalcliques")))) + 
-    geom_bar(position=position_dodge(), size=10, stat="identity") +
-    geom_errorbar(aes(ymin=(runtime-se)/1000, ymax=(runtime+se)/1000),
-                  colour="black", width=.005,
-                  position=position_dodge(.9)) +
-   geom_text(aes(label=status, fill=factor(sys, levels=c("graphframes", "graphx", "arabesque", "fractalcliques"))),
-              position = position_dodge(width = 1), vjust = 0.7, hjust = -0.2,
-              size = 5, angle = 90, color="black") +
-    labs(x="Input graphs", y="Runtime (s) -- log-scale") +
-    scale_fill_manual(values=lgValues, labels=lgLabels, breaks=lgBreaks) +
-    # theme_minimal(base_size = 20) +
-    scale_y_log10() +
-    theme_classic(base_size = 18) +
-    theme(legend.title=element_blank(), legend.position="top")
-
-ggsave(file="triangles_runtime_log.pdf", family="serif", heigh=4, width=6)
-ggsave(file="triangles_runtime_log.png", family="serif", heigh=4, width=6)
+write.table(speedupdata, file="speedup.gp.dat", col.names=F, row.names=F)

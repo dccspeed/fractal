@@ -43,16 +43,25 @@ fractal mico-single-label 4 5216168
 fractal mico-single-label 4 5893375
 fractal mico-single-label 4 5384734
 
-arabesque mico-multi-label 2 13586
-arabesque mico-multi-label 2 13326
-arabesque mico-multi-label 2 13492
+mrsub mico-single-label 2 25920
+mrsub mico-single-label 2 26180
+mrsub mico-single-label 2 26040
+mrsub mico-single-label 3 108300
+mrsub mico-single-label 3 109200
+mrsub mico-single-label 3 109300
+mrsub mico-single-label 4 0
 
-fractal mico-multi-label 2 6130
-fractal mico-multi-label 2 6739
-fractal mico-multi-label 2 7106
-fractal mico-multi-label 3 78959
-fractal mico-multi-label 3 78169
-fractal mico-multi-label 3 77253
+
+#arabesque mico-multi-label 2 13586
+#arabesque mico-multi-label 2 13326
+#arabesque mico-multi-label 2 13492
+
+#fractal mico-multi-label 2 6130
+#fractal mico-multi-label 2 6739
+#fractal mico-multi-label 2 7106
+#fractal mico-multi-label 3 78959
+#fractal mico-multi-label 3 78169
+#fractal mico-multi-label 3 77253
 
 arabesque youtube-single-label 2 20500
 arabesque youtube-single-label 2 24786
@@ -68,10 +77,18 @@ fractal youtube-single-label 3 434141
 fractal youtube-single-label 3 418022
 fractal youtube-single-label 3 422774
 
-arabesque youtube-multi-label 2 16921863
-arabesque youtube-multi-label 2 18274642
-arabesque youtube-multi-label 2 17644229
+mrsub youtube-single-label 2 720900
+mrsub youtube-single-label 2 446200
+mrsub youtube-single-label 2 448800
+mrsub youtube-single-label 3 996900
+mrsub youtube-single-label 3 986800
+mrsub youtube-single-label 3 975100
 
-fractal youtube-multi-label 2 30487
-fractal youtube-multi-label 2 31815
-fractal youtube-multi-label 2 30321
+
+#arabesque youtube-multi-label 2 16921863
+#arabesque youtube-multi-label 2 18274642
+#arabesque youtube-multi-label 2 17644229
+#
+#fractal youtube-multi-label 2 30487
+#fractal youtube-multi-label 2 31815
+#fractal youtube-multi-label 2 30321

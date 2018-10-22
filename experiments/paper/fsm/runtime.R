@@ -56,11 +56,11 @@ datac <- summarySE(data, measurevar="runtime", groupvars=c("sys", "graph", "supp
 
 print(datac)
 
-lgLabels <- c("Arabesque", "Fractal", "ScaleMine")
-lgBreaks <- c("arabesque", "fractal", "scalemine")
-lgValues <- c("#7570b3", "#1b9e77", "#d95f02")
+lgLabels <- c("Arabesque", "ScaleMine", "Fractal")
+lgBreaks <- c("arabesque", "scalemine", "fractal")
+lgValues <- c("#7570b3","#d95f02", "#1b9e77")
 
-plot <- ggplot(datac, aes(x=factor(supp), y=runtime, fill=factor(sys))) + 
+plot <- ggplot(datac, aes(x=factor(supp), y=runtime, fill=factor(sys, levels=c("arabesque", "scalemine", "fractal")))) + 
     geom_bar(position=position_dodge(), size=10, stat="identity") +
     geom_errorbar(aes(ymin=(runtime-se), ymax=(runtime+se)),
                   colour="black", width=.005,
@@ -84,11 +84,11 @@ datac$runtime[datac$runtime == 0] <- log(0)
 
 print(datac)
 
-lgLabels <- c("Arabesque", "Fractal", "ScaleMine")
-lgBreaks <- c("arabesque", "fractal", "scalemine")
-lgValues <- c("#7570b3", "#1b9e77", "#d95f02")
+lgLabels <- c("Arabesque", "ScaleMine", "Fractal")
+lgBreaks <- c("arabesque", "scalemine", "fractal")
+lgValues <- c("#7570b3","#d95f02", "#1b9e77")
 
-plot <- ggplot(datac, aes(x=factor(supp), y=runtime, fill=factor(sys))) + 
+plot <- ggplot(datac, aes(x=factor(supp), y=runtime, fill=factor(sys, levels=c("arabesque", "scalemine", "fractal")))) + 
     geom_bar(position=position_dodge(), size=10, stat="identity") +
     geom_errorbar(aes(ymin=(runtime-se), ymax=(runtime+se)),
                   colour="black", width=.005,

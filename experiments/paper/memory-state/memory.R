@@ -51,21 +51,24 @@ summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
 data <- read.table(header=T, file="memory.dat")
 datac <- summarySE(data, measurevar="mem", groupvars=c("sys", "alg", "graph", "depth"))
 
+datac <- datac[datac$sys == "fractal",]
+
 print(datac)
 
-#require(ggplot2)
-#require(scales)
-#
-#lgLabels <- c("Arabesque", "Fractal")
-#cbPalette <- c("#0072B2","#CC79A7")
-#lgBreaks <- c("arabesque", "fractal")
-#
-#p<-ggplot(data, aes(x=factor(depth), y=mem, fill=sys)) +
-#  geom_boxplot() +
-#  scale_fill_brewer(palette="Dark2", breaks=lgBreaks, labels=lgLabels) +
-#  theme_minimal() +
-#  theme(legend.title=element_blank(), legend.position=c(0.1,0.9)) +
-#  labs(x="Depth", y="Memory Used (GB)")
-#
-#ggsave(file="cliques-youtube-multi-label-memory.pdf", family="serif", heigh=4, width=6)
-#ggsave(file="cliques-youtube-multi-label-memory.png", family="serif", heigh=4, width=6)
+require(ggplot2)
+require(scales)
+
+lgLabels <- c("Arabesque", "Fractal")
+cbPalette <- c("#0072B2","#CC79A7")
+lgBreaks <- c("arabesque", "fractal")
+
+ggplot(datac, aes(x=depth, y=mem, group=alg)) +
+  geom_line(aes(color=alg), size=1) +
+  geom_errorbar(aes(ymin=mem-se, ymax=mem+se), colour="black", width=.005) +
+  scale_color_brewer(palette="Spectral") +
+  theme_classic(base_size = 18) +
+  theme(legend.title=element_blank(), legend.position=c(0.36,0.95)) +
+  labs(x="Depth", y="Memory Used (GB)")
+
+ggsave(file="fractal-memory.pdf", family="serif", heigh=4, width=6)
+ggsave(file="fractal-memory.png", family="serif", heigh=4, width=6)

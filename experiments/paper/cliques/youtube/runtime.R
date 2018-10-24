@@ -61,7 +61,6 @@ lgValues <- c("#ca0020", "#d95f02", "#7570b3", "#1b9e77")
 lgBreaks <- c("graphframes", "qkcount", "arabesque","fractal")
 
 datac[is.na(datac)] <- 0
-
 datac$status <- ""
 datac$status[datac$runtime == 0] <- "out of memory"
 

@@ -62,12 +62,11 @@ lgBreaks <- c("prevsteps", "laststep")
 ggplot(datac, aes(x=nvertices, y=nembeddings, fill=factor(group, levels=c("prevsteps", "laststep")), label=sprintf("%.1f %%", relcost*100))) + 
     geom_bar(position=position_stack(), size=10, stat="identity") +
     geom_text(size = 5, position = position_stack(vjust = 0.5), color="white") + 
-    labs(x="# Vertices", y="# Embeddings\nlog-scale") +
+    labs(x="# Vertices", y="# Subgraphs -- log-scale") +
     scale_fill_manual(values=lgValues, labels=lgLabels, breaks=lgBreaks) +
-    theme_minimal(base_size = 22) +
-    #theme_minimal() +
     scale_y_log10() +
-    theme(legend.title=element_blank(), legend.position=c(0.3,0.9))
+    theme_classic(base_size = 22) +
+    theme(legend.title=element_blank(), legend.position="top")
 
 ggsave(file="cost_motifs_youtube_runtime.pdf", family="serif", heigh=4, width=6)
 ggsave(file="cost_motifs_youtube_runtime.png", family="serif", heigh=4, width=6)

@@ -56,22 +56,30 @@ print(datac)
 
 require(ggplot2)
 
-lgLabels <- c("SEED", "Fractal")
-lgValues <- c("#d95f02", "#1b9e77")
-lgBreaks <- c("seed", "fractal")
+lgLabels <- c("Arabesque", "SEED", "Fractal")
+lgValues <- c("#7570b3", "#d95f02","#1b9e77")
+lgBreaks <- c("arabesque", "seed", "fractal")
+
+datac[is.na(datac)] <- 0
+datac$status <- ""
+datac$status[datac$runtime == 0] <- "out of memory"
 
 ggplot(datac, aes(x=factor(query, labels=c("q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8")),
                   y=runtime/1000,
-                  fill=factor(sys, levels = c("seed", "fractal")))) + 
+                  fill=factor(sys, levels = c("arabesque", "seed", "fractal")))) + 
     geom_bar(position=position_dodge(), size=10, stat="identity") +
     geom_errorbar(aes(ymin=(runtime-se)/1000, ymax=(runtime+se)/1000),
                   colour="black", width=.005,
                   position=position_dodge(.9)) +
+   geom_text(aes(label=status, fill=factor(sys, levels=c("arabesque", "seed", "fractal"))),
+              position = position_dodge(width = 1), vjust = 0.4, hjust = -0.2,
+              size = 6, angle = 90, color="black") +
+    labs(x="Query", y="Runtime (s) -- log-scale") +
     labs(x="Query", y="Runtime (s) -- log-scale") +
     scale_fill_manual(values=lgValues, labels=lgLabels, breaks=lgBreaks) +
     scale_y_log10() +
     theme_classic(base_size = 20) +
-    theme(legend.title=element_blank(), legend.position=c(0.22,0.90))
+    theme(legend.title=element_blank(), legend.position="top")
 
 ggsave(file="gmatching_youtube_runtime.pdf", family="serif", heigh=4, width=6)
 ggsave(file="gmatching_youtube_runtime.png", family="serif", heigh=4, width=6)

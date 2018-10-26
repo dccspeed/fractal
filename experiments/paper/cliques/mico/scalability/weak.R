@@ -70,9 +70,11 @@ basese <- datac$se[[1]]
 require(ggplot2)
 require(scales)
 
-lgLabels <- c("Fractal (Mico-SL, 5 vertices)", "Fractal (Mico-SL, 6 vertices)", "Fractal (Youtube-SL, 10 vertices)", "Fractal (Orkut-SL, 4 vertices)")
+#lgLabels <- c("Fractal (Mico-SL, 5 vertices)", "Fractal (Mico-SL, 6 vertices)", "Fractal (Youtube-SL, 10 vertices)", "Fractal (Orkut-SL, 4 vertices)")
+lgLabels <- c("Fractal (Mico-SL, 6 vertices)", "Fractal (Youtube-SL, 10 vertices)", "Fractal (Orkut-SL, 4 vertices)")
 cbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
-lgBreaks <- c("mico 4", "mico 5", "youtube 9", "orkut 3")
+#lgBreaks <- c("mico 4", "mico 5", "youtube 9", "orkut 3")
+lgBreaks <- c("mico 5", "youtube 9", "orkut 3")
 
 func <- function(x) x
 

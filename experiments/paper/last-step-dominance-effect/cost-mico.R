@@ -55,13 +55,13 @@ print(datac)
 require(ggplot2)
 require(scales)
 
-lgLabels <- c("Previous steps", "Last step")
+lgLabels <- c("Previous steps", "Current step")
 lgValues <- c("#7570b3", "#1b9e77", "#d95f02")
 lgBreaks <- c("prevsteps", "laststep")
 
 ggplot(datac, aes(x=nvertices, y=nembeddings, fill=factor(group, levels=c("prevsteps", "laststep")), label=sprintf("%.1f %%", relcost*100))) + 
     geom_bar(position=position_stack(), size=10, stat="identity") +
-    geom_text(size = 5, position = position_stack(vjust = 0.5), color="white") + 
+    geom_text(size = 5.5, position = position_stack(vjust = 0.5), color="white") + 
     labs(x="# Vertices", y="# Subgraphs -- log-scale") +
     scale_fill_manual(values=lgValues, labels=lgLabels, breaks=lgBreaks) +
     #theme_minimal() +

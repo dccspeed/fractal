@@ -51,14 +51,18 @@ summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
 data <- read.table(header=T, file="runtime.dat")
 datac <- summarySE(data, measurevar="runtime", groupvars=c("sys", "depth"))
 
+datac[is.na(datac)] <- 0
+
+datac$status <- ""
+datac$status[datac$runtime == 0] <- "out of memory"
 print(datac)
 
 require(ggplot2)
 require(scales)
 
-lgLabels <- c("Arabesque", "Fractal")
-lgValues <- c("#7570b3", "#1b9e77", "#d95f02")
-lgBreaks <- c("arabesque", "fractal")
+lgLabels <- c("GraphFrames", "QkCount", "Arabesque", "Fractal")
+lgValues <- c("#ca0020", "#d95f02", "#7570b3", "#1b9e77")
+lgBreaks <- c("graphframes", "qkcount", "arabesque","fractal")
 
 ggplot(datac, aes(x=factor(depth + 1), y=runtime/1000, fill=factor(sys))) + 
     geom_bar(position=position_dodge(), size=10, stat="identity") +
@@ -67,6 +71,7 @@ ggplot(datac, aes(x=factor(depth + 1), y=runtime/1000, fill=factor(sys))) +
                   position=position_dodge(.9)) +
     labs(x="# Vertices", y="Runtime (seconds)") +
     scale_fill_manual(values=lgValues, labels=lgLabels, breaks=lgBreaks) +
+    #scale_fill_brewer(palette="RdYlBu", labels=lgLabels, breaks=lgBreaks) +
     # theme_minimal(base_size = 20) +
     theme_minimal() +
     theme(legend.title=element_blank(), legend.position=c(0.1,0.9))
@@ -74,23 +79,23 @@ ggplot(datac, aes(x=factor(depth + 1), y=runtime/1000, fill=factor(sys))) +
 ggsave(file="cliques_mico_runtime.pdf", family="serif", heigh=4, width=6)
 ggsave(file="cliques_mico_runtime.png", family="serif", heigh=4, width=6)
 
-plot.log <- ggplot(datac, aes(x=factor(depth + 1), y=runtime/1000, fill=factor(sys))) + 
-    geom_bar(position=position_dodge(), size=10, stat="identity") +
+plot.log <- ggplot(datac, aes(x=factor(depth + 1), y=runtime/1000, fill=factor(sys, levels=c("graphframes","qkcount", "arabesque", "fractal")))) + 
+    geom_bar(position=position_dodge(preserve='single'), size=10, stat="identity") +
     #geom_text(aes(x = factor(depth), y=max(runtime+500000)/1000, label = status, group = factor(sys)), position = position_dodge(width = 1)) +
     geom_errorbar(aes(ymin=(runtime-se)/1000, ymax=(runtime+se)/1000),
                   colour="black", width=.005,
-                  position=position_dodge(.9)) +
-    labs(x="# Vertices", y="Runtime (seconds) \n log-scale") +
+                  position=position_dodge(width=0.9)) +
+   geom_text(aes(label=status, fill=factor(sys, levels=c("graphframes", "qkcount", "arabesque", "fractal"))),
+              position = position_dodge(width = 1), vjust = 0.7, hjust = -0.2,
+              size = 6, angle = 90, color="black") +
+
+    labs(x="# Vertices", y="Runtime (s) -- log-scale") +
     scale_fill_manual(values=lgValues, labels=lgLabels, breaks=lgBreaks) +
+    #scale_fill_brewer(palette="RdYlBu", labels=lgLabels, breaks=lgBreaks) +
     scale_y_log10() +
     # theme_minimal(base_size = 20) +
-    theme_minimal() +
-    theme(legend.title=element_blank(), legend.position=c(0.1,0.9))
+    theme_classic(base_size = 20) +
+    theme(legend.title=element_blank(), legend.position="top")
     
 ggsave(file="cliques_mico_runtime_log.pdf", family="serif", heigh=4, width=6)
 ggsave(file="cliques_mico_runtime_log.png", family="serif", heigh=4, width=6)
-
-ggsave(file="cliques_mico_runtime_log_red.pdf", plot.log + theme_minimal(base_size = 22) + theme(legend.position=c(0.2,0.8), legend.title=element_blank()),
-       family="serif", heigh=4, width=6)
-ggsave(file="cliques_mico_runtime_log_red.png", plot.log + theme_minimal(base_size = 22) + theme(legend.position=c(0.2,0.8), legend.title=element_blank()),
-       family="serif", heigh=4, width=6)

@@ -4,10 +4,10 @@ import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.hash.HashIntSet;
 import com.koloboke.function.IntConsumer;
 import io.arabesque.computation.Computation;
-import io.arabesque.computation.SparkFromScratchMasterEngine;
 import io.arabesque.conf.Configuration;
 import io.arabesque.graph.Edge;
 import io.arabesque.graph.VertexNeighbourhood;
+import io.arabesque.pattern.PatternEdge;
 import io.arabesque.utils.collection.AtomicBitSetArray;
 import io.arabesque.utils.collection.IntArrayList;
 
@@ -24,8 +24,7 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
       numVerticesAddedWithWord = new IntArrayList();
    }
 
-   private ValidWordIdAdder extensionWordIdsAdder =
-           new ValidWordIdAdder();
+   private ValidWordIdAdder extensionWordIdsAdder = new ValidWordIdAdder();
 
    @Override
    public void init(Configuration config) {
@@ -110,7 +109,7 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
       updateVertices(word);
    }
 
-   private void updateVertices(int word) {
+   protected void updateVertices(int word) {
       final Edge edge = configuration.getMainGraph().getEdge(word);
 
       int numVerticesAdded = 0;
@@ -126,7 +125,7 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
          dstIsNew = true;
       }
 
-      if (srcIsNew) {
+      if (srcIsNew) { 
          vertices.add(edge.getSourceId());
          neighborhoodCuts.add(-1);
          ++numVerticesAdded;
@@ -213,7 +212,7 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
       int currVertice = numVertices - 1;
       int wordId;
       int lowerBound = edges.getUnchecked(0);
-      int[] orderedEdges = null;
+      IntArrayList orderedEdges = null;
       VertexNeighbourhood neighbourhood = null;
 
       for (int i = numEdges - 1; i >= 0; --i) {
@@ -230,16 +229,16 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
             }
 
             orderedEdges = neighbourhood.getOrderedEdges();
+            int numOrderedEdges = orderedEdges.size();
             int fromIdx = neighborhoodCuts.getUnchecked(currVertice);
             if (fromIdx < 0) {
-               fromIdx = Arrays.binarySearch(orderedEdges,
-                     edges.getUnchecked(0));
+               fromIdx = orderedEdges.binarySearch(edges.getUnchecked(0));
                fromIdx = (fromIdx < 0) ? (-fromIdx - 1) : fromIdx;
                neighborhoodCuts.setUnchecked(currVertice, fromIdx);
             }
 
-            for (int k = fromIdx; k < orderedEdges.length; ++k) {
-               int w = orderedEdges[k];
+            for (int k = fromIdx; k < numOrderedEdges; ++k) {
+               int w = orderedEdges.getUnchecked(k);
                if (w > lowerBound) {
                   extensionWordIds.add(w);
                } else {
@@ -247,7 +246,7 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
                }
             }
 
-            neighborhoodLookups += (orderedEdges.length - fromIdx);
+            neighborhoodLookups += (numOrderedEdges - fromIdx);
 
             --currVertice;
          }
@@ -256,9 +255,30 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
       }
       
       computation.getExecutionEngine().aggregate(
-            SparkFromScratchMasterEngine.NEIGHBORHOOD_LOOKUPS(getNumWords()),
+            Configuration.NEIGHBORHOOD_LOOKUPS(getNumWords()),
             neighborhoodLookups);
    }
+
+   //@Override
+   //protected void updateExtensions(
+   //      Computation computation, PatternEdge pedge) {
+   //   int srcPos = pedge.getSrcPos();
+   //   int destPos = pedge.getDestPos();
+
+   //   super.updateExtensions(computation, srcPos, destPos);
+
+   //   if (srcPos <= 1 || destPos <= 1) {
+   //      int tmp = vertices.get(0);
+   //      vertices.set(0, vertices.get(1));
+   //      vertices.set(1, tmp);
+
+   //      super.updateExtensions(computation, srcPos, destPos);
+   //      
+   //      tmp = vertices.get(0);
+   //      vertices.set(0, vertices.get(1));
+   //      vertices.set(1, tmp);
+   //   }
+   //}
 
    @Override
    public void readFields(DataInput in) throws IOException {
@@ -300,7 +320,8 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
    }
 
    @Override
-   public void applyTagFrom(AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos) {
+   public void applyTagFrom(Computation computation,
+         AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos) {
       int numEdges = edges.size();
       int numVertices = vertices.size();
       int upperIdx = numVertices - 1;
@@ -320,7 +341,8 @@ public class EdgeInducedEmbedding extends BasicEmbedding {
    }
    
    @Override
-   public void applyTagTo(AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos) {
+   public void applyTagTo(Computation computation,
+         AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos) {
       int lowerIdx = 0;
 
       for (int i = 0; i <= pos; ++i) {

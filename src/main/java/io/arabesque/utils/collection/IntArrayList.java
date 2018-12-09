@@ -4,8 +4,6 @@ import io.arabesque.utils.pool.IntArrayListPool;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.IntIterator;
-import com.koloboke.function.IntConsumer;
-import com.koloboke.function.IntPredicate;
 
 import org.apache.hadoop.io.Writable;
 
@@ -16,6 +14,10 @@ import java.util.Collection;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
+import java.util.function.IntPredicate;
+import java.util.function.Predicate;
+import java.util.function.IntConsumer;
+import java.util.function.Consumer;
 
 public class IntArrayList implements ReclaimableIntCollection, Writable, Externalizable {
     private static final int INITIAL_SIZE = 16;
@@ -387,6 +389,11 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
                 index = numElements - 1;
             }
         }
+        
+        @Override
+        public void forEachRemaining(@Nonnull Consumer<? super Integer> intConsumer) {
+           throw new UnsupportedOperationException();
+        }
 
         @Override
         public boolean hasNext() {
@@ -425,6 +432,11 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
         for (int i = 0; i < numElements; ++i) {
             intConsumer.accept(backingArray[i]);
         }
+    }
+    
+    @Override
+    public void forEach(@Nonnull Consumer<? super Integer> intConsumer) {
+       throw new UnsupportedOperationException();
     }
 
     @Override
@@ -556,6 +568,11 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
 
         return removedAtLeastOne;
     }
+    
+    @Override
+    public boolean removeIf(@Nonnull Predicate<? super Integer> intPredicate) {
+       throw new UnsupportedOperationException();
+    }
 
     public int remove(int index) {
         if (index < 0 || index >= numElements) {
@@ -591,6 +608,10 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
         backingArray[index] = newValue;
     }
 
+    public void incUnchecked(int index) {
+       backingArray[index] += 1;
+    }
+
     public void clear() {
         numElements = 0;
     }
@@ -600,7 +621,7 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
     }
 
     public void sort() {
-        Arrays.sort(backingArray, 0, numElements);
+        Arrays.parallelSort(backingArray, 0, numElements);
     }
 
     public boolean ensureCapacity(int targetCapacity) {

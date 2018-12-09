@@ -5,7 +5,6 @@ import io.arabesque.utils.pool.IntIntMapPool;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.map.IntIntCursor;
-import com.koloboke.function.IntConsumer;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
 
 import java.io.Externalizable;
@@ -14,6 +13,7 @@ import java.io.DataInput;
 import java.io.ObjectOutput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.function.IntConsumer;
 
 import org.apache.hadoop.io.Writable;
 

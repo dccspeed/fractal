@@ -1,5 +1,6 @@
 package io.arabesque
 
+import io.arabesque.conf.Configuration
 import io.arabesque.computation.GtagMessagingSystem
 import io.arabesque.utils.Logging
 
@@ -49,8 +50,10 @@ class ArabesqueContext(sc: SparkContext, logLevel: String = "info",
     * @see [[https://github.com/viniciusvdias/Arabesque/blob/master/README.md]]
     * for how to prepare the input file
     */
-  def textFile (path: String, local: Boolean = false): ArabesqueGraph = {
-    new ArabesqueGraph (path, this, logLevel)
+  def textFile (path: String,
+      graphClass: String = Configuration.CONF_MAINGRAPH_CLASS_DEFAULT,
+      local: Boolean = false): ArabesqueGraph = {
+    new ArabesqueGraph (path, graphClass, this, logLevel)
   }
 
   /**
@@ -61,7 +64,7 @@ class ArabesqueContext(sc: SparkContext, logLevel: String = "info",
     */
   def stop() = {
     val fs = FileSystem.get (sc.hadoopConfiguration)
-    val res = fs.delete (new Path(tmpPath))
+    val res = fs.delete (new Path(tmpPath), true)
     GtagMessagingSystem.shutdown()
     logInfo (s"Removing arabesque temp directory: ${tmpPath} (exists=${res})")
   }

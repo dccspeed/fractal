@@ -230,9 +230,14 @@ public class VICPattern extends BasicPattern {
     }
 
     @Override
-    protected void fillVertexPositionEquivalences(VertexPositionEquivalences vertexPositionEquivalences) {
+    protected void fillVertexPositionEquivalences(VertexPositionEquivalences vertexPositionEquivalences, IntArrayList vertexLabels) {
         findCanonicalLabelling();
         vertexPositionEquivalences.addAll(this.vertexPositionEquivalences);
+    }
+    
+    @Override
+    protected void fillEdgePositionEquivalences(EdgePositionEquivalences edgePositionEquivalences, IntArrayList edgeLabels) {
+       throw new UnsupportedOperationException();
     }
 
     @Override

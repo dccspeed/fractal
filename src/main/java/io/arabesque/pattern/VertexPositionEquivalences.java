@@ -2,6 +2,7 @@ package io.arabesque.pattern;
 
 import io.arabesque.utils.collection.IntCollectionAddConsumer;
 import com.koloboke.collect.IntCursor;
+import com.koloboke.collect.ObjCursor;
 import com.koloboke.collect.map.IntIntCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.set.IntSet;
@@ -73,6 +74,37 @@ public class VertexPositionEquivalences {
 
     public IntSet getEquivalences(int pos) {
         return equivalences[pos];
+    }
+
+    public EdgePositionEquivalences getEdgeEquivalences(PatternEdgeArrayList edges) {
+       int numEdges = edges.size();
+       IntSet[] equivalences = new IntSet[numEdges];
+       
+       for (int i = 0; i < numEdges; ++i) {
+          equivalences[i] = HashIntSets.newMutableSet();
+       }
+		
+       for (int i = 0; i < numEdges; ++i) {
+          PatternEdge edge1 = edges.get(i);
+          IntSet src1 = getEquivalences(edge1.getSrcPos());
+          IntSet dest1 = getEquivalences(edge1.getDestPos());
+          equivalences[i].add(i);
+          for (int j = i; j < numEdges; ++j) {
+             // are these edges adjacent?
+             PatternEdge edge2 = edges.get(j);
+             
+             IntSet src2 = getEquivalences(edge2.getSrcPos());
+             IntSet dest2 = getEquivalences(edge2.getDestPos());
+
+             if ((src1.equals(src2) && dest1.equals(dest2)) ||
+                   (src1.equals(dest2) && dest1.equals(src2))) {
+                equivalences[i].add(j);
+                equivalences[j].add(i);
+             }
+          }
+       }
+
+       return new EdgePositionEquivalences(equivalences);
     }
 
     public void propagateEquivalences() {

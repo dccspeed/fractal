@@ -9,7 +9,8 @@ public class IntIntMapPool extends Pool<IntIntMap> {
     private static final Factory<IntIntMap> factory = new BasicFactory<IntIntMap>() {
         @Override
         public IntIntMap createObject() {
-            return HashIntIntMaps.newMutableMap();
+            return HashIntIntMaps.getDefaultFactory().
+               withDefaultValue(-1).newMutableMap();
         }
     };
 

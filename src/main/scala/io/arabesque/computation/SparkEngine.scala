@@ -71,7 +71,9 @@ trait SparkEngine [E <: Embedding]
     
     aggregationStorageFactory = new AggregationStorageFactory(configuration)
 
-    configuration.setEmbeddingClass (computation.getEmbeddingClass())
+    if (configuration.getEmbeddingClass() == null) {
+      configuration.setEmbeddingClass (computation.getEmbeddingClass())
+    }
     numEmbeddingsProcessed = 0
     numEmbeddingsGenerated = 0
     numEmbeddingsOutput = 0
@@ -334,6 +336,8 @@ trait SparkEngine [E <: Embedding]
         classOf[EEmbedding]
       else if (embedding.isInstanceOf[VertexInducedEmbedding])
         classOf[VEmbedding]
+      else if (embedding.isInstanceOf[VertexEdgeInducedEmbedding])
+        classOf[VEEmbedding]
       else
         classOf[ResultEmbedding[_]] // not allowed, will crash
 

@@ -107,6 +107,8 @@ public class PatternAggregationStorage<K extends Pattern, V extends Writable> ex
             super.removeKey(key);
         }
 
+        int numQuicksRemoved = 0;
+
         // If quick2Canonical is not empty then we need to clean it up.
         // Key may represent a quick or canonical pattern.
         // We need to clean all keys and values matching it.
@@ -121,9 +123,13 @@ public class PatternAggregationStorage<K extends Pattern, V extends Writable> ex
 
                 if (keys.contains(quickPattern) || keys.contains(canonicalPattern)) {
                     quick2CanonicalIterator.remove();
+                    numQuicksRemoved += 1;
                 }
             }
         }
+
+        LOG.info("NumCanonicalPatternsRemoved=" + keys.size() +
+              " NumQuickPatternsRemoved=" + numQuicksRemoved);
     }
 
     @Override
@@ -140,6 +146,20 @@ public class PatternAggregationStorage<K extends Pattern, V extends Writable> ex
                 }
             }
         }
+    }
+
+    @Override
+    public void aggregateWithReusables(K key, V value) {
+        V myValue = keyValueMap.get(key);
+
+        if (myValue == null) {
+            keyValueMap.put((K) key.copy(), copyWritable(value));
+        } else {
+            reductionFunction.reduce(myValue, value);
+        }
+
+        reusableKey = key;
+        reusableValue = value;
     }
 
     @Override
@@ -356,7 +376,7 @@ public class PatternAggregationStorage<K extends Pattern, V extends Writable> ex
     public String toString() {
         return "PatternAggregationStorage{" +
                 "quick2CanonicalMapSize=" + quick2CanonicalMap.size() +
-                // ",quick2CanonicalMap=" + quick2CanonicalMap +
+                 //",quick2CanonicalMap=" + quick2CanonicalMap +
                 "} " + super.toString();
     }
 

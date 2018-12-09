@@ -1,8 +1,8 @@
 sys depth runtime
 
-fractal 2 4009
-fractal 2 4904
-fractal 2 4671
+#fractal 2 4009
+#fractal 2 4904
+#fractal 2 4671
 fractal 3 7095
 fractal 3 7132
 fractal 3 6225
@@ -25,9 +25,9 @@ fractal 9 203917
 fractal 9 200963
 fractal 9 201165
 
-arabesque 2 24295
-arabesque 2 20410
-arabesque 2 25930
+#arabesque 2 24295
+#arabesque 2 20410
+#arabesque 2 25930
 arabesque 3 46749
 arabesque 3 48476
 arabesque 3 47458
@@ -49,3 +49,33 @@ arabesque 8 873360
 arabesque 9 2701682
 arabesque 9 2701425
 arabesque 9 2401532
+
+qkcount 3 154800
+qkcount 3 154800
+qkcount 3 154800
+qkcount 4 157200
+qkcount 4 157200
+qkcount 4 157200
+qkcount 5 163200
+qkcount 5 163200
+qkcount 5 163200
+qkcount 6 163800
+qkcount 6 163800
+qkcount 6 163800
+qkcount 7 165600
+qkcount 7 165600
+qkcount 7 165600
+qkcount 8 161400
+qkcount 8 161400
+qkcount 8 161400
+qkcount 9 153600
+qkcount 9 153600
+qkcount 9 153600
+
+graphframes 3 0
+graphframes 4 0
+graphframes 5 0
+graphframes 6 0
+graphframes 7 0
+graphframes 8 0
+graphframes 9 0

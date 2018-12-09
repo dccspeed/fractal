@@ -13,6 +13,7 @@ import io.arabesque.computation.comm.CommunicationStrategyFactory;
 import io.arabesque.embedding.Embedding;
 import io.arabesque.embedding.VertexInducedEmbedding;
 import io.arabesque.embedding.EdgeInducedEmbedding;
+import io.arabesque.embedding.VertexEdgeInducedEmbedding;
 import io.arabesque.graph.MainGraph;
 import io.arabesque.optimization.OptimizationSet;
 import io.arabesque.optimization.OptimizationSetDescriptor;
@@ -150,6 +151,13 @@ public class Configuration<O extends Embedding> implements Serializable {
     public static final String CONF_WS_EXTERNAL = "arabesque.ws.mode.external";
     public static final boolean CONF_WS_MODE_EXTERNAL_DEFAULT = true;
 
+    private static final String[] NEIGHBORHOOD_LOOKUPS_ARR = new String[16];
+    static {
+       for (int i = 0; i < NEIGHBORHOOD_LOOKUPS_ARR.length; ++i) {
+          NEIGHBORHOOD_LOOKUPS_ARR[i] = "neighborhood_lookups_" + i;
+       }
+    }
+
     private String masterHostname;
     protected static Configuration instance = null;
     protected static ConcurrentHashMap<Integer,Configuration> activeConfigs =
@@ -202,12 +210,6 @@ public class Configuration<O extends Embedding> implements Serializable {
             throw new RuntimeException("Oh-oh, Null configuration");
         }
 
-        if (instance instanceof SparkConfiguration) {
-           LOG.error ("static getter not allowed in Spark mode");
-            throw new RuntimeException(
-                  "Static getter is not allowed in Spark mode");
-        }
-
         if (!instance.isInitialized()) {
            instance.initialize();
         }
@@ -250,6 +252,10 @@ public class Configuration<O extends Embedding> implements Serializable {
 
     public static boolean isUnset(int id) {
        return !activeConfigs.containsKey(id);
+    }
+    
+    public static String NEIGHBORHOOD_LOOKUPS(int i) {
+       return NEIGHBORHOOD_LOOKUPS_ARR[i];
     }
 
     public int taskCheckIn() {
@@ -519,8 +525,8 @@ public class Configuration<O extends Embedding> implements Serializable {
     }
 
     protected boolean isMainGraphRead() {
-       return mainGraph.getNumberVertices() > 0 ||
-          mainGraph.getNumberEdges() > 0;
+       return mainGraph != null && (mainGraph.getNumberVertices() > 0 ||
+          mainGraph.getNumberEdges() > 0);
     }
 
     public MainGraph createGraph() {
@@ -864,6 +870,8 @@ public class Configuration<O extends Embedding> implements Serializable {
        if (embeddingClass == EdgeInducedEmbedding.class) {
           return getMainGraph().getNumberEdges();
        } else if (embeddingClass == VertexInducedEmbedding.class) {
+          return getMainGraph().getNumberVertices();
+       } else if (embeddingClass == VertexEdgeInducedEmbedding.class) {
           return getMainGraph().getNumberVertices();
        } else {
           throw new RuntimeException(

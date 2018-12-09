@@ -108,5 +108,7 @@ public interface Computation<E extends Embedding> {
     Class<? extends Embedding> getEmbeddingClass();
     
     int getInitialNumWords();
+
+    Pattern getPattern();
     // }}}
 }

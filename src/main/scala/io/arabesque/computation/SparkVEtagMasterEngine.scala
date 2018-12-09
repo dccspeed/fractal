@@ -240,6 +240,37 @@ class SparkVEtagMasterEngine[E <: Embedding](
     logInfo (s"HadoopConfiguration estimated size = " +
       s"${SizeEstimator.estimate(config.hadoopConf)} bytes")
 
+    val initStart = System.currentTimeMillis
+    val _configBc = configBc
+    val _previousAggregationsBc = previousAggregationsBc
+    superstepRDD.mapPartitions { iter =>
+      val prevAggs = _previousAggregationsBc.value.asInstanceOf[Map[String,_]]
+      (prevAggs.get(VPREV_ENUM), prevAggs.get(EPREV_ENUM)) match {
+        case (Some(vagg), Some(eagg)) =>
+
+          val vtag = vagg.
+            asInstanceOf[AggregationStorage[NullWritable,AtomicBitSetArray]].
+            getValue(NullWritable.get())
+
+          val etag = eagg.
+            asInstanceOf[AggregationStorage[NullWritable,AtomicBitSetArray]].
+            getValue(NullWritable.get())
+
+          _configBc.value.initializeWithTag(false)
+
+        case (None, None) =>
+          _configBc.value.initializeWithTag(false)
+
+        case tags =>
+          throw new RuntimeException(s"Not allowed, missing tag: ${tags}")
+      }
+      iter
+    }.foreachPartition(_ => {})
+
+    val initElapsed = System.currentTimeMillis - initStart
+
+    logInfo (s"Initialization took ${initElapsed} ms")
+
     val _aggAccums = aggAccums
 
     val execEngines = getExecutionEngines (
@@ -332,10 +363,10 @@ class SparkVEtagMasterEngine[E <: Embedding](
             asInstanceOf[AggregationStorage[NullWritable,AtomicBitSetArray]].
             getValue(NullWritable.get())
 
-          configBc.value.initializeWithTag(vtag, etag)
+          configBc.value.initializeWithTag(false)
 
         case (None, None) =>
-          configBc.value.initialize()
+          configBc.value.initializeWithTag(false)
 
         case tags =>
           throw new RuntimeException(s"Not allowed, missing tag: ${tags}")
@@ -415,9 +446,9 @@ class SparkVEtagMasterEngine[E <: Embedding](
           c.getAggregationStorage [NullWritable,AtomicBitSetArray] (EPREV_ENUM).
             aggregate(NullWritable.get(), enabledEdges)
 
-          if (c.getStep == 0) {
-            enabledEdges.enableAll()
-          }
+          //if (c.getStep == 0) {
+          //  enabledEdges.enableAll()
+          //}
 
           // setup work-stealing system
           val gtagExecutorActor = execEngine.
@@ -427,7 +458,8 @@ class SparkVEtagMasterEngine[E <: Embedding](
             if (ret > 0) {
               val embedding = consumer.getEmbedding()
               val prefixSize = consumer.getPrefix().size()
-              embedding.applyTagTo(enabledVertices, enabledEdges, prefixSize - 1)
+              embedding.applyTagTo(c,
+                enabledVertices, enabledEdges, prefixSize - 1)
             }
           }
 
@@ -464,7 +496,8 @@ class SparkVEtagMasterEngine[E <: Embedding](
             currentEmbedding.previousExtensionLevel
 
             if (_validChildren > 0) {
-              currentEmbedding.applyTagFrom(enabledVertices, enabledEdges,
+              currentEmbedding.applyTagFrom(c,
+                enabledVertices, enabledEdges,
                 currentEmbedding.getNumWords() - 1)
               validChildren += _validChildren
             }
@@ -489,8 +522,8 @@ class SparkVEtagMasterEngine[E <: Embedding](
           if (c.filter(currentEmbedding)) {
             embeddingsGenerated += 1
             c.process(currentEmbedding)
-            currentEmbedding.applyTagFrom(enabledVertices, enabledEdges,
-              currentEmbedding.getNumWords() - 1)
+            currentEmbedding.applyTagFrom(c,
+              enabledVertices, enabledEdges, currentEmbedding.getNumWords() - 1)
           }
         }
 
@@ -535,34 +568,6 @@ class SparkVEtagMasterEngine[E <: Embedding](
       }
     }
   }
-
-  //def getWordFilterFunc(
-  //    _cfAccums: Array[LongAccumulator],
-  //    _gfAccums: Array[LongAccumulator],
-  //    _gfcfAccums: Array[LongAccumulator],
-  //    idx: Int): WordFilterFunc[E] = {
-  //  new WordFilterFunc[E] with Logging {
-  //    val cfAccums = _cfAccums
-
-  //    val gfAccums = _gfAccums
-
-  //    val gfcfAccums = _gfcfAccums
-
-  //    var enabledWords: AtomicBitSetArray = _
-
-  //    var totalNumWords: Int = _
-
-  //    def apply(e: E, w: Int, c: Computation[E]): Boolean = {
-  //      if (enabledWords == null) {
-  //        totalNumWords = c.getConfig().getNumWords()
-  //        enabledWords = c.
-  //          readAggregation[NullWritable,AtomicBitSetArray](PREV_ENUM).
-  //          getValue(NullWritable.get())
-  //      }
-  //      enabledWords.contains(idx * totalNumWords + w)
-  //    }
-  //  }
-  //}
 
   def aggregationRegister(cc: ComputationContainer[E], depth: Int)
     : (Computation[E]) => Unit = {

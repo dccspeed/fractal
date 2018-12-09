@@ -77,6 +77,10 @@
 
    <repositories>
       <repository>
+         <id>Spark Packages</id>
+         <url>https://dl.bintray.com/spark-packages/maven/</url>
+      </repository>
+      <repository>
          <id>Neo4j releases</id>
          <url>http://m2.neo4j.org/content/repositories/releases</url>
       </repository>
@@ -122,7 +126,9 @@
           <version>3.2.2</version>
           <configuration>
              <outputDir>${project.build.directory}/unwoven-classes</outputDir>
-             <useIncrementalCompilation>false</useIncrementalCompilation>
+             <useIncrementalCompilation>true</useIncrementalCompilation>
+             <recompileMode>incremental</recompileMode>
+             <useZincServer>true</useZincServer>
           </configuration>
           <executions>
             <execution>
@@ -331,6 +337,18 @@
          <scope>${spark.scope}</scope>
       </dependency>
       <dependency>
+         <groupId>org.apache.spark</groupId>
+         <artifactId>spark-graphx_2.11</artifactId>
+         <version>${spark.version}</version>
+         <scope>${spark.scope}</scope>
+      </dependency>
+      <dependency>
+         <groupId>org.apache.spark</groupId>
+         <artifactId>spark-sql_2.11</artifactId>
+         <version>${spark.version}</version>
+         <scope>${spark.scope}</scope>
+      </dependency>
+      <dependency>
          <groupId>org.apache.hadoop</groupId>
          <artifactId>hadoop-common</artifactId>
          <version>${hadoop.version}</version>
@@ -361,12 +379,12 @@
       </dependency>
       <dependency>
          <groupId>com.koloboke</groupId>
-         <artifactId>koloboke-api-jdk6-7</artifactId>
+         <artifactId>koloboke-api-jdk8</artifactId>
          <version>1.0.0</version>
       </dependency>
       <dependency>
          <groupId>com.koloboke</groupId>
-         <artifactId>koloboke-impl-jdk6-7</artifactId>
+         <artifactId>koloboke-impl-jdk8</artifactId>
          <version>1.0.0</version>
          <scope>runtime</scope>
       </dependency>
@@ -385,6 +403,12 @@
          <artifactId>xbean-asm5-shaded</artifactId>
          <version>4.4</version>
       </dependency>
+      <dependency>
+         <groupId>graphframes</groupId>
+         <artifactId>graphframes</artifactId>
+         <version>0.6.0-spark2.2-s_2.11</version>
+      </dependency>
+
       <!-- Testing dependencies -->
       <dependency>
          <groupId>org.spockframework</groupId>
@@ -392,38 +416,12 @@
          <version>1.0-groovy-2.4</version>
          <scope>test</scope>
       </dependency>
-      <!-- tracing dependencies -->
-      <dependency>
-         <groupId>org.aspectj</groupId>
-         <artifactId>aspectjrt</artifactId>
-         <version>1.8.7</version>
-      </dependency>
 
       <!-- akka dependencies -->
       <dependency>
          <groupId>com.typesafe.akka</groupId>
          <artifactId>akka-remote_2.11</artifactId>
          <version>2.5.3</version>
-      </dependency>
-
-      <!--<dependency>
-         <groupId>com.github.romix.akka</groupId>
-         <artifactId>akka-kryo-serialization_2.11</artifactId>
-         <version>0.5.0</version>
-      </dependency>-->
-
-      <!-- compressed bitmap -->
-      <dependency>
-         <groupId>org.roaringbitmap</groupId>
-         <artifactId>RoaringBitmap</artifactId>
-         <version>0.6.51</version>
-      </dependency>
-
-      <!-- natural language processing -->
-      <dependency>
-         <groupId>org.apache.opennlp</groupId>
-         <artifactId>opennlp-tools</artifactId>
-         <version>1.8.3</version>
       </dependency>
 
    </dependencies>

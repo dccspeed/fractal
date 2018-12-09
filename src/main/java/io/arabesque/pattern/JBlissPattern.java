@@ -1,6 +1,7 @@
 package io.arabesque.pattern;
 
 import io.arabesque.conf.Configuration;
+import io.arabesque.utils.collection.IntArrayList;
 import fi.tkk.ics.jbliss.Graph;
 import fi.tkk.ics.jbliss.Reporter;
 import com.koloboke.collect.map.IntIntCursor;
@@ -55,15 +56,47 @@ public class JBlissPattern extends BasicPattern {
         }
     }
 
+    protected class EdgePositionEquivalencesReporter implements Reporter {
+        EdgePositionEquivalences equivalences;
+
+        public EdgePositionEquivalencesReporter(EdgePositionEquivalences equivalences) {
+            this.equivalences = equivalences;
+        }
+
+        @Override
+        public void report(HashIntIntMap generator, Object user_param) {
+            IntIntCursor generatorCursor = generator.cursor();
+
+            while (generatorCursor.moveNext()) {
+                int oldPos = generatorCursor.key();
+                int newPos = generatorCursor.value();
+
+                equivalences.addEquivalence(oldPos, newPos);
+                //equivalences.addEquivalence(newPos, oldPos);
+            }
+        }
+    }
+
     @Override
-    protected void fillVertexPositionEquivalences(VertexPositionEquivalences vertexPositionEquivalences) {
+    protected void fillVertexPositionEquivalences(VertexPositionEquivalences vertexPositionEquivalences, IntArrayList vertexLabels) {
         for (int i = 0; i < getNumberOfVertices(); ++i) {
             vertexPositionEquivalences.addEquivalence(i, i);
         }
 
         VertexPositionEquivalencesReporter reporter = new VertexPositionEquivalencesReporter(vertexPositionEquivalences);
-        jblissGraph.findAutomorphisms(reporter, null);
+        jblissGraph.findAutomorphisms(reporter, null, vertexLabels);
         vertexPositionEquivalences.propagateEquivalences();
+    }
+    
+    @Override
+    protected void fillEdgePositionEquivalences(EdgePositionEquivalences edgePositionEquivalences, IntArrayList edgeLabels) {
+        for (int i = 0; i < getNumberOfEdges(); ++i) {
+            edgePositionEquivalences.addEquivalence(i, i);
+        }
+
+        EdgePositionEquivalencesReporter reporter = new EdgePositionEquivalencesReporter(edgePositionEquivalences);
+        jblissGraph.findEdgeAutomorphisms(reporter, null, edgeLabels);
+        edgePositionEquivalences.propagateEquivalences();
     }
 
     @Override
@@ -76,5 +109,11 @@ public class JBlissPattern extends BasicPattern {
         dirtyVertexPositionEquivalences = true;
 
         return super.turnCanonical();
+    }
+
+    @Override
+    public String toString() {
+       return "JBlissPattern{jblissGraph=" + jblissGraph + " " +
+          super.toString() + "}";
     }
 }

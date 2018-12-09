@@ -2,25 +2,33 @@ package io.arabesque.embedding;
 
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.hash.HashIntSet;
+import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.function.IntConsumer;
+import com.koloboke.function.IntIntConsumer;
 import io.arabesque.computation.Computation;
-import io.arabesque.computation.SparkFromScratchMasterEngine;
 import io.arabesque.conf.Configuration;
 import io.arabesque.graph.Vertex;
 import io.arabesque.graph.Edge;
 import io.arabesque.graph.LabelledEdge;
+import io.arabesque.graph.VertexNeighbourhood;
 import io.arabesque.pattern.Pattern;
+import io.arabesque.pattern.PatternEdge;
+import io.arabesque.pattern.PatternEdgeArrayList;
+import io.arabesque.utils.Utils;
 import io.arabesque.utils.collection.AtomicBitSetArray;
-import io.arabesque.utils.collection.RoaringBitSet;
 import io.arabesque.utils.collection.IntArrayList;
 import io.arabesque.utils.collection.IntCollectionAddConsumer;
 import io.arabesque.utils.collection.ObjArrayList;
 import io.arabesque.utils.pool.HashIntSetPool;
-import io.arabesque.utils.pool.RoaringBitSetPool;
+import io.arabesque.utils.pool.IntIntMapPool;
+import io.arabesque.utils.pool.IntArrayListPool;
+import com.koloboke.collect.map.hash.HashIntObjMaps;
+import com.koloboke.collect.map.hash.HashIntObjMap;
 
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.ObjectOutput;
+import java.util.Arrays;
 import java.util.Objects;
 
 public abstract class BasicEmbedding implements Embedding {
@@ -32,12 +40,15 @@ public abstract class BasicEmbedding implements Embedding {
 
    // Extension helper structures {{
    protected HashIntSet extensionWordIds;
+   protected IntIntMap extensionWordMaps;
    protected boolean dirtyExtensionWordIds;
 
    // Active extensions
    protected ObjArrayList<HashIntSet> extensionLevels;
    protected IntArrayList neighborhoodCuts;
    protected IntArrayList lastWords;
+
+   protected HashIntObjMap cacheStore;
 
    protected IntConsumer extensionWordIdsAdder = new IntConsumer() {
       @Override
@@ -46,8 +57,14 @@ public abstract class BasicEmbedding implements Embedding {
       }
    };
 
-   protected IntCollectionAddConsumer intAddConsumer =
-      new IntCollectionAddConsumer();
+   protected BoundedWordIdAdder boundedExtensionsAdder =
+      new BoundedWordIdAdder();
+   
+   protected BoundedWordMapAdder boundedExtensionsMapAdder =
+      new BoundedWordMapAdder();
+   
+   protected BoundedWordMapAdderFixedSrc boundedExtensionsMapAdderFixedSrc =
+      new BoundedWordMapAdderFixedSrc();
 
    // }}
 
@@ -72,8 +89,10 @@ public abstract class BasicEmbedding implements Embedding {
    public BasicEmbedding() {
       vertices = new IntArrayList();
       edges = new IntArrayList();
+      extensionWordMaps = IntIntMapPool.instance().createObject();
       extensionLevels = new ObjArrayList<HashIntSet>();
       neighborhoodCuts = new IntArrayList();
+      cacheStore = HashIntObjMaps.newMutableMap();
       nextExtensionLevel();
    }
 
@@ -101,10 +120,20 @@ public abstract class BasicEmbedding implements Embedding {
       dirtyExtensionWordIds = true;
    }
 
+   @Override
+   public HashIntObjMap cacheStore() {
+      return cacheStore;
+   }
+
+   @Override
+   public IntCollection extensions() {
+      return extensionWordIds();
+   }
+
    protected HashIntSet extensionWordIds() {
       return extensionLevels.getLast();
    }
-
+   
    protected HashIntSet extensionWordIds(int level) {
       return extensionLevels.get(level);
    }
@@ -123,7 +152,7 @@ public abstract class BasicEmbedding implements Embedding {
       HashIntSetPool.instance().reclaimObject(
             extensionLevels.remove(extensionLevels.size() - 1));
    }
-
+   
    @Override
    public void nextExtensionLevel(Embedding other) {
       extensionLevels.add(HashIntSetPool.instance().createObject());
@@ -189,6 +218,37 @@ public abstract class BasicEmbedding implements Embedding {
       return extensionWordIds();
    }
 
+   @Override
+   public IntCollection extensions(Computation computation) {
+      if (dirtyExtensionWordIds) {
+         if (getNumWords() > 0) {
+            updateExtensions(computation);
+         } else {
+            updateInitExtensibleWordIds(computation);
+         }
+      }
+
+      return extensionWordIds();
+   }
+   
+   @Override
+   public IntCollection extensions(Computation computation, Pattern pattern) {
+      if (dirtyExtensionWordIds) {
+         if (getNumWords() == 0) {
+            updateExtensionsInit(computation, pattern);
+         } else {
+            updateExtensions(computation, pattern);
+         }
+
+         int numVertices = getNumVertices();
+         for (int i = 0; i < numVertices; ++i) {
+            extensionWordIds().removeInt(vertices.getUnchecked(i));
+         }
+      }
+      
+      return extensionWordIds();
+   }
+
    protected void updateInitExtensibleWordIds(Computation computation) {
       int totalNumWords = computation.getInitialNumWords();
       int numPartitions = computation.getNumberPartitions();
@@ -211,11 +271,57 @@ public abstract class BasicEmbedding implements Embedding {
       }
 
       computation.getExecutionEngine().aggregate(
-            SparkFromScratchMasterEngine.NEIGHBORHOOD_LOOKUPS(getNumWords()),
+            Configuration.NEIGHBORHOOD_LOOKUPS(getNumWords()),
             (endMyWordRange - startMyWordRange));
    }
 
-   protected void updateExtensibleWordIdsSimple(Computation computation) {
+   protected void updateExtensionsInit(Computation computation, Pattern pattern) {
+      int totalNumWords = computation.getInitialNumWords();
+      int numPartitions = computation.getNumberPartitions();
+      int myPartitionId = computation.getPartitionId();
+      int numWordsPerPartition = Math.max(totalNumWords / numPartitions, 1);
+      int startMyWordRange = myPartitionId * numWordsPerPartition;
+      int endMyWordRange = startMyWordRange + numWordsPerPartition;
+
+      // If we are the last partition or our range end goes over the total
+      // number of vertices, set the range end to the total number of vertices
+      if (myPartitionId == numPartitions - 1 ||
+            endMyWordRange > totalNumWords) {
+         endMyWordRange = totalNumWords;
+      }
+
+      for (int i = startMyWordRange; i < endMyWordRange; ++i) {
+         if (!computation.filter(this, i)) {
+            continue;
+         }
+
+         int word = i;
+         addWord(word);
+         if (pattern.testSymmetryBreakerPos(this, 1)) {
+            extensionWordIds().add(word);
+         }
+         removeLastWord();
+
+         word += computation.getInitialNumWords();
+         addWord(word);
+         if (pattern.testSymmetryBreakerPos(this, 1)) {
+            extensionWordIds().add(word);
+         }
+         removeLastWord();
+      }
+
+      computation.getExecutionEngine().aggregate(
+            Configuration.NEIGHBORHOOD_LOOKUPS(getNumWords()),
+            (endMyWordRange - startMyWordRange));
+   }
+
+   protected abstract void updateExtensibleWordIdsSimple(Computation computation);
+   
+   protected void updateExtensions(Computation computation, Pattern pattern) {
+      updateExtensions(computation);
+   }
+
+   protected void updateExtensions(Computation computation) {
       IntArrayList vertices = getVertices();
       int numVertices = getNumVertices();
 
@@ -326,11 +432,67 @@ public abstract class BasicEmbedding implements Embedding {
       return Objects.hash(vertices, edges);
    }
 
-   @Override
-   public void applyTagFrom(AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos) {
+   private class BoundedWordIdAdder implements IntConsumer {
+      private int lowerBound = Integer.MIN_VALUE;
+      private int upperBound = Integer.MAX_VALUE;
+
+      public BoundedWordIdAdder setBounds(int lowerBound, int upperBound) {
+         this.lowerBound = lowerBound;
+         this.upperBound = upperBound;
+         return this;
+      }
+
+      @Override
+      public void accept(int i) {
+         if (i > lowerBound && i < upperBound) {
+            extensionWordIds().add(i);
+         }
+      }
    }
-   
-   @Override
-   public void applyTagTo(AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos) {
+
+   private class BoundedWordMapAdder implements IntIntConsumer {
+      private int lowerBound = Integer.MIN_VALUE;
+      private int upperBound = Integer.MAX_VALUE;
+      private Pattern pattern;
+
+      public BoundedWordMapAdder setBounds(int lowerBound, int upperBound) {
+         this.lowerBound = lowerBound;
+         this.upperBound = upperBound;
+         return this;
+      }
+
+      public BoundedWordMapAdder setPattern(Pattern pattern) {
+         this.pattern = pattern;
+         return this;
+      }
+
+      @Override
+      public void accept(int k, int word) {
+         extensionWordMaps.put(k, word);
+         extensionWordIds().add(word);
+      }
+   }
+
+   private class BoundedWordMapAdderFixedSrc implements IntConsumer {
+      private int lowerBound = Integer.MIN_VALUE;
+      private int upperBound = Integer.MAX_VALUE;
+      private int k;
+
+      public BoundedWordMapAdderFixedSrc setBounds(
+            int lowerBound, int upperBound) {
+         this.lowerBound = lowerBound;
+         this.upperBound = upperBound;
+         return this;
+      }
+
+      public BoundedWordMapAdderFixedSrc setK(int k) {
+         this.k = k;
+         return this;
+      }
+
+      @Override
+      public void accept(int word) {
+         extensionWordIds().add(word);
+      }
    }
 }

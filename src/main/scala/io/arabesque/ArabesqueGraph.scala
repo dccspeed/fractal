@@ -1,14 +1,20 @@
 package io.arabesque
 
+import io.arabesque.aggregation._
+import io.arabesque.aggregation.reductions._
 import io.arabesque.computation._
 import io.arabesque.conf.{Configuration, SparkConfiguration}
 import io.arabesque.embedding._
-import io.arabesque.graph.MainGraph
-import io.arabesque.utils.{ClosureParser, Logging}
+import io.arabesque.graph.{BasicMainGraph, MainGraph}
+import io.arabesque.pattern._
+import io.arabesque.utils.{ClosureParser, Logging, Utils}
 import io.arabesque.utils.collection._
+import io.arabesque.utils.pool._
 
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
+    
+import org.apache.hadoop.io._
 
 import scala.collection.mutable.Map
 import scala.reflect.{classTag, ClassTag}
@@ -46,6 +52,31 @@ class ArabesqueGraph(
     )
     config.createGraph()
     config.getMainGraph[MainGraph[String,String]]
+  }
+
+  def asPattern: Pattern = {
+    val computation: Computation[EdgeInducedEmbedding] =
+      new EComputationContainer()
+    val config = new SparkConfiguration[EdgeInducedEmbedding]
+    config.set ("input_graph_path", path)
+    config.set ("input_graph_local", local)
+    config.setEmbeddingClass (computation.getEmbeddingClass())
+    config.setMainGraphId (graphId)
+    config.initialize()
+    val embedding = config.createEmbedding[EdgeInducedEmbedding]
+    
+    val graph = config.getMainGraph[BasicMainGraph[_,_]]
+    val numEdges = graph.getNumberEdges()
+    val edges = graph.getEdges()
+    var i = 0
+    while (i < numEdges) {
+      embedding.addWord(edges(i).getEdgeId())
+      i += 1
+    }
+
+    val pattern = config.createPattern
+    pattern.setEmbedding(embedding)
+    pattern
   }
 
   def tmpPath: String = s"${arab.tmpPath}/graph-${uuid}"
@@ -113,18 +144,25 @@ class ArabesqueGraph(
     import io.arabesque.pattern.Pattern
 
     val AGG_MOTIFS = "motifs"
-    vertexInducedComputation.
-      withAggregationRegistered [Pattern,LongWritable] (
-        AGG_MOTIFS)(
-          (e,c,k) => e.getPattern,
-          new Function3[VertexInducedEmbedding, Computation[VertexInducedEmbedding], LongWritable, LongWritable] with Serializable {
-            @transient lazy val reusableUnit = new LongWritable(1)
-            def apply(e: VertexInducedEmbedding,
-                c: Computation[VertexInducedEmbedding], k: LongWritable): LongWritable = {
-              reusableUnit
-            }
-          },
-          (v1, v2) => {v1.set (v1.get + v2.get); v1})
+    vertexInducedComputation
+    //vertexInducedComputation.
+    //  aggregate [Pattern,LongWritable] (
+    //    AGG_MOTIFS,
+    //    (e,c,k) => { e.getPattern },
+    //    (e,c,v) => { v.set(1); v },
+    //    (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
+
+      //withAggregationRegistered [Pattern,LongWritable] (
+      //  AGG_MOTIFS)(
+      //    (e,c,k) => e.getPattern,
+      //    new Function3[VertexInducedEmbedding, Computation[VertexInducedEmbedding], LongWritable, LongWritable] with Serializable {
+      //      @transient lazy val reusableUnit = new LongWritable(1)
+      //      def apply(e: VertexInducedEmbedding,
+      //          c: Computation[VertexInducedEmbedding], k: LongWritable): LongWritable = {
+      //        reusableUnit
+      //      }
+      //    },
+      //    (v1, v2) => {v1.set (v1.get + v2.get); v1})
   }
 
   /**
@@ -199,7 +237,8 @@ class ArabesqueGraph(
       iteration += 1
       freqFrac = freqFrac.
         filterByAgg [Pattern,DomainSupport] (AGG_SUPPORT) {
-          (e,a) => a.containsKey(e.getPattern)
+          (e,a) =>
+            a.containsKey(e.getPattern)
         }.
         expand(1).
         aggregate [Pattern,DomainSupport] (AGG_SUPPORT,
@@ -367,13 +406,614 @@ class ArabesqueGraph(
   /**
    */
   def cliques: ArabesqueResult[VertexInducedEmbedding] = {
+    val CLIQUE_COUNTING = "clique_counting"
     vertexInducedComputation.
       withFilter { (e,c) =>
         e.getNumEdgesAddedWithExpansion == e.getNumVertices - 1
-      }
+      }.
+      aggregate [IntWritable,LongWritable] (
+        CLIQUE_COUNTING,
+        (e,c,k) => { k.set(0); k },
+        (e,c,v) => { v.set(1); v },
+        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
   }
 
-def ecliques: ArabesqueResult[EdgeInducedEmbedding] = {
+  
+  def maximalcliquesNaive: ArabesqueResult[VertexInducedEmbedding] = {
+    import java.util.concurrent.ThreadLocalRandom
+    import java.util.Random
+    import com.koloboke.collect.set.hash.HashIntSet
+
+    val MAXIMAL_CLIQUE_COUNTING = "maximal_clique_counting"
+
+    val generatePivot = (p: HashIntSet, x: HashIntSet, seed: Int) => {
+      val pivotCandidates = IntArrayListPool.instance().createObject()
+      pivotCandidates.addAll(p)
+      pivotCandidates.addAll(x)
+      var pivot = -1
+      if (pivotCandidates.size() > 0) {
+        val pivotIdx = new Random(seed).nextInt(pivotCandidates.size())
+        pivot = pivotCandidates.get(pivotIdx)
+      }
+      IntArrayListPool.instance().reclaimObject(pivotCandidates)
+      pivot
+    }
+
+    vertexInducedComputation.
+      extend { (e,c) =>
+        val numWords = e.getNumWords
+        if (numWords == 0) {
+          e.extensions(c)
+        } else {
+          val vertices = e.getVertices()
+          var p = HashIntSetPool.instance().createObject()
+          var x = HashIntSetPool.instance().createObject()
+          var aux = HashIntSetPool.instance().createObject()
+
+          var i = 0
+          while (i < numWords) {
+            val vertexId = vertices.get(i)
+            val neighborhood = c.getConfig().getMainGraph[MainGraph[_,_]]().
+              getVertexNeighbourhood(vertexId)
+            val orderedVertices = if (neighborhood != null) {
+              neighborhood.getOrderedVertices()
+            } else {
+              IntArrayListPool.instance().createObject()
+            }
+            val numOrderedVertices = orderedVertices.size()
+
+            aux.clear()
+            var j = 0
+            while (j < numOrderedVertices && orderedVertices.get(j) < vertexId) {
+              val neighborId = orderedVertices.get(j)
+              if (i == 0) {
+                aux.add(neighborId)
+              } else if (p.contains(neighborId) || x.contains(neighborId)) {
+                aux.add(neighborId)
+              }
+              j += 1
+            }
+
+            var tmp = x
+            x = aux
+            aux = tmp
+            
+            aux.clear()
+            while (j < numOrderedVertices && orderedVertices.get(j) > vertexId) {
+              val neighborId = orderedVertices.get(j)
+              if (i == 0) {
+                aux.add(neighborId)
+              } else if (p.contains(neighborId)) {
+                aux.add(neighborId)
+              }
+              j += 1
+            }
+            
+            tmp = p
+            p = aux
+            aux = tmp
+
+            i += 1
+          }
+
+          i = 0
+          while (i < numWords) {
+            val vId = vertices.get(i)
+            p.removeInt(vId)
+            x.removeInt(vId)
+            i += 1
+          }
+
+          val cur = p.cursor()
+          while (cur.moveNext()) {
+            e.extensions().add(cur.elem())
+          }
+
+          if (p.size() == 0 && x.size() == 0) {
+            println (s"MaximalClique size=${e.getVertices().size()} vertices=${e.getVertices()}")
+          } else {
+            println (s"NonMaximalClique size=${e.getVertices().size()} vertices=${e.getVertices()} |P|=${p.size()} |X|=${x.size()}")
+          }
+
+          HashIntSetPool.instance().reclaimObject(p)
+          HashIntSetPool.instance().reclaimObject(x)
+          HashIntSetPool.instance().reclaimObject(aux)
+
+          e.extensions()
+        }
+      }.
+      aggregate [IntWritable,LongWritable] (
+        MAXIMAL_CLIQUE_COUNTING,
+        (e,c,k) => { k.set(0); k },
+        (e,c,v) => { v.set(1); v },
+        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
+
+  }
+
+  def maximalcliques: ArabesqueResult[VertexInducedEmbedding] = {
+    import java.util.concurrent.ThreadLocalRandom
+    import java.util.Random
+    import com.koloboke.collect.set.hash.HashIntSet
+    import com.koloboke.collect.map.hash.HashIntObjMap
+
+    val MAXIMAL_CLIQUE_COUNTING = "maximal_clique_counting"
+
+    val vertexNeighborhood = (c: Computation[_], vertexId: Int) => {
+      val neighborhood = c.getConfig().
+        getMainGraph[MainGraph[_,_]]().
+        getVertexNeighbourhood(vertexId)
+      if (neighborhood != null) {
+        neighborhood.getOrderedVertices()
+      } else {
+        null.asInstanceOf[IntArrayList]
+      }
+    }
+
+    val aggregateMaximalClique = (c: Computation[_], k: Int, v: Long) => {
+      val aggStorage = c.getAggregationStorage [
+      IntWritable,LongWritable] (MAXIMAL_CLIQUE_COUNTING)
+      val reusableKey = aggStorage.reusableKey()
+      val reusableValue = aggStorage.reusableValue()
+      reusableKey.set(k)
+      reusableValue.set(v)
+      aggStorage.aggregateWithReusables(reusableKey, reusableValue)
+    }
+
+
+    val generatePivot = (c: Computation[_], p: IntArrayList, x: IntArrayList) => {
+      val seed = 13 * p.hashCode() * x.hashCode()
+      val totalSize = p.size() + x.size()
+      var pivot = -1
+      if (totalSize > 0) {
+        val pivotIdx = new Random(seed).nextInt(totalSize)
+        if (pivotIdx < p.size()) {
+          pivot = p.get(pivotIdx)
+        } else {
+          pivot = x.get(pivotIdx - p.size())
+        }
+      }
+      pivot
+    }
+
+    val generateBestPivot2 = (
+        c: Computation[_], p: IntArrayList, x: IntArrayList) => {
+
+      var bestU = -1
+      var bestUSize = Int.MinValue
+      
+      var i = 0
+      while (i < p.size()) {
+        val u = p.get(i)
+        val uSize = vertexNeighborhood(c, u).size()
+        if (bestU == -1 || uSize > bestUSize) {
+          bestU = u
+          bestUSize = uSize
+        }
+        i +=1
+      }
+
+      i = 0
+      while (i < x.size()) {
+        val u = x.get(i)
+        val uSize = vertexNeighborhood(c, u).size()
+        if (bestU == -1 || uSize > bestUSize) {
+          bestU = u
+          bestUSize = uSize
+        }
+        i +=1
+      }
+
+      bestU
+    }
+
+    val generateBestPivot = (
+        c: Computation[_], p: IntArrayList, x: IntArrayList) => {
+
+      var i = 0
+      var bestU = -1
+      var bestUSize = Int.MinValue
+
+      val px = IntArrayListPool.instance().createObject()
+      val intersectRes = IntArrayListPool.instance().createObject()
+
+      Utils.sunion(p, x, 0, p.size(), 0, x.size(), px)
+      val pxSize = px.size()
+
+      while (i < pxSize) {
+        val u = px.get(i)
+        val orderedVertices = vertexNeighborhood(c, u)
+        
+        intersectRes.clear()
+        Utils.sintersect(px, orderedVertices,
+          0, px.size(), 0, orderedVertices.size(), intersectRes)
+
+        val uSize = intersectRes.size()
+
+        if (bestU == -1 || uSize > bestUSize) {
+          bestU = u
+          bestUSize = uSize
+        }
+
+        i += 1
+      }
+
+      IntArrayListPool.instance().reclaimObject(px)
+      IntArrayListPool.instance().reclaimObject(intersectRes)
+      bestU
+    }
+
+    vertexInducedComputation.
+      extend { (e,c) =>
+        val numWords = e.getNumWords
+        val cacheStore = e.cacheStore().asInstanceOf[HashIntObjMap[IntArrayList]]
+        val extensions = e.extensions()
+        if (numWords == 0) {
+          e.extensions(c)
+        } else if (numWords == 1 || !cacheStore.containsKey((numWords - 1) * 3)) {
+          val vertices = e.getVertices()
+          var p = IntArrayListPool.instance().createObject()
+          var x = IntArrayListPool.instance().createObject()
+          var candidates = IntArrayListPool.instance().createObject()
+          var aux = IntArrayListPool.instance().createObject()
+              
+          var vi = 0
+          var vertexId = vertices.get(vi)
+          var orderedVertices = vertexNeighborhood(c, vertexId)
+
+          if (orderedVertices != null) {
+            var numOrderedVertices = orderedVertices.size()
+
+            var i = 0
+            x.clear()
+            while (i < numOrderedVertices && orderedVertices.get(i) < vertexId) {
+              x.add(orderedVertices.get(i))
+              i += 1
+            }
+
+            p.clear()
+            while (i < numOrderedVertices) {
+              p.add(orderedVertices.get(i))
+              i += 1
+            }
+            
+            vi += 1
+            while (vi < numWords) {
+              vertexId = vertices.get(vi)
+              
+              //val pivot = generatePivot(c, p, x)
+              val pivot = generateBestPivot(c, p, x)
+              //val pivot = generateBestPivot2(c, p, x)
+
+              candidates.clear()
+              orderedVertices = vertexNeighborhood(c, pivot)
+              numOrderedVertices = orderedVertices.size()
+              Utils.sdifference(p, orderedVertices,
+                0, p.size(), 0, numOrderedVertices, candidates)
+              
+              var partitionIdx = candidates.binarySearch(vertexId)
+              if (partitionIdx < 0) {
+                partitionIdx = candidates.size()
+              }
+
+              if (partitionIdx >= 0) {
+                aux.clear()
+                Utils.sdifference(p, candidates,
+                  0, p.size(), 0, partitionIdx, aux)
+                var tmp = p
+                p = aux
+                aux = tmp
+
+                aux.clear()
+                Utils.sunion(x, candidates,
+                  0, x.size(), 0, partitionIdx, aux)
+                tmp = x
+                x = aux
+                aux = tmp
+              }
+              
+              orderedVertices = vertexNeighborhood(c, vertexId)
+              numOrderedVertices = orderedVertices.size()
+
+              aux.clear()
+              Utils.sintersect(p, orderedVertices,
+                0, p.size(), 0, numOrderedVertices, aux)
+              var tmp = p
+              p = aux
+              aux = tmp
+
+              aux.clear()
+              Utils.sintersect(x, orderedVertices,
+                0, x.size(), 0, numOrderedVertices, aux)
+              tmp = x
+              x = aux
+              aux = tmp
+              
+              vi += 1
+            }
+
+            extensions.clear()
+            extensions.addAll(p)
+
+            if (p.size() == 0 && x.size() == 0) {
+              aggregateMaximalClique(c, numWords, 1)
+            }
+
+            aggregateMaximalClique(c, 0, 1)
+
+          }
+
+          val pivotArr = IntArrayListPool.instance().createObject()
+          pivotArr.add(generateBestPivot(c, p, x))
+          cacheStore.put(numWords * 3, p)
+          cacheStore.put(numWords * 3 + 1, x)
+          cacheStore.put(numWords * 3 + 2, pivotArr)
+
+          //IntArrayListPool.instance().reclaimObject(p)
+          //IntArrayListPool.instance().reclaimObject(x)
+          IntArrayListPool.instance().reclaimObject(candidates)
+          IntArrayListPool.instance().reclaimObject(aux)
+
+        } else {
+          val vertices = e.getVertices()
+          var p = IntArrayListPool.instance().createObject()
+          var x = IntArrayListPool.instance().createObject()
+          var candidates = IntArrayListPool.instance().createObject()
+          var aux = IntArrayListPool.instance().createObject()
+
+          val lastP = cacheStore.get(
+            (numWords - 1) * 3).asInstanceOf[IntArrayList]
+          val lastX = cacheStore.get(
+            (numWords - 1) * 3 + 1).asInstanceOf[IntArrayList]
+          val lastPivotArr = cacheStore.get(
+            (numWords - 1) * 3 + 2).asInstanceOf[IntArrayList]
+
+          val pivot = lastPivotArr.get(0)
+
+          val vertexId = vertices.get(numWords - 1)
+              
+          //val pivot = generatePivot(c, lastP, lastX)
+          //val pivot = generateBestPivot(c, lastP, lastX)
+          //val pivot = generateBestPivot2(c, lastP, lastX)
+
+          candidates.clear()
+          var orderedVertices = vertexNeighborhood(c, pivot)
+          var numOrderedVertices = orderedVertices.size()
+          Utils.sdifference(lastP, orderedVertices,
+            0, lastP.size(), 0, numOrderedVertices, candidates)
+
+          var partitionIdx = candidates.binarySearch(vertexId)
+          if (partitionIdx < 0) {
+            partitionIdx = candidates.size()
+          }
+
+          aux.clear()
+          Utils.sdifference(lastP, candidates,
+            0, lastP.size(), 0, partitionIdx, aux)
+          var tmp = p
+          p = aux
+          aux = tmp
+
+          aux.clear()
+          Utils.sunion(lastX, candidates,
+            0, lastX.size(), 0, partitionIdx, aux)
+          tmp = x
+          x = aux
+          aux = tmp
+
+          orderedVertices = vertexNeighborhood(c, vertexId)
+          numOrderedVertices = orderedVertices.size()
+
+          aux.clear()
+          Utils.sintersect(p, orderedVertices,
+            0, p.size(), 0, numOrderedVertices, aux)
+          tmp = p
+          p = aux
+          aux = tmp
+
+          aux.clear()
+          Utils.sintersect(x, orderedVertices,
+            0, x.size(), 0, numOrderedVertices, aux)
+          tmp = x
+          x = aux
+          aux = tmp
+
+          extensions.clear()
+          extensions.addAll(p)
+          
+          val pivotArr = IntArrayListPool.instance().createObject()
+          pivotArr.add(generateBestPivot(c, p, x))
+          cacheStore.put(numWords * 3, p)
+          cacheStore.put(numWords * 3 + 1, x)
+          cacheStore.put(numWords * 3 + 2, pivotArr)
+
+          if (p.size() == 0 && x.size() == 0) {
+            aggregateMaximalClique(c, numWords, 1)
+          }
+            
+          aggregateMaximalClique(c, 1, 1)
+          
+        }
+        extensions
+      }.
+      withAggregationRegistered [IntWritable,LongWritable] (MAXIMAL_CLIQUE_COUNTING) (
+        (e,c,k) => k,
+        (e,c,v) => v,
+        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 }
+        )
+  }
+
+  def maximalcliquesSets: ArabesqueResult[VertexInducedEmbedding] = {
+    import java.util.concurrent.ThreadLocalRandom
+    import java.util.Random
+    import com.koloboke.collect.set.hash.HashIntSet
+
+    val MAXIMAL_CLIQUE_COUNTING = "maximal_clique_counting"
+
+    val generatePivot = (p: HashIntSet, x: HashIntSet) => {
+      val seed = 13 * p.hashCode() * x.hashCode()
+      val pivotCandidates = IntArrayListPool.instance().createObject()
+      pivotCandidates.addAll(p)
+      pivotCandidates.addAll(x)
+      pivotCandidates.sort()
+      var pivot = -1
+      if (pivotCandidates.size() > 0) {
+        val pivotIdx = new Random(seed).nextInt(pivotCandidates.size())
+        pivot = pivotCandidates.get(pivotIdx)
+      }
+      IntArrayListPool.instance().reclaimObject(pivotCandidates)
+      pivot
+    }
+
+    val vertexNeighborhood = (c: Computation[_], vertexId: Int) => {
+      val neighborhood = c.getConfig().
+        getMainGraph[MainGraph[_,_]]().
+        getVertexNeighbourhood(vertexId)
+      if (neighborhood != null) {
+        neighborhood.getOrderedVertices()
+      } else {
+        null.asInstanceOf[IntArrayList]
+      }
+    }
+
+    vertexInducedComputation.
+      extend { (e,c) =>
+        val numWords = e.getNumWords
+        if (numWords == 0) {
+          e.extensions(c)
+        } else {
+          val extensions = e.extensions()
+          val vertices = e.getVertices()
+          var p = HashIntSetPool.instance().createObject()
+          var x = HashIntSetPool.instance().createObject()
+          var candidates = HashIntSetPool.instance().createObject()
+          var aux = HashIntSetPool.instance().createObject()
+          var aux2 = HashIntSetPool.instance().createObject()
+
+          var vi = 0
+          var vertexId = vertices.get(vi)
+          var orderedVertices = vertexNeighborhood(c, vertexId)
+
+          if (orderedVertices != null) {
+            var numOrderedVertices = orderedVertices.size()
+
+            var i = 0
+            aux.clear()
+            while (i < numOrderedVertices && orderedVertices.get(i) < vertexId) {
+              aux.add(orderedVertices.get(i))
+              i += 1
+            }
+
+            var tmp = x
+            x = aux
+            aux = tmp
+
+            aux.clear()
+            while (i < numOrderedVertices) {
+              aux.add(orderedVertices.get(i))
+              i += 1
+            }
+
+            tmp = p
+            p = aux
+            aux = tmp
+
+            println (s"${vi}. p=${p} x=${x}")
+
+            vi += 1
+            while (vi < numWords) {
+              vertexId = vertices.get(vi)
+              
+              val pivot = generatePivot(p, x)
+              candidates.clear()
+              candidates.addAll(p)
+              orderedVertices = vertexNeighborhood(c, pivot)
+              numOrderedVertices = orderedVertices.size()
+              println (s"${vi}. candidates=${candidates} pivot=${pivot}")
+              i = 0
+              while (i < numOrderedVertices) {
+                candidates.removeInt(orderedVertices.get(i))
+                i += 1
+              }
+
+              val candidatesArr = new IntArrayList(candidates)
+              candidatesArr.sort()
+              println (s"${vi}. candidates=${candidatesArr}")
+              val ccur = candidatesArr.cursor()
+              while (ccur.moveNext() && ccur.elem() != vertexId) {
+                p.removeInt(ccur.elem())
+                x.add(ccur.elem())
+              }
+
+              println (s"${vi}. p=${p} x=${x}")
+              
+              orderedVertices = vertexNeighborhood(c, vertexId)
+              numOrderedVertices = orderedVertices.size()
+              i = 0
+              aux.clear()
+              aux2.clear()
+              while (i < numOrderedVertices) {
+                val vId = orderedVertices.get(i)
+                if (p.contains(vId)) {
+                  aux.add(vId)
+                }
+                if (x.contains(vId)) {
+                  aux2.add(vId)
+                }
+                i += 1
+              }
+            
+              tmp = p
+              p = aux
+              aux = tmp
+
+              tmp = x
+              x = aux2
+              aux2 = tmp
+
+              i = 0
+              while (i <= vi) {
+                if (p.contains(vertices.get(i)) || x.contains(vertices.get(i))) {
+                  throw new RuntimeException(s"Invalid sets p=${p} x=${x}")
+                }
+                i += 1
+              }
+            
+              println (s"${vi}. p=${p} x=${x}")
+
+              vi += 1
+            }
+
+            extensions.clear()
+            extensions.addAll(p)
+
+            if (p.size() == 0 && x.size() == 0) {
+              println (s"MaximalClique size=${e.getVertices().size()} vertices=${e.getVertices()}")
+            } else {
+              println (s"NonMaximalClique size=${e.getVertices().size()} vertices=${e.getVertices()} |P|=${p.size()} |X|=${x.size()}")
+            }
+
+          } else {
+            println (s"MaximalClique size=${e.getVertices().size()} vertices=${e.getVertices()}")
+          }
+
+          HashIntSetPool.instance().reclaimObject(p)
+          HashIntSetPool.instance().reclaimObject(x)
+          HashIntSetPool.instance().reclaimObject(candidates)
+          HashIntSetPool.instance().reclaimObject(aux)
+          HashIntSetPool.instance().reclaimObject(aux2)
+
+          extensions
+        }
+      }.
+      aggregate [IntWritable,LongWritable] (
+        MAXIMAL_CLIQUE_COUNTING,
+        (e,c,k) => { k.set(0); k },
+        (e,c,v) => { v.set(1); v },
+        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
+
+  }
+
+  def ecliques: ArabesqueResult[EdgeInducedEmbedding] = {
     edgeInducedComputation.
       withFilter { (e,c) =>
         if (e.getNumVerticesAddedWithExpansion > 0) {
@@ -442,16 +1082,14 @@ def ecliques: ArabesqueResult[EdgeInducedEmbedding] = {
     import io.arabesque.utils.pool._
     import java.io._
     import java.util.Comparator
+    import java.util.function.IntConsumer
     import org.apache.hadoop.io._
     import org.apache.spark.broadcast.Broadcast
     import com.koloboke.collect.set.hash.HashObjSet
     import com.koloboke.collect.ObjCursor
-    import com.koloboke.function.IntConsumer
-    import opennlp.tools.stemmer.PorterStemmer 
     import scala.collection.mutable.Map
 
-    val stemmer = new PorterStemmer()
-    val keywords = _keywords.map(w => stemmer.stem(w)).toSet
+    val keywords = _keywords
 
     logInfo (s"KeywordSearch keywords=${_keywords.mkString("[", ",", "]")}" +
       s" stemmedKeywords=${keywords.mkString("[", ",", "]")}")
@@ -909,6 +1547,48 @@ def ecliques: ArabesqueResult[EdgeInducedEmbedding] = {
     kwsRes
   }
 
+  def gmatching(subgraph: ArabesqueGraph): ArabesqueResult[VertexEdgeInducedEmbedding] = {
+    val qpattern = subgraph.asPattern
+
+    logInfo (s"Querying pattern ${qpattern} in ${this}")
+
+    val SUBGRAPH_COUNTING = "subgraph_counting"
+
+    val computation = vertexEdgeInducedComputation(qpattern).
+      extend { (e,c) => 
+        e.extensions(c, c.getPattern)
+      }.
+      aggregate [IntWritable,LongWritable] (
+        SUBGRAPH_COUNTING,
+        (e,c,k) => { k.set(0); k },
+        (e,c,v) => { v.set(1); v },
+        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
+       
+    computation
+  }
+
+  def gmatchingNaive(subgraph: ArabesqueGraph): ArabesqueResult[VertexEdgeInducedEmbedding] = {
+    val qpattern = subgraph.asPattern
+    
+    logInfo (s"Querying pattern ${qpattern} in ${this}")
+
+    val SUBGRAPH_COUNTING = "subgraph_counting"
+
+    val computation = vertexEdgeInducedComputation(qpattern).
+      extend ((e,c) => e.extensions(c)).
+      filter { (e,c) =>
+        val p = e.getPattern
+        p.equals(c.getPattern, p.getNumberOfEdges)
+      }.
+      aggregate [IntWritable,LongWritable] (
+        SUBGRAPH_COUNTING,
+        (e,c,k) => { k.set(0); k },
+        (e,c,v) => { v.set(1); v },
+        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
+
+    computation
+  }
+
   /** api for custom computations **/
 
   /**
@@ -968,6 +1648,7 @@ def ecliques: ArabesqueResult[EdgeInducedEmbedding] = {
       withNewComputation (computation)
     config.set ("input_graph_path", path)
     config.set ("input_graph_local", local)
+    config.set ("input_graph_class", graphClass)
     config.set ("output_path", s"${tmpPath}/edge-computation-${config.getId}")
     customComputation [EdgeInducedEmbedding] (config)
   }
@@ -1010,12 +1691,62 @@ def ecliques: ArabesqueResult[EdgeInducedEmbedding] = {
       withNewComputation (computation)
     config.set ("input_graph_path", path)
     config.set ("input_graph_local", local)
+    config.set ("input_graph_class", graphClass)
     config.set ("output_path", s"${tmpPath}/vertex-computation-${config.getId}")
     customComputation [VertexInducedEmbedding] (config)
   }
 
   def vertexInducedComputation: ArabesqueResult[VertexInducedEmbedding] =
     vertexInducedComputation (null)
+
+  /**
+   * Returns a new result with a configurable computation container.
+   *
+    * {{{
+    *   import io.arabesque.ArabesqueContext
+    *   val input_graph = "ArabesqueDir/data/cube.graph"
+    *
+    *   val graph = arab.textFile(input_graph)
+    *   val res = arabGraph.
+    *     edgeInducedComputation {(e,c) =>
+    *       if (e.getNumWords == 3) {
+    *         c.output (e)
+    *       }
+    *     }.
+    *     withFilter ((e,c) => e.getNumWords == 3).
+    *     withShouldExpand ((e,c) => e.getNumWords < 3)
+    *
+    *   res.embeddings.count()
+    *   res.embeddings.collect()
+    * }}}
+    *
+    * @param process function that is called for each embedding produced
+    *
+    * @return an [[io.arabesque.ArabesqueResult]] carrying odags and embeddings
+   */
+  def vertexEdgeInducedComputation(
+      process: (VertexEdgeInducedEmbedding,
+                Computation[VertexEdgeInducedEmbedding]) => Unit,
+      pattern: Pattern): ArabesqueResult[VertexEdgeInducedEmbedding] = {
+    val computation: Computation[VertexEdgeInducedEmbedding] =
+      new VEComputationContainer(processOpt = Option(process),
+        patternOpt = Option(pattern))
+    val config = new SparkConfiguration[VertexEdgeInducedEmbedding].
+      withNewComputation (computation)
+    config.set ("input_graph_path", path)
+    config.set ("input_graph_local", local)
+    config.set ("input_graph_class", graphClass)
+    config.set ("output_path",
+      s"${tmpPath}/vertex-edge-computation-${config.getId}")
+    customComputation [VertexEdgeInducedEmbedding] (config)
+  }
+
+  def vertexEdgeInducedComputation: ArabesqueResult[VertexEdgeInducedEmbedding] =
+    vertexEdgeInducedComputation (null, null)
+  
+  def vertexEdgeInducedComputation(
+      pattern: Pattern): ArabesqueResult[VertexEdgeInducedEmbedding] =
+    vertexEdgeInducedComputation (null, pattern)
 
   def customComputation [E <: Embedding: ClassTag] (
       config: SparkConfiguration[E]): ArabesqueResult[E] = {
@@ -1025,6 +1756,8 @@ def ecliques: ArabesqueResult[EdgeInducedEmbedding] = {
   def set(key: String, value: Any): Unit = {
     confs.update (key, value)
   }
+
+  override def toString(): String = s"ArabesqueGraph(${path})"
 }
 
 class VAtomicBitSetArray extends AtomicBitSetArray {

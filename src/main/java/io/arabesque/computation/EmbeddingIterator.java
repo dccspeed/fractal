@@ -34,7 +34,7 @@ public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
    protected Computation<E> computation;
 
    protected IntArrayList prefix;
-
+   
    protected E embedding;
 
    protected boolean lastHasNext;
@@ -118,6 +118,7 @@ public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
       if (prefix.size() > 0) {
          iter.embedding.addWord(prefix.getUnchecked(0));
       }
+
       for (int i = 1; i < prefix.size(); ++i) {
          iter.embedding.nextExtensionLevel(embedding);
          iter.embedding.addWord(prefix.getUnchecked(i));
@@ -160,7 +161,8 @@ public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
             while (cur.moveNext()) {
                currElem = cur.elem();
                // cur.remove();
-               if (fromRemote || computation.filter(embedding, currElem)) {
+               //if (fromRemote || computation.filter(embedding, currElem)) {
+               if (computation.filter(embedding, currElem)) {
                   lastHasNext = true;
                   return true;
                }

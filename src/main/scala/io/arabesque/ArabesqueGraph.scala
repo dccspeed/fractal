@@ -144,13 +144,13 @@ class ArabesqueGraph(
     import io.arabesque.pattern.Pattern
 
     val AGG_MOTIFS = "motifs"
-    //vertexInducedComputation
-    vertexInducedComputation.
-      aggregate [Pattern,LongWritable] (
-        AGG_MOTIFS,
-        (e,c,k) => { e.getPattern },
-        (e,c,v) => { v.set(1); v },
-        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
+    vertexInducedComputation
+    //vertexInducedComputation.
+    //  aggregate [Pattern,LongWritable] (
+    //    AGG_MOTIFS,
+    //    (e,c,k) => { e.getPattern },
+    //    (e,c,v) => { v.set(1); v },
+    //    (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
 
       //withAggregationRegistered [Pattern,LongWritable] (
       //  AGG_MOTIFS)(

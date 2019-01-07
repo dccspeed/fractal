@@ -52,9 +52,15 @@ data <- read.table(header=T, file="runtime.dat")
 
 base1 <- min(data$runtime[data$db == "mico" & data$size == 3 & data$nworkers == 1])
 base2 <- min(data$runtime[data$db == "mico" & data$size == 4 & data$nworkers == 1])
+base3 <- min(data$runtime[data$db == "youtube" & data$size == 3 & data$nworkers == 1])
+base4 <- min(data$runtime[data$db == "orkut" & data$size == 2 & data$nworkers == 1])
+base5 <- min(data$runtime[data$db == "patent" & data$size == 2 & data$nworkers == 1])
 
 data$singlethread[data$db == "mico" & data$size == 3] <- base1 * 28
 data$singlethread[data$db == "mico" & data$size == 4] <- base2 * 28
+data$singlethread[data$db == "youtube" & data$size == 3] <- base3 * 28
+data$singlethread[data$db == "orkut" & data$size == 2] <- base4 * 28
+data$singlethread[data$db == "patent" & data$size == 2] <- base5 * 28
 
 data$speedup <- data$singlethread / data$runtime
 data$dbsize <- paste(data$db, data$size)
@@ -67,9 +73,12 @@ basese <- datac$se[[1]]
 require(ggplot2)
 require(scales)
 
-lgLabels <- c("Fractal (Mico-SL, 4 vertices)", "Fractal (Mico-SL, 5 vertices)")
+lgLabels <- c("Fractal (Mico-SL, 5 vertices)",
+              "Fractal (Youtube-SL, 4 vertices)",
+              "Fractal (Orkut-SL, 3 vertices)",
+              "Fractal (Patents-SL, 3 vertices)")
 cbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
-lgBreaks <- c("mico 3", "mico 4")
+lgBreaks <- c("mico 4", "youtube 3", "orkut 2", "patent 2")
 
 func <- function(x) x
 

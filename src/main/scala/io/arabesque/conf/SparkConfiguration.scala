@@ -346,6 +346,8 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
     // max number of odags in case of odag communication strategy
     updateIfExists ("max_odags", CONF_COMM_STRATEGY_ODAGMP_MAX)
 
+    // multigraph
+    updateIfExists ("multigraph", CONF_MAINGRAPH_MULTIGRAPH)
   }
 
   var tagApplied = false
@@ -481,6 +483,9 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
       getClass (CONF_PATTERN_CLASS, CONF_PATTERN_CLASS_DEFAULT).
       asInstanceOf[Class[_ <: Pattern]]
     )
+    
+    isGraphMulti = getBoolean(CONF_MAINGRAPH_MULTIGRAPH,
+      CONF_MAINGRAPH_MULTIGRAPH_DEFAULT)
 
     // optimizations
     setOptimizationSetDescriptorClass (

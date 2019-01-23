@@ -190,7 +190,7 @@ public class Configuration<O extends Embedding> implements Serializable {
     protected int mainGraphId = -1;
     private boolean isGraphEdgeLabelled;
     protected transient boolean initialized = false;
-    private boolean isGraphMulti;
+    protected boolean isGraphMulti;
 
     private static int newConfId() {
        return nextConfId.getAndIncrement();

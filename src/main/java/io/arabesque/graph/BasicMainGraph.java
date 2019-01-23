@@ -208,6 +208,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       for (int i = 0; i < vertexNeighbourhoods.length; ++i) {
          if (vertexNeighbourhoods[i] != null) {
             vertexNeighbourhoods[i].buildSortedNeighborhood();
+            LOG.info(vertexNeighbourhoods[i]);
          }
       }
 

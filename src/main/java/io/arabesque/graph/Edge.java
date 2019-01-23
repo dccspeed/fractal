@@ -52,6 +52,10 @@ public class Edge<E> implements Writable, java.io.Serializable {
        return property;
     }
 
+    public boolean validateLabel(int label) {
+       return true;
+    }
+
     @Override
     public void write(DataOutput dataOutput) throws IOException {
         dataOutput.writeInt(this.edgeId);

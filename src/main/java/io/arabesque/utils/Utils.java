@@ -8,6 +8,7 @@ import java.util.*;
 
 import java.util.concurrent.ThreadLocalRandom;
 
+import java.util.function.IntPredicate;
 
 public class Utils {
   // Implementing Fisher–Yates shuffle
@@ -30,6 +31,30 @@ public class Utils {
         int v2 = arr2.getUnchecked(i2);
         if (v1 == v2) {
            target.add(v1);
+           ++i1;
+           ++i2;
+        } else if (v1 < v2) {
+           ++i1;
+        } else {
+           ++i2;
+        }
+        ++cost;
+     }
+
+     return cost;
+  }
+  
+  public static int sintersect(IntArrayList arr1, IntArrayList arr2,
+        int i1, int size1, int i2, int size2, IntCollection target,
+        IntPredicate pred) {
+     int cost = 0;
+     while (i1 < size1 && i2 < size2) {
+        int v1 = arr1.getUnchecked(i1);
+        int v2 = arr2.getUnchecked(i2);
+        if (v1 == v2) {
+           if (pred.test(v1)) {
+              target.add(v1);
+           }
            ++i1;
            ++i2;
         } else if (v1 < v2) {

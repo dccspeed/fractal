@@ -27,6 +27,10 @@ public class LabelledEdge<E> extends Edge<E> {
         return edgeLabel;
     }
 
+    public boolean validateLabel(int label) {
+       return edgeLabel == label;
+    }
+
     @Override
     public void write(DataOutput dataOutput) throws IOException {
         super.write(dataOutput);

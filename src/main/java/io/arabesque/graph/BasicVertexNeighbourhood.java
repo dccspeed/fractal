@@ -16,9 +16,9 @@ import java.util.Arrays;
 public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Serializable {
    // Key = neighbour vertex id, Value = edge id that connects owner of neighbourhood with Key
    protected IntIntMap neighbourhoodMap;
-   private IntIntMap removedNeighbourhoodMap;
-   private IntArrayList orderedVertices;
-   private IntArrayList orderedEdges;
+   protected IntIntMap removedNeighbourhoodMap;
+   protected IntArrayList orderedVertices;
+   protected IntArrayList orderedEdges;
 
    public BasicVertexNeighbourhood() {
       this.neighbourhoodMap = HashIntIntMaps.getDefaultFactory().withDefaultValue(-1).newMutableMap();

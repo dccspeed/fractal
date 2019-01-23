@@ -32,6 +32,16 @@ public class MultiVertexNeighbourhood extends BasicVertexNeighbourhood {
         this.neighbourVertices = null;
     }
 
+   @Override
+   public void buildSortedNeighborhood() {
+      orderedVertices = new IntArrayList(getNeighborVertices().size());
+      orderedVertices.addAll(getNeighborVertices());
+      orderedVertices.sort();
+      orderedEdges = new IntArrayList(getNeighborEdges().size());
+      orderedEdges.addAll(getNeighborEdges());
+      orderedEdges.sort();
+   }
+
     @Override
     public IntCollection getNeighborVertices() {
         if (neighbourVertices == null) {

@@ -21,6 +21,9 @@ import org.apache.log4j.Logger;
 
 import java.io.*;
 import java.util.Arrays;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.StringTokenizer;
 
 public abstract class BasicPattern implements Pattern {
     private static final Logger LOG = Logger.getLogger(BasicPattern.class);
@@ -96,6 +99,8 @@ public abstract class BasicPattern implements Pattern {
         configurationId = config.getId();
 
         configuration = config;
+
+        isGraphEdgeLabelled = config.isGraphEdgeLabelled();
 
         if (edges == null) {
            edges = createPatternEdgeArrayList(isGraphEdgeLabelled);
@@ -470,21 +475,27 @@ public abstract class BasicPattern implements Pattern {
              if (vsymmetryBreaker == null) {
                 int[][] symmetryBreaker = vsymmetryBreakerMatrix();
 
-                vsymmetryBreaker = new ObjArrayList<IntArrayList>(
-                      symmetryBreaker.length);
-
-                for (int i = 0; i < symmetryBreaker.length; ++i) {
-                   vsymmetryBreaker.add(new IntArrayList());
-                   for (int j = 0; j < i; ++j) {
-                      if (symmetryBreaker[i][j] == 1) {
-                         vsymmetryBreaker.get(i).add(j);
-                      }
-                   }
-                }
+                vsymmetryBreaker = computeVsymmetryBreaker(symmetryBreaker);
              }
           }
 
           LOG.info("vsymmetryBreaker " + vsymmetryBreaker);
+       }
+
+       return vsymmetryBreaker;
+    }
+    
+    public ObjArrayList<IntArrayList> computeVsymmetryBreaker(int[][] symmetryBreaker) {
+       ObjArrayList<IntArrayList> vsymmetryBreaker = new ObjArrayList<IntArrayList>(
+             symmetryBreaker.length);
+
+       for (int i = 0; i < symmetryBreaker.length; ++i) {
+          vsymmetryBreaker.add(new IntArrayList());
+          for (int j = 0; j < i; ++j) {
+             if (symmetryBreaker[i][j] == 1) {
+                vsymmetryBreaker.get(i).add(j);
+             }
+          }
        }
 
        return vsymmetryBreaker;
@@ -658,6 +669,69 @@ public abstract class BasicPattern implements Pattern {
           esymmetryBreakerRec(pattern.copy(), sbreaker, edgeLabels, --nextLabel);
        }
     }
+    
+    @Override
+    public void readSymmetryBreakingConditions(Object path) {
+       int[][] symmetryBreaker;
+       if (path instanceof Path) {
+          Path filePath = (Path) path;
+          symmetryBreaker = readFromFile(filePath);
+       } else if (path instanceof org.apache.hadoop.fs.Path) {
+          org.apache.hadoop.fs.Path hadoopPath = (org.apache.hadoop.fs.Path) path;
+          symmetryBreaker = readFromHdfs(hadoopPath);
+       } else {
+          throw new RuntimeException("Invalid path: " + path);
+       }
+
+       vsymmetryBreaker = computeVsymmetryBreaker(symmetryBreaker);
+    }
+
+    private int[][] readFromFile(Path filePath) throws IOException {
+       InputStream is = Files.newInputStream(filePath);
+       int[][] sbreaker = readFromInputStream(is);
+       is.close();
+       return sbreaker;
+    }
+
+    private int[][] readFromHdfs(org.apache.hadoop.fs.Path hdfsPath) throws IOException {
+      FileSystem fs = FileSystem.get(new org.apache.hadoop.conf.Configuration());
+      InputStream is = fs.open(hdfsPath);
+      int[][] sbreaker = readFromInputSteam(is);
+      is.close();
+      return sbreaker;
+    }
+
+    private int[][] readFromInputStream(InputStream is) {
+       int[][] sbreaker;
+       try {
+          BufferedReader reader = new BufferedReader(
+                new InputStreamReader(new BOMInputStream(is)));
+
+          String line = reader.readLine();         
+          StringTokenizer tokenizer = new StringTokenizer(line);
+          int numVertices = Integer.parseInt(tokenizer.nextToken());
+
+          sbreaker = new int[numVertices][numVertices];
+
+          line = reader.readLine();
+
+          while (line != null) {
+             StringTokenizer tokenizer = new StringTokenizer(line);
+
+             int pos1 = Integer.parseInt(tokenizer.nextToken());
+             int pos2 = Integer.parseInt(tokenizer.nextToken());
+
+             sbreaker[pos1][pos2] = -1;
+             sbreaker[pos2][pos1] = 1;
+
+             line = reader.readLine();
+          }
+       } catch (IOException e) {
+          throw new RuntimeException(e);
+       }
+
+       return sbreaker;
+    }
 
     protected abstract void fillVertexPositionEquivalences(
           VertexPositionEquivalences vertexPositionEquivalences,
@@ -808,6 +882,11 @@ public abstract class BasicPattern implements Pattern {
 
     protected PatternEdge createPatternEdge(Edge edge, int srcPos, int dstPos, int srcId) {
         PatternEdge patternEdge = patternEdgePool.createObject();
+
+        if (!(patternEdge instanceof LabelledPatternEdge)) {
+           throw new RuntimeException("Not labeled " + isGraphEdgeLabelled + 
+                 " " + patternEdge);
+        }
 
         patternEdge.setFromEdge(getConfig().getMainGraph(),
               edge, srcPos, dstPos, srcId);

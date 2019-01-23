@@ -46,6 +46,8 @@ public interface Pattern extends Writable, Externalizable {
     public boolean testSymmetryBreakerPos(Embedding embedding, int pos);
     
     public int sbLowerBound(Embedding embedding, int pos);
+
+    public void readSymmetryBreakingConditions(Object path);
     
     public Configuration getConfig();
 

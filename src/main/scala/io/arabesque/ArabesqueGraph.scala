@@ -60,6 +60,7 @@ class ArabesqueGraph(
     val config = new SparkConfiguration[EdgeInducedEmbedding]
     config.set ("input_graph_path", path)
     config.set ("input_graph_local", local)
+    config.set ("edge_labelled", true)
     config.setEmbeddingClass (computation.getEmbeddingClass())
     config.setMainGraphId (graphId)
     config.initialize()

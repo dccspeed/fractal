@@ -75,8 +75,10 @@ class ArabesqueGraph(
       i += 1
     }
 
-    val pattern = config.createPattern
+    val pattern = config.createPattern().asInstanceOf[BasicPattern]
     pattern.setEmbedding(embedding)
+    pattern.readSymmetryBreakingConditions(s"${path}.sb")
+    logInfo(s"SymmetryBreakingConditions: ${pattern.vsymmetryBreaker()}")
     pattern
   }
 
@@ -145,25 +147,12 @@ class ArabesqueGraph(
     import io.arabesque.pattern.Pattern
 
     val AGG_MOTIFS = "motifs"
-    vertexInducedComputation
-    //vertexInducedComputation.
-    //  aggregate [Pattern,LongWritable] (
-    //    AGG_MOTIFS,
-    //    (e,c,k) => { e.getPattern },
-    //    (e,c,v) => { v.set(1); v },
-    //    (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
-
-      //withAggregationRegistered [Pattern,LongWritable] (
-      //  AGG_MOTIFS)(
-      //    (e,c,k) => e.getPattern,
-      //    new Function3[VertexInducedEmbedding, Computation[VertexInducedEmbedding], LongWritable, LongWritable] with Serializable {
-      //      @transient lazy val reusableUnit = new LongWritable(1)
-      //      def apply(e: VertexInducedEmbedding,
-      //          c: Computation[VertexInducedEmbedding], k: LongWritable): LongWritable = {
-      //        reusableUnit
-      //      }
-      //    },
-      //    (v1, v2) => {v1.set (v1.get + v2.get); v1})
+    vertexInducedComputation.
+      aggregate [Pattern,LongWritable] (
+        AGG_MOTIFS,
+        (e,c,k) => { e.getPattern },
+        (e,c,v) => { v.set(1); v },
+        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
   }
 
   /**
@@ -1561,6 +1550,7 @@ class ArabesqueGraph(
       }.
       aggregate [IntWritable,LongWritable] (
         SUBGRAPH_COUNTING,
+        //(e,c,k) => { k.set(0); println(s"vertices ${e.getVertices().toIntArray().map(v => c.getConfig().getMainGraph[BasicMainGraph[_,_]]().getVertex(v).getVertexOriginalId()).mkString(" ")}"); k },
         (e,c,k) => { k.set(0); k },
         (e,c,v) => { v.set(1); v },
         (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })

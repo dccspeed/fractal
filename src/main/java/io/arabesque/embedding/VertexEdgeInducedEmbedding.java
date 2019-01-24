@@ -72,7 +72,7 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
    public int getNumWords() {
       return vertices.size();
    }
-
+   
    @Override
    public String toOutputString() {
       StringBuilder sb = new StringBuilder();
@@ -335,6 +335,7 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
 
          // clean-up and return
          IntArrayListPool.instance().reclaimObject(neighborhoodSources);
+         IntArrayListPool.instance().reclaimObject(neighborhoodEdgeLabels);
 
          return;
       }
@@ -432,6 +433,7 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
             validNeighborhoodPredicate);
 
       IntArrayListPool.instance().reclaimObject(neighborhoodSources);
+      IntArrayListPool.instance().reclaimObject(neighborhoodEdgeLabels);
       IntArrayListPool.instance().reclaimObject(intersect1);
       IntArrayListPool.instance().reclaimObject(intersect2);
 
@@ -549,6 +551,12 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
 
       private MainGraph mainGraph;
       private int targetLabel;
+      private int mod = 1;
+      
+      public EdgeLabelPredicate setModifier(int mod) {
+         this.mod = mod;
+         return this;
+      }
 
       public EdgeLabelPredicate set(MainGraph mainGraph, int targetLabel) {
          this.mainGraph = mainGraph;
@@ -558,7 +566,7 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
 
       @Override
       public boolean test(int edgeId) {
-         return !mainGraph.getEdge(edgeId).validateLabel(targetLabel);
+         return !mainGraph.getEdge(edgeId).validateLabel(mod * targetLabel);
       }
    }
 
@@ -579,7 +587,10 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
       @Override
       public boolean test(int dst) {
          IntCollection edgeIds = mainGraph.getEdgeIds(src, dst);
-         return !edgeIds.forEachWhile(edgeLabelPredicate);
+         return !edgeIds.forEachWhile(
+               edgeLabelPredicate.setModifier(src < dst ? 1 : -1)
+               );
+         //return true;
       }
    }
 

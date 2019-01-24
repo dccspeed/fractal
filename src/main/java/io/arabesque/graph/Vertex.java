@@ -8,6 +8,8 @@ import java.io.IOException;
 
 public class Vertex<V> implements Writable, java.io.Serializable {
 
+   private int vertexOriginalId = -1;
+
     private int vertexId;
     private int vertexLabel;
     private V property;
@@ -20,9 +22,19 @@ public class Vertex<V> implements Writable, java.io.Serializable {
         this.vertexId = vertexId;
         this.vertexLabel = vertexLabel;
     }
+    
+    public Vertex(int vertexId, int vertexOriginalId, int vertexLabel) {
+        this.vertexId = vertexId;
+        this.vertexOriginalId = vertexOriginalId;
+        this.vertexLabel = vertexLabel;
+    }
 
     public int getVertexId() {
         return vertexId;
+    }
+
+    public int getVertexOriginalId() {
+       return vertexOriginalId;
     }
 
     public int getVertexLabel() {

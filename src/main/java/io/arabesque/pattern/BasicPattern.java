@@ -17,12 +17,14 @@ import com.koloboke.collect.map.hash.HashIntIntMapFactory;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
 import com.koloboke.collect.set.IntSet;
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.io.input.BOMInputStream;
 import org.apache.log4j.Logger;
 
 import java.io.*;
 import java.util.Arrays;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.StringTokenizer;
 
 public abstract class BasicPattern implements Pattern {
@@ -671,16 +673,12 @@ public abstract class BasicPattern implements Pattern {
     }
     
     @Override
-    public void readSymmetryBreakingConditions(Object path) {
+    public void readSymmetryBreakingConditions(String path) throws IOException {
        int[][] symmetryBreaker;
-       if (path instanceof Path) {
-          Path filePath = (Path) path;
-          symmetryBreaker = readFromFile(filePath);
-       } else if (path instanceof org.apache.hadoop.fs.Path) {
-          org.apache.hadoop.fs.Path hadoopPath = (org.apache.hadoop.fs.Path) path;
-          symmetryBreaker = readFromHdfs(hadoopPath);
-       } else {
-          throw new RuntimeException("Invalid path: " + path);
+       try {
+          symmetryBreaker = readFromFile(Paths.get(path));
+       } catch (IOException e) {
+          symmetryBreaker = readFromHdfs(new org.apache.hadoop.fs.Path(path));
        }
 
        vsymmetryBreaker = computeVsymmetryBreaker(symmetryBreaker);
@@ -694,9 +692,10 @@ public abstract class BasicPattern implements Pattern {
     }
 
     private int[][] readFromHdfs(org.apache.hadoop.fs.Path hdfsPath) throws IOException {
-      FileSystem fs = FileSystem.get(new org.apache.hadoop.conf.Configuration());
+      org.apache.hadoop.fs.FileSystem fs = org.apache.hadoop.fs.FileSystem.get(
+            new org.apache.hadoop.conf.Configuration());
       InputStream is = fs.open(hdfsPath);
-      int[][] sbreaker = readFromInputSteam(is);
+      int[][] sbreaker = readFromInputStream(is);
       is.close();
       return sbreaker;
     }
@@ -716,7 +715,7 @@ public abstract class BasicPattern implements Pattern {
           line = reader.readLine();
 
           while (line != null) {
-             StringTokenizer tokenizer = new StringTokenizer(line);
+             tokenizer = new StringTokenizer(line);
 
              int pos1 = Integer.parseInt(tokenizer.nextToken());
              int pos2 = Integer.parseInt(tokenizer.nextToken());
@@ -840,6 +839,16 @@ public abstract class BasicPattern implements Pattern {
         dataOutput.writeInt(configurationId);
         edges.write(dataOutput);
         vertices.write(dataOutput);
+
+        if (vsymmetryBreaker != null) {
+           dataOutput.writeBoolean(true);
+           dataOutput.writeInt(vsymmetryBreaker.size());
+           for (int i = 0; i < vsymmetryBreaker.size(); ++i) {
+              vsymmetryBreaker.getUnchecked(i).write(dataOutput);
+           }
+        } else {
+           dataOutput.writeBoolean(false);
+        }
     }
 
     @Override
@@ -870,7 +879,19 @@ public abstract class BasicPattern implements Pattern {
         for (int i = 0; i < vertices.size(); ++i) {
             vertexPositions.put(vertices.getUnchecked(i), i);
         }
+
+        boolean hasVsymmetryBreaker = dataInput.readBoolean();
+        if (hasVsymmetryBreaker) {
+           int size = dataInput.readInt();
+           vsymmetryBreaker = new ObjArrayList<IntArrayList>(size);
+           for (int i = 0; i < size; ++i) {
+              IntArrayList conds = new IntArrayList();
+              conds.readFields(dataInput);
+              vsymmetryBreaker.add(conds);
+           }
+        }
     }
+
     @Override
     public void readExternal(ObjectInput objInput) throws IOException, ClassNotFoundException {
        readFields(objInput);

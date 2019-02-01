@@ -8,6 +8,7 @@ import io.arabesque.computation.Computation;
 import io.arabesque.computation.BasicComputation;
 import io.arabesque.conf.Configuration;
 import io.arabesque.graph.VertexNeighbourhood;
+import io.arabesque.pattern.Pattern;
 import io.arabesque.utils.collection.AtomicBitSetArray;
 import io.arabesque.utils.collection.IntArrayList;
 import io.arabesque.utils.collection.ObjArrayList;
@@ -42,6 +43,8 @@ public class VertexInducedEmbedding extends BasicEmbedding {
 
    private IntWritable reusableInt = new IntWritable();
 
+   private int lastPositionAdded = -1;
+
    public VertexInducedEmbedding() {
       super();
       updateEdgesConsumer = new UpdateEdgesConsumer();
@@ -73,6 +76,12 @@ public class VertexInducedEmbedding extends BasicEmbedding {
    public int getNumWords() {
       return getNumVertices();
    }
+   
+   @Override
+   public Pattern getPattern() {
+      ensureEdges();
+      return super.getPattern();
+   }
 
    @Override
    public String toOutputString() {
@@ -100,7 +109,23 @@ public class VertexInducedEmbedding extends BasicEmbedding {
 
    @Override
    public int getNumEdgesAddedWithExpansion() {
+      ensureEdges();
       return numEdgesAddedWithWord.getLastOrDefault(0);
+   }
+
+   private void removeExtraEdges() {
+      while (lastPositionAdded >= vertices.size()) {
+         int numEdgesToRemove = numEdgesAddedWithWord.pop();
+         edges.removeLast(numEdgesToRemove);
+         lastPositionAdded--;
+      }
+   }
+
+   private void ensureEdges() {
+      while (lastPositionAdded + 1 < vertices.size()) {
+         updateEdges(vertices.get(lastPositionAdded + 1),
+               lastPositionAdded + 1);
+      }
    }
 
    protected IntCollection getValidNeighboursForExpansion(int vertexId) {
@@ -115,9 +140,8 @@ public class VertexInducedEmbedding extends BasicEmbedding {
    @Override
    public void addWord(int word) {
       super.addWord(word);
-      vertices.add(word);
+      vertices.addUnchecked(word);
       neighborhoodCuts.add(-1);
-      updateEdges(word, vertices.size() - 1);
    }
 
    @Override
@@ -126,10 +150,10 @@ public class VertexInducedEmbedding extends BasicEmbedding {
          return;
       }
 
-      int numEdgesToRemove = numEdgesAddedWithWord.pop();
-      edges.removeLast(numEdgesToRemove);
       vertices.removeLast();
       neighborhoodCuts.removeLast();
+
+      removeExtraEdges();
 
       super.removeLastWord();
    }
@@ -172,11 +196,13 @@ public class VertexInducedEmbedding extends BasicEmbedding {
 
          updateEdgesConsumer.reset();
          configuration.getMainGraph().forEachEdgeId(existingVertexId,
-                 newVertexId, updateEdgesConsumer);
+               newVertexId, updateEdgesConsumer);
          addedEdges += updateEdgesConsumer.getNumAdded();
       }
 
       numEdgesAddedWithWord.add(addedEdges);
+
+      lastPositionAdded = positionAdded;
    }
 
    @Override

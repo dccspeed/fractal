@@ -25,6 +25,8 @@ import io.arabesque.utils.pool.IntArrayListPool;
 import com.koloboke.collect.map.hash.HashIntObjMaps;
 import com.koloboke.collect.map.hash.HashIntObjMap;
 
+import io.arabesque.optimization.CliqueInducedSubgraphs;
+
 import java.io.DataOutput;
 import java.io.IOException;
 import java.io.ObjectOutput;
@@ -45,10 +47,14 @@ public abstract class BasicEmbedding implements Embedding {
 
    // Active extensions
    protected ObjArrayList<HashIntSet> extensionLevels;
+   protected ObjArrayList<IntArrayList> extensionArrays;
    protected IntArrayList neighborhoodCuts;
    protected IntArrayList lastWords;
 
    protected HashIntObjMap cacheStore;
+
+   // state
+   protected CliqueInducedSubgraphs state;
 
    protected IntConsumer extensionWordIdsAdder = new IntConsumer() {
       @Override
@@ -91,6 +97,7 @@ public abstract class BasicEmbedding implements Embedding {
       edges = new IntArrayList();
       extensionWordMaps = IntIntMapPool.instance().createObject();
       extensionLevels = new ObjArrayList<HashIntSet>();
+      extensionArrays = new ObjArrayList<IntArrayList>();
       neighborhoodCuts = new IntArrayList();
       cacheStore = HashIntObjMaps.newMutableMap();
       nextExtensionLevel();
@@ -123,6 +130,16 @@ public abstract class BasicEmbedding implements Embedding {
    @Override
    public HashIntObjMap cacheStore() {
       return cacheStore;
+   }
+
+   @Override
+   public CliqueInducedSubgraphs getState() {
+      return state;
+   }
+
+   @Override
+   public void setState(CliqueInducedSubgraphs state) {
+      this.state = state;
    }
 
    @Override

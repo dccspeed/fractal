@@ -586,11 +586,11 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
 
       @Override
       public boolean test(int dst) {
-         IntCollection edgeIds = mainGraph.getEdgeIds(src, dst);
-         return !edgeIds.forEachWhile(
-               edgeLabelPredicate.setModifier(src < dst ? 1 : -1)
-               );
-         //return true;
+         //IntCollection edgeIds = mainGraph.getEdgeIds(src, dst);
+         //return !edgeIds.forEachWhile(
+         //      edgeLabelPredicate.setModifier(src < dst ? 1 : -1)
+         //      );
+         return true;
       }
    }
 

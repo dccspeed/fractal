@@ -393,7 +393,7 @@
          <artifactId>lz4</artifactId>
          <version>1.3.0</version>
       </dependency>
-      <dependency>
+      <!--<dependency>
          <groupId>org.yaml</groupId>
          <artifactId>snakeyaml</artifactId>
          <version>1.14</version>
@@ -403,18 +403,11 @@
          <artifactId>xbean-asm5-shaded</artifactId>
          <version>4.4</version>
       </dependency>
+      -->
       <dependency>
          <groupId>graphframes</groupId>
          <artifactId>graphframes</artifactId>
          <version>0.6.0-spark2.2-s_2.11</version>
-      </dependency>
-
-      <!-- Testing dependencies -->
-      <dependency>
-         <groupId>org.spockframework</groupId>
-         <artifactId>spock-core</artifactId>
-         <version>1.0-groovy-2.4</version>
-         <scope>test</scope>
       </dependency>
 
       <!-- akka dependencies -->

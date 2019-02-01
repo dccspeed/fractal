@@ -1,6 +1,8 @@
 package io.arabesque.optimization;
 
-import io.arabesque.graph.MainGraph;
+import com.koloboke.collect.IntCursor;
+
+import io.arabesque.graph.*;
 import io.arabesque.utils.collection.IntArrayList;
 
 public class BiggerNeighboursMainGraphDecorator extends OrderedNeighboursMainGraphDecorator {
@@ -8,14 +10,27 @@ public class BiggerNeighboursMainGraphDecorator extends OrderedNeighboursMainGra
     public BiggerNeighboursMainGraphDecorator(MainGraph underlyingMainGraph) {
         super(underlyingMainGraph);
 
-        for (int vertexId = 0; vertexId < orderedNeighbours.length; ++vertexId) {
-            IntArrayList orderedNeighboursOfVertex = orderedNeighbours[vertexId];
+        int removed = 0;
 
-            if (orderedNeighboursOfVertex == null) {
-                continue;
-            }
+        for (int v  = 0; v < underlyingMainGraph.getNumberVertices(); ++v) {
+           VertexNeighbourhood neighborhood = getVertexNeighbourhood(v);
+           if (neighborhood == null) continue;
 
-            orderedNeighboursOfVertex.removeSmaller(vertexId);
+           IntArrayList neighbors = neighborhood.getOrderedVertices();
+
+           for (int i = 0; i < neighbors.size(); ++i) {
+              int u = neighbors.getUnchecked(i);
+              if (u < v) {
+                 neighborhood.removeVertex(u);
+                 ++removed;
+              } else {
+                 break;
+              }
+           }
+
+           neighborhood.buildSortedNeighborhood();
         }
+
+        System.out.println("RemovedVertices " + removed);
     }
 }

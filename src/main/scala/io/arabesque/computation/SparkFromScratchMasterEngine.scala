@@ -1,5 +1,7 @@
 package io.arabesque.computation
 
+import com.koloboke.function.IntConsumer
+
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.{Iterator => JavaIterator}
@@ -305,6 +307,8 @@ class SparkFromScratchMasterEngine[E <: Embedding](
 
       var validEmbeddings: AtomicLong = _
 
+      var lastStepConsumer: LastStepConsumer[E] = _
+
       def apply(iter: JavaIterator[E], c: Computation[E]): Long = {
         if (c.getDepth() == 0) {
           val config = c.getConfig()
@@ -328,6 +332,8 @@ class SparkFromScratchMasterEngine[E <: Embedding](
               s"${CANONICAL_EMBEDDINGS}_${depth}")
             currComp = currComp.nextComputation
           }
+
+          lastStepConsumer = new LastStepConsumer[E]()
 
           validEmbeddings = execEngine.validEmbeddings
 
@@ -410,24 +416,30 @@ class SparkFromScratchMasterEngine[E <: Embedding](
 
       private def lastComputation(iter: JavaIterator[E],
           c: Computation[E]): Long = {
-        var currentEmbedding: E = null.asInstanceOf[E]
-        var addWords = 0L
-        var embeddingsGenerated = 0L
+        //var currentEmbedding: E = null.asInstanceOf[E]
+        //var addWords = 0L
+        //var embeddingsGenerated = 0L
 
-        while (iter.hasNext) {
-          currentEmbedding = iter.next
-          addWords += 1
-          if (c.filter(currentEmbedding)) {
-            embeddingsGenerated += 1
-            if (c.shouldExpand(currentEmbedding)) {
-              c.getExecutionEngine().processExpansion(currentEmbedding)
-            }
-            c.process(currentEmbedding)
-          }
-        }
+        //while (iter.hasNext) {
+        //  currentEmbedding = iter.next
+        //  addWords += 1
+        //  if (c.filter(currentEmbedding)) {
+        //    embeddingsGenerated += 1
+        //    if (c.shouldExpand(currentEmbedding)) {
+        //      c.getExecutionEngine().processExpansion(currentEmbedding)
+        //    }
+        //    c.process(currentEmbedding)
+        //  }
+        //}
 
-        awAccums(c.getDepth).add(addWords)
-        egAccums(c.getDepth).add(embeddingsGenerated)
+        //awAccums(c.getDepth).add(addWords)
+        //egAccums(c.getDepth).add(embeddingsGenerated)
+        
+        val embIter = iter.asInstanceOf[EmbeddingIterator[E]]
+        lastStepConsumer.set(embIter.getEmbedding(), c)
+        embIter.getWordIds().forEach(lastStepConsumer)
+        awAccums(c.getDepth).add(lastStepConsumer.addWords)
+        egAccums(c.getDepth).add(lastStepConsumer.embeddingsGenerated)
 
         0
       }
@@ -447,6 +459,31 @@ class SparkFromScratchMasterEngine[E <: Embedding](
         }
       }
     }
+  }
+}
+
+class LastStepConsumer[E <: Embedding] extends IntConsumer {
+  var embedding: E = _
+  var computation: Computation[E] = _
+  var addWords: Long = _
+  var embeddingsGenerated: Long = _
+
+  def set(embedding: E, computation: Computation[E]): LastStepConsumer[E] = {
+    this.embedding = embedding
+    this.computation = computation
+    this.addWords = 0L
+    this.embeddingsGenerated = 0L
+    this
+  }
+
+  override def accept(w: Int): Unit = {
+    addWords += 1
+    embedding.addWord(w)
+    if (computation.filter(embedding)) {
+      embeddingsGenerated += 1
+      computation.process(embedding)
+    }
+    embedding.removeLastWord()
   }
 }
 

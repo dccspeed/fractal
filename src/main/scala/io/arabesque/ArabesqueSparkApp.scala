@@ -56,6 +56,29 @@ class CliquesNaiveApp(val arabGraph: ArabesqueGraph,
   }
 }
 
+class CliquesOptApp(val arabGraph: ArabesqueGraph,
+    commStrategy: String,
+    numPartitions: Int,
+    explorationSteps: Int) extends ArabesqueSparkApp {
+  def execute: Unit = {
+    val cliquesRes = arabGraph.cliquesOpt(explorationSteps + 1).
+      set ("comm_strategy", commStrategy).
+      set ("num_partitions", numPartitions).
+      set ("arabesque.optimizations", "io.arabesque.optimization.CliqueOptimization").
+      explore(explorationSteps)
+
+    val (accums, elapsed) = SparkRunner.time {
+      cliquesRes.compute()
+    }
+
+    println (s"CliquesOptApp comm=${commStrategy}" +
+      s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
+      s" graph=${arabGraph} " +
+      s" accums=${accums} elapsed=${elapsed}"
+      )
+  }
+}
+
 class CliquesApp(val arabGraph: ArabesqueGraph,
     commStrategy: String,
     numPartitions: Int,
@@ -335,6 +358,9 @@ object SparkRunner {
           numPartitions, explorationSteps)
       case "cliques" =>
         new CliquesApp(arabGraph, commStrategy,
+          numPartitions, explorationSteps)
+      case "cliquesopt" =>
+        new CliquesOptApp(arabGraph, commStrategy,
           numPartitions, explorationSteps)
       case "maximalcliquesnaive" =>
         new MaximalCliquesNaiveApp(arabGraph, commStrategy,

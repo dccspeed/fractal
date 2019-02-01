@@ -149,14 +149,14 @@ public abstract class BasicComputation<E extends Embedding>
             return emptyIter;
         }
         
-        if (possibleExtensions.isEmpty()) {
-           //if (getConfig().shouldKeepMaximal()) {
-           //   return bypassIter.set(this, embedding, possibleExtensions);
-           //} else {
-              handleNoExpansions(embedding);
-              return emptyIter;
-           //}
-        }
+        //if (possibleExtensions.isEmpty()) {
+        //   //if (getConfig().shouldKeepMaximal()) {
+        //   //   return bypassIter.set(this, embedding, possibleExtensions);
+        //   //} else {
+        //      handleNoExpansions(embedding);
+        //      return emptyIter;
+        //   //}
+        //}
        
         currentEmbedding = embedding;
         return embeddingIterator.set(this, embedding, possibleExtensions);
@@ -337,7 +337,7 @@ public abstract class BasicComputation<E extends Embedding>
        BasicComputation<E> curr = this;
        EmbeddingIterator<E> consumer = null;
 
-       while (curr != null) {
+       while (curr != null && curr.nextComputation() != null) {
           if (curr.embeddingIterator != null &&
                 curr.embeddingIterator.isActive()) {
              consumer = curr.embeddingIterator.forkConsumer(local);

@@ -625,13 +625,14 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
    protected Edge parseEdge(StringTokenizer tokenizer, int vertexId) {
       int neighborId = Integer.parseInt(tokenizer.nextToken());
+      int neighborIdx = neighborId;
 
-      int neighborIdx = vertexIdMap.get(neighborId);
-      if (neighborIdx == -1) {
-         neighborIdx = vertexIdMap.size();
-         vertexIdMap.put(neighborId, neighborIdx);
-         addVertex(createVertex(neighborIdx, neighborId, -1));
-      }
+      //int neighborIdx = vertexIdMap.get(neighborId);
+      //if (neighborIdx == -1) {
+      //   neighborIdx = vertexIdMap.size();
+      //   vertexIdMap.put(neighborId, neighborIdx);
+      //   addVertex(createVertex(neighborIdx, neighborId, -1));
+      //}
 
       Edge edge;
 
@@ -653,7 +654,8 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
       int vertexIdx = vertexIdMap.get(vertexId);
       if (vertexIdx == -1) {
-         vertexIdx = vertexIdMap.size();
+         //vertexIdx = vertexIdMap.size();
+         vertexIdx = vertexId;
          vertexIdMap.put(vertexId, vertexIdx);
          Vertex vertex = createVertex(vertexIdx, vertexId, vertexLabel);
          addVertex(vertex);

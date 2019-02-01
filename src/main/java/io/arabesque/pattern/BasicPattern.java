@@ -904,11 +904,6 @@ public abstract class BasicPattern implements Pattern {
     protected PatternEdge createPatternEdge(Edge edge, int srcPos, int dstPos, int srcId) {
         PatternEdge patternEdge = patternEdgePool.createObject();
 
-        if (!(patternEdge instanceof LabelledPatternEdge)) {
-           throw new RuntimeException("Not labeled " + isGraphEdgeLabelled + 
-                 " " + patternEdge);
-        }
-
         patternEdge.setFromEdge(getConfig().getMainGraph(),
               edge, srcPos, dstPos, srcId);
 

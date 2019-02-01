@@ -15,6 +15,9 @@ import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.hash.HashIntSet;
 import com.koloboke.collect.map.hash.HashIntObjMap;
 
+import io.arabesque.optimization.CliqueInducedSubgraph;
+import io.arabesque.optimization.CliqueInducedSubgraphs;
+
 import java.io.Externalizable;
 
 public interface Embedding extends WritableObject, Externalizable {
@@ -75,4 +78,8 @@ public interface Embedding extends WritableObject, Externalizable {
           AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos);
 
    HashIntObjMap cacheStore();
+
+   CliqueInducedSubgraphs getState();
+   
+   void setState(CliqueInducedSubgraphs state);
 }

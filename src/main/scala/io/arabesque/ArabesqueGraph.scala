@@ -147,10 +147,16 @@ class ArabesqueGraph(
     import io.arabesque.pattern.Pattern
 
     val AGG_MOTIFS = "motifs"
+    //vertexInducedComputation.
+    //  aggregate [Pattern,LongWritable] (
+    //    AGG_MOTIFS,
+    //    (e,c,k) => { e.getPattern },
+    //    (e,c,v) => { v.set(1); v },
+    //    (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
     vertexInducedComputation.
-      aggregate [Pattern,LongWritable] (
+      aggregate [IntWritable,LongWritable] (
         AGG_MOTIFS,
-        (e,c,k) => { e.getPattern },
+        (e,c,k) => { k.set(e.getVertices().getLast() % 10); k },
         (e,c,v) => { v.set(1); v },
         (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
   }
@@ -200,10 +206,10 @@ class ArabesqueGraph(
     import org.apache.hadoop.io.{IntWritable, LongWritable}
     import scala.collection.JavaConverters._
     
-    val AGG_SUPPORT = "support"
+    val AGG_FREQS = "frequent_patterns"
 
     val bootstrap = edgeInducedComputation.
-      aggregate [Pattern,DomainSupport] (AGG_SUPPORT,
+      aggregate [Pattern,DomainSupport] (AGG_FREQS,
         (e,c,k) => { e.getPattern },
         (e,c,v) => { v.setSupport(support); v.setFromEmbedding(e); v },
         (v1,v2) => { v1.aggregate(v2); v1 },
@@ -213,7 +219,7 @@ class ArabesqueGraph(
     var iteration = 0
     var freqFrac = bootstrap
     var freqPatts = bootstrap.
-      aggregationStorage[Pattern,DomainSupport](AGG_SUPPORT)
+      aggregationStorage[Pattern,DomainSupport](AGG_FREQS)
       
     freqPatts.getMapping().asScala.foreach { case (pattern,supp) =>
       logInfo(s"FrequentPattern iteration=${iteration} ${pattern} ${supp}")
@@ -226,12 +232,12 @@ class ArabesqueGraph(
     while (continue) {
       iteration += 1
       freqFrac = freqFrac.
-        filterByAgg [Pattern,DomainSupport] (AGG_SUPPORT) {
+        filterByAgg [Pattern,DomainSupport] (AGG_FREQS) {
           (e,a) =>
             a.containsKey(e.getPattern)
         }.
         expand(1).
-        aggregate [Pattern,DomainSupport] (AGG_SUPPORT,
+        aggregate [Pattern,DomainSupport] (AGG_FREQS,
           (e,c,k) => { e.getPattern },
           (e,c,v) => { v.setSupport(support); v.setFromEmbedding(e); v },
           (v1,v2) => { v1.aggregate(v2); v1 },
@@ -239,7 +245,7 @@ class ArabesqueGraph(
           isIncremental = true)
 
       freqPatts = freqFrac.
-        aggregationStorage[Pattern,DomainSupport](AGG_SUPPORT)
+        aggregationStorage[Pattern,DomainSupport](AGG_FREQS)
     
       freqPatts.getMapping().asScala.foreach { case (pattern,supp) =>
         logInfo(s"FrequentPattern iteration=${iteration} ${pattern} ${supp}")
@@ -407,7 +413,25 @@ class ArabesqueGraph(
         (e,c,v) => { v.set(1); v },
         (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
   }
-
+  
+  def cliquesOpt(cliqueSize: Int): ArabesqueResult[VertexInducedEmbedding] = {
+    import io.arabesque.optimization.CliqueInducedSubgraph
+    import io.arabesque.optimization.CliqueInducedSubgraphs
+    import io.arabesque.optimization.CliqueInducedSubgraphPool
+    val CLIQUE_COUNTING = "clique_counting"
+    vertexInducedComputation.
+      extend { (e,c) =>
+        var state = e.getState()
+        if (state == null) {
+          state = new CliqueInducedSubgraphs(cliqueSize)
+          val extensions = state.extensions(e, c)
+          e.setState(state)
+          extensions
+        } else {
+          state.extensions(e, c)
+        }
+      }
+  }
   
   def maximalcliquesNaive: ArabesqueResult[VertexInducedEmbedding] = {
     import java.util.concurrent.ThreadLocalRandom

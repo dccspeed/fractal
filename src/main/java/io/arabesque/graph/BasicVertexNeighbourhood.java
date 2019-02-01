@@ -68,8 +68,6 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
       while (cur.moveNext()) {
          if (!vtag.contains(cur.key()) || !etag.contains(cur.value())) {
             removedNeighbourhoodMap.put(cur.key(), cur.value());
-            //verticesBitmap.remove(cur.key());
-            //edgesBitmap.remove(cur.value());
             cur.remove();
             --numVertices;
             ++removedEdges;

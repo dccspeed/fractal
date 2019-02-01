@@ -5,6 +5,7 @@ import com.koloboke.collect.IntCursor;
 import io.arabesque.embedding.Embedding;
 import io.arabesque.utils.collection.IntArrayList;
 import io.arabesque.utils.pool.IntArrayListPool;
+import io.arabesque.optimization.CliqueInducedSubgraph;
 import org.apache.log4j.Logger;
 
 import java.util.Iterator;
@@ -27,8 +28,6 @@ public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
       }
    };
 
-   protected EmbeddingIterator<E> parent;
-
    protected ReentrantLock rlock;
 
    protected Computation<E> computation;
@@ -47,8 +46,6 @@ public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
 
    protected boolean shouldRemoveLastWord;
    
-   protected boolean fromRemote;
-
    protected AtomicBoolean active;
 
    public String computationLabel() {
@@ -80,7 +77,6 @@ public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
       this.wordIds = wordIds;
       this.cur = wordIds.cursor();
       this.shouldRemoveLastWord = false;
-      this.fromRemote = true;
       this.active = new AtomicBoolean(true);
       return this;
    }
@@ -96,39 +92,40 @@ public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
       this.wordIds = wordIds;
       this.cur = wordIds.cursor();
       this.shouldRemoveLastWord = false;
-      this.fromRemote = false;
       this.active = new AtomicBoolean(true);
       return this;
    }
 
    public synchronized EmbeddingIterator<E> forkConsumer(boolean local) {
-      //if (!local && fromRemote) {
-      //   return emptyIter;
-      //}
-      // create new consumer
+      // create new consumer, adding just enough to verify if there is still
+      // work in it
       EmbeddingIterator<E> iter = new EmbeddingIterator<E>();
-      iter.parent = this;
+      iter.embedding = computation.getConfig().createEmbedding();
       iter.rlock = this.rlock;
       iter.computation = this.computation;
-      iter.prefix = IntArrayListPool.instance().createObject();
-      iter.prefix.addAll(this.prefix);
-
-      //iter.embedding = this.embedding;
-      iter.embedding = computation.getConfig().createEmbedding();
-      if (prefix.size() > 0) {
-         iter.embedding.addWord(prefix.getUnchecked(0));
-      }
-
-      for (int i = 1; i < prefix.size(); ++i) {
-         iter.embedding.nextExtensionLevel(embedding);
-         iter.embedding.addWord(prefix.getUnchecked(i));
-      }
-
       iter.lastHasNext = false;
       iter.cur = this.cur;
       iter.wordIds = this.wordIds;
       iter.shouldRemoveLastWord = false;
       iter.active = this.active;
+
+      // expensive operations, only do if iterator is not empty
+      if (iter.hasNext()) {
+         iter.prefix = IntArrayListPool.instance().createObject();
+         iter.prefix.addAll(this.prefix);
+
+         if (prefix.size() > 0) {
+            iter.embedding.addWord(prefix.getUnchecked(0));
+         }
+
+         for (int i = 1; i < prefix.size(); ++i) {
+            iter.embedding.nextExtensionLevel(embedding);
+            iter.embedding.addWord(prefix.getUnchecked(i));
+         }
+
+         iter.embedding.setState(null);
+      }
+
       return iter;
    }
 
@@ -160,8 +157,6 @@ public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
             // skip extensions that turn the embedding not canonical
             while (cur.moveNext()) {
                currElem = cur.elem();
-               // cur.remove();
-               //if (fromRemote || computation.filter(embedding, currElem)) {
                if (computation.filter(embedding, currElem)) {
                   lastHasNext = true;
                   return true;
@@ -202,7 +197,7 @@ public class EmbeddingIterator<E extends Embedding> implements Iterator<E> {
       return prefix;
    }
 
-   public Embedding getEmbedding() {
+   public E getEmbedding() {
       return embedding;
    }
 

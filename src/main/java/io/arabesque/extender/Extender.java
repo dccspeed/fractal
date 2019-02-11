@@ -11,8 +11,8 @@ import java.io.ObjectOutput;
 import java.io.Externalizable;
 import java.io.Serializable;
 
-abstract class Extender implements Serializable {
+abstract class Extender implements Externalizable {
    
-   protected abstract IntCollection extend(Computation c, Embedding e);
-
+   public abstract IntCollection extend(Embedding e, Computation c);
+   
 }

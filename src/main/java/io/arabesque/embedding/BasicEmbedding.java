@@ -7,6 +7,7 @@ import com.koloboke.function.IntConsumer;
 import com.koloboke.function.IntIntConsumer;
 import io.arabesque.computation.Computation;
 import io.arabesque.conf.Configuration;
+import io.arabesque.extender.GtrieExtender;
 import io.arabesque.graph.Vertex;
 import io.arabesque.graph.Edge;
 import io.arabesque.graph.LabelledEdge;
@@ -55,6 +56,7 @@ public abstract class BasicEmbedding implements Embedding {
 
    // state
    protected CliqueInducedSubgraphs state;
+   protected GtrieExtender extender;
 
    protected IntConsumer extensionWordIdsAdder = new IntConsumer() {
       @Override
@@ -109,6 +111,7 @@ public abstract class BasicEmbedding implements Embedding {
       reset();
    }
 
+   @Override
    public Configuration getConfig() {
       return configuration;
    }
@@ -130,6 +133,16 @@ public abstract class BasicEmbedding implements Embedding {
    @Override
    public HashIntObjMap cacheStore() {
       return cacheStore;
+   }
+
+   @Override
+   public GtrieExtender getExtender() {
+      return extender;
+   }
+
+   @Override
+   public void setExtender(GtrieExtender extender) {
+      this.extender = extender;
    }
 
    @Override

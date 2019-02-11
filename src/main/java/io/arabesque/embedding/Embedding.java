@@ -2,6 +2,7 @@ package io.arabesque.embedding;
 
 import io.arabesque.conf.Configuration;
 import io.arabesque.computation.Computation;
+import io.arabesque.extender.GtrieExtender;
 import io.arabesque.graph.Vertex;
 import io.arabesque.graph.Edge;
 import io.arabesque.graph.LabelledEdge;
@@ -22,6 +23,8 @@ import java.io.Externalizable;
 
 public interface Embedding extends WritableObject, Externalizable {
     void init(Configuration configuration);
+
+    Configuration getConfig();
 
     IntArrayList getWords();
 
@@ -82,4 +85,10 @@ public interface Embedding extends WritableObject, Externalizable {
    CliqueInducedSubgraphs getState();
    
    void setState(CliqueInducedSubgraphs state);
+
+   GtrieExtender getExtender();
+
+   void setExtender(GtrieExtender extender);
+
+
 }

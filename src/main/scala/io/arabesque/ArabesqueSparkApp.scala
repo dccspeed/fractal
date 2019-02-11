@@ -18,6 +18,20 @@ trait ArabesqueSparkApp {
   def execute: Unit
 }
 
+class VSubgraphsApp(val arabGraph: ArabesqueGraph,
+    commStrategy: String,
+    numPartitions: Int,
+    explorationSteps: Int) extends ArabesqueSparkApp {
+  def execute: Unit = {
+    val vsubgraphsRes = arabGraph.vertexInducedComputation.
+      set ("comm_strategy", commStrategy).
+      set ("num_partitions", numPartitions).
+      exploreExp (explorationSteps)
+
+    vsubgraphsRes.compute()
+  }
+}
+
 class MotifsApp(val arabGraph: ArabesqueGraph,
     commStrategy: String,
     numPartitions: Int,
@@ -31,6 +45,20 @@ class MotifsApp(val arabGraph: ArabesqueGraph,
     motifsRes.embeddings((_,_) => false).count()
 
     //val patterns = motifsRes.aggregation("motifs", (_,_) => true)
+  }
+}
+
+class MotifsGtrieApp(val arabGraph: ArabesqueGraph,
+    commStrategy: String,
+    numPartitions: Int,
+    explorationSteps: Int) extends ArabesqueSparkApp {
+  def execute: Unit = {
+    val motifsRes = arabGraph.motifsGtrie(explorationSteps + 1).
+      set ("comm_strategy", commStrategy).
+      set ("num_partitions", numPartitions).
+      explore(explorationSteps)
+
+    motifsRes.compute()
   }
 }
 
@@ -202,6 +230,8 @@ class FSMApp(val arabGraph: ArabesqueGraph,
     explorationSteps: Int,
     support: Int) extends ArabesqueSparkApp {
   def execute: Unit = {
+    arabGraph.set ("comm_strategy", commStrategy)
+    arabGraph.set ("num_partitions", numPartitions)
     arabGraph.fsm2(support, explorationSteps)
   }
 }
@@ -350,8 +380,14 @@ object SparkRunner {
     val arabGraph = arab.textFile (graphPath, graphClass = graphClass)
 
     val app = algorithm.toLowerCase match {
+      case "vsubgraphs" =>
+        new VSubgraphsApp(arabGraph, commStrategy,
+          numPartitions, explorationSteps)
       case "motifs" =>
         new MotifsApp(arabGraph, commStrategy,
+          numPartitions, explorationSteps)
+      case "motifsgtrie" =>
+        new MotifsGtrieApp(arabGraph, commStrategy,
           numPartitions, explorationSteps)
       case "cliquesnaive" =>
         new CliquesNaiveApp(arabGraph, commStrategy,

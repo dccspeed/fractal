@@ -69,7 +69,7 @@
       <scala.version>2.11.8</scala.version>
       <scala.binary.version>2.11</scala.binary.version>
       <giraph.scope>compile</giraph.scope>
-      <hadoop.scope>provided</hadoop.scope>
+      <hadoop.scope>compile</hadoop.scope>
       <spark.scope>provided</spark.scope>
       <scala.scope>provided</scala.scope>
       <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -224,6 +224,9 @@
                            <artifact>*:*</artifact>
                            <excludes>
                               <exclude>META-INF/LICENSE</exclude>
+                              <exclude>META-INF/*.SF</exclude>
+                              <exclude>META-INF/*.DSA</exclude>
+                              <exclude>META-INF/*.RSA</exclude>
                            </excludes>
                         </filter>
                      </filters>

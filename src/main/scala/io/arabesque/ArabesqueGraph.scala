@@ -147,16 +147,37 @@ class ArabesqueGraph(
     import io.arabesque.pattern.Pattern
 
     val AGG_MOTIFS = "motifs"
-    //vertexInducedComputation.
-    //  aggregate [Pattern,LongWritable] (
-    //    AGG_MOTIFS,
-    //    (e,c,k) => { e.getPattern },
-    //    (e,c,v) => { v.set(1); v },
-    //    (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
     vertexInducedComputation.
+      aggregate [Pattern,LongWritable] (
+        AGG_MOTIFS,
+        (e,c,k) => { e.getPattern },
+        (e,c,v) => { v.set(1); v },
+        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
+  }
+  
+  /**
+   * Return a motif computation containing:
+   * - Sum aggregation with key=Pattern and value=LongWritable
+   */
+  def motifsGtrie(size: Int): ArabesqueResult[VertexInducedEmbedding] = {
+    import org.apache.hadoop.io.IntWritable
+    import org.apache.hadoop.io.LongWritable
+    import io.arabesque.extender.GtrieExtender
+
+    val AGG_MOTIFS = "motifs"
+    vertexInducedComputation.
+      extend { (e,c) =>
+        var extender = e.getExtender()
+        if (extender == null) {
+          extender = GtrieExtender.create(size)
+          e.setExtender(extender)
+        }
+        extender.extend(e,c)
+      }.
       aggregate [IntWritable,LongWritable] (
         AGG_MOTIFS,
-        (e,c,k) => { k.set(e.getVertices().getLast() % 10); k },
+        (e,c,k) => { k.set(e.getExtender().pattern(e)); k },
+        //(e,c,k) => { k.set(e.getExtender().pattern(e)); println(s"${e} ${Integer.toBinaryString(k.get())} ${e.getPattern}"); k },
         (e,c,v) => { v.set(1); v },
         (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
   }

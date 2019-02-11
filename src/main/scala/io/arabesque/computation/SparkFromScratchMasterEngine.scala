@@ -1,10 +1,9 @@
 package io.arabesque.computation
 
-import com.koloboke.function.IntConsumer
-
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.{Iterator => JavaIterator}
+import java.util.function.IntConsumer
 
 import akka.actor._
 import akka.util.Timeout
@@ -431,7 +430,6 @@ class SparkFromScratchMasterEngine[E <: Embedding](
         //    c.process(currentEmbedding)
         //  }
         //}
-
         //awAccums(c.getDepth).add(addWords)
         //egAccums(c.getDepth).add(embeddingsGenerated)
         

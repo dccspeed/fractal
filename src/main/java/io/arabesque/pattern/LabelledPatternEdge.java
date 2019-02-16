@@ -55,6 +55,7 @@ public class LabelledPatternEdge extends PatternEdge {
         }
     }
 
+    @Override
     public int getLabel() {
         return label;
     }
@@ -96,7 +97,7 @@ public class LabelledPatternEdge extends PatternEdge {
 
     @Override
     public String toString() {
-        return ("[" + getSrcPos() + "(" + getSrcLabel() + ")--(" + label + ")--" + getDestPos() + "(" + getDestLabel() + ")]");
+        return ("[(" + getSrcPos() + "," + getSrcLabel() + "),(" + label + ")-(" + getDestPos() + "," + getDestLabel() + ")]");
     }
 
     @Override

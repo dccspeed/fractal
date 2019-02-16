@@ -5,6 +5,7 @@ import java.util.concurrent.atomic._
 
 import akka.actor._
 import io.arabesque.cache.LZ4ObjectCache
+import io.arabesque.conf.Configuration
 import io.arabesque.embedding._
 import io.arabesque.utils.Logging
 import org.apache.hadoop.io.SequenceFile.{Writer => SeqWriter}

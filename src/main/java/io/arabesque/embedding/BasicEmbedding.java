@@ -7,6 +7,7 @@ import com.koloboke.function.IntConsumer;
 import com.koloboke.function.IntIntConsumer;
 import io.arabesque.computation.Computation;
 import io.arabesque.conf.Configuration;
+import io.arabesque.extender.GtrieExtender;
 import io.arabesque.graph.Vertex;
 import io.arabesque.graph.Edge;
 import io.arabesque.graph.LabelledEdge;
@@ -24,6 +25,8 @@ import io.arabesque.utils.pool.IntIntMapPool;
 import io.arabesque.utils.pool.IntArrayListPool;
 import com.koloboke.collect.map.hash.HashIntObjMaps;
 import com.koloboke.collect.map.hash.HashIntObjMap;
+
+import io.arabesque.optimization.CliqueInducedSubgraphs;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -45,10 +48,15 @@ public abstract class BasicEmbedding implements Embedding {
 
    // Active extensions
    protected ObjArrayList<HashIntSet> extensionLevels;
+   protected ObjArrayList<IntArrayList> extensionArrays;
    protected IntArrayList neighborhoodCuts;
    protected IntArrayList lastWords;
 
    protected HashIntObjMap cacheStore;
+
+   // state
+   protected CliqueInducedSubgraphs state;
+   protected GtrieExtender extender;
 
    protected IntConsumer extensionWordIdsAdder = new IntConsumer() {
       @Override
@@ -91,6 +99,7 @@ public abstract class BasicEmbedding implements Embedding {
       edges = new IntArrayList();
       extensionWordMaps = IntIntMapPool.instance().createObject();
       extensionLevels = new ObjArrayList<HashIntSet>();
+      extensionArrays = new ObjArrayList<IntArrayList>();
       neighborhoodCuts = new IntArrayList();
       cacheStore = HashIntObjMaps.newMutableMap();
       nextExtensionLevel();
@@ -102,6 +111,7 @@ public abstract class BasicEmbedding implements Embedding {
       reset();
    }
 
+   @Override
    public Configuration getConfig() {
       return configuration;
    }
@@ -123,6 +133,26 @@ public abstract class BasicEmbedding implements Embedding {
    @Override
    public HashIntObjMap cacheStore() {
       return cacheStore;
+   }
+
+   @Override
+   public GtrieExtender getExtender() {
+      return extender;
+   }
+
+   @Override
+   public void setExtender(GtrieExtender extender) {
+      this.extender = extender;
+   }
+
+   @Override
+   public CliqueInducedSubgraphs getState() {
+      return state;
+   }
+
+   @Override
+   public void setState(CliqueInducedSubgraphs state) {
+      this.state = state;
    }
 
    @Override

@@ -75,7 +75,7 @@ public class EdgeListGraph<V,E> extends BasicMainGraph<V,E> {
       if (vertexIdx == -1) {
          vertexIdx = vertexIdMap.size();
          vertexIdMap.put(vertexId, vertexIdx);
-         Vertex vertex = createVertex(vertexIdx, 1);
+         Vertex vertex = createVertex(vertexIdx, vertexId, 1);
          addVertex(vertex);
          return vertex;
       } else {

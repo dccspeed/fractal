@@ -7,6 +7,7 @@ import com.koloboke.collect.map.IntIntMap;
 import org.apache.hadoop.io.Writable;
 
 import java.io.Externalizable;
+import java.io.IOException;
 
 public interface Pattern extends Writable, Externalizable {
     Pattern copy();
@@ -46,6 +47,8 @@ public interface Pattern extends Writable, Externalizable {
     public boolean testSymmetryBreakerPos(Embedding embedding, int pos);
     
     public int sbLowerBound(Embedding embedding, int pos);
+
+    public void readSymmetryBreakingConditions(String path) throws IOException;
     
     public Configuration getConfig();
 

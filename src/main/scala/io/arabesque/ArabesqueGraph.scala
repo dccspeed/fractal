@@ -60,6 +60,7 @@ class ArabesqueGraph(
     val config = new SparkConfiguration[EdgeInducedEmbedding]
     config.set ("input_graph_path", path)
     config.set ("input_graph_local", local)
+    config.set ("edge_labelled", true)
     config.setEmbeddingClass (computation.getEmbeddingClass())
     config.setMainGraphId (graphId)
     config.initialize()
@@ -74,8 +75,10 @@ class ArabesqueGraph(
       i += 1
     }
 
-    val pattern = config.createPattern
+    val pattern = config.createPattern().asInstanceOf[BasicPattern]
     pattern.setEmbedding(embedding)
+    pattern.readSymmetryBreakingConditions(s"${path}.sb")
+    logInfo(s"SymmetryBreakingConditions: ${pattern.vsymmetryBreaker()}")
     pattern
   }
 
@@ -144,25 +147,39 @@ class ArabesqueGraph(
     import io.arabesque.pattern.Pattern
 
     val AGG_MOTIFS = "motifs"
-    vertexInducedComputation
-    //vertexInducedComputation.
-    //  aggregate [Pattern,LongWritable] (
-    //    AGG_MOTIFS,
-    //    (e,c,k) => { e.getPattern },
-    //    (e,c,v) => { v.set(1); v },
-    //    (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
+    vertexInducedComputation.
+      aggregate [Pattern,LongWritable] (
+        AGG_MOTIFS,
+        (e,c,k) => { e.getPattern },
+        (e,c,v) => { v.set(1); v },
+        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
+  }
+  
+  /**
+   * Return a motif computation containing:
+   * - Sum aggregation with key=Pattern and value=LongWritable
+   */
+  def motifsGtrie(size: Int): ArabesqueResult[VertexInducedEmbedding] = {
+    import org.apache.hadoop.io.IntWritable
+    import org.apache.hadoop.io.LongWritable
+    import io.arabesque.extender.GtrieExtender
 
-      //withAggregationRegistered [Pattern,LongWritable] (
-      //  AGG_MOTIFS)(
-      //    (e,c,k) => e.getPattern,
-      //    new Function3[VertexInducedEmbedding, Computation[VertexInducedEmbedding], LongWritable, LongWritable] with Serializable {
-      //      @transient lazy val reusableUnit = new LongWritable(1)
-      //      def apply(e: VertexInducedEmbedding,
-      //          c: Computation[VertexInducedEmbedding], k: LongWritable): LongWritable = {
-      //        reusableUnit
-      //      }
-      //    },
-      //    (v1, v2) => {v1.set (v1.get + v2.get); v1})
+    val AGG_MOTIFS = "motifs"
+    vertexInducedComputation.
+      extend { (e,c) =>
+        var extender = e.getExtender()
+        if (extender == null) {
+          extender = GtrieExtender.create(size)
+          e.setExtender(extender)
+        }
+        extender.extend(e,c)
+      }.
+      aggregate [IntWritable,LongWritable] (
+        AGG_MOTIFS,
+        (e,c,k) => { k.set(e.getExtender().pattern(e)); k },
+        //(e,c,k) => { k.set(e.getExtender().pattern(e)); println(s"${e} ${Integer.toBinaryString(k.get())} ${e.getPattern}"); k },
+        (e,c,v) => { v.set(1); v },
+        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
   }
 
   /**
@@ -210,10 +227,10 @@ class ArabesqueGraph(
     import org.apache.hadoop.io.{IntWritable, LongWritable}
     import scala.collection.JavaConverters._
     
-    val AGG_SUPPORT = "support"
+    val AGG_FREQS = "frequent_patterns"
 
     val bootstrap = edgeInducedComputation.
-      aggregate [Pattern,DomainSupport] (AGG_SUPPORT,
+      aggregate [Pattern,DomainSupport] (AGG_FREQS,
         (e,c,k) => { e.getPattern },
         (e,c,v) => { v.setSupport(support); v.setFromEmbedding(e); v },
         (v1,v2) => { v1.aggregate(v2); v1 },
@@ -223,7 +240,7 @@ class ArabesqueGraph(
     var iteration = 0
     var freqFrac = bootstrap
     var freqPatts = bootstrap.
-      aggregationStorage[Pattern,DomainSupport](AGG_SUPPORT)
+      aggregationStorage[Pattern,DomainSupport](AGG_FREQS)
       
     freqPatts.getMapping().asScala.foreach { case (pattern,supp) =>
       logInfo(s"FrequentPattern iteration=${iteration} ${pattern} ${supp}")
@@ -236,12 +253,12 @@ class ArabesqueGraph(
     while (continue) {
       iteration += 1
       freqFrac = freqFrac.
-        filterByAgg [Pattern,DomainSupport] (AGG_SUPPORT) {
+        filterByAgg [Pattern,DomainSupport] (AGG_FREQS) {
           (e,a) =>
             a.containsKey(e.getPattern)
         }.
         expand(1).
-        aggregate [Pattern,DomainSupport] (AGG_SUPPORT,
+        aggregate [Pattern,DomainSupport] (AGG_FREQS,
           (e,c,k) => { e.getPattern },
           (e,c,v) => { v.setSupport(support); v.setFromEmbedding(e); v },
           (v1,v2) => { v1.aggregate(v2); v1 },
@@ -249,7 +266,7 @@ class ArabesqueGraph(
           isIncremental = true)
 
       freqPatts = freqFrac.
-        aggregationStorage[Pattern,DomainSupport](AGG_SUPPORT)
+        aggregationStorage[Pattern,DomainSupport](AGG_FREQS)
     
       freqPatts.getMapping().asScala.foreach { case (pattern,supp) =>
         logInfo(s"FrequentPattern iteration=${iteration} ${pattern} ${supp}")
@@ -417,7 +434,25 @@ class ArabesqueGraph(
         (e,c,v) => { v.set(1); v },
         (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
   }
-
+  
+  def cliquesOpt(cliqueSize: Int): ArabesqueResult[VertexInducedEmbedding] = {
+    import io.arabesque.optimization.CliqueInducedSubgraph
+    import io.arabesque.optimization.CliqueInducedSubgraphs
+    import io.arabesque.optimization.CliqueInducedSubgraphPool
+    val CLIQUE_COUNTING = "clique_counting"
+    vertexInducedComputation.
+      extend { (e,c) =>
+        var state = e.getState()
+        if (state == null) {
+          state = new CliqueInducedSubgraphs(cliqueSize)
+          val extensions = state.extensions(e, c)
+          e.setState(state)
+          extensions
+        } else {
+          state.extensions(e, c)
+        }
+      }
+  }
   
   def maximalcliquesNaive: ArabesqueResult[VertexInducedEmbedding] = {
     import java.util.concurrent.ThreadLocalRandom
@@ -1560,6 +1595,7 @@ class ArabesqueGraph(
       }.
       aggregate [IntWritable,LongWritable] (
         SUBGRAPH_COUNTING,
+        //(e,c,k) => { k.set(0); println(s"vertices ${e.getVertices().toIntArray().map(v => c.getConfig().getMainGraph[BasicMainGraph[_,_]]().getVertex(v).getVertexOriginalId()).mkString(" ")}"); k },
         (e,c,k) => { k.set(0); k },
         (e,c,v) => { v.set(1); v },
         (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })

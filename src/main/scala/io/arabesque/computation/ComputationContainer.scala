@@ -679,7 +679,7 @@ case class VComputationContainer [E <: VertexInducedEmbedding] (
     wordFilterOpt.getOrElse (
       new WordFilterFunc [E] {
         def apply(e: E, w: Int, c: Computation[E]): Boolean = {
-          e.isCanonicalEmbeddingWithWord(w)
+          true
         }
       }
     )

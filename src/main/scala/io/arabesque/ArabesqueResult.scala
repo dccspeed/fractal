@@ -148,6 +148,10 @@ case class ArabesqueResult [E <: Embedding : ClassTag] (
     }
   }
 
+  def compute(): Map[String,Long] = {
+    masterEngine.aggAccums.map{case (k,v) => (k, v.value.longValue)}
+  }
+
   /**
    * Output: embeddings
    */

@@ -416,7 +416,7 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
     public IntCursor cursor() {
         return new IntArrayListCursor();
     }
-    
+
     public IntCursor reverseCursor() {
         return new IntArrayListReverseCursor();
     }
@@ -455,6 +455,10 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
         return add((int) integer);
     }
 
+    public void addUnchecked(int newValue) {
+       backingArray[numElements++] = newValue;
+    }
+    
     public boolean add(int newValue) {
         ensureCanAddNewElement();
         backingArray[numElements++] = newValue;

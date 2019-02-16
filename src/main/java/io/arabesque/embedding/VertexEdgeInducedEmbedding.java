@@ -7,6 +7,7 @@ import io.arabesque.computation.Computation;
 import io.arabesque.conf.Configuration;
 import io.arabesque.graph.Edge;
 import io.arabesque.graph.VertexNeighbourhood;
+import io.arabesque.graph.MainGraph;
 import io.arabesque.pattern.Pattern;
 import io.arabesque.pattern.PatternEdge;
 import io.arabesque.pattern.PatternEdgeArrayList;
@@ -19,6 +20,7 @@ import java.io.DataInput;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.util.Arrays;
+import java.util.function.IntPredicate;
 
 public class VertexEdgeInducedEmbedding extends BasicEmbedding {
    // Consumers {{
@@ -41,6 +43,9 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
    private ValidWordIdAdder extensionWordIdsAdder = new ValidWordIdAdder();
    
    private EdgeTaggerConsumer edgeTagger = new EdgeTaggerConsumer();
+
+   private ValidNeighborhoodPredicate validNeighborhoodPredicate =
+      new ValidNeighborhoodPredicate();
 
    @Override
    public void init(Configuration config) {
@@ -67,7 +72,7 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
    public int getNumWords() {
       return vertices.size();
    }
-
+   
    @Override
    public String toOutputString() {
       StringBuilder sb = new StringBuilder();
@@ -264,7 +269,10 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
       // find out the pattern edges that should connect the next vertex
       IntArrayList neighborhoodSources =
          IntArrayListPool.instance().createObject();
+      IntArrayList neighborhoodEdgeLabels =
+         IntArrayListPool.instance().createObject();
       neighborhoodSources.clear();
+      neighborhoodEdgeLabels.clear();
       PatternEdgeArrayList patternEdges = pattern.getEdges();
       int numPatternEdges = patternEdges.size();
       for (int i = 0; i < numPatternEdges; ++i) {
@@ -281,6 +289,7 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
                      " pattern=" + pattern);
             }
             neighborhoodSources.add(srcPos);
+            neighborhoodEdgeLabels.add(pedge.getLabel());
          }
       }
 
@@ -291,8 +300,9 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
       // if we are extending through a single neighborhood, we do not need to
       // perform any intersection at all
       if (numNeighborhoods == 1) {
+         int srcPos = neighborhoodSources.getUnchecked(0);
          neighborhood = configuration.getMainGraph().getVertexNeighbourhood(
-                  vertices.getUnchecked(neighborhoodSources.getUnchecked(0)));
+                  vertices.getUnchecked(srcPos));
          if (neighborhood != null) {
             IntArrayList orderedVertices = neighborhood.getOrderedVertices();
             int numOrderedVertices = orderedVertices.size();
@@ -308,14 +318,24 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
                int vertexId = orderedVertices.getUnchecked(i);
                int vertexLabel = configuration.getMainGraph().
                   getVertex(vertexId).getVertexLabel();
+
                if (vertexLabel == targetLabel) {
-                  extensionWordIds.add(vertexId);
+                  // set edge label predicate
+                  validNeighborhoodPredicate.set(configuration.getMainGraph(),
+                        neighborhoodEdgeLabels.getUnchecked(0),
+                        vertices.getUnchecked(srcPos));
+
+                  // edge label passes the test
+                  if (validNeighborhoodPredicate.test(vertexId)) {
+                     extensionWordIds.add(vertexId);
+                  }
                }
             }
          }
 
          // clean-up and return
          IntArrayListPool.instance().reclaimObject(neighborhoodSources);
+         IntArrayListPool.instance().reclaimObject(neighborhoodEdgeLabels);
 
          return;
       }
@@ -329,8 +349,9 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
       // ni tracks the list we are intersecting
       // we start by just copying the first one
       int ni = 0;
+      int srcPos = neighborhoodSources.getUnchecked(ni);
       neighborhood = configuration.getMainGraph().getVertexNeighbourhood(
-            vertices.getUnchecked(neighborhoodSources.getUnchecked(ni)));
+            vertices.getUnchecked(srcPos));
       orderedVertices = neighborhood.getOrderedVertices();
       i1 = 0;
       size1 = orderedVertices.size();
@@ -341,7 +362,15 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
          int vertexLabel = configuration.getMainGraph().
             getVertex(vertexId).getVertexLabel();
          if (vertexLabel == targetLabel) {
-            intersect1.add(vertexId);
+            // set edge label predicate
+            validNeighborhoodPredicate.set(configuration.getMainGraph(),
+                  neighborhoodEdgeLabels.getUnchecked(ni),
+                  vertices.getUnchecked(srcPos));
+
+            // edge label passes the test
+            if (validNeighborhoodPredicate.test(vertexId)) {
+               intersect1.add(vertexId);
+            }
          }
       }
       //intersect1.transferFrom(orderedVertices, i1, 0, size1 - i1);
@@ -349,11 +378,12 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
 
       // intersect the current with a new neighborhood until the last but one
       for (; ni < numNeighborhoods - 1; ++ni) {
+         srcPos = neighborhoodSources.getUnchecked(ni);
          i1 = 0;
          size1 = intersect1.size();
 
          neighborhood = configuration.getMainGraph().getVertexNeighbourhood(
-               vertices.getUnchecked(neighborhoodSources.getUnchecked(ni)));
+               vertices.getUnchecked(srcPos));
          orderedVertices = neighborhood.getOrderedVertices();
          i2 = 0;
          size2 = orderedVertices.size();
@@ -363,9 +393,15 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
 
          intersect2.clear();
 
+         // set edge label predicate
+         validNeighborhoodPredicate.set(configuration.getMainGraph(),
+               neighborhoodEdgeLabels.getUnchecked(ni),
+               vertices.getUnchecked(srcPos));
+
          Utils.sintersect(intersect1, orderedVertices,
                i1, size1, i2, size2,
-               intersect2);
+               intersect2,
+               validNeighborhoodPredicate);
 
          IntArrayList tmp = intersect1;
          intersect1 = intersect2;
@@ -375,21 +411,29 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
       // the last intersection we write directly to the output set
       i1 = 0;
       size1 = intersect1.size();
+      srcPos = neighborhoodSources.getUnchecked(ni);
 
       neighborhood = configuration.getMainGraph().getVertexNeighbourhood(
-            vertices.getUnchecked(neighborhoodSources.getUnchecked(ni)));
+            vertices.getUnchecked(srcPos));
       orderedVertices = neighborhood.getOrderedVertices();
       i2 = 0;
       size2 = orderedVertices.size();
 
       for (; i2 < size2 &&
             orderedVertices.getUnchecked(i2) <= lowerBound; ++i2);
+         
+      // set edge label predicate
+      validNeighborhoodPredicate.set(configuration.getMainGraph(),
+            neighborhoodEdgeLabels.getUnchecked(ni),
+            vertices.getUnchecked(srcPos));
 
       Utils.sintersect(intersect1, orderedVertices,
             i1, size1, i2, size2,
-            extensionWordIds);
+            extensionWordIds,
+            validNeighborhoodPredicate);
 
       IntArrayListPool.instance().reclaimObject(neighborhoodSources);
+      IntArrayListPool.instance().reclaimObject(neighborhoodEdgeLabels);
       IntArrayListPool.instance().reclaimObject(intersect1);
       IntArrayListPool.instance().reclaimObject(intersect2);
 
@@ -500,6 +544,53 @@ public class VertexEdgeInducedEmbedding extends BasicEmbedding {
       public void accept(int i) {
          edges.add(i);
          ++numAdded;
+      }
+   }
+
+   private class EdgeLabelPredicate implements IntPredicate {
+
+      private MainGraph mainGraph;
+      private int targetLabel;
+      private int mod = 1;
+      
+      public EdgeLabelPredicate setModifier(int mod) {
+         this.mod = mod;
+         return this;
+      }
+
+      public EdgeLabelPredicate set(MainGraph mainGraph, int targetLabel) {
+         this.mainGraph = mainGraph;
+         this.targetLabel = targetLabel;
+         return this;
+      }
+
+      @Override
+      public boolean test(int edgeId) {
+         return !mainGraph.getEdge(edgeId).validateLabel(mod * targetLabel);
+      }
+   }
+
+   private class ValidNeighborhoodPredicate implements IntPredicate {
+      
+      private MainGraph mainGraph;
+      private int src;
+      private EdgeLabelPredicate edgeLabelPredicate = new EdgeLabelPredicate();
+
+      public ValidNeighborhoodPredicate set(MainGraph mainGraph,
+            int targetLabel, int src) {
+         this.mainGraph = mainGraph;
+         this.src = src;
+         this.edgeLabelPredicate.set(mainGraph, targetLabel);
+         return this;
+      }
+
+      @Override
+      public boolean test(int dst) {
+         //IntCollection edgeIds = mainGraph.getEdgeIds(src, dst);
+         //return !edgeIds.forEachWhile(
+         //      edgeLabelPredicate.setModifier(src < dst ? 1 : -1)
+         //      );
+         return true;
       }
    }
 

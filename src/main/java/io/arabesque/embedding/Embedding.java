@@ -2,6 +2,7 @@ package io.arabesque.embedding;
 
 import io.arabesque.conf.Configuration;
 import io.arabesque.computation.Computation;
+import io.arabesque.extender.GtrieExtender;
 import io.arabesque.graph.Vertex;
 import io.arabesque.graph.Edge;
 import io.arabesque.graph.LabelledEdge;
@@ -15,10 +16,15 @@ import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.hash.HashIntSet;
 import com.koloboke.collect.map.hash.HashIntObjMap;
 
+import io.arabesque.optimization.CliqueInducedSubgraph;
+import io.arabesque.optimization.CliqueInducedSubgraphs;
+
 import java.io.Externalizable;
 
 public interface Embedding extends WritableObject, Externalizable {
     void init(Configuration configuration);
+
+    Configuration getConfig();
 
     IntArrayList getWords();
 
@@ -75,4 +81,14 @@ public interface Embedding extends WritableObject, Externalizable {
           AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos);
 
    HashIntObjMap cacheStore();
+
+   CliqueInducedSubgraphs getState();
+   
+   void setState(CliqueInducedSubgraphs state);
+
+   GtrieExtender getExtender();
+
+   void setExtender(GtrieExtender extender);
+
+
 }

@@ -18,6 +18,20 @@ trait ArabesqueSparkApp {
   def execute: Unit
 }
 
+class VSubgraphsApp(val arabGraph: ArabesqueGraph,
+    commStrategy: String,
+    numPartitions: Int,
+    explorationSteps: Int) extends ArabesqueSparkApp {
+  def execute: Unit = {
+    val vsubgraphsRes = arabGraph.vertexInducedComputation.
+      set ("comm_strategy", commStrategy).
+      set ("num_partitions", numPartitions).
+      exploreExp (explorationSteps)
+
+    vsubgraphsRes.compute()
+  }
+}
+
 class MotifsApp(val arabGraph: ArabesqueGraph,
     commStrategy: String,
     numPartitions: Int,
@@ -31,6 +45,20 @@ class MotifsApp(val arabGraph: ArabesqueGraph,
     motifsRes.embeddings((_,_) => false).count()
 
     //val patterns = motifsRes.aggregation("motifs", (_,_) => true)
+  }
+}
+
+class MotifsGtrieApp(val arabGraph: ArabesqueGraph,
+    commStrategy: String,
+    numPartitions: Int,
+    explorationSteps: Int) extends ArabesqueSparkApp {
+  def execute: Unit = {
+    val motifsRes = arabGraph.motifsGtrie(explorationSteps + 1).
+      set ("comm_strategy", commStrategy).
+      set ("num_partitions", numPartitions).
+      explore(explorationSteps)
+
+    motifsRes.compute()
   }
 }
 
@@ -52,6 +80,28 @@ class CliquesNaiveApp(val arabGraph: ArabesqueGraph,
       s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
       s" graph=${arabGraph} " +
       s" counting=${counting.head._2} elapsed=${elapsed}"
+      )
+  }
+}
+
+class CliquesOptApp(val arabGraph: ArabesqueGraph,
+    commStrategy: String,
+    numPartitions: Int,
+    explorationSteps: Int) extends ArabesqueSparkApp {
+  def execute: Unit = {
+    val cliquesRes = arabGraph.cliquesOpt(explorationSteps + 1).
+      set ("comm_strategy", commStrategy).
+      set ("num_partitions", numPartitions).
+      explore(explorationSteps)
+
+    val (accums, elapsed) = SparkRunner.time {
+      cliquesRes.compute()
+    }
+
+    println (s"CliquesOptApp comm=${commStrategy}" +
+      s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
+      s" graph=${arabGraph} " +
+      s" accums=${accums} elapsed=${elapsed}"
       )
   }
 }
@@ -179,6 +229,8 @@ class FSMApp(val arabGraph: ArabesqueGraph,
     explorationSteps: Int,
     support: Int) extends ArabesqueSparkApp {
   def execute: Unit = {
+    arabGraph.set ("comm_strategy", commStrategy)
+    arabGraph.set ("num_partitions", numPartitions)
     arabGraph.fsm2(support, explorationSteps)
   }
 }
@@ -327,14 +379,23 @@ object SparkRunner {
     val arabGraph = arab.textFile (graphPath, graphClass = graphClass)
 
     val app = algorithm.toLowerCase match {
+      case "vsubgraphs" =>
+        new VSubgraphsApp(arabGraph, commStrategy,
+          numPartitions, explorationSteps)
       case "motifs" =>
         new MotifsApp(arabGraph, commStrategy,
+          numPartitions, explorationSteps)
+      case "motifsgtrie" =>
+        new MotifsGtrieApp(arabGraph, commStrategy,
           numPartitions, explorationSteps)
       case "cliquesnaive" =>
         new CliquesNaiveApp(arabGraph, commStrategy,
           numPartitions, explorationSteps)
       case "cliques" =>
         new CliquesApp(arabGraph, commStrategy,
+          numPartitions, explorationSteps)
+      case "cliquesopt" =>
+        new CliquesOptApp(arabGraph, commStrategy,
           numPartitions, explorationSteps)
       case "maximalcliquesnaive" =>
         new MaximalCliquesNaiveApp(arabGraph, commStrategy,
@@ -379,8 +440,11 @@ object SparkRunner {
 
     i += 1
     while (i < args.length) {
+      println (s"Found config=${args(i)}")
       val kv = args(i).split(":")
-      arabGraph.set (kv(0), kv(1))
+      if (kv.length == 2) {
+        arabGraph.set (kv(0), kv(1))
+      }
       i += 1
     }
 

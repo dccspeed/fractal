@@ -208,6 +208,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       for (int i = 0; i < vertexNeighbourhoods.length; ++i) {
          if (vertexNeighbourhoods[i] != null) {
             vertexNeighbourhoods[i].buildSortedNeighborhood();
+            //LOG.info(vertexNeighbourhoods[i]);
          }
       }
 
@@ -611,6 +612,10 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
             while (tokenizer.hasMoreTokens()) {
                parseEdge(tokenizer, vertexId);
+               if (numEdges % 1e7 == 0) {
+                  LOG.info("Stats numVertices=" + numVertices +
+                        " numEdges=" + numEdges);
+               }
             }
 
             line = reader.readLine();
@@ -624,13 +629,14 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
    protected Edge parseEdge(StringTokenizer tokenizer, int vertexId) {
       int neighborId = Integer.parseInt(tokenizer.nextToken());
+      int neighborIdx = neighborId;
 
-      int neighborIdx = vertexIdMap.get(neighborId);
-      if (neighborIdx == -1) {
-         neighborIdx = vertexIdMap.size();
-         vertexIdMap.put(neighborId, neighborIdx);
-         addVertex(createVertex(neighborIdx, -1));
-      }
+      //int neighborIdx = vertexIdMap.get(neighborId);
+      //if (neighborIdx == -1) {
+      //   neighborIdx = vertexIdMap.size();
+      //   vertexIdMap.put(neighborId, neighborIdx);
+      //   addVertex(createVertex(neighborIdx, neighborId, -1));
+      //}
 
       Edge edge;
 
@@ -652,9 +658,10 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
       int vertexIdx = vertexIdMap.get(vertexId);
       if (vertexIdx == -1) {
-         vertexIdx = vertexIdMap.size();
+         //vertexIdx = vertexIdMap.size();
+         vertexIdx = vertexId;
          vertexIdMap.put(vertexId, vertexIdx);
-         Vertex vertex = createVertex(vertexIdx, vertexLabel);
+         Vertex vertex = createVertex(vertexIdx, vertexId, vertexLabel);
          addVertex(vertex);
          return vertex;
       } else {
@@ -716,8 +723,8 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       return (dest1 == src2 || dest1 == dest2 || src1 == dest2);
    }
 
-   protected Vertex createVertex(int id, int label) {
-      Vertex vertex = new Vertex(id, label);
+   protected Vertex createVertex(int id, int originalId, int label) {
+      Vertex vertex = new Vertex(id, originalId, label);
       if (vertexProperties != null) {
          vertex.setProperty(vertexProperties[label]);
       }

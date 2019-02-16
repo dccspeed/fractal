@@ -2,6 +2,7 @@ package io.arabesque.computation;
 
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.IntCursor;
+import io.arabesque.conf.Configuration;
 import io.arabesque.embedding.Embedding;
 import io.arabesque.utils.collection.IntArrayList;
 import io.arabesque.utils.pool.IntArrayListPool;

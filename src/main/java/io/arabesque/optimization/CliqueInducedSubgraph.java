@@ -72,8 +72,9 @@ public class CliqueInducedSubgraph {
          }
       }
       
-      for (int i = 0; i < orderedVertices.size(); ++i) {
-         int v = orderedVertices.getUnchecked(i);
+      IntObjCursor<IntArrayList> cur = sg.adjLists.cursor();
+      while (cur.moveNext()) {
+         int v = cur.key();
          neighborhood = config.getMainGraph().getVertexNeighbourhood(v);
 
          if (neighborhood == null) continue;
@@ -83,10 +84,9 @@ public class CliqueInducedSubgraph {
          for (int j = 0; j < orderedVertices2.size(); ++j) {
             int w = orderedVertices2.getUnchecked(j);
             if (w > v && sg.adjLists.containsKey(w)) {
-               sg.adjLists.get(v).add(w);
+               cur.value().add(w);
             }
          }
-
       }
 
       return sg;

@@ -92,7 +92,6 @@ class CliquesOptApp(val arabGraph: ArabesqueGraph,
     val cliquesRes = arabGraph.cliquesOpt(explorationSteps + 1).
       set ("comm_strategy", commStrategy).
       set ("num_partitions", numPartitions).
-      set ("arabesque.optimizations", "io.arabesque.optimization.CliqueOptimization").
       explore(explorationSteps)
 
     val (accums, elapsed) = SparkRunner.time {
@@ -441,8 +440,11 @@ object SparkRunner {
 
     i += 1
     while (i < args.length) {
+      println (s"Found config=${args(i)}")
       val kv = args(i).split(":")
-      arabGraph.set (kv(0), kv(1))
+      if (kv.length == 2) {
+        arabGraph.set (kv(0), kv(1))
+      }
       i += 1
     }
 

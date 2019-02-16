@@ -612,6 +612,10 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
             while (tokenizer.hasMoreTokens()) {
                parseEdge(tokenizer, vertexId);
+               if (numEdges % 1e7 == 0) {
+                  LOG.info("Stats numVertices=" + numVertices +
+                        " numEdges=" + numEdges);
+               }
             }
 
             line = reader.readLine();

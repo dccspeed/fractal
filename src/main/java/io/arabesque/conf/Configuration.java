@@ -21,9 +21,9 @@ import io.arabesque.pattern.Pattern;
 import io.arabesque.pattern.VICPattern;
 import io.arabesque.utils.pool.Pool;
 import io.arabesque.utils.pool.PoolRegistry;
+import io.arabesque.utils.Timer;
 
-import java.io.IOException;
-import java.io.Serializable;
+import java.io.*;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.lang.reflect.InvocationTargetException;
@@ -39,16 +39,16 @@ import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
 
 public class Configuration<O extends Embedding> implements Serializable {
-    
+    private static final Logger LOG = Logger.getLogger(Configuration.class);
+
     // we keep a local (per JVM) pool of configurations potentially
-    // representing several active arabesque applications
+    // representing several active fractal applications
     private static AtomicInteger nextConfId = new AtomicInteger(0);
 
     protected final int id = newConfId();
 
     protected AtomicInteger taskCounter = new AtomicInteger(0);
 
-    private static final Logger LOG = Logger.getLogger(Configuration.class);
     public static final int KB = 1024;
     public static final int MB = 1024 * KB;
     public static final int GB = 1024 * MB;
@@ -150,6 +150,9 @@ public class Configuration<O extends Embedding> implements Serializable {
     public static final boolean CONF_WS_MODE_INTERNAL_DEFAULT = true;
     public static final String CONF_WS_EXTERNAL = "arabesque.ws.mode.external";
     public static final boolean CONF_WS_MODE_EXTERNAL_DEFAULT = true;
+    
+    public static final String CONF_JVMPROF_CMD = "arabesque.jvmprof.cmd";
+    public static final String CONF_JVMPROF_CMD_DEFAULT = null;
 
     private static final String[] NEIGHBORHOOD_LOOKUPS_ARR = new String[16];
     static {
@@ -886,5 +889,7 @@ public class Configuration<O extends Embedding> implements Serializable {
     public int getNumEdges() {
        return getMainGraph().getNumberEdges();
     }
+
+    
 }
 

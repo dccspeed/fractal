@@ -8,7 +8,7 @@ import io.arabesque.graph.{BasicMainGraph, MainGraph}
 import io.arabesque.optimization.OptimizationSet
 import io.arabesque.optimization.OptimizationSetDescriptor
 import io.arabesque.pattern.Pattern
-import io.arabesque.utils.{Logging, SerializableConfiguration}
+import io.arabesque.utils.{JVMProfiler, Logging, SerializableConfiguration}
 import io.arabesque.utils.collection.AtomicBitSetArray
 
 import java.io._
@@ -348,6 +348,9 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
 
     // multigraph
     updateIfExists ("multigraph", CONF_MAINGRAPH_MULTIGRAPH)
+
+    // jvm profiler cmd
+    updateIfExists ("jvmprof_cmd", CONF_JVMPROF_CMD)
   }
 
   var tagApplied = false
@@ -501,7 +504,9 @@ case class SparkConfiguration[E <: Embedding](confs: Map[String,Any])
     setAggregationsMetadata (new java.util.HashMap())
 
     setOutputPath (getString(CONF_OUTPUT_PATH, CONF_OUTPUT_PATH_DEFAULT))
-    
+
+    JVMProfiler.instance().init(this);
+
     initialized = true
   }
 

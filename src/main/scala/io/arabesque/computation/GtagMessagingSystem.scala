@@ -119,7 +119,6 @@ class MasterActor(masterPath: String, numSlaves: Int)
 
   def receive = {
     case HelloMaster(partitionId, slaveRef) =>
-
       if (slaves(partitionId) == null) {
         registeredSlaves += 1
         slavesRouter = slavesRouter.addRoutee(ActorRefRoutee(slaveRef))
@@ -827,6 +826,7 @@ class WorkStealingSystem [E <: Embedding] (
       s" requestsBalance=${requestsBalance}" +
       s" numPartitionsTotal=${c.getNumberPartitions}" + 
       s" wastedIterations=${wastedIterations}")
+
   }
 
   private def workStealingComputeLocal(c: Computation[E]): Long = {

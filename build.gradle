@@ -37,10 +37,6 @@ repositories {
     maven {
        url 'https://jitpack.io'
     }
-
-    maven {
-       url 'http://maven.alexjf.net'
-    }
 }
 
 dependencies {
@@ -53,8 +49,6 @@ dependencies {
     
     compile 'com.koloboke:koloboke-impl-jdk8:1.0.0'
     
-    compile 'org.apache.giraph:giraph-core:1.2.0-ARABESQUE'
-
     compile 'org.scala-lang:scala-library:2.11.8'
 
     compile 'org.scalatest:scalatest_2.11:2.2.6'
@@ -77,10 +71,6 @@ task scalaTest(dependsOn: ['testClasses'], type: JavaExec) {
 
 test.dependsOn scalaTest
 
-//sourceSets.main.scala.srcDir "src/main/java"
-//sourceSets.test.scala.srcDir "src/test/java"
-//sourceSets.main.java.srcDirs = []
-//sourceSets.test.java.srcDirs = []
 apply plugin: 'com.github.johnrengelman.shadow'
 
 //test {

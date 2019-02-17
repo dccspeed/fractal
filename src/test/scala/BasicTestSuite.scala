@@ -1,6 +1,5 @@
-package io.arabesque
+package br.ufmg.cs.systems.fractal
 
-import io.arabesque.conf.{Configuration, SparkConfiguration}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 
@@ -11,8 +10,8 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
   private var master: String = _
   private var sampleGraphPath: String = _
   private var sc: SparkContext = _
-  private var arab: ArabesqueContext = _
-  private var arabGraph: ArabesqueGraph = _
+  private var arab: FractalContext = _
+  private var arabGraph: FractalGraph = _
 
   /** set up spark context */
   override def beforeAll: Unit = {
@@ -23,7 +22,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
       setAppName(appName)
 
     sc = new SparkContext(conf)
-    arab = new ArabesqueContext(sc, "warn")
+    arab = new FractalContext(sc, "warn")
 
     val loader = classOf[BasicTestSuite].getClassLoader
 
@@ -41,45 +40,45 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
   }
 
   test ("[cube,motifs]", Tag("cube.motifs")) {
-    // Test output for motifs for embedding with size 0 to 3
+    // Test output for motifs for subgraph with size 0 to 3
 
     // Expected output
-    val numEmbedding = List(8, 12, 24)
+    val numSubgraph = List(8, 12, 24)
 
-    for (k <- 0 to (numEmbedding.size - 1)) {
+    for (k <- 0 to (numSubgraph.size - 1)) {
       val motifsRes = arabGraph.motifs.
         set ("num_partitions", numPartitions).
         exploreExp(k)
-      val embeddings = motifsRes.embeddings
+      val Subgraphs = motifsRes.subgraphs
 
-      assert(embeddings.count() == numEmbedding(k))
+      assert(Subgraphs.count() == numSubgraph(k))
     }
 
   }
 
   test ("[cube,cliques]", Tag("cube.cliques")) {
-    // Test output for clique for embeddings with size 1 to 3
+    // Test output for clique for Subgraphs with size 1 to 3
     // Expected output
-    val numEmbedding = List(8, 12, 0)
+    val numSubgraph = List(8, 12, 0)
 
-    for (k <- 0 to (numEmbedding.size - 1)) {
+    for (k <- 0 to (numSubgraph.size - 1)) {
       val cliqueRes = arabGraph.cliques.
         set ("num_partitions", numPartitions).
         exploreExp(k)
 
-      val embeddings = cliqueRes.embeddings
+      val Subgraphs = cliqueRes.subgraphs
 
-      assert(embeddings.count == numEmbedding(k))
+      assert(Subgraphs.count == numSubgraph(k))
     }
   }
 
 
   test ("[cube,fsm]", Tag("cube.fsm")) {
-    import io.arabesque.gmlib.fsm.DomainSupport
-    import io.arabesque.pattern.Pattern
+    import br.ufmg.cs.systems.fractal.gmlib.fsm.DomainSupport
+    import br.ufmg.cs.systems.fractal.pattern.Pattern
 
     // Critical test
-    // Test output for fsm with support 2 for embeddings with size 2 to 3
+    // Test output for fsm with support 2 for Subgraphs with size 2 to 3
     val support = 2
 
     // Expected output

@@ -1,7 +1,0 @@
-alg sys comm fsmsupp runtime status
-fsm arabesque odag 16000 0 FT
-fsm arabesque odag 20000 5412315 S
-fsm arabesque odag 24000 249835 S
-fsm fractal scratch 16000 0 FT
-fsm fractal scratch 20000 2430308 S
-fsm fractal scratch 24000 91571 S

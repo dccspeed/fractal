@@ -1,6 +1,0 @@
-computation: io.arabesque.gmlib.motif.MotifComputation
-input_graph_path: citeseer-single-label.graph
-output_path: Motifs_Output
-
-# Custom parameters
-arabesque.motif.maxsize: 3

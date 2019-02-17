@@ -8,11 +8,11 @@ verbose: yes
 log_level: info
 
 #### Computation
-#computation: Required - <Java class reference extends io.arabesque.computation.Computation>
-#master_computation: Optional - <Java class reference extends io.arabesque.computation.MasterComputation>
-#worker_context: Optional - <Java class reference extends io.arabesque.computation.WorkerContext>
-pattern: io.arabesque.pattern.JBlissPattern
-communication_strategy: odag # Possible values: odag, embeddings, <Java class reference extends io.arabesque.computation.comm.CommunicationStrategyFactory>
+#computation: Required - <Java class reference extends br.ufmg.cs.systems.fractal.computation.Computation>
+#master_computation: Optional - <Java class reference extends br.ufmg.cs.systems.fractal.computation.MasterComputation>
+#worker_context: Optional - <Java class reference extends br.ufmg.cs.systems.fractal.computation.WorkerContext>
+pattern: br.ufmg.cs.systems.fractal.pattern.JBlissPattern
+communication_strategy: odag # Possible values: odag, Subgraphs, <Java class reference extends br.ufmg.cs.systems.fractal.computation.comm.CommunicationStrategyFactory>
 
 #### Input
 #input_graph_path: Required - <String with HDFS/local path to the input graph>

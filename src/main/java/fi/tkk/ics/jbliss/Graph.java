@@ -7,19 +7,17 @@
 
 package fi.tkk.ics.jbliss;
 
-import cz.adamh.utils.NativeUtils;
-import io.arabesque.conf.Configuration;
-import io.arabesque.graph.MainGraph;
-import io.arabesque.graph.Vertex;
-import io.arabesque.pattern.JBlissPattern;
-import io.arabesque.pattern.PatternEdge;
-import io.arabesque.pattern.PatternEdgeArrayList;
-import io.arabesque.utils.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.graph.MainGraph;
+import br.ufmg.cs.systems.fractal.pattern.JBlissPattern;
+import br.ufmg.cs.systems.fractal.pattern.PatternEdge;
+import br.ufmg.cs.systems.fractal.pattern.PatternEdgeArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.ObjCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
+import cz.adamh.utils.NativeUtils;
 import org.apache.commons.lang3.SystemUtils;
 import sun.misc.Unsafe;
 

@@ -33,11 +33,12 @@ Vertex ids are expected to be sequential integers between 0 and (total number of
 ```
 git clone https://github.com/dccspeed/fractal.git
 cd fractal
+export FRACTAL_HOME=`pwd`
 ./gradlew assembly
 ```
 
 2. Execute a built-in example:
 ```
-./bin/fractal.sh 
+steps=2 inputgraph=$FRACTAL_HOME/data/citeseer-single-label.graph alg=cliques ./bin/fractal.sh
 ```
 

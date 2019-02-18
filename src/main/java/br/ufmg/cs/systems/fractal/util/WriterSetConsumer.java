@@ -1,6 +1,6 @@
 package br.ufmg.cs.systems.fractal.util;
 
-import com.koloboke.function.IntConsumer;
+import java.util.function.IntConsumer;
 
 import java.io.DataOutput;
 import java.io.IOException;

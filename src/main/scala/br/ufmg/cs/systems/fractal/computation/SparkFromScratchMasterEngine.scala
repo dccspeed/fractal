@@ -22,7 +22,7 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
 /**
- * Underlying engine that runs the Arabesque master.
+ * Underlying engine that runs the fractal master.
  * It interacts directly with the RDD interface in Spark by handling the
  * SparkContext.
  */
@@ -103,8 +103,8 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
     val exAccums = new Array[LongAccumulator](numComputations)
     var i = 0
     while (i < numComputations) {
-      val egKey = s"${VALID_SubgraphS}_${i}"
-      val awKey = s"${CANONICAL_SubgraphS}_${i}"
+      val egKey = s"${VALID_SUBGRAPHS}_${i}"
+      val awKey = s"${CANONICAL_SUBGRAPHS}_${i}"
       val exKey = s"${NEIGHBORHOOD_LOOKUPS}_${i}"
 
       egAccums(i) = sc.longAccumulator(egKey)
@@ -182,11 +182,11 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
     val initElapsed = System.currentTimeMillis - initStart
 
     logInfo (s"Initialization took ${initElapsed} ms")
-    
+
     val superstepStart = System.currentTimeMillis
 
     val enumerationStart = System.currentTimeMillis
-    
+
     val _aggAccums = aggAccums
 
     val execEngines = getExecutionEngines (
@@ -198,9 +198,9 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
 
     execEngines.persist(MEMORY_ONLY_SER)
     execEngines.foreachPartition (_ => {})
-    
+
     val enumerationElapsed = System.currentTimeMillis - enumerationStart
-    
+
     logInfo(s"Enumeration step=${superstep} took ${enumerationElapsed} ms")
 
     /** [1] We extract and aggregate the *aggregations* globally.
@@ -310,9 +310,9 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
             asInstanceOf[SparkFromScratchEngine[E]]
 
           egAccums(c.getDepth) = execEngine.
-            accums(s"${VALID_SubgraphS}_${c.getDepth}")
+            accums(s"${VALID_SUBGRAPHS}_${c.getDepth}")
           awAccums(c.getDepth) = execEngine.
-            accums(s"${CANONICAL_SubgraphS}_${c.getDepth}")
+            accums(s"${CANONICAL_SUBGRAPHS}_${c.getDepth}")
 
           var currComp = c.nextComputation()
           while (currComp != null) {
@@ -321,9 +321,9 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
             currComp.init(config)
             currComp.initAggregations(config)
             egAccums(depth) = execEngine.accums(
-              s"${VALID_SubgraphS}_${depth}")
+              s"${VALID_SUBGRAPHS}_${depth}")
             awAccums(depth) = execEngine.accums(
-              s"${CANONICAL_SubgraphS}_${depth}")
+              s"${CANONICAL_SUBGRAPHS}_${depth}")
             currComp = currComp.nextComputation
           }
 
@@ -351,7 +351,7 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
             workStealingSys.workStealingCompute(c)
           }
           elapsed = System.currentTimeMillis - start
-          
+
           logInfo (s"WorkStealingComputation step=${c.getStep}" +
             s" partitionId=${c.getPartitionId} took ${elapsed} ms")
 
@@ -427,7 +427,7 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
         //}
         //awAccums(c.getDepth).add(addWords)
         //egAccums(c.getDepth).add(SubgraphsGenerated)
-        
+
         val embIter = iter.asInstanceOf[SubgraphEnumerator[E]]
         lastStepConsumer.set(embIter.getSubgraph(), c)
         embIter.getWordIds().forEach(lastStepConsumer)
@@ -497,9 +497,9 @@ object SparkFromScratchMasterEngine {
     NEIGHBORHOOD_LOOKUPS_ARR(depth)
   }
 
-  val CANONICAL_SubgraphS = "canonical_Subgraphs"
+  val CANONICAL_SUBGRAPHS = "canonical_subgraphs"
 
-  val VALID_SubgraphS = "valid_Subgraphs"
+  val VALID_SUBGRAPHS = "valid_subgraphs"
 
   val AGG_CANONICAL_FILTER = "canonical_filter"
 }

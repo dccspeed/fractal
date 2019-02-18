@@ -4,7 +4,7 @@ import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
 
 public class ConfigBasedOptimizationSetDescriptor implements OptimizationSetDescriptor {
-    public static final String CONF_OPTIMIZATION_CLASSES = "arabesque.optimizations";
+    public static final String CONF_OPTIMIZATION_CLASSES = "fractal.optimizations";
     public static final Class[] CONF_OPTMIZATION_CLASSES_DEFAULT = {};
 
     @Override

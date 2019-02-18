@@ -71,7 +71,10 @@ task scalaTest(dependsOn: ['testClasses'], type: JavaExec) {
 
 test.dependsOn scalaTest
 
+task assembly(dependsOn: ['shadowJar', 'test'])
+
 apply plugin: 'com.github.johnrengelman.shadow'
+
 
 //test {
 //    testLogging.showStandardStreams = true

@@ -6,8 +6,8 @@ import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.map.IntObjMap;
 import com.koloboke.collect.map.hash.HashIntObjMaps;
-import com.koloboke.function.IntConsumer;
-import com.koloboke.function.IntFunction;
+import java.util.function.IntConsumer;
+import java.util.function.IntFunction;
 
 public class MultiVertexNeighbourhood extends BasicVertexNeighbourhood {
     private static final IntFunction<IntArrayList> INTARRAYLIST_FACTORY = new IntFunction<IntArrayList>() {

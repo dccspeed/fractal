@@ -334,7 +334,7 @@ trait SparkEngine [E <: Subgraph]
         classOf[ESubgraph]
       else if (subgraph.isInstanceOf[VertexInducedSubgraph])
         classOf[VSubgraph]
-      else if (subgraph.isInstanceOf[VertexEdgeInducedSubgraph])
+      else if (subgraph.isInstanceOf[PatternInducedSubgraph])
         classOf[VESubgraph]
       else
         classOf[ResultSubgraph[_]] // not allowed, will crash

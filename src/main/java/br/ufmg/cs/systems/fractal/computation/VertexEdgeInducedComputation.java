@@ -1,9 +1,9 @@
 package br.ufmg.cs.systems.fractal.computation;
 
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
-import br.ufmg.cs.systems.fractal.subgraph.VertexEdgeInducedSubgraph;
+import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph;
 
-public abstract class VertexEdgeInducedComputation<E extends VertexEdgeInducedSubgraph> extends BasicComputation<E> {
+public abstract class VertexEdgeInducedComputation<E extends PatternInducedSubgraph> extends BasicComputation<E> {
     @Override
     public final int getInitialNumWords() {
         return getMainGraph().getNumberVertices();
@@ -11,6 +11,6 @@ public abstract class VertexEdgeInducedComputation<E extends VertexEdgeInducedSu
 
     @Override
     public Class<? extends Subgraph> getSubgraphClass() {
-        return VertexEdgeInducedSubgraph.class;
+        return PatternInducedSubgraph.class;
     }
 }

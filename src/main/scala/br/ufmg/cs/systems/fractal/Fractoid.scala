@@ -20,7 +20,7 @@ import scala.collection.mutable.Map
 import scala.reflect.{ClassTag, classTag}
 
 /**
- * Results of an Arabesque computation.
+ * Results of an fractal computation.
  */
 case class Fractoid [E <: Subgraph : ClassTag](
                                                 arabGraph: FractalGraph,
@@ -509,7 +509,7 @@ case class Fractoid [E <: Subgraph : ClassTag](
       case e: RuntimeException =>
         logWarning (s"No computation container was set." +
           s" Please start with 'edgeInducedComputation' or" +
-          s" 'vertexInducedComputation' from ArabesqueGraph." +
+          s" 'vertexInducedComputation' from fractalGraph." +
           s" Error message: ${e.getMessage}")
         return null
     }
@@ -547,7 +547,7 @@ case class Fractoid [E <: Subgraph : ClassTag](
     ec.unset(SparkConfiguration.MASTER_COMPUTATION_CONTAINER)
   }
 
-  /****** Arabesque Scala API: High Level API ******/
+  /****** fractal Scala API: High Level API ******/
 
   /**
    * Perform a single standard expansion step over the existing Subgraphs
@@ -714,7 +714,7 @@ case class Fractoid [E <: Subgraph : ClassTag](
   }
 
 
-  /****** Arabesque Scala API: ComputationContainer ******/
+  /****** fractal Scala API: ComputationContainer ******/
 
   /**
    * Updates the process function of the underlying computation container.
@@ -1186,7 +1186,7 @@ case class Fractoid [E <: Subgraph : ClassTag](
     this.copy (config = _newConfig, storageLevel = StorageLevel.NONE)
   }
 
-  /****** Arabesque Scala API: MasterComputationContainer ******/
+  /****** fractal Scala API: MasterComputationContainer ******/
 
   /**
    * Updates the init function of the underlying master computation
@@ -1220,7 +1220,7 @@ case class Fractoid [E <: Subgraph : ClassTag](
     this.copy (config = newConfig)
   }
 
-  /****** Arabesque Scala API: Built-in algorithms ******/
+  /****** fractal Scala API: Built-in algorithms ******/
 
   /**
    * Check whether the current subgraph parameter is compatible with another
@@ -1261,38 +1261,6 @@ case class Fractoid [E <: Subgraph : ClassTag](
     }
   }
 
-  /**
-   * Build a Triangles computation from the current computation
-   */
-  def triangles: Fractoid[VertexInducedSubgraph] = {
-    if (!extensibleFrom [VertexInducedSubgraph]) {
-      throw new RuntimeException (
-        s"${this} should be induced by vertices to be extended to Triangles")
-    } else {
-      val trianglesRes = arabGraph.triangles.copy(stepByStep = stepByStep)
-      handleNextResult(
-        trianglesRes.asInstanceOf[Fractoid[E]],
-        trianglesRes.config.asInstanceOf[SparkConfiguration[E]]).
-      asInstanceOf[Fractoid[VertexInducedSubgraph]]
-    }
-  }
-
-  /**
-   * Build a FSM computation from the current computation
-   */
-  def fsm(support: Int): Fractoid[EdgeInducedSubgraph] = {
-    if (!extensibleFrom [EdgeInducedSubgraph]) {
-      throw new RuntimeException (
-        s"${this} should be induced by edges to be extended to FSM")
-    } else {
-      val fsmRes = arabGraph.fsm(support).copy(stepByStep = stepByStep)
-      handleNextResult(
-        fsmRes.asInstanceOf[Fractoid[E]],
-        fsmRes.config.asInstanceOf[SparkConfiguration[E]]).
-      asInstanceOf[Fractoid[EdgeInducedSubgraph]]
-    }
-  }
-
   override def toString: String = {
     def computationToString: String = config.computationContainerOpt match {
       case Some(cc) =>
@@ -1301,7 +1269,7 @@ case class Fractoid [E <: Subgraph : ClassTag](
         s"${config.getString(Configuration.CONF_COMPUTATION_CLASS,"")}"
     }
 
-    s"Arabesque(scope=${scope}, step=${step}, depth=${depth}," + 
+    s"fractal(scope=${scope}, step=${step}, depth=${depth}," +
     s" stepByStep=${stepByStep}," +
     s" computation=${computationToString}," +
     s" mustSync=${mustSync}, storageLevel=${storageLevel}," +

@@ -118,7 +118,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
   }
 
   /**
-   * Sets a default hadoop configuration for this arabesque configuration. That
+   * Sets a default hadoop configuration for this fractal configuration. That
    * way both can be shipped together to the workers.
    * This function mutates the object.
    */
@@ -148,7 +148,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
   }
 
   /**
-   * Translates Arabesque configuration into SparkConf.
+   * Translates fractal configuration into SparkConf.
    * ATENTION: This is highly spark-dependent
    */
   def sparkConf = {
@@ -157,7 +157,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
     }
     val sparkMaster = getString ("spark_master", "local[*]")
     val conf = new SparkConf().
-      setAppName ("Arabesque Master Execution Engine").
+      setAppName ("fractal Master Execution Engine").
       setMaster (sparkMaster)
         
     conf.set ("spark.executor.memory", getString("worker_memory", "1g"))
@@ -311,8 +311,8 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
     updateIfExists ("comm_strategy", CONF_COMM_STRATEGY)
 
     // gtag
-    updateIfExists ("gtag_batch_low", CONF_GTAG_BATCH_SIZE_LOW)
-    updateIfExists ("gtag_batch_high", CONF_GTAG_BATCH_SIZE_HIGH)
+    updateIfExists ("gtag_batch_low", CONF_WS_EXTERNAL_BATCHSIZE_LOW)
+    updateIfExists ("gtag_batch_high", CONF_WS_EXTERNAL_BATCHSIZE_HIGH)
 
     // work stealing
     updateIfExists ("ws_internal", CONF_WS_INTERNAL)
@@ -407,7 +407,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
   }
 
   /**
-   * Garantees that arabesque configuration is properly set
+   * Garantees that fractal configuration is properly set
    *
    * TODO: generalize the initialization in the superclass Configuration
    */
@@ -439,7 +439,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
   }
 
   /**
-   * Called whether no arabesque configuration is set in the running jvm
+   * Called whether no fractal configuration is set in the running jvm
    */
   private def initializeInstance(shouldSetGraph: Boolean = true): Unit = {
 

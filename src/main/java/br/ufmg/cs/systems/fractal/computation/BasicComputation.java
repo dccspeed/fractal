@@ -6,7 +6,7 @@ import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import com.koloboke.collect.IntCollection;
-import com.koloboke.function.IntConsumer;
+import java.util.function.IntConsumer;
 import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
 

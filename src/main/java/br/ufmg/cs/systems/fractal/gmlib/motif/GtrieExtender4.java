@@ -1,4 +1,4 @@
-package br.ufmg.cs.systems.fractal.extender;
+package br.ufmg.cs.systems.fractal.gmlib.motif;
 
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;

@@ -8,7 +8,7 @@ import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.map.IntIntCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
-import com.koloboke.function.IntConsumer;
+import java.util.function.IntConsumer;
 import com.koloboke.function.IntIntConsumer;
 
 public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Serializable {

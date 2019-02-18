@@ -6,7 +6,7 @@ import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
-import com.koloboke.function.IntConsumer;
+import java.util.function.IntConsumer;
 import org.apache.commons.io.input.BOMInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.Logger;
@@ -25,7 +25,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    private static final Logger LOG = Logger.getLogger(BasicMainGraph.class);
 
    // we keep a local (per JVM) pool of configurations potentially
-   // representing several active arabesque applications
+   // representing several active fractal applications
    private static AtomicInteger nextGraphId = new AtomicInteger(0);
    protected int id = newGraphId();
 

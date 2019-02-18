@@ -3,7 +3,7 @@ package br.ufmg.cs.systems.fractal.graph;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
 import com.koloboke.collect.IntCollection;
-import com.koloboke.function.IntConsumer;
+import java.util.function.IntConsumer;
 
 public interface MainGraph<V,E> {
     int getId();

@@ -85,7 +85,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
     val numFreqPatterns = List(3, 3+4, 3+4+7)
 
     for (k <- 0 to (numFreqPatterns.size - 1)) {
-      val fsmRes = arabGraph.fsm2(support, k).
+      val fsmRes = arabGraph.fsm(support, k).
         set ("num_partitions", numPartitions)
 
       val freqPatterns = fsmRes.

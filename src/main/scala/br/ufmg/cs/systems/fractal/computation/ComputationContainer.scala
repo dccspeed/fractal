@@ -20,7 +20,7 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
     def findCaller: String = {
       var i = 0
       while (i < calls.length) {
-        if (calls(i).getClassName equals "br.ufmg.cs.systems.fractal.ArabesqueResult") {
+        if (calls(i).getClassName equals "br.ufmg.cs.systems.fractal.fractalResult") {
           return calls(i).getMethodName
         }
         i += 1
@@ -1037,7 +1037,7 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
   override def toString: String = s"V${super.toString}"
 }
 
-case class VEComputationContainer [E <: VertexEdgeInducedSubgraph] (
+case class VEComputationContainer [E <: PatternInducedSubgraph](
     computationLabelOpt: Option[String] = None,
     patternOpt: Option[Pattern] = None,
     processOpt: Option[(E,Computation[E]) => Unit] = None,

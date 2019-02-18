@@ -2,7 +2,7 @@ package br.ufmg.cs.systems.fractal.subgraph;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
-import br.ufmg.cs.systems.fractal.extender.GtrieExtender;
+import br.ufmg.cs.systems.fractal.gmlib.motif.GtrieExtender;
 import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.LabelledEdge;
 import br.ufmg.cs.systems.fractal.graph.Vertex;
@@ -17,7 +17,7 @@ import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntObjMap;
 import com.koloboke.collect.map.hash.HashIntObjMaps;
 import com.koloboke.collect.set.hash.HashIntSet;
-import com.koloboke.function.IntConsumer;
+import java.util.function.IntConsumer;
 import com.koloboke.function.IntIntConsumer;
 
 import java.io.DataOutput;

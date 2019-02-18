@@ -16,7 +16,7 @@ import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.map.IntIntCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.set.IntSet;
-import com.koloboke.function.IntConsumer;
+import java.util.function.IntConsumer;
 import org.apache.log4j.Logger;
 
 public class VICPattern extends BasicPattern {

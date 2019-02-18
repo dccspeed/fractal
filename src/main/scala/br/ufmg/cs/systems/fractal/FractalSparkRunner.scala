@@ -13,7 +13,7 @@ class VSubgraphsApp(val arabGraph: FractalGraph,
                     numPartitions: Int,
                     explorationSteps: Int) extends FractalSparkApp {
   def execute: Unit = {
-    val vsubgraphsRes = arabGraph.vertexInducedComputation.
+    val vsubgraphsRes = arabGraph.vfractoid.
       set ("comm_strategy", commStrategy).
       set ("num_partitions", numPartitions).
       exploreExp (explorationSteps)
@@ -104,7 +104,7 @@ class CliquesApp(val arabGraph: FractalGraph,
     val cliquesRes = arabGraph.cliques.
       set ("comm_strategy", commStrategy).
       set ("num_partitions", numPartitions).
-      set ("arabesque.optimizations", "br.ufmg.cs.systems.fractal.optimization.CliqueOptimization").
+      set ("fractal.optimizations", "br.ufmg.cs.systems.fractal.optimization.CliqueOptimization").
       explore(explorationSteps)
 
     val (counting, elapsed) = FractalSparkRunner.time {
@@ -221,7 +221,7 @@ class FSMApp(val arabGraph: FractalGraph,
   def execute: Unit = {
     arabGraph.set ("comm_strategy", commStrategy)
     arabGraph.set ("num_partitions", numPartitions)
-    arabGraph.fsm2(support, explorationSteps)
+    arabGraph.fsm(support, explorationSteps)
   }
 }
 
@@ -235,7 +235,7 @@ class KeywordSearchApp(val arabGraph: FractalGraph,
   }
 }
 
-class GMatchingApp(val arabGraph: FractalGraph,
+class GQueryingApp(val arabGraph: FractalGraph,
                    commStrategy: String,
                    numPartitions: Int,
                    explorationSteps: Int,
@@ -259,7 +259,7 @@ class GMatchingApp(val arabGraph: FractalGraph,
       subgraphPath, arabGraph.arabContext, "warn")
 
     val (gmatchingRes, symmetryBreakingElapsed) = FractalSparkRunner.time {
-      var _gmatchingRes = arabGraph.gmatching(subgraph).
+      var _gmatchingRes = arabGraph.gquerying(subgraph).
         set ("comm_strategy", commStrategy).
         set ("num_partitions", numPartitions)
       //if (tag.length > 0) {
@@ -294,7 +294,7 @@ class GMatchingApp(val arabGraph: FractalGraph,
   }
 }
 
-class GMatchingNaiveApp(val arabGraph: FractalGraph,
+class GQueryingNaiveApp(val arabGraph: FractalGraph,
                         commStrategy: String,
                         numPartitions: Int,
                         explorationSteps: Int,
@@ -304,7 +304,7 @@ class GMatchingNaiveApp(val arabGraph: FractalGraph,
     val subgraph = new FractalGraph(
       subgraphPath, arabGraph.arabContext, "warn")
 
-    val gmatchingRes = arabGraph.gmatchingNaive(subgraph).
+    val gmatchingRes = arabGraph.gqueryingNaive(subgraph).
       set ("comm_strategy", commStrategy).
       set ("num_partitions", numPartitions).
       exploreExp(explorationSteps)
@@ -322,7 +322,7 @@ class GMatchingNaiveApp(val arabGraph: FractalGraph,
 }
 
 object FractalSparkRunner {
-  def time[R](block: => R): (R, Long) = { 
+  def time[R](block: => R): (R, Long) = {
     val t0 = System.currentTimeMillis()
     val result = block    // call-by-name
     val t1 = System.currentTimeMillis()
@@ -414,15 +414,15 @@ object FractalSparkRunner {
         val queryWords = args.slice(i, args.length)
         new KeywordSearchApp(arabGraph, commStrategy,
           numPartitions, explorationSteps, queryWords)
-      case "gmatching" =>
+      case "gquerying" =>
         i += 1
         val subgraphPath = args(i)
-        new GMatchingApp(arabGraph, commStrategy,
+        new GQueryingApp(arabGraph, commStrategy,
           numPartitions, explorationSteps, subgraphPath)
-      case "gmatchingnaive" =>
+      case "gqueryingnaive" =>
         i += 1
         val subgraphPath = args(i)
-        new GMatchingNaiveApp(arabGraph, commStrategy,
+        new GQueryingNaiveApp(arabGraph, commStrategy,
           numPartitions, explorationSteps, subgraphPath)
       case appName =>
         throw new RuntimeException(s"Unknown app: ${appName}")

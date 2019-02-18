@@ -24,7 +24,7 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
 /**
- * Underlying engine that runs the Arabesque master.
+ * Underlying engine that runs the fractal master.
  * It interacts directly with the RDD interface in Spark by handling the
  * SparkContext.
  */
@@ -123,8 +123,8 @@ class SparkVEtagMasterEngine[E <: Subgraph](
     
     var i = 0
     while (i < numComputations) {
-      val veKey = s"${VALID_SubgraphS}_${i}"
-      val ceKey = s"${CANONICAL_SubgraphS}_${i}"
+      val veKey = s"${VALID_SUBGRAPHS}_${i}"
+      val ceKey = s"${CANONICAL_SUBGRAPHS}_${i}"
       val eKey = s"${NEIGHBORHOOD_LOOKUPS}_${i}"
 
       veAccums(i) = sc.longAccumulator(veKey)
@@ -416,9 +416,9 @@ class SparkVEtagMasterEngine[E <: Subgraph](
           val execEngine = c.getExecutionEngine().asInstanceOf[SparkEngine[E]]
 
           egAccums(c.getDepth) = execEngine.
-            accums(s"${VALID_SubgraphS}_${c.getDepth}")
+            accums(s"${VALID_SUBGRAPHS}_${c.getDepth}")
           awAccums(c.getDepth) = execEngine.
-            accums(s"${CANONICAL_SubgraphS}_${c.getDepth}")
+            accums(s"${CANONICAL_SUBGRAPHS}_${c.getDepth}")
 
           var currComp = c.nextComputation()
           while (currComp != null) {
@@ -427,9 +427,9 @@ class SparkVEtagMasterEngine[E <: Subgraph](
             currComp.init(config)
             currComp.initAggregations(config)
             egAccums(depth) = execEngine.accums(
-              s"${VALID_SubgraphS}_${depth}")
+              s"${VALID_SUBGRAPHS}_${depth}")
             awAccums(depth) = execEngine.accums(
-              s"${CANONICAL_SubgraphS}_${depth}")
+              s"${CANONICAL_SUBGRAPHS}_${depth}")
             currComp = currComp.nextComputation
           }
 

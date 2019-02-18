@@ -1,7 +1,7 @@
 package br.ufmg.cs.systems.fractal.util;
 
 import com.koloboke.collect.set.hash.HashIntSet;
-import com.koloboke.function.IntConsumer;
+import java.util.function.IntConsumer;
 
 public class ClearSetConsumer implements IntConsumer {
     private HashIntSet[] supportMatrix;

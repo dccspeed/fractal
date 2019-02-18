@@ -342,7 +342,7 @@ trait SparkMasterEngine [E <: Subgraph]
             classOf[ESubgraph]
           else if (SubgraphClass == classOf[VertexInducedSubgraph])
             classOf[VSubgraph]
-          else if (SubgraphClass == classOf[VertexEdgeInducedSubgraph])
+          else if (SubgraphClass == classOf[PatternInducedSubgraph])
             classOf[VESubgraph]
           else
             classOf[ResultSubgraph[_]]

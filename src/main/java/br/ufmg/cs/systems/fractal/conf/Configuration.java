@@ -13,7 +13,7 @@ import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.pattern.VICPattern;
 import br.ufmg.cs.systems.fractal.subgraph.EdgeInducedSubgraph;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
-import br.ufmg.cs.systems.fractal.subgraph.VertexEdgeInducedSubgraph;
+import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph;
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
 import br.ufmg.cs.systems.fractal.util.pool.Pool;
 import br.ufmg.cs.systems.fractal.util.pool.PoolRegistry;
@@ -31,7 +31,6 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -45,6 +44,9 @@ public class Configuration<O extends Subgraph> implements Serializable {
     protected final int id = newConfId();
 
     protected AtomicInteger taskCounter = new AtomicInteger(0);
+
+    public static final String CONF_MASTER_HOSTNAME = "fractal.master.hostname";
+    public static final String CONF_MASTER_HOSTNAME_DEFAULT = "localhost";
 
     public static final String CONF_LOG_LEVEL = "fractal.log.level";
     public static final String CONF_LOG_LEVEL_DEFAULT = "info";
@@ -91,23 +93,23 @@ public class Configuration<O extends Subgraph> implements Serializable {
     public static final String CONF_AGGREGATION_STORAGE_CLASS = "fractal.aggregation.storage.class";
     public static final String CONF_AGGREGATION_STORAGE_CLASS_DEFAULT = "br.ufmg.cs.systems.fractal.aggregation.AggregationStorage";
 
-    public static final String CONF_MASTER_HOSTNAME = "fractal.master.hostname";
-    public static final String CONF_MASTER_HOSTNAME_DEFAULT = "localhost";
 
-    // gtag
-    public static final String CONF_GTAG_BATCH_SIZE_LOW = "fractal.gtag.batch.size.low";
-    public static final int CONF_GTAG_BATCH_SIZE_LOW_DEFAULT = 1;
+    // work stealing {{
+    public static final String CONF_WS_EXTERNAL_BATCHSIZE_LOW = "fractal.ws.external.batchsize.low";
+    public static final int CONF_WS_EXTERNAL_BATCHSIZE_LOW_DEFAULT = 1;
 
-    public static final String CONF_GTAG_BATCH_SIZE_HIGH = "fractal.gtag.batch.size.high";
-    public static final int CONF_GTAG_BATCH_SIZE_HIGH_DEFAULT = 10;
+    public static final String CONF_WS_EXTERNAL_BATCHSIZE_HIGH = "fractal.ws.external.batchsize.high";
+    public static final int CONF_WS_EXTERNAL_BATCHSIZE_HIGH_DEFAULT = 10;
     
     public static final String CONF_WS_INTERNAL = "fractal.ws.mode.internal";
     public static final boolean CONF_WS_MODE_INTERNAL_DEFAULT = true;
+
     public static final String CONF_WS_EXTERNAL = "fractal.ws.mode.external";
     public static final boolean CONF_WS_MODE_EXTERNAL_DEFAULT = true;
     
     public static final String CONF_JVMPROF_CMD = "fractal.jvmprof.cmd";
     public static final String CONF_JVMPROF_CMD_DEFAULT = null;
+    // }}
 
     private static final String[] NEIGHBORHOOD_LOOKUPS_ARR = new String[16];
     static {
@@ -599,13 +601,13 @@ public class Configuration<O extends Subgraph> implements Serializable {
     }
 
     public int getGtagBatchSizeLow() {
-       return getInteger(CONF_GTAG_BATCH_SIZE_LOW,
-             CONF_GTAG_BATCH_SIZE_LOW_DEFAULT);
+       return getInteger(CONF_WS_EXTERNAL_BATCHSIZE_LOW,
+               CONF_WS_EXTERNAL_BATCHSIZE_LOW_DEFAULT);
     }
     
     public int getGtagBatchSizeHigh() {
-       return getInteger(CONF_GTAG_BATCH_SIZE_HIGH,
-             CONF_GTAG_BATCH_SIZE_HIGH_DEFAULT);
+       return getInteger(CONF_WS_EXTERNAL_BATCHSIZE_HIGH,
+               CONF_WS_EXTERNAL_BATCHSIZE_HIGH_DEFAULT);
     }
 
     public boolean internalWsEnabled() {
@@ -626,7 +628,7 @@ public class Configuration<O extends Subgraph> implements Serializable {
           return getMainGraph().getNumberEdges();
        } else if (SubgraphClass == VertexInducedSubgraph.class) {
           return getMainGraph().getNumberVertices();
-       } else if (SubgraphClass == VertexEdgeInducedSubgraph.class) {
+       } else if (SubgraphClass == PatternInducedSubgraph.class) {
           return getMainGraph().getNumberVertices();
        } else {
           throw new RuntimeException(

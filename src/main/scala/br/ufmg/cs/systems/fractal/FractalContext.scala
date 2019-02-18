@@ -9,13 +9,13 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.SparkContext
 
 /**
-  * Creates an Arabesque Context from a Spark Context
+  * Creates an fractal Context from a Spark Context
   *
   * Example of usage:
   * {{{
-  * import br.ufmg.cs.systems.fractal.ArabesqueContext
-  * val arab = new ArabesqueContext(sc)
-  * arab: br.ufmg.cs.systems.fractal.ArabesqueContext = br.ufmg.cs.systems.fractal.ArabesqueContext@3a996bbc
+  * import br.ufmg.cs.systems.fractal.fractalContext
+  * val arab = new fractalContext(sc)
+  * arab: br.ufmg.cs.systems.fractal.fractalContext = br.ufmg.cs.systems.fractal.fractalContext@3a996bbc
   * }}}
   *
   * @param sc a [[SparkContext]] instance
@@ -38,13 +38,13 @@ class FractalContext(sc: SparkContext, logLevel: String = "info",
     * {{{
     *  val file_path = "~/input.graph" // Set the input file path
     *  graph = arab.textFile(file_path)
-    *  graph: br.ufmg.cs.systems.fractal.ArabesqueGraph = br.ufmg.cs.systems.fractal.ArabesqueGraph@2310a619
+    *  graph: br.ufmg.cs.systems.fractal.fractalGraph = br.ufmg.cs.systems.fractal.fractalGraph@2310a619
     * }}}
     *
     * @param path a string indicating the path for input graph
     * @param local TODO: Describe local variable
     * @return an [[br.ufmg.cs.systems.fractal.FractalGraph]]
-    * @see [[https://github.com/viniciusvdias/Arabesque/blob/master/README.md]]
+    * @see [[https://github.com/viniciusvdias/fractal/blob/master/README.md]]
     * for how to prepare the input file
     */
   def textFile (path: String,
@@ -63,6 +63,6 @@ class FractalContext(sc: SparkContext, logLevel: String = "info",
     val fs = FileSystem.get (sc.hadoopConfiguration)
     val res = fs.delete (new Path(tmpPath), true)
     ActorMessageSystem.shutdown()
-    logInfo (s"Removing arabesque temp directory: ${tmpPath} (exists=${res})")
+    logInfo (s"Removing fractal temp directory: ${tmpPath} (exists=${res})")
   }
 }

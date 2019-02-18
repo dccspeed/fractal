@@ -1,7 +1,7 @@
 package br.ufmg.cs.systems.fractal.util;
 
 import com.koloboke.collect.map.hash.HashIntIntMap;
-import com.koloboke.function.IntConsumer;
+import java.util.function.IntConsumer;
 
 public class ElementCounterConsumer implements IntConsumer {
     private HashIntIntMap map;

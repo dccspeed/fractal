@@ -6,7 +6,7 @@ import com.koloboke.collect.IntCollection;
 
 import java.io.Externalizable;
 
-abstract class Extender implements Externalizable {
+public abstract class Extender implements Externalizable {
    
    public abstract IntCollection extend(Subgraph e, Computation c);
    

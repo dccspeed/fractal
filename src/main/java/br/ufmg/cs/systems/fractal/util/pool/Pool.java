@@ -3,7 +3,7 @@ package br.ufmg.cs.systems.fractal.util.pool;
 import br.ufmg.cs.systems.fractal.util.Factory;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ReclaimableObjCollection;
-import com.koloboke.function.Consumer;
+import java.util.function.Consumer;
 
 public class Pool<O> {
     private final static int MAX_SIZE_DEFAULT = 1000;

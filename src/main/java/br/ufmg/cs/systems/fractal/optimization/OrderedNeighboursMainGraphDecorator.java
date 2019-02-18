@@ -8,7 +8,7 @@ import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
 import com.koloboke.collect.IntCollection;
-import com.koloboke.function.IntConsumer;
+import java.util.function.IntConsumer;
 
 public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMainGraph {
     protected MainGraph underlyingMainGraph;

@@ -1,6 +1,7 @@
-package br.ufmg.cs.systems.fractal.extender;
+package br.ufmg.cs.systems.fractal.gmlib.motif;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
+import br.ufmg.cs.systems.fractal.extender.Extender;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.graph.VertexNeighbourhood;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
@@ -11,7 +12,7 @@ import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.map.IntIntCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.set.hash.HashIntSet;
-import com.koloboke.function.IntConsumer;
+import java.util.function.IntConsumer;
 import com.koloboke.function.IntIntPredicate;
 
 import java.io.IOException;

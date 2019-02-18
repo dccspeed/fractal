@@ -14,14 +14,14 @@ import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.hash.HashIntSet;
-import com.koloboke.function.IntConsumer;
+import java.util.function.IntConsumer;
 
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.util.function.IntPredicate;
 
-public class VertexEdgeInducedSubgraph extends BasicSubgraph {
+public class PatternInducedSubgraph extends BasicSubgraph {
    // Consumers {{
    private UpdateEdgesConsumer updateEdgesConsumer;
    // }}
@@ -32,7 +32,7 @@ public class VertexEdgeInducedSubgraph extends BasicSubgraph {
 
    private IntArrayList numVerticesAddedWithWord;
 
-   public VertexEdgeInducedSubgraph() {
+   public PatternInducedSubgraph() {
       super();
       numVerticesAddedWithWord = new IntArrayList();
       numEdgesAddedWithWord = new IntArrayList();

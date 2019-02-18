@@ -17,7 +17,7 @@ import scala.collection.mutable.Map
 import scala.reflect.{ClassTag, classTag}
 
 /**
-  * Creates an [[br.ufmg.cs.systems.fractal.FractalGraph]] used for calling arabesque graph
+  * Creates an [[br.ufmg.cs.systems.fractal.FractalGraph]] used for calling fractal graph
   * algorithms
   *
   * @param path  a string indicating the path for input graph
@@ -106,36 +106,6 @@ class FractalGraph(
   }
 
   /**
-   * Computes all the motifs of a given size
-   * {{{
-    * import br.ufmg.cs.systems.fractal.ArabesqueContext
-    *
-    * val input_graph = "ArabesqueDir/data/cube.graph"
-    * val max_size = 3
-    *
-    * val arab = new ArabesqueContext(sc)
-    *
-    * val graph = arab.textFile(input_graph)
-    * val res = graph.motif(4)
-    *
-    * res.Subgraphs.count
-    * res.Subgraphs.collect
-    * }}}
-    *
-    * @param maxSize number of vertices of the target motifs
-    * @return an [[br.ufmg.cs.systems.fractal.Fractoid]] carrying odags and Subgraphs
-   */
-  def motifs(maxSize: Int): Fractoid[VertexInducedSubgraph] = {
-    val config = new SparkConfiguration [VertexInducedSubgraph]
-    config.set ("input_graph_path", path)
-    config.set ("input_graph_local", local)
-    config.set ("output_path", s"${tmpPath}/motifs-${config.getId}")
-    config.set ("arabesque.motif.maxsize", maxSize)
-    config.set ("computation", "br.ufmg.cs.systems.fractal.gmlib.motif.MotifComputation")
-    resultHandler (config, false)
-  }
-
-  /**
    * Return a motif computation containing:
    * - Sum aggregation with key=Pattern and value=LongWritable
    */
@@ -144,7 +114,7 @@ class FractalGraph(
     import org.apache.hadoop.io.LongWritable
 
     val AGG_MOTIFS = "motifs"
-    vertexInducedComputation.
+    vfractoid.
       aggregate [Pattern,LongWritable] (
         AGG_MOTIFS,
         (e,c,k) => { e.getPattern },
@@ -157,11 +127,11 @@ class FractalGraph(
    * - Sum aggregation with key=Pattern and value=LongWritable
    */
   def motifsGtrie(size: Int): Fractoid[VertexInducedSubgraph] = {
-    import br.ufmg.cs.systems.fractal.extender.GtrieExtender
+    import br.ufmg.cs.systems.fractal.gmlib.motif.GtrieExtender
     import org.apache.hadoop.io.{IntWritable, LongWritable}
 
     val AGG_MOTIFS = "motifs"
-    vertexInducedComputation.
+    vfractoid.
       extend { (e,c) =>
         var extender = e.getExtender()
         if (extender == null) {
@@ -178,41 +148,7 @@ class FractalGraph(
         (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
   }
 
-  /**
-   * Computes all the frequent subgraphs for the given support
-   *
-    * {{{
-    * import br.ufmg.cs.systems.fractal.ArabesqueContext
-    *
-    * val input_graph = "ArabesqueDir/data/cube.graph"
-    * val max_size = 2
-    * val support = 3
-    *
-    * val graph = arab.textFile(input_graph)
-    * val res = graph.fsm(support, max_size)
-    *
-    * res.Subgraphs.count
-    * res.Subgraphs.collect
-    * }}}
-   *
-   * @param support frequency threshold
-   * @param maxSize upper bound for subgraph exploration
-    * @return an [[br.ufmg.cs.systems.fractal.Fractoid]] carrying odags and Subgraphs
-   */
-  def fsm(support: Int, maxSize: Int): Fractoid[EdgeInducedSubgraph] = {
-    val config = new SparkConfiguration [EdgeInducedSubgraph]
-    config.set ("input_graph_path", path)
-    config.set ("input_graph_local", local)
-    config.set ("output_path", s"${tmpPath}/fsm-${config.getId}")
-    config.set ("arabesque.fsm.maxsize", maxSize)
-    config.set ("arabesque.fsm.support", support)
-    config.set ("computation", "br.ufmg.cs.systems.fractal.gmlib.fsm.FSMComputation")
-    config.set ("master_computation",
-      "br.ufmg.cs.systems.fractal.gmlib.fsm.FSMMasterComputation")
-    resultHandler (config, false)
-  }
-
-  def fsm2(support: Int, numSteps: Int): Fractoid[EdgeInducedSubgraph] = {
+  def fsm(support: Int, numSteps: Int): Fractoid[EdgeInducedSubgraph] = {
     import br.ufmg.cs.systems.fractal.gmlib.fsm._
     import br.ufmg.cs.systems.fractal.pattern.Pattern
 
@@ -220,7 +156,7 @@ class FractalGraph(
 
     val AGG_FREQS = "frequent_patterns"
 
-    val bootstrap = edgeInducedComputation.
+    val bootstrap = efractoid.
       aggregate [Pattern,DomainSupport] (AGG_FREQS,
         (e,c,k) => { e.getPattern },
         (e,c,v) => { v.setSupport(support); v.setFromSubgraph(e); v },
@@ -273,143 +209,9 @@ class FractalGraph(
 
   /**
    */
-  def fsm(support: Int): Fractoid[EdgeInducedSubgraph] = {
-    import br.ufmg.cs.systems.fractal.gmlib.fsm._
-    import br.ufmg.cs.systems.fractal.pattern.Pattern
-
-    import scala.collection.JavaConverters._
-
-    val AGG_SUPPORT = "support"
-
-    val fsmRes = edgeInducedComputation { new EdgeProcessFunc {
-      @transient lazy val domainSupport = new ThreadLocal [DomainSupport] {
-        override def initialValue = new DomainSupport(support)
-      }
-      def apply (e: EdgeInducedSubgraph, c: Computation[EdgeInducedSubgraph])
-        : Unit = {
-        domainSupport.get.setFromSubgraph (e)
-        c.map(AGG_SUPPORT, e.getPattern, domainSupport.get)
-      }
-    }}.
-    withMasterCompute { new MasterComputeFunc {
-      private var numPreviousFrequentPatterns: Int = 0
-      def apply(c: MasterComputation): Unit = {
-        val freqPatterns = c.readAggregation [Pattern,DomainSupport] (AGG_SUPPORT)
-        if (freqPatterns.getNumberMappings <= numPreviousFrequentPatterns &&
-            c.getStep > 0) {
-          println (s"Stopping computation ${c} at step ${c.getStep}")
-          c.haltComputation()
-        } else {
-          freqPatterns.getMapping().asScala.foreach { case (pattern,support) =>
-            println (s"Frequent pattern(${c.getStep}): ${pattern} -> ${support}")
-          }
-          numPreviousFrequentPatterns = freqPatterns.getNumberMappings()
-        }
-      }
-    }}.
-    withAggregationRegistered [Pattern,DomainSupport] (AGG_SUPPORT,
-      new DomainSupportReducer(),
-      endAggregationFunction = new DomainSupportEndAggregationFunction(),
-      isIncremental = true).
-    //copy (mustSync = true).
-    filterByAgg [Pattern,DomainSupport] (AGG_SUPPORT) {
-      (e,a) =>
-        val res = a.containsKey (e.getPattern)
-        res
-    }//.
-    //copy(mustSync = true)
-
-    // The standard behavior is to increment the scope along with the step.
-    // However, because we want to handle fsm within the same scope, we must
-    // decrement one to it
-    fsmRes.copy (scope = fsmRes.scope - 1)
-  }
-
-  /**
-   * Counts triangles
-    * {{{
-    *   import br.ufmg.cs.systems.fractal.ArabesqueContext
-    *   val input_graph = "ArabesqueDir/data/cube.graph"
-    *
-    *   val graph = arab.textFile(input_graph)
-    *   val res = graph.triangles()
-    *
-    *   // The cube graph has no triangle
-    *   res.Subgraphs.count()
-    *   res.Subgraphs.collect()
-    * }}}
-   *
-   * @return an [[br.ufmg.cs.systems.fractal.Fractoid]] carrying odags and Subgraphs
-   */
-  def allStepsTriangles: Fractoid[VertexInducedSubgraph] = {
-    val config = new SparkConfiguration [VertexInducedSubgraph]
-    config.set ("input_graph_path", path)
-    config.set ("input_graph_local", local)
-    config.set ("output_path", s"${tmpPath}/triangles-${config.getId}")
-    config.set ("computation",
-      "br.ufmg.cs.systems.fractal.gmlib.triangles.CountingTrianglesComputation")
-    resultHandler (config, false)
-  }
-
-  /**
-   */
-  def triangles: Fractoid[VertexInducedSubgraph] = {
-    import br.ufmg.cs.systems.fractal.aggregation.reductions.LongSumReduction
-    import br.ufmg.cs.systems.fractal.util.SerializableWritable
-    import org.apache.hadoop.io.{IntWritable, LongWritable}
-
-    val longUnitSer = new SerializableWritable (new LongWritable(1))
-    val AGG_TRIANGLES = "membership"
-    vertexInducedComputation { (e,c) =>
-      if (e.getNumVertices == 3) {
-        val vertices = e.getVertices
-        val id = new IntWritable()
-        var i = 0
-        while (i < 3) {
-          id.set (vertices.getUnchecked(i))
-          c.map (AGG_TRIANGLES, id, longUnitSer.value)
-          i += 1
-        }
-      }
-    }.
-    withFilter ((e,c) => e.getNumVertices < 3 ||
-      (e.getNumVertices == 3 && e.getNumEdges == 3)).
-    withAggregationRegistered [IntWritable,LongWritable] (AGG_TRIANGLES,
-      new LongSumReduction)
-  }
-
-  /**
-   * Computes graph cliques of a given size
-   *
-    * {{{
-    *   import br.ufmg.cs.systems.fractal.ArabesqueContext
-    *   val input_graph = "ArabesqueDir/data/cube.graph"
-    *
-    *   val graph = arab.textFile(input_graph)
-    *   val res = graph.fsm()
-    *
-    *   res.Subgraphs.count()
-    *   res.Subgraphs.collect()
-    * }}}
-    *
-    * @param maxSize target clique size
-    * @return an [[br.ufmg.cs.systems.fractal.Fractoid]] carrying odags and Subgraphs
-   */
-  def cliques(maxSize: Int): Fractoid[VertexInducedSubgraph] = {
-    val config = new SparkConfiguration [VertexInducedSubgraph]
-    config.set ("input_graph_path", path)
-    config.set ("input_graph_local", local)
-    config.set ("output_path", s"${tmpPath}/cliques-${config.getId}")
-    config.set ("arabesque.clique.maxsize", maxSize)
-    config.set ("computation", "br.ufmg.cs.systems.fractal.gmlib.clique.CliqueComputation")
-    resultHandler (config, false)
-  }
-
-  /**
-   */
   def cliques: Fractoid[VertexInducedSubgraph] = {
     val CLIQUE_COUNTING = "clique_counting"
-    vertexInducedComputation.
+    vfractoid.
       withFilter { (e,c) =>
         e.getNumEdgesAddedWithExpansion == e.getNumVertices - 1
       }.
@@ -423,7 +225,7 @@ class FractalGraph(
   def cliquesOpt(cliqueSize: Int): Fractoid[VertexInducedSubgraph] = {
     import br.ufmg.cs.systems.fractal.optimization.CliqueInducedSubgraphs
     val CLIQUE_COUNTING = "clique_counting"
-    vertexInducedComputation.
+    vfractoid.
       extend { (e,c) =>
         var state = e.getState()
         if (state == null) {
@@ -457,7 +259,7 @@ class FractalGraph(
       pivot
     }
 
-    vertexInducedComputation.
+    vfractoid.
       extend { (e,c) =>
         val numWords = e.getNumWords
         if (numWords == 0) {
@@ -659,7 +461,7 @@ class FractalGraph(
       bestU
     }
 
-    vertexInducedComputation.
+    vfractoid.
       extend { (e,c) =>
         val numWords = e.getNumWords
         val cacheStore = e.cacheStore().asInstanceOf[HashIntObjMap[IntArrayList]]
@@ -892,7 +694,7 @@ class FractalGraph(
       }
     }
 
-    vertexInducedComputation.
+    vfractoid.
       extend { (e,c) =>
         val numWords = e.getNumWords
         if (numWords == 0) {
@@ -1031,7 +833,7 @@ class FractalGraph(
   }
 
   def ecliques: Fractoid[EdgeInducedSubgraph] = {
-    edgeInducedComputation.
+    efractoid.
       withFilter { (e,c) =>
         if (e.getNumVerticesAddedWithExpansion > 0) {
           val numVertices = e.getNumVertices - 1
@@ -1069,24 +871,10 @@ class FractalGraph(
     logInfo(s"QuasiCliques: maxDensity=${maxDensity}" +
       s" cummDensities=${cummDensities.mkString(",")}")
 
-    vertexInducedComputation.
+    vfractoid.
       withFilter((e,c) => (e.getNumEdges() / maxDensity) +
         cummDensities(e.getNumVertices() - 1) >= minDensity).
       exploreExp(numSteps)
-  }
-
-  /**
-   */
-  def cliquesPercolation(maxSize: Int)
-    : Fractoid[VertexInducedSubgraph] = {
-    val config = new SparkConfiguration [VertexInducedSubgraph]
-    config.set ("input_graph_path", path)
-    config.set ("input_graph_local", local)
-    config.set ("output_path", s"${tmpPath}/cliques-${config.getId}")
-    config.set ("arabesque.clique.maxsize", maxSize)
-    config.set ("computation",
-      "br.ufmg.cs.systems.fractal.gmlib.cliqueperc.CliquePercComputation")
-    resultHandler (config, false)
   }
 
   def keywordSearch(
@@ -1184,7 +972,7 @@ class FractalGraph(
       }
     }
 
-    val idxRes = edgeInducedComputation.
+    val idxRes = efractoid.
       set ("num_partitions", numPartitions).
       set ("input_graph_class", "br.ufmg.cs.systems.fractal.gmlib.keywordsearch.KeywordSearchGraph").
       set ("edge_labelled", true).
@@ -1504,7 +1292,7 @@ class FractalGraph(
       }
     }
 
-    val kwsRes = edgeInducedComputation.
+    val kwsRes = efractoid.
       set ("num_partitions", numPartitions).
       set ("input_graph_class", "br.ufmg.cs.systems.fractal.gmlib.keywordsearch.KeywordSearchGraph").
       set ("edge_labelled", true).
@@ -1563,20 +1351,19 @@ class FractalGraph(
     kwsRes
   }
 
-  def gmatching(subgraph: FractalGraph): Fractoid[VertexEdgeInducedSubgraph] = {
+  def gquerying(subgraph: FractalGraph): Fractoid[PatternInducedSubgraph] = {
     val qpattern = subgraph.asPattern
 
     logInfo (s"Querying pattern ${qpattern} in ${this}")
 
     val SUBGRAPH_COUNTING = "subgraph_counting"
 
-    val computation = vertexEdgeInducedComputation(qpattern).
+    val computation = pfractoid(qpattern).
       extend { (e,c) =>
         e.extensions(c, c.getPattern)
       }.
       aggregate [IntWritable,LongWritable] (
         SUBGRAPH_COUNTING,
-        //(e,c,k) => { k.set(0); println(s"vertices ${e.getVertices().toIntArray().map(v => c.getConfig().getMainGraph[BasicMainGraph[_,_]]().getVertex(v).getVertexOriginalId()).mkString(" ")}"); k },
         (e,c,k) => { k.set(0); k },
         (e,c,v) => { v.set(1); v },
         (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
@@ -1584,14 +1371,14 @@ class FractalGraph(
     computation
   }
 
-  def gmatchingNaive(subgraph: FractalGraph): Fractoid[VertexEdgeInducedSubgraph] = {
+  def gqueryingNaive(subgraph: FractalGraph): Fractoid[PatternInducedSubgraph] = {
     val qpattern = subgraph.asPattern
 
     logInfo (s"Querying pattern ${qpattern} in ${this}")
 
     val SUBGRAPH_COUNTING = "subgraph_counting"
 
-    val computation = vertexEdgeInducedComputation(qpattern).
+    val computation = pfractoid(qpattern).
       extend ((e,c) => e.extensions(c)).
       filter { (e,c) =>
         val p = e.getPattern
@@ -1614,9 +1401,9 @@ class FractalGraph(
   def computation [E <: Subgraph : ClassTag]: Fractoid[E] = {
     val eClass = classTag[E].runtimeClass
     if (eClass == classOf[VertexInducedSubgraph]) {
-      vertexInducedComputation.asInstanceOf[Fractoid[E]]
+      vfractoid.asInstanceOf[Fractoid[E]]
     } else if (eClass == classOf[EdgeInducedSubgraph]) {
-      edgeInducedComputation.asInstanceOf[Fractoid[E]]
+      efractoid.asInstanceOf[Fractoid[E]]
     } else {
       throw new RuntimeException (s"Unsupported subgraph type ${eClass}")
     }
@@ -1634,8 +1421,8 @@ class FractalGraph(
    * Returns a new result with a configurable computation container.
    *
     * {{{
-    *   import br.ufmg.cs.systems.fractal.ArabesqueContext
-    *   val input_graph = "ArabesqueDir/data/cube.graph"
+    *   import br.ufmg.cs.systems.fractal.fractalContext
+    *   val input_graph = "fractalDir/data/cube.graph"
     *
     *   val graph = arab.textFile(input_graph)
     *   val res = arabGraph.
@@ -1654,7 +1441,7 @@ class FractalGraph(
     * @param process function that is called for each subgraph produced
     * @return an [[br.ufmg.cs.systems.fractal.Fractoid]] carrying odags and Subgraphs
    */
-  def edgeInducedComputation(
+  def efractoid(
       process: (EdgeInducedSubgraph,
                 Computation[EdgeInducedSubgraph]) => Unit)
     : Fractoid[EdgeInducedSubgraph] = {
@@ -1669,15 +1456,15 @@ class FractalGraph(
     customComputation [EdgeInducedSubgraph] (config)
   }
 
-  def edgeInducedComputation: Fractoid[EdgeInducedSubgraph] =
-    edgeInducedComputation (null)
+  def efractoid: Fractoid[EdgeInducedSubgraph] =
+    efractoid (null)
 
   /**
    * Returns a new result with a configurable computation container.
    *
     * {{{
-    *   import br.ufmg.cs.systems.fractal.ArabesqueContext
-    *   val input_graph = "ArabesqueDir/data/cube.graph"
+    *   import br.ufmg.cs.systems.fractal.fractalContext
+    *   val input_graph = "fractalDir/data/cube.graph"
     *
     *   val graph = arab.textFile(input_graph)
     *   val res = arabGraph.
@@ -1696,7 +1483,7 @@ class FractalGraph(
     * @param process function that is called for each subgraph produced
     * @return an [[br.ufmg.cs.systems.fractal.Fractoid]] carrying odags and Subgraphs
    */
-  def vertexInducedComputation(
+  def vfractoid(
       process: (VertexInducedSubgraph,
                 Computation[VertexInducedSubgraph]) => Unit)
     : Fractoid[VertexInducedSubgraph] = {
@@ -1711,15 +1498,15 @@ class FractalGraph(
     customComputation [VertexInducedSubgraph] (config)
   }
 
-  def vertexInducedComputation: Fractoid[VertexInducedSubgraph] =
-    vertexInducedComputation (null)
+  def vfractoid: Fractoid[VertexInducedSubgraph] =
+    vfractoid (null)
 
   /**
    * Returns a new result with a configurable computation container.
    *
     * {{{
-    *   import br.ufmg.cs.systems.fractal.ArabesqueContext
-    *   val input_graph = "ArabesqueDir/data/cube.graph"
+    *   import br.ufmg.cs.systems.fractal.fractalContext
+    *   val input_graph = "fractalDir/data/cube.graph"
     *
     *   val graph = arab.textFile(input_graph)
     *   val res = arabGraph.
@@ -1738,29 +1525,29 @@ class FractalGraph(
     * @param process function that is called for each subgraph produced
     * @return an [[br.ufmg.cs.systems.fractal.Fractoid]] carrying odags and Subgraphs
    */
-  def vertexEdgeInducedComputation(
-      process: (VertexEdgeInducedSubgraph,
-                Computation[VertexEdgeInducedSubgraph]) => Unit,
-      pattern: Pattern): Fractoid[VertexEdgeInducedSubgraph] = {
-    val computation: Computation[VertexEdgeInducedSubgraph] =
+  def pfractoid(
+                 process: (PatternInducedSubgraph,
+                Computation[PatternInducedSubgraph]) => Unit,
+                 pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
+    val computation: Computation[PatternInducedSubgraph] =
       new VEComputationContainer(processOpt = Option(process),
         patternOpt = Option(pattern))
-    val config = new SparkConfiguration[VertexEdgeInducedSubgraph].
+    val config = new SparkConfiguration[PatternInducedSubgraph].
       withNewComputation (computation)
     config.set ("input_graph_path", path)
     config.set ("input_graph_local", local)
     config.set ("input_graph_class", graphClass)
     config.set ("output_path",
       s"${tmpPath}/vertex-edge-computation-${config.getId}")
-    customComputation [VertexEdgeInducedSubgraph] (config)
+    customComputation [PatternInducedSubgraph] (config)
   }
 
-  def vertexEdgeInducedComputation: Fractoid[VertexEdgeInducedSubgraph] =
-    vertexEdgeInducedComputation (null, null)
+  def pfractoid: Fractoid[PatternInducedSubgraph] =
+    pfractoid (null, null)
 
-  def vertexEdgeInducedComputation(
-      pattern: Pattern): Fractoid[VertexEdgeInducedSubgraph] =
-    vertexEdgeInducedComputation (null, pattern)
+  def pfractoid(
+      pattern: Pattern): Fractoid[PatternInducedSubgraph] =
+    pfractoid (null, pattern)
 
   def customComputation [E <: Subgraph: ClassTag] (
       config: SparkConfiguration[E]): Fractoid[E] = {
@@ -1771,7 +1558,7 @@ class FractalGraph(
     confs.update (key, value)
   }
 
-  override def toString(): String = s"ArabesqueGraph(${path})"
+  override def toString(): String = s"fractalGraph(${path})"
 }
 
 class VAtomicBitSetArray extends AtomicBitSetArray {

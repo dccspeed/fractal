@@ -8,7 +8,7 @@ import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.hash.HashIntSet;
-import com.koloboke.function.IntConsumer;
+import java.util.function.IntConsumer;
 
 import java.io.DataInput;
 import java.io.IOException;

@@ -4,6 +4,7 @@ import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
 import com.koloboke.collect.IntCollection;
 import java.util.function.IntConsumer;
+import java.util.function.Predicate;
 
 public interface MainGraph<V,E> {
     int getId();
@@ -47,14 +48,16 @@ public interface MainGraph<V,E> {
 
     void forEachEdgeId(int v1, int v2, IntConsumer intConsumer);
 
-    int applyTagVertexes(AtomicBitSetArray tag);
-    
-    int applyTagEdges(AtomicBitSetArray tag);
-    
-    int applyTag();
+    int filterVertices(AtomicBitSetArray tag);
 
-    int applyTag(AtomicBitSetArray vtag, AtomicBitSetArray etag);
-    
-    void removeVertex(int vertexId);
+    int filterVertices(Predicate<Vertex<V>> vpred);
+
+    int filterEdges(AtomicBitSetArray tag);
+
+    int filterEdges(Predicate<Edge<E>> epred);
+
+    int undoFilter();
+
+    int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag);
 
 }

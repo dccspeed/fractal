@@ -2,11 +2,12 @@ package br.ufmg.cs.systems.fractal.conf
 
 import java.io._
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.function.Predicate
 
 import br.ufmg.cs.systems.fractal.aggregation._
 import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.conf.Configuration._
-import br.ufmg.cs.systems.fractal.graph.{BasicMainGraph, MainGraph}
+import br.ufmg.cs.systems.fractal.graph._
 import br.ufmg.cs.systems.fractal.optimization.OptimizationSetDescriptor
 import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.subgraph._
@@ -26,7 +27,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
 
   // from scratch computation must have incremental aggregations
   fixAssignments
-  if (SparkConfiguration.COMMS_FROM_SCRATCH.contains(getCommStrategy())) {
+  if (SparkConfiguration.COMM_FROM_SCRATCH.contains(getCommStrategy())) {
     logInfo (s"Switching aggregations to incremental")
     set("incremental_aggregation", true)
   }
@@ -341,14 +342,13 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
 
   var tagApplied = false
 
-
   def initializeWithTag(isMaster: Boolean): Unit = synchronized {
     initialize(isMaster)
     if (!tagApplied) {
       val start = System.currentTimeMillis
       (confs.get("vtag"), confs.get("etag")) match {
         case (Some(vtag : AtomicBitSetArray), Some(etag : AtomicBitSetArray)) =>
-          val ret = getMainGraph[BasicMainGraph[_,_]].applyTag(vtag, etag)
+          val ret = getMainGraph[BasicMainGraph[_,_]].filter(vtag, etag)
           System.gc()
           val elapsed = System.currentTimeMillis - start
           logInfo (s"GraphTagging took ${elapsed} ms. Return: ${ret}")
@@ -365,7 +365,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
     initialize(isMaster)
     if (!tagApplied) {
       val start = System.currentTimeMillis
-      val ret = getMainGraph[BasicMainGraph[_,_]].applyTag(vtag, etag)
+      val ret = getMainGraph[BasicMainGraph[_,_]].filter(vtag, etag)
       System.gc()
       val elapsed = System.currentTimeMillis - start
       logInfo (s"GraphTagging took ${elapsed} ms. Return: ${ret}")
@@ -379,23 +379,12 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
       val start = System.currentTimeMillis
       val ec = createComputation.getSubgraphClass()
       val ret = if (ec == classOf[VertexInducedSubgraph]) {
-        getMainGraph[BasicMainGraph[_,_]].applyTagVertexes(tag)
+        getMainGraph[BasicMainGraph[_,_]].filterVertices(tag)
       } else if (ec == classOf[EdgeInducedSubgraph]) {
-        getMainGraph[BasicMainGraph[_,_]].applyTagEdges(tag)
+        getMainGraph[BasicMainGraph[_,_]].filterEdges(tag)
       } else {
         throw new RuntimeException(s"Unknown subgraph type: ${ec}")
       }
-      val elapsed = System.currentTimeMillis - start
-      logInfo (s"GraphTagging took ${elapsed} ms. Return: ${ret}")
-      tagApplied = true
-    }
-  }
-
-  def initializeWithTag(): Unit = synchronized {
-    initialize()
-    if (!tagApplied) {
-      val start = System.currentTimeMillis
-      val ret = getMainGraph[BasicMainGraph[_,_]].applyTag()
       val elapsed = System.currentTimeMillis - start
       logInfo (s"GraphTagging took ${elapsed} ms. Return: ${ret}")
       tagApplied = true
@@ -591,43 +580,10 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
 object SparkConfiguration extends Logging {
   /** odag flush methods */
 
-  // good for regular distributions
-  val FLUSH_BY_PATTERN = "flush_by_pattern"
-  // good for irregular distributions but small subgraph domains
-  val FLUSH_BY_ENTRIES = "flush_by_entries"
-  // good for irregular distributions, period
-  val FLUSH_BY_PARTS = "flush_by_parts"
-
-  /** communication strategies */
-
-  // pack Subgraphs with single-pattern odags
-  val COMM_ODAG_SP = "odag_sp"
-  // pack Subgraphs with multi-pattern odags
-  val COMM_ODAG_MP = "odag_mp"
-  // pack Subgraphs with compressed caches (e.g., LZ4)
-  val COMM_SUBGRAPH = "subgraph"
   // re-enumerates from scratch every superstep
   val COMM_FROM_SCRATCH = "scratch"
-  // re-enumerates from scratch every superstep (includes graph tags)
-  val COMM_GTAG = "gtag"
-  // re-enumerates from scratch every superstep (hierarchical)
-  val COMM_GTAG_HIER = "gtag_hier"
-  // re-enumerates from scratch every step (includes boolean tags)
-  val COMM_BTAG = "btag"
-  // re-enumerates from scratch every step (includes boolean tags for vertices
-  // and edges)
-  val COMM_VETAG = "vetag"
-  // re-enumerates from scratch every step (includes word edges tags)
-  val COMM_VIEWTAG = "viewtag"
-  // re-enumerates from scratch (used for characterization purposes)
-  val COMM_CHARAC = "charac"
-
-  val COMMS_FROM_SCRATCH = Set(COMM_FROM_SCRATCH, COMM_GTAG,
-    COMM_GTAG_HIER, COMM_BTAG, COMM_VETAG, COMM_VIEWTAG, COMM_CHARAC)
-
-  // gtag
-  val GTAG_BATCH_LOW = "gtag_batch_low"
-  val GTAG_BATCH_HIGH = "gtag_batch_high"
+  // transparently reducing input graph each fractal step
+  val COMM_GRAPH_RED = "graphred"
 
   // hadoop conf
   val HADOOP_CONF = "hadoop_conf"

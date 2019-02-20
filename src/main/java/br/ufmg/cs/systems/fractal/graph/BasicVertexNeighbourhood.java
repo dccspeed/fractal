@@ -9,6 +9,8 @@ import com.koloboke.collect.map.IntIntCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
 import java.util.function.IntConsumer;
+import java.util.function.Predicate;
+
 import com.koloboke.function.IntIntConsumer;
 
 public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Serializable {
@@ -18,9 +20,16 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
    protected IntArrayList orderedVertices;
    protected IntArrayList orderedEdges;
 
+   protected MainGraph graph;
+
    public BasicVertexNeighbourhood() {
       this.neighbourhoodMap = HashIntIntMaps.getDefaultFactory().withDefaultValue(-1).newMutableMap();
       this.removedNeighbourhoodMap = HashIntIntMaps.getDefaultFactory().withDefaultValue(-1).newMutableMap();
+   }
+
+   public BasicVertexNeighbourhood(MainGraph graph) {
+      this();
+      this.graph = graph;
    }
 
    @Override
@@ -59,7 +68,7 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
    }
    
    @Override
-   public int applyTag(AtomicBitSetArray vtag, AtomicBitSetArray etag) {
+   public int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag) {
       IntIntCursor cur = neighbourhoodMap.cursor();
       int numVertices = neighbourhoodMap.size();
       int removedEdges = 0;
@@ -84,7 +93,33 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
    }
 
    @Override
-   public int applyTagVertexes(AtomicBitSetArray tag) {
+   public int filter(Predicate<Vertex> vpred, Predicate<Edge> epred) {
+      IntIntCursor cur = neighbourhoodMap.cursor();
+      int numVertices = neighbourhoodMap.size();
+      int removedEdges = 0;
+      while (cur.moveNext()) {
+         if (!vpred.test(graph.getVertex(cur.key())) ||
+                 !epred.test(graph.getEdge(cur.value()))) {
+            removedNeighbourhoodMap.put(cur.key(), cur.value());
+            cur.remove();
+            --numVertices;
+            ++removedEdges;
+         }
+      }
+
+      if (numVertices != neighbourhoodMap.size()) {
+         throw new RuntimeException("Tagging error. Expected: " +
+                 numVertices + " Got: " + neighbourhoodMap.size());
+      }
+
+      buildSortedNeighborhood();
+
+      return removedEdges;
+
+   }
+
+   @Override
+   public int filterVertices(AtomicBitSetArray tag) {
       IntIntCursor cur = neighbourhoodMap.cursor();
       int numVertices = neighbourhoodMap.size();
       int removedEdges = 0;
@@ -108,7 +143,7 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
    }
 
    @Override
-   public int applyTagEdges(AtomicBitSetArray tag) {
+   public int filterEdges(AtomicBitSetArray tag) {
       IntIntCursor cur = neighbourhoodMap.cursor();
       int numVertices = neighbourhoodMap.size();
       int removedWords = 0;
@@ -159,20 +194,6 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
       }
    }
 
-   @Override
-   public int forEachVertexEdgeLowerBound(
-         IntIntConsumer consumer, int lowerBound) {
-      int numVertices = orderedVertices.size();
-      int fromIdx = orderedVertices.binarySearch(lowerBound);
-      fromIdx = (fromIdx < 0) ? (-fromIdx - 1) : fromIdx;
-      for (int i = fromIdx; i < numVertices; ++i) {
-         int vIdx = orderedVertices.getUnchecked(i);
-         consumer.accept(vIdx, neighbourhoodMap.get(vIdx));
-      }
-
-      return (numVertices - fromIdx);
-   }
-   
    @Override
    public void forEachVertexEdge(IntIntConsumer consumer) {
       neighbourhoodMap.forEach(consumer);

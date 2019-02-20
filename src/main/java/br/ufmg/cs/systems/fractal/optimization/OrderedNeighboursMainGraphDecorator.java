@@ -9,6 +9,7 @@ import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
 import com.koloboke.collect.IntCollection;
 import java.util.function.IntConsumer;
+import java.util.function.Predicate;
 
 public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMainGraph {
     protected MainGraph underlyingMainGraph;
@@ -43,28 +44,33 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
     }
 
     @Override
-    public int applyTag(AtomicBitSetArray vtag, AtomicBitSetArray etag) {
-       throw new UnsupportedOperationException("Not implemented");
-    }
-    
-    @Override
-    public int applyTag() {
-       throw new UnsupportedOperationException("Not implemented");
-    }
-    
-    @Override
-    public int applyTagVertexes(AtomicBitSetArray tag) {
-       throw new UnsupportedOperationException("Not implemented");
-    }
-    
-    @Override
-    public int applyTagEdges(AtomicBitSetArray tag) {
+    public int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag) {
        throw new UnsupportedOperationException("Not implemented");
     }
 
     @Override
-    public void removeVertex(int vertexId) {
+    public int undoFilter() {
        throw new UnsupportedOperationException("Not implemented");
+    }
+
+    @Override
+    public int filterVertices(Predicate vpred) {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
+    @Override
+    public int filterVertices(AtomicBitSetArray tag) {
+       throw new UnsupportedOperationException("Not implemented");
+    }
+    
+    @Override
+    public int filterEdges(AtomicBitSetArray tag) {
+       throw new UnsupportedOperationException("Not implemented");
+    }
+
+    @Override
+    public int filterEdges(Predicate epred) {
+        throw new UnsupportedOperationException("Not implemented");
     }
 
     @Override

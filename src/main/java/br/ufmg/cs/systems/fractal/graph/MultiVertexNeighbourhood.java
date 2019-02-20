@@ -26,10 +26,11 @@ public class MultiVertexNeighbourhood extends BasicVertexNeighbourhood {
     private IntCollectionMultiplexer neighbourEdges;
     private IntCollectionMultiplexer neighbourVertices;
 
-    public MultiVertexNeighbourhood() {
-        this.multiEdgeNeighbourhoodMap = HashIntObjMaps.newMutableMap();
-        this.neighbourEdges = null;
-        this.neighbourVertices = null;
+    public MultiVertexNeighbourhood(MainGraph graph) {
+      this.multiEdgeNeighbourhoodMap = HashIntObjMaps.newMutableMap();
+      this.neighbourEdges = null;
+      this.neighbourVertices = null;
+      this.graph = graph;
     }
 
    @Override

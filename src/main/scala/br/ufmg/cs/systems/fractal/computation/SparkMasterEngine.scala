@@ -35,7 +35,14 @@ trait SparkMasterEngine [E <: Subgraph]
 
   def config: SparkConfiguration[E]
   
-  lazy val configBc: Broadcast[SparkConfiguration[E]] = sc.broadcast(config)
+  var mutableConfigBc: Broadcast[SparkConfiguration[E]] = _
+
+  def configBc: Broadcast[SparkConfiguration[E]] = {
+    if (mutableConfigBc == null) {
+      mutableConfigBc = sc.broadcast(config)
+    }
+    mutableConfigBc
+  }
   
   def parentOpt: Option[SparkMasterEngine[E]]
   
@@ -383,7 +390,7 @@ object SparkMasterEngine {
     case COMM_FROM_SCRATCH =>
       new SparkFromScratchMasterEngine [E] (sc, config, parent)
     
-    case COMM_VETAG =>
-      new SparkVEtagMasterEngine [E] (sc, config, parent)
+    case COMM_GRAPH_RED =>
+      new SparkGraphRedMasterEngine [E] (sc, config, parent)
   }
 }

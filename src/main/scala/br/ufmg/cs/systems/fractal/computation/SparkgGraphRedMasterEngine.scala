@@ -28,27 +28,27 @@ import scala.util.{Failure, Success}
  * It interacts directly with the RDD interface in Spark by handling the
  * SparkContext.
  */
-class SparkVEtagMasterEngine[E <: Subgraph](
+class SparkGraphRedMasterEngine[E <: Subgraph](
     _config: SparkConfiguration[E],
     _parentOpt: Option[SparkMasterEngine[E]]) extends SparkMasterEngine [E] {
 
   import SparkFromScratchMasterEngine._
-  import SparkVEtagMasterEngine._
+  import SparkGraphRedMasterEngine._
 
   var repetition: Boolean = false
 
   def config: SparkConfiguration[E] = _config
-  
+
   def parentOpt: Option[SparkMasterEngine[E]] = _parentOpt
-  
+
   var gtagMasterActorRef: ActorRef = _
-  
+
   def this(_sc: SparkContext, config: SparkConfiguration[E]) {
     this (config, None)
     sc = _sc
     init()
   }
-  
+
   def this(_sc: SparkContext, config: SparkConfiguration[E],
       parent: SparkMasterEngine[E]) {
     this (config, Option(parent))
@@ -60,7 +60,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
     val start = System.currentTimeMillis
 
     super.init()
-    
+
     // gtag computations must have incremental aggregations because we compute
     // from scratch all the steps, then if one of those depends on any previous
     // aggregation (e.g., fsm computation) we are secured
@@ -76,7 +76,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
 
     logInfo(s"${this} took ${(end - start)}ms to initialize.")
   }
-  
+
   /**
    * Master's computation takes place here, superstep by superstep
    */
@@ -88,11 +88,11 @@ class SparkVEtagMasterEngine[E <: Subgraph](
     //tmp.previousAggregationsBc = previousAggregationsBc
     //tmp.computeNext()
   }
-  
+
   def computeNext(): Boolean = {
 
     val superstepStart = System.currentTimeMillis
-    
+
     logInfo (s"${this} Computation starting from ${superstepRDD}," +
       s", StorageLevel=${superstepRDD.getStorageLevel}")
 
@@ -119,8 +119,8 @@ class SparkVEtagMasterEngine[E <: Subgraph](
     // adding accumulators to each computation
     val veAccums = new Array[LongAccumulator](numComputations)
     val ceAccums = new Array[LongAccumulator](numComputations)
-    val eAccums = new Array[LongAccumulator](numComputations)  
-    
+    val eAccums = new Array[LongAccumulator](numComputations)
+
     var i = 0
     while (i < numComputations) {
       val veKey = s"${VALID_SUBGRAPHS}_${i}"
@@ -139,7 +139,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
 
       i += 1
     }
-    
+
     // we will contruct the pipeline in this var
     var cc = originalContainer.withComputationLabel("last_step_begins")
 
@@ -152,7 +152,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
 
     // configure custom WordFilterFunc, except for computations of the last step
     val wordFilterFuncs = new Array[WordFilterFunc[E]](numComputations)
-    
+
     //if ((numComputations - numComputationsLastStep) > 0) {
     //  val wordFilterFunc = getWordFilterFunc(cfAccums, gfAccums, gfcfAccums, 0)
     //  var j = 0
@@ -161,11 +161,11 @@ class SparkVEtagMasterEngine[E <: Subgraph](
     //    j += 1
     //  }
     //}
-    
+
     //if ((numComputations - numComputationsLastStep) > 0) {
     //  wordFilterFuncs(0) = getWordFilterFunc(cfAccums, gfAccums, gfcfAccums, 0)
     //}
-    
+
     //val lastIdx = if (!repetition) {
     //  (numComputations - numComputationsLastStep) - 1
     //} else {
@@ -294,7 +294,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
       case Success(previousAggregations) =>
         aggregations = mergeOrReplaceAggregations (aggregations,
           previousAggregations)
-        
+
         aggregations.foreach { case (name, agg) =>
           val mapping = agg.getMapping
           val numMappings = agg.getNumberMappings
@@ -309,13 +309,13 @@ class SparkVEtagMasterEngine[E <: Subgraph](
         logError (s"Error in collecting aggregations: ${e.getMessage}")
         throw e
     }
-    
+
     execEngines.unpersist()
 
     // whether the user chose to customize master computation, executed every
     // superstep
     masterComputation.compute()
-    
+
     // print stats
     aggAccums.foreach { case (name, accum) =>
       logInfo (s"Accumulator[${superstep}][${name}]: ${accum.value}")
@@ -324,7 +324,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
 
     // master will send poison pills to all executor actors of this step
     gtagMasterActorRef ! Reset
-    
+
     val superstepFinish = System.currentTimeMillis
     logInfo (
       s"Superstep $superstep finished in ${superstepFinish - superstepStart} ms"
@@ -336,8 +336,30 @@ class SparkVEtagMasterEngine[E <: Subgraph](
     !sc.isStopped && !isComputationHalted
   }
 
+  override def finalizeComputation(): Unit = {
+    val vagg = getAggregatedValue [
+      AggregationStorage[NullWritable,AtomicBitSetArray]] (VPREV_ENUM)
+    if (vagg != null) {
+      aggregations.remove(VPREV_ENUM)
+      config.set(VPREV_ENUM, vagg.getValue(NullWritable.get()))
+    }
+
+    val eagg = getAggregatedValue [
+      AggregationStorage[NullWritable,AtomicBitSetArray]] (EPREV_ENUM)
+    if (eagg != null) {
+      aggregations.remove(EPREV_ENUM)
+      config.set(EPREV_ENUM, eagg.getValue(NullWritable.get()))
+    }
+
+    previousAggregationsBc.destroy()
+    previousAggregationsBc = sc.broadcast(aggregations)
+
+    configBc.destroy()
+    mutableConfigBc = sc.broadcast(config)
+  }
+
   /**
-   * Creates an RDD of execution engines 
+   * Creates an RDD of execution engines
    */
   def getExecutionEngines[E <: Subgraph](
       superstepRDD: RDD[Unit],
@@ -347,7 +369,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
       previousAggregationsBc: Broadcast[_]): RDD[SparkEngine[E]] = {
 
     val execEngines = superstepRDD.mapPartitionsWithIndex { (idx, cacheIter) =>
-    
+
       val prevAggs = previousAggregationsBc.value.asInstanceOf[Map[String,_]]
       (prevAggs.get(VPREV_ENUM), prevAggs.get(EPREV_ENUM)) match {
         case (Some(vagg), Some(eagg)) =>
@@ -368,7 +390,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
         case tags =>
           throw new RuntimeException(s"Not allowed, missing tag: ${tags}")
       }
-          
+
       val execEngine = new SparkFromScratchEngine [E] (
         partitionId = idx,
         superstep = superstep,
@@ -380,7 +402,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
       execEngine.init()
       execEngine.compute ()
       execEngine.finalize()
-          
+
       configBc.value.uninitialize()
 
       Iterator[SparkEngine[E]](execEngine)
@@ -391,7 +413,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
 
   def getProcessComputeFunc(_egAccums: Array[LongAccumulator],
       _awAccums: Array[LongAccumulator]): ProcessComputeFunc[E] = {
-    new ProcessComputeFunc[E] with Logging { 
+    new ProcessComputeFunc[E] with Logging {
       val numComputations = _egAccums.length
 
       val egAccums = _egAccums
@@ -399,17 +421,17 @@ class SparkVEtagMasterEngine[E <: Subgraph](
       val awAccums = _awAccums
 
       var enabledVertices: AtomicBitSetArray = _
-      
+
       var enabledEdges: AtomicBitSetArray = _
 
       var workStealingSys: WorkStealingSystem[E] = _
-        
+
       var totalNumWords: Int = _
 
       var computations: Array[Computation[E]] = _
-      
+
       var iterators: Array[JavaIterator[E]] = _
-      
+
       def apply(iter: JavaIterator[E], c: Computation[E]): Long = {
         if (c.getDepth() == 0) {
           val config = c.getConfig()
@@ -438,7 +460,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
           enabledVertices = new AtomicBitSetArray(config.getNumVertices())
           c.getAggregationStorage [NullWritable,AtomicBitSetArray] (VPREV_ENUM).
             aggregate(NullWritable.get(), enabledVertices)
-          
+
           enabledEdges = new AtomicBitSetArray(config.getNumEdges())
           c.getAggregationStorage [NullWritable,AtomicBitSetArray] (EPREV_ENUM).
             aggregate(NullWritable.get(), enabledEdges)
@@ -463,7 +485,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
           workStealingSys = new WorkStealingSystem[E](
             processCompute, gtagExecutorActor, new ConcurrentLinkedQueue(),
             callback = callback)
-          
+
           val ret = processCompute(iter, c)
           workStealingSys.workStealingCompute(c)
           ret
@@ -500,7 +522,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
             }
           }
         }
-        
+
         awAccums(c.getDepth).add(addWords)
         egAccums(c.getDepth).add(SubgraphsGenerated)
 
@@ -550,7 +572,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
 
         SubgraphsGenerated
       }
-      
+
       private def processCompute(iter: JavaIterator[E],
           c: Computation[E]): Long = {
         val nextComp = c.nextComputation()
@@ -591,7 +613,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
         }
       }
     )
-    
+
     val endAggregationFunc =
       null.asInstanceOf[EndAggregationFunction[NullWritable,AtomicBitSetArray]]
 
@@ -616,7 +638,7 @@ class SparkVEtagMasterEngine[E <: Subgraph](
   }
 }
 
-object SparkVEtagMasterEngine {
-  val VPREV_ENUM = "vprevious_enumeration"
-  val EPREV_ENUM = "eprevious_enumeration"
+object SparkGraphRedMasterEngine {
+  val VPREV_ENUM = "vtag"
+  val EPREV_ENUM = "etag"
 }

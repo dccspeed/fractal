@@ -5,6 +5,8 @@ import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
 import com.koloboke.collect.IntCollection;
 import java.util.function.IntConsumer;
+import java.util.function.Predicate;
+
 import com.koloboke.function.IntIntConsumer;
 
 public interface VertexNeighbourhood {
@@ -20,15 +22,14 @@ public interface VertexNeighbourhood {
     
     void forEachVertexEdge(IntIntConsumer consumer);
    
-    int forEachVertexEdgeLowerBound(
-         IntIntConsumer consumer, int lowerBound);
+    int filterVertices(AtomicBitSetArray tag);
     
-    int applyTagVertexes(AtomicBitSetArray tag);
+    int filterEdges(AtomicBitSetArray tag);
     
-    int applyTagEdges(AtomicBitSetArray tag);
-    
-    int applyTag(AtomicBitSetArray vtag, AtomicBitSetArray etag);
-    
+    int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag);
+
+    int filter(Predicate<Vertex> vpred, Predicate<Edge> epred);
+
     void removeVertex(int vertexId);
 
     void reset();

@@ -77,9 +77,24 @@ public class SubgraphEnumerator<E extends Subgraph> implements Iterator<E> {
       this.active = new AtomicBoolean(true);
       return this;
    }
+   
+   public synchronized SubgraphEnumerator<E> set(
+         Computation<E> computation,E Subgraph) {
+      this.computation = computation;
+      this.prefix.clear();
+      this.prefix.addAll(Subgraph.getWords());
+      this.Subgraph = Subgraph;
+      this.lastHasNext = false;
+      this.currElem = -1;
+      this.wordIds = null;
+      this.cur = null;
+      this.shouldRemoveLastWord = false;
+      this.active = new AtomicBoolean(true);
+      return this;
+   }
 
    public synchronized SubgraphEnumerator<E> set(Computation<E> computation,
-                                                 E Subgraph, IntCollection wordIds) {
+         E Subgraph, IntCollection wordIds) {
       this.computation = computation;
       this.prefix.clear();
       this.prefix.addAll(Subgraph.getWords());

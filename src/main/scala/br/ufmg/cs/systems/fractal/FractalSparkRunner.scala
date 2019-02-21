@@ -185,20 +185,6 @@ class MaximalCliquesNaiveApp(val arabGraph: FractalGraph,
   }
 }
 
-class ECliquesApp(val arabGraph: FractalGraph,
-                  commStrategy: String,
-                  numPartitions: Int,
-                  explorationSteps: Int) extends FractalSparkApp {
-  def execute: Unit = {
-    val cliquesRes = arabGraph.ecliques.
-      set ("comm_strategy", commStrategy).
-      set ("num_partitions", numPartitions).
-      explore(explorationSteps)
-    val Subgraphs = cliquesRes.subgraphs((_, _) => false)
-    println (s"num cliques = ${Subgraphs.count}")
-  }
-}
-
 class QuasiCliquesApp(val arabGraph: FractalGraph,
                       commStrategy: String,
                       numPartitions: Int,
@@ -395,9 +381,6 @@ object FractalSparkRunner {
           numPartitions, explorationSteps)
       case "maximalcliques" =>
         new MaximalCliquesApp(arabGraph, commStrategy,
-          numPartitions, explorationSteps)
-      case "ecliques" =>
-        new ECliquesApp(arabGraph, commStrategy,
           numPartitions, explorationSteps)
       case "quasicliques" =>
         i += 1

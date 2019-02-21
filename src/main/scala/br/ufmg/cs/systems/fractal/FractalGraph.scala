@@ -212,7 +212,7 @@ class FractalGraph(
   def cliques: Fractoid[VertexInducedSubgraph] = {
     val CLIQUE_COUNTING = "clique_counting"
     vfractoid.
-      withFilter { (e,c) =>
+      filter { (e,c) =>
         e.getNumEdgesAddedWithExpansion == e.getNumVertices - 1
       }.
       aggregate [IntWritable,LongWritable] (
@@ -830,20 +830,6 @@ class FractalGraph(
         (e,c,v) => { v.set(1); v },
         (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
 
-  }
-
-  def ecliques: Fractoid[EdgeInducedSubgraph] = {
-    efractoid.
-      withFilter { (e,c) =>
-        if (e.getNumVerticesAddedWithExpansion > 0) {
-          val numVertices = e.getNumVertices - 1
-          val maxNumEdges = numVertices * (numVertices - 1) / 2
-          if (e.getNumEdges - 1 == maxNumEdges) true
-          else false
-        } else {
-          true
-        }
-      }
   }
 
   def quasiCliques(

@@ -23,7 +23,7 @@ public abstract class BasicComputation<E extends Subgraph>
     
     private transient SubgraphEnumerator<E> bypassIter;
     
-    private transient SubgraphEnumerator<E> SubgraphEnumerator;
+    private transient SubgraphEnumerator<E> subgraphEnumerator;
 
     private transient CommonExecutionEngine<E> executionEngine;
     private transient MainGraph mainGraph;
@@ -71,7 +71,17 @@ public abstract class BasicComputation<E extends Subgraph>
         };
 
         bypassIter = new SubgraphEnumerator<E>() {
-           private boolean hasNext = true;
+           private boolean hasNext;
+
+           @Override
+           public synchronized SubgraphEnumerator<E> set(
+                 Computation<E> computation, E Subgraph) {
+              this.computation = computation;
+              this.Subgraph = Subgraph;
+              this.hasNext = true;
+              return this;
+           }
+
            @Override
            public boolean hasNext() {
               return hasNext;
@@ -84,7 +94,7 @@ public abstract class BasicComputation<E extends Subgraph>
            }
         };
 
-        SubgraphEnumerator = new SubgraphEnumerator<E>();
+        subgraphEnumerator = new SubgraphEnumerator<E>();
     }
 
     @Override
@@ -94,13 +104,7 @@ public abstract class BasicComputation<E extends Subgraph>
 
     @Override
     public final long compute(E Subgraph) {
-       if (!aggregationCompute(Subgraph)) {
-          return 0;
-       }
-
-       long ret = processCompute(expandCompute(Subgraph));
-       // finish();
-       return ret;
+       return processCompute(expandCompute(Subgraph));
     }
 
     @Override
@@ -143,7 +147,7 @@ public abstract class BasicComputation<E extends Subgraph>
         //}
        
         currentSubgraph = Subgraph;
-        return SubgraphEnumerator.set(this, Subgraph, possibleExtensions);
+        return subgraphEnumerator.set(this, Subgraph, possibleExtensions);
     }
 
     @Override
@@ -312,8 +316,13 @@ public abstract class BasicComputation<E extends Subgraph>
        return null;
     }
 
+    @Override
+    public SubgraphEnumerator<E> bypass(E subgraph) {
+       return bypassIter.set(this, subgraph);
+    }
+
     public SubgraphEnumerator<E> getSubgraphEnumerator() {
-       return this.SubgraphEnumerator;
+       return this.subgraphEnumerator;
     }
 
     @Override
@@ -322,9 +331,9 @@ public abstract class BasicComputation<E extends Subgraph>
        SubgraphEnumerator<E> consumer = null;
 
        while (curr != null && curr.nextComputation() != null) {
-          if (curr.SubgraphEnumerator != null &&
-                curr.SubgraphEnumerator.isActive()) {
-             consumer = curr.SubgraphEnumerator.forkConsumer(local);
+          if (curr.subgraphEnumerator != null &&
+                curr.subgraphEnumerator.isActive()) {
+             consumer = curr.subgraphEnumerator.forkConsumer(local);
              if (consumer.hasNext()) {
                 return consumer;
              } else {

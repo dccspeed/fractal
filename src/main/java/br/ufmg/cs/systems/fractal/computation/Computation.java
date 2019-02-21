@@ -84,6 +84,8 @@ public interface Computation<E extends Subgraph> {
     Configuration<E> getConfig();
 
     E getCurrentSubgraph();
+
+    SubgraphEnumerator<E> bypass(E subgraph);
     // }}}
 
     // {{{ Internal
@@ -102,6 +104,8 @@ public interface Computation<E extends Subgraph> {
     Class<? extends Subgraph> getSubgraphClass();
     
     int getInitialNumWords();
+
+    boolean containsWord(int wordId);
 
     Pattern getPattern();
     // }}}

@@ -13,4 +13,9 @@ public abstract class VertexInducedComputation<E extends VertexInducedSubgraph> 
     public Class<? extends Subgraph> getSubgraphClass() {
         return VertexInducedSubgraph.class;
     }
+
+    @Override
+    public boolean containsWord(int vertexId) {
+       return getMainGraph().getVertex(vertexId) != null;
+    }
 }

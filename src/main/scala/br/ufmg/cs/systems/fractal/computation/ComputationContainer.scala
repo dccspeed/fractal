@@ -1056,7 +1056,7 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
     processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
       None,
     nextComputationOpt: Option[Computation[E]] = None)
-  extends VertexEdgeInducedComputation[E] with ComputationContainer[E] {
+  extends PatternInducedComputation[E] with ComputationContainer[E] {
   
   private val pconfigOpt: Option[Configuration[E]] =
     patternOpt.map(_.getConfig().asInstanceOf[Configuration[E]])

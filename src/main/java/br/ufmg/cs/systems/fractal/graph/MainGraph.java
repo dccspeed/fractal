@@ -56,8 +56,12 @@ public interface MainGraph<V,E> {
 
     int filterEdges(Predicate<Edge<E>> epred);
 
-    int undoFilter();
+    int undoVertexFilter();
+    
+    int undoEdgeFilter();
 
     int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag);
+
+    void buildSortedNeighborhood();
 
 }

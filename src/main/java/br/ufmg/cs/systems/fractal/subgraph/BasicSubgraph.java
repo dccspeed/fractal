@@ -286,7 +286,7 @@ public abstract class BasicSubgraph implements Subgraph {
       }
 
       for (int i = startMyWordRange; i < endMyWordRange; ++i) {
-         if (computation.filter(this, i)) {
+         if (computation.containsWord(i) && computation.filter(this, i)) {
             extensionWordIds().add(i);
          }
       }

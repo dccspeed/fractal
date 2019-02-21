@@ -175,7 +175,7 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
     val initStart = System.currentTimeMillis
     val _configBc = configBc
     superstepRDD.mapPartitions { iter =>
-      _configBc.value.initialize(isMaster = false)
+      _configBc.value.initializeWithTag(isMaster = false)
       iter
     }.foreachPartition(_ => {})
 
@@ -268,7 +268,7 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
 
     val execEngines = superstepRDD.mapPartitionsWithIndex { (idx, cacheIter) =>
 
-      configBc.value.initialize(isMaster = false)
+      configBc.value.initializeWithTag(isMaster = false)
 
       val execEngine = new SparkFromScratchEngine [E] (
         partitionId = idx,
@@ -410,38 +410,43 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
 
       private def lastComputation(iter: JavaIterator[E],
           c: Computation[E]): Long = {
-        //var currentSubgraph: E = null.asInstanceOf[E]
-        //var addWords = 0L
-        //var SubgraphsGenerated = 0L
 
-        //while (iter.hasNext) {
-        //  currentSubgraph = iter.next
-        //  addWords += 1
-        //  if (c.filter(currentSubgraph)) {
-        //    SubgraphsGenerated += 1
-        //    if (c.shouldExpand(currentSubgraph)) {
-        //      c.getExecutionEngine().processExpansion(currentSubgraph)
-        //    }
-        //    c.process(currentSubgraph)
-        //  }
-        //}
-        //awAccums(c.getDepth).add(addWords)
-        //egAccums(c.getDepth).add(SubgraphsGenerated)
+        try {       
+          val embIter = iter.asInstanceOf[SubgraphEnumerator[E]]
+          lastStepConsumer.set(embIter.getSubgraph(), c)
+          embIter.getWordIds().forEach(lastStepConsumer)
+          awAccums(c.getDepth).add(lastStepConsumer.addWords)
+          egAccums(c.getDepth).add(lastStepConsumer.SubgraphsGenerated)
+        } catch {
+          case e: Exception =>
+            var currentSubgraph: E = null.asInstanceOf[E]
+            var addWords = 0L
+            var SubgraphsGenerated = 0L
 
-        val embIter = iter.asInstanceOf[SubgraphEnumerator[E]]
-        lastStepConsumer.set(embIter.getSubgraph(), c)
-        embIter.getWordIds().forEach(lastStepConsumer)
-        awAccums(c.getDepth).add(lastStepConsumer.addWords)
-        egAccums(c.getDepth).add(lastStepConsumer.SubgraphsGenerated)
+            while (iter.hasNext) {
+              currentSubgraph = iter.next
+              addWords += 1
+              if (c.filter(currentSubgraph)) {
+                SubgraphsGenerated += 1
+                if (c.shouldExpand(currentSubgraph)) {
+                  c.getExecutionEngine().processExpansion(currentSubgraph)
+                }
+                c.process(currentSubgraph)
+              }
+            }
+            awAccums(c.getDepth).add(addWords)
+            egAccums(c.getDepth).add(SubgraphsGenerated)
+        }
+
 
         0
       }
 
       private def processCompute(iter: JavaIterator[E],
-          c: Computation[E]): Long = {
-        val nextComp = c.nextComputation()
+        c: Computation[E]): Long = {
+          val nextComp = c.nextComputation()
 
-        if (nextComp != null) {
+          if (nextComp != null) {
           if (nextComp.computationLabel() == "last_step_begins") {
             lastStepBeginsOnNextComputation(iter, c, nextComp)
           } else {

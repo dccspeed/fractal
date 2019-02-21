@@ -49,7 +49,12 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
     }
 
     @Override
-    public int undoFilter() {
+    public int undoVertexFilter() {
+       throw new UnsupportedOperationException("Not implemented");
+    }
+    
+    @Override
+    public int undoEdgeFilter() {
        throw new UnsupportedOperationException("Not implemented");
     }
 
@@ -70,6 +75,11 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
 
     @Override
     public int filterEdges(Predicate epred) {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
+    @Override
+    public void buildSortedNeighborhood() {
         throw new UnsupportedOperationException("Not implemented");
     }
 

@@ -863,6 +863,7 @@ public abstract class BasicPattern implements Pattern {
 
         //init(Configuration.get(dataInput.readInt()));
         configurationId = dataInput.readInt();
+        configuration = Configuration.get(configurationId);
 
         if (edges == null) {
            edges = createPatternEdgeArrayList(isGraphEdgeLabelled);

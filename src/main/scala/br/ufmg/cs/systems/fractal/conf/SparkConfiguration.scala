@@ -345,18 +345,72 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
   def initializeWithTag(isMaster: Boolean): Unit = synchronized {
     initialize(isMaster)
     if (!tagApplied) {
-      val start = System.currentTimeMillis
-      (confs.get("vtag"), confs.get("etag")) match {
+      
+      val startTag = System.currentTimeMillis
+
+      logInfo(s"BeforeFilter\n${getMainGraph[BasicMainGraph[_,_]].toDebugString()}")
+      getMainGraph[BasicMainGraph[_,_]].undoVertexFilter()
+      getMainGraph[BasicMainGraph[_,_]].undoEdgeFilter()
+      logInfo(s"AfterUndoFilter\n${getMainGraph[BasicMainGraph[_,_]].toDebugString()}")
+      
+      val ret = (confs.get("vtag"), confs.get("etag")) match {
         case (Some(vtag : AtomicBitSetArray), Some(etag : AtomicBitSetArray)) =>
-          val ret = getMainGraph[BasicMainGraph[_,_]].filter(vtag, etag)
-          System.gc()
-          val elapsed = System.currentTimeMillis - start
-          logInfo (s"GraphTagging took ${elapsed} ms. Return: ${ret}")
           tagApplied = true
+          getMainGraph[BasicMainGraph[_,_]].filter(vtag, etag)
 
         case other =>
-          logWarning (s"Ignoring tags ${other}")
+          0
       }
+
+      val elapsedTag = System.currentTimeMillis - startTag
+
+      if (ret > 0) {
+        logInfo (s"GraphTagging took ${elapsedTag} return=${ret}")
+      }
+
+      val startFilter = System.currentTimeMillis
+
+      def filterVertices[V,E](graph: BasicMainGraph[V,E],
+          vpred: Predicate[_]): Int = {
+        graph.filterVertices(vpred.asInstanceOf[Predicate[Vertex[V]]])
+      }
+
+      val removedVertices = confs.get("vfilter") match {
+        case Some(vpred: Predicate[_]) =>
+          tagApplied = true
+          filterVertices(getMainGraph[BasicMainGraph[_,_]], vpred)
+
+        case other =>
+          0
+      }
+
+      def filterEdges[V,E](graph: BasicMainGraph[V,E],
+          epred: Predicate[_]): Int = {
+        graph.filterEdges(epred.asInstanceOf[Predicate[Edge[E]]])
+      }
+
+      val removedEdges = confs.get("efilter") match {
+        case Some(epred: Predicate[_]) =>
+          tagApplied = true
+          filterEdges(getMainGraph[BasicMainGraph[_,_]], epred)
+
+        case other =>
+          0
+      }
+
+      val elapsedFilter = System.currentTimeMillis - startFilter
+      System.gc()
+
+      if (removedVertices + removedEdges > 0) {
+        logInfo (s"GraphFiltering took ${elapsedFilter} ms" +
+          s" removedVertices=${removedVertices} removedEdges=${removedEdges}")
+      }
+
+      if (ret + removedVertices + removedEdges > 0) {
+        getMainGraph[BasicMainGraph[_,_]].buildSortedNeighborhood()
+      }
+      
+      logInfo(s"AfterFilter\n${getMainGraph[BasicMainGraph[_,_]].toDebugString()}")
     }
   }
 

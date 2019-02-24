@@ -26,26 +26,26 @@ import scala.util.{Failure, Success}
  * It interacts directly with the RDD interface in Spark by handling the
  * SparkContext.
  */
-class SparkFromScratchMasterEngine[E <: Subgraph](
-    _config: SparkConfiguration[E],
-    _parentOpt: Option[SparkMasterEngine[E]]) extends SparkMasterEngine [E] {
+class SparkFromScratchMasterEngine[S <: Subgraph](
+    _config: SparkConfiguration[S],
+    _parentOpt: Option[SparkMasterEngine[S]]) extends SparkMasterEngine [S] {
 
   import SparkFromScratchMasterEngine._
 
-  def config: SparkConfiguration[E] = _config
+  def config: SparkConfiguration[S] = _config
   
-  def parentOpt: Option[SparkMasterEngine[E]] = _parentOpt
+  def parentOpt: Option[SparkMasterEngine[S]] = _parentOpt
   
-  var gtagMasterActorRef: ActorRef = _
-  
-  def this(_sc: SparkContext, config: SparkConfiguration[E]) {
+  var masterActorRef: ActorRef = _
+
+  def this(_sc: SparkContext, config: SparkConfiguration[S]) {
     this (config, None)
     sc = _sc
     init()
   }
-  
-  def this(_sc: SparkContext, config: SparkConfiguration[E],
-      parent: SparkMasterEngine[E]) {
+
+  def this(_sc: SparkContext, config: SparkConfiguration[S],
+      parent: SparkMasterEngine[S]) {
     this (config, Option(parent))
     sc = _sc
     init()
@@ -55,44 +55,44 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
     val start = System.currentTimeMillis
 
     super.init()
-    
+
     // gtag computations must have incremental aggregations because we compute
     // from scratch all the steps, then if one of those depends on any previous
     // aggregation (e.g., fsm computation) we are safe
     config.set("incremental_aggregation", true)
 
     // gtag actor
-    gtagMasterActorRef = ActorMessageSystem.createActor(this)
+    masterActorRef = ActorMessageSystem.createActor(this)
 
     logInfo(s"Started gtag-master-actor(step=${superstep}):" +
-      s" ${gtagMasterActorRef}")
+      s" ${masterActorRef}")
 
     val end = System.currentTimeMillis
 
     logInfo(s"${this} took ${(end - start)}ms to initialize.")
   }
-  
+
   /**
    * Master's computation takes place here, superstep by superstep
    */
   lazy val next: Boolean = {
 
-    
+
     logInfo (s"${this} Computation starting from ${superstepRDD}," +
       s", StorageLevel=${superstepRDD.getStorageLevel}")
 
     // save original container, i.e., without parents' computations
-    val originalContainer = config.computationContainer[E]
+    val originalContainer = config.computationContainer[S]
     logInfo (s"From scratch computation (${this})." +
       s" Original computation: ${originalContainer}")
 
     // find out how many computations are pipelined
     val numComputations = {
       var cc = originalContainer
-      var curr: SparkMasterEngine[E] = this
+      var curr: SparkMasterEngine[S] = this
       while (curr.parentOpt.isDefined) {
         curr = curr.parentOpt.get
-        cc = curr.config.computationContainer[E].withComputationAppended(cc)
+        cc = curr.config.computationContainer[S].withComputationAppended(cc)
       }
       cc.setDepth(0)
     }
@@ -130,19 +130,19 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
     var cc = originalContainer.withComputationLabel("last_step_begins")
 
     // add parents' computations
-    var curr: SparkMasterEngine[E] = this
+    var curr: SparkMasterEngine[S] = this
     while (curr.parentOpt.isDefined) {
       curr = curr.parentOpt.get
-      cc = curr.config.computationContainer[E].withComputationAppended(cc)
+      cc = curr.config.computationContainer[S].withComputationAppended(cc)
     }
 
     // configure custom ProcessComputeFunc and aggregations
     val processComputeFunc = getProcessComputeFunc(egAccums, awAccums)
     cc = {
-      def withCustomFuncs(cc: ComputationContainer[E], depth: Int)
-        : ComputationContainer[E] = cc.nextComputationOpt match {
+      def withCustomFuncs(cc: ComputationContainer[S], depth: Int)
+        : ComputationContainer[S] = cc.nextComputationOpt match {
         case Some(c) =>
-          val ncc = withCustomFuncs(c.asInstanceOf[ComputationContainer[E]],
+          val ncc = withCustomFuncs(c.asInstanceOf[ComputationContainer[S]],
             depth + 1)
           cc.shallowCopy(
             processComputeOpt = Option(processComputeFunc),
@@ -242,7 +242,7 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
     }
 
     // master will send poison pills to all executor actors of this step
-    gtagMasterActorRef ! Reset
+    masterActorRef ! Reset
 
     val superstepFinish = System.currentTimeMillis
     logInfo (
@@ -289,25 +289,25 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
   }
 
   def getProcessComputeFunc(_egAccums: Array[LongAccumulator],
-      _awAccums: Array[LongAccumulator]): ProcessComputeFunc[E] = {
-    new ProcessComputeFunc[E] with Logging {
+      _awAccums: Array[LongAccumulator]): ProcessComputeFunc[S] = {
+    new ProcessComputeFunc[S] with Logging {
       val numComputations = _egAccums.length
 
       val egAccums = _egAccums
 
       val awAccums = _awAccums
 
-      var workStealingSys: WorkStealingSystem[E] = _
+      var workStealingSys: WorkStealingSystem[S] = _
 
       var validSubgraphs: AtomicLong = _
 
-      var lastStepConsumer: LastStepConsumer[E] = _
+      var lastStepConsumer: LastStepConsumer[S] = _
 
-      def apply(iter: JavaIterator[E], c: Computation[E]): Long = {
+      def apply(iter: JavaIterator[S], c: Computation[S]): Long = {
         if (c.getDepth() == 0) {
           val config = c.getConfig()
           val execEngine = c.getExecutionEngine().
-            asInstanceOf[SparkFromScratchEngine[E]]
+            asInstanceOf[SparkFromScratchEngine[S]]
 
           egAccums(c.getDepth) = execEngine.
             accums(s"${VALID_SUBGRAPHS}_${c.getDepth}")
@@ -327,7 +327,7 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
             currComp = currComp.nextComputation
           }
 
-          lastStepConsumer = new LastStepConsumer[E]()
+          lastStepConsumer = new LastStepConsumer[S]()
 
           validSubgraphs = execEngine.validSubgraphs
 
@@ -345,7 +345,7 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
           start = System.currentTimeMillis
           if (config.wsEnabled()) {
             val gtagExecutorActor = execEngine.gtagActorRef
-            workStealingSys = new WorkStealingSystem[E](
+            workStealingSys = new WorkStealingSystem[S](
               processCompute, gtagExecutorActor, new ConcurrentLinkedQueue())
 
             workStealingSys.workStealingCompute(c)
@@ -361,9 +361,9 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
         }
       }
 
-      private def lastStepBeginsOnNextComputation(iter: JavaIterator[E],
-          c: Computation[E], nextComp: Computation[E]): Long = {
-        var currentSubgraph: E = null.asInstanceOf[E]
+      private def lastStepBeginsOnNextComputation(iter: JavaIterator[S],
+          c: Computation[S], nextComp: Computation[S]): Long = {
+        var currentSubgraph: S = null.asInstanceOf[S]
         var addWords = 0L
         var SubgraphsGenerated = 0L
 
@@ -385,9 +385,9 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
         0
       }
 
-      private def hasNextComputation(iter: JavaIterator[E],
-          c: Computation[E], nextComp: Computation[E]): Long = {
-        var currentSubgraph: E = null.asInstanceOf[E]
+      private def hasNextComputation(iter: JavaIterator[S],
+          c: Computation[S], nextComp: Computation[S]): Long = {
+        var currentSubgraph: S = null.asInstanceOf[S]
         var addWords = 0L
         var SubgraphsGenerated = 0L
 
@@ -408,42 +408,39 @@ class SparkFromScratchMasterEngine[E <: Subgraph](
         0
       }
 
-      private def lastComputation(iter: JavaIterator[E],
-          c: Computation[E]): Long = {
+      private def lastComputation(iter: JavaIterator[S],
+          c: Computation[S]): Long = {
 
         try {       
-          val embIter = iter.asInstanceOf[SubgraphEnumerator[E]]
+          val embIter = iter.asInstanceOf[SubgraphEnumerator[S]]
           lastStepConsumer.set(embIter.getSubgraph(), c)
           embIter.getWordIds().forEach(lastStepConsumer)
           awAccums(c.getDepth).add(lastStepConsumer.addWords)
           egAccums(c.getDepth).add(lastStepConsumer.SubgraphsGenerated)
         } catch {
           case e: Exception =>
-            var currentSubgraph: E = null.asInstanceOf[E]
+            var currentSubgraph: S = null.asInstanceOf[S]
             var addWords = 0L
-            var SubgraphsGenerated = 0L
+            var subgraphsGenerated = 0L
 
             while (iter.hasNext) {
               currentSubgraph = iter.next
               addWords += 1
               if (c.filter(currentSubgraph)) {
-                SubgraphsGenerated += 1
-                if (c.shouldExpand(currentSubgraph)) {
-                  c.getExecutionEngine().processExpansion(currentSubgraph)
-                }
+                subgraphsGenerated += 1
                 c.process(currentSubgraph)
               }
             }
             awAccums(c.getDepth).add(addWords)
-            egAccums(c.getDepth).add(SubgraphsGenerated)
+            egAccums(c.getDepth).add(subgraphsGenerated)
         }
 
 
         0
       }
 
-      private def processCompute(iter: JavaIterator[E],
-        c: Computation[E]): Long = {
+      private def processCompute(iter: JavaIterator[S],
+        c: Computation[S]): Long = {
           val nextComp = c.nextComputation()
 
           if (nextComp != null) {

@@ -39,60 +39,60 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
     }
   }
 
-  //test ("[cube,motifs]", Tag("cube.motifs")) {
-  //  // Test output for motifs for subgraph with size 0 to 3
+  test ("[cube,motifs]", Tag("cube.motifs")) {
+    // Test output for motifs for subgraph with size 0 to 3
 
-  //  // Expected output
-  //  val numSubgraph = List(8, 12, 24)
+    // Expected output
+    val numSubgraph = List(8, 12, 24)
 
-  //  for (k <- 0 to (numSubgraph.size - 1)) {
-  //    val motifsRes = fgraph.motifs.
-  //      set ("num_partitions", numPartitions).
-  //      exploreExp(k)
-  //    val Subgraphs = motifsRes.subgraphs
+    for (k <- 0 to (numSubgraph.size - 1)) {
+      val motifsRes = fgraph.motifs.
+        set ("num_partitions", numPartitions).
+        exploreExp(k)
+      val Subgraphs = motifsRes.subgraphs
 
-  //    assert(Subgraphs.count() == numSubgraph(k))
-  //  }
+      assert(Subgraphs.count() == numSubgraph(k))
+    }
 
-  //}
+  }
 
-  //test ("[cube,cliques]", Tag("cube.cliques")) {
-  //  // Test output for clique for Subgraphs with size 1 to 3
-  //  // Expected output
-  //  val numSubgraph = List(8, 12, 0)
+  test ("[cube,cliques]", Tag("cube.cliques")) {
+    // Test output for clique for Subgraphs with size 1 to 3
+    // Expected output
+    val numSubgraph = List(8, 12, 0)
 
-  //  for (k <- 0 to (numSubgraph.size - 1)) {
-  //    val cliqueRes = fgraph.cliques.
-  //      set ("num_partitions", numPartitions).
-  //      exploreExp(k)
+    for (k <- 0 to (numSubgraph.size - 1)) {
+      val cliqueRes = fgraph.cliques.
+        set ("num_partitions", numPartitions).
+        exploreExp(k)
 
-  //    val Subgraphs = cliqueRes.subgraphs
-  //    assert(Subgraphs.count == numSubgraph(k))
-  //  }
-  //}
+      val Subgraphs = cliqueRes.subgraphs
+      assert(Subgraphs.count == numSubgraph(k))
+    }
+  }
 
 
-  //test ("[cube,fsm]", Tag("cube.fsm")) {
-  //  import br.ufmg.cs.systems.fractal.gmlib.fsm.DomainSupport
-  //  import br.ufmg.cs.systems.fractal.pattern.Pattern
+  test ("[cube,fsm]", Tag("cube.fsm")) {
+    import br.ufmg.cs.systems.fractal.gmlib.fsm.DomainSupport
+    import br.ufmg.cs.systems.fractal.pattern.Pattern
 
-  //  // Critical test
-  //  // Test output for fsm with support 2 for Subgraphs with size 2 to 3
-  //  val support = 2
+    // Critical test
+    // Test output for fsm with support 2 for Subgraphs with size 2 to 3
+    val support = 2
 
-  //  // Expected output
-  //  val numFreqPatterns = List(3, 3+4, 3+4+7)
+    // Expected output
+    val numFreqPatterns = List(3, 3+4, 3+4+7)
 
-  //  for (k <- 0 to (numFreqPatterns.size - 1)) {
-  //    val fsmRes = fgraph.fsm(support, k).
-  //      set ("num_partitions", numPartitions)
+    for (k <- 0 to (numFreqPatterns.size - 1)) {
+      val fsmRes = fgraph.fsm(support, k).
+        set ("num_partitions", numPartitions)
 
-  //    val freqPatterns = fsmRes.
-  //      aggregation [Pattern,DomainSupport] ("frequent_patterns")
+      val freqPatterns = fsmRes.
+        aggregation [Pattern,DomainSupport] ("frequent_patterns")
 
-  //    assert(freqPatterns.size == numFreqPatterns(k))
-  //  }
-  //}
+      assert(freqPatterns.size == numFreqPatterns(k))
+    }
+  }
 
   test ("[cube,vfilter]", Tag("cube.vfilter")) {
     val numSubgraph = List(3)
@@ -105,15 +105,15 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
     }
   }
 
-  //test ("[cube,efilter]", Tag("cube.efilter")) {
-  //  val numSubgraph = List(2)
-  //  for (k <- 0 to (numSubgraph.size - 1)) {
-  //    val frac = fgraph.vfractoid.
-  //      efilter [String] (e => e.getSourceId() == 1).
-  //      expand.
-  //      set ("num_partitions", numPartitions)
-  //    val subgraphs = frac.subgraphs
-  //    assert(subgraphs.count == numSubgraph(k))
-  //  }
-  //}
+  test ("[cube,efilter]", Tag("cube.efilter")) {
+    val numSubgraph = List(2)
+    for (k <- 0 to (numSubgraph.size - 1)) {
+      val frac = fgraph.vfractoid.
+        efilter [String] (e => e.getSourceId() == 1).
+        expand.
+        set ("num_partitions", numPartitions)
+      val subgraphs = frac.subgraphs
+      assert(subgraphs.count == numSubgraph(k))
+    }
+  }
 }

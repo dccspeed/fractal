@@ -84,9 +84,9 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
    @Override
    public int undoVertexFilter() {
-      LOG.info("removedVertices " + removedVertices);
+      //LOG.info("removedVertices " + removedVertices);
       removedVertices.forEach(vertexReset);
-      LOG.info("removedNeighborhoods " + removedNeighborhoods);
+      //LOG.info("removedNeighborhoods " + removedNeighborhoods);
       removedNeighborhoods.forEach(neighborhoodReset);
       removedVertices.clear();
       removedNeighborhoods.clear();
@@ -95,7 +95,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    
    @Override
    public int undoEdgeFilter() {
-      LOG.info("removedEdges" + removedEdges);
+      //LOG.info("removedEdges" + removedEdges);
       removedEdges.forEach(edgeReset);
       removedEdges.clear();
       return 0;
@@ -127,9 +127,19 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       int numRemovedVertices = 0;
       for (int vertexId = 0; vertexId < numVertices; ++vertexId) {
          Vertex vertex = getVertex(vertexId);
-         if (!vpred.test(vertex)) {
-            removeVertex(vertex);
-            ++numRemovedVertices;
+         if (vertex != null) {
+            if (!vpred.test(vertex)) {
+               removeVertex(vertex);
+               ++numRemovedVertices;
+            }
+         } else {
+            vertex = removedVertices.remove(vertexId);
+            if (vpred.test(vertex)) {
+               addVertex(vertex);
+               addNeighborhood(vertexId, removedNeighborhoods.remove(vertexId));
+            } else {
+               ++numRemovedVertices;
+            }
          }
       }
 
@@ -147,9 +157,37 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       int numRemovedEdges = 0;
       for (int edgeId = 0; edgeId < numEdges; ++edgeId) {
          Edge edge = getEdge(edgeId);
-         if (!epred.test(edge)) {
-            removeEdge(edge);
-            ++numRemovedEdges;
+         if (edge != null) {
+            if (!epred.test(edge)) {
+               removeEdge(edge);
+               ++numRemovedEdges;
+            }
+         } else {
+            edge = removedEdges.remove(edgeId);
+            if (epred.test(edge)) {
+               int src = edge.getSourceId();
+               int dst = edge.getDestinationId();
+               VertexNeighbourhood neighborhood = vertexNeighborhoods[src];
+               if (neighborhood == null) {
+                  Vertex vertex = removedVertices.remove(src);
+                  addVertex(vertex);
+                  addNeighborhood(src, removedNeighborhoods.remove(src));
+                  neighborhood = vertexNeighborhoods[src];
+               }
+               neighborhood.addEdge(dst, edge.getEdgeId());
+
+               neighborhood = vertexNeighborhoods[dst];
+               if (neighborhood == null) {
+                  Vertex vertex = removedVertices.remove(dst);
+                  addVertex(vertex);
+                  addNeighborhood(dst, removedNeighborhoods.remove(dst));
+                  neighborhood = vertexNeighborhoods[dst];
+               }
+               neighborhood.addEdge(src, edge.getEdgeId());
+               edgeIndexF[edge.getEdgeId()] = edge;
+            } else {
+               ++numRemovedEdges;
+            }
          }
       }
 
@@ -206,8 +244,16 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
             IntCursor cur = neighborhood.getNeighborVertices().cursor();
             while (cur.moveNext()) {
                VertexNeighbourhood otherNeighborhood = vertexNeighborhoods[cur.elem()];
-               otherNeighborhood.forEachEdgeId(vertexId, edgeRemover);
+               IntCollection edgeIds = otherNeighborhood.getEdgesWithNeighbourVertex(vertexId);
+               IntCursor cur2 = edgeIds.cursor();
+               while (cur2.moveNext()) {
+                  synchronized (removedEdges) {
+                     removedEdges.put(cur2.elem(), getEdge(cur2.elem()));
+                     edgeIndexF[cur2.elem()] = null;
+                  }
+               }
                otherNeighborhood.removeVertex(vertexId);
+               cur.remove();
             }
          }
       }
@@ -556,17 +602,6 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       VertexNeighbourhood vertexNeighbourhood = this.vertexNeighborhoods[minv];
 
       vertexNeighbourhood.forEachEdgeId(maxv, intConsumer);
-   }
-
-   private void addEdgeInternal(Edge edge) {
-      int src = edge.getSourceId();
-      int dst = edge.getDestinationId();
-
-      VertexNeighbourhood neighborhood = vertexNeighborhoods[src];
-      neighborhood.addEdge(dst, edge.getEdgeId());
-      
-      neighborhood = vertexNeighborhoods[dst];
-      neighborhood.addEdge(src, edge.getEdgeId());
    }
 
    @Override
@@ -934,7 +969,14 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    private class EdgeReset implements IntObjConsumer<Edge<E>> {
       @Override
       public void accept(int edgeId, Edge<E> edge) {
-         BasicMainGraph.this.addEdgeInternal(edge);
+         int src = edge.getSourceId();
+         int dst = edge.getDestinationId();
+         VertexNeighbourhood neighborhood =
+            BasicMainGraph.this.vertexNeighborhoods[src];
+         neighborhood.addEdge(dst, edge.getEdgeId());
+         neighborhood = BasicMainGraph.this.vertexNeighborhoods[dst];
+         neighborhood.addEdge(src, edge.getEdgeId());
+         BasicMainGraph.this.edgeIndexF[edge.getEdgeId()] = edge;
       }
    }
 }

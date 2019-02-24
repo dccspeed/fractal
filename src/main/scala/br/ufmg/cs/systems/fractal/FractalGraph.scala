@@ -1405,27 +1405,6 @@ class FractalGraph(
 
   /**
    * Returns a new result with a configurable computation container.
-   *
-    * {{{
-    *   import br.ufmg.cs.systems.fractal.fractalContext
-    *   val input_graph = "fractalDir/data/cube.graph"
-    *
-    *   val graph = arab.textFile(input_graph)
-    *   val res = arabGraph.
-    *     edgeInducedComputation {(e,c) =>
-    *       if (e.getNumWords == 3) {
-    *         c.output (e)
-    *       }
-    *     }.
-    *     withFilter ((e,c) => e.getNumWords == 3).
-    *     withShouldExpand ((e,c) => e.getNumWords < 3)
-    *
-    *   res.Subgraphs.count()
-    *   res.Subgraphs.collect()
-    * }}}
-    *
-    * @param process function that is called for each subgraph produced
-    * @return an [[br.ufmg.cs.systems.fractal.Fractoid]] carrying odags and Subgraphs
    */
   def efractoid(
       process: (EdgeInducedSubgraph,

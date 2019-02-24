@@ -6,7 +6,6 @@ import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import com.koloboke.collect.IntCollection;
-import java.util.function.IntConsumer;
 import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
 
@@ -28,7 +27,6 @@ public abstract class BasicComputation<E extends Subgraph>
     private transient CommonExecutionEngine<E> executionEngine;
     private transient MainGraph mainGraph;
     private transient Configuration configuration;
-    private transient IntConsumer expandConsumer;
     private transient E currentSubgraph;
 
     @Override
@@ -53,13 +51,6 @@ public abstract class BasicComputation<E extends Subgraph>
 
     @Override
     public void init(Configuration<E> config) {
-        expandConsumer = new IntConsumer() {
-            @Override
-            public void accept(int wordId) {
-                doExpandFilter(wordId);
-            }
-        };
-
         configuration = config;
         mainGraph = configuration.getMainGraph();
 
@@ -103,8 +94,8 @@ public abstract class BasicComputation<E extends Subgraph>
     }
 
     @Override
-    public final long compute(E Subgraph) {
-       return processCompute(expandCompute(Subgraph));
+    public final long compute(E subgraph) {
+       return processCompute(expandCompute(subgraph));
     }
 
     @Override
@@ -113,124 +104,19 @@ public abstract class BasicComputation<E extends Subgraph>
     }
 
     @Override
-    public boolean aggregationCompute(E Subgraph) {
-        if (getStep() > 0) {
-            if (!aggregationFilter(Subgraph)) {
-                return false;
-            }
-
-            aggregationProcess(Subgraph);
-        }
-        return true;
-    }
-
-    @Override
-    public Iterator<E> expandCompute(E Subgraph) {
-        IntCollection possibleExtensions = getPossibleExtensions(Subgraph);
+    public Iterator<E> expandCompute(E subgraph) {
+        IntCollection possibleExtensions = getPossibleExtensions(subgraph);
         
-        if (possibleExtensions != null) {
-            filter(Subgraph, possibleExtensions);
-        }
-
         if (possibleExtensions == null) {
-            handleNoExpansions(Subgraph);
             return emptyIter;
         }
         
-        //if (possibleExtensions.isEmpty()) {
-        //   //if (getConfig().shouldKeepMaximal()) {
-        //   //   return bypassIter.set(this, subgraph, possibleExtensions);
-        //   //} else {
-        //      handleNoExpansions(subgraph);
-        //      return emptyIter;
-        //   //}
-        //}
+        if (possibleExtensions.isEmpty() && getConfig().keepMaximal()) {
+          return bypass(subgraph);
+        }
        
-        currentSubgraph = Subgraph;
-        return subgraphEnumerator.set(this, Subgraph, possibleExtensions);
-    }
-
-    @Override
-    public long processCompute(Iterator<E> expansionsIter) {
-       Computation<E> nextComp = nextComputation();
-
-       if (nextComp != null) {
-          nextComp.setExecutionEngine (getExecutionEngine());
-          nextComp.init(getConfig());
-          nextComp.initAggregations(getConfig());
-
-          while (expansionsIter.hasNext()) {
-             currentSubgraph = expansionsIter.next();
-             if (filter(currentSubgraph)) {
-                process(currentSubgraph);
-
-                currentSubgraph.nextExtensionLevel();
-                nextComp.compute(currentSubgraph);
-                currentSubgraph.previousExtensionLevel();
-             }
-          }
-
-       } else {
-          while (expansionsIter.hasNext()) {
-             currentSubgraph = expansionsIter.next();
-             if (filter(currentSubgraph)) {
-                if (shouldExpand(currentSubgraph)) {
-                   executionEngine.processExpansion(currentSubgraph);
-                }
-                process(currentSubgraph);
-             }
-          }
-       }
-
-       return 0;
-    }
-
-    @Override
-    public void expand(E Subgraph) {
-        if (getStep() > 0) {
-            if (!aggregationFilter(Subgraph)) {
-                return;
-            }
-
-            aggregationProcess(Subgraph);
-        }
-
-        IntCollection possibleExtensions = getPossibleExtensions(Subgraph);
-        
-        if (possibleExtensions != null) {
-            filter(Subgraph, possibleExtensions);
-        }
-
-        if (possibleExtensions == null || possibleExtensions.isEmpty()) {
-            handleNoExpansions(Subgraph);
-            return;
-        }
-
-        currentSubgraph = Subgraph;
-        possibleExtensions.forEach(expandConsumer);
-    }
-
-    private void doExpandFilter(int wordId) {
-        if (filter(currentSubgraph, wordId)) {
-            currentSubgraph.addWord(wordId);
-
-            if (filter(currentSubgraph)) {
-                if (shouldExpand(currentSubgraph)) {
-                    executionEngine.
-                       processExpansion(currentSubgraph);
-                }
-
-                process(currentSubgraph);
-            }
-
-            currentSubgraph.removeLastWord();
-        }
-
-    }
-
-    @Override
-    public void handleNoExpansions(E Subgraph) {
-        // Empty by default
+        currentSubgraph = subgraph;
+        return subgraphEnumerator.set(this, subgraph, possibleExtensions);
     }
 
     @Override
@@ -238,17 +124,7 @@ public abstract class BasicComputation<E extends Subgraph>
        return Subgraph.getExtensibleWordIds(this);
     }
 
-    @Override
-    public boolean shouldExpand(E Subgraph) {
-        return true;
-    }
-
-    @Override
-    public void filter(E existingSubgraph, IntCollection extensionPoints) {
-        // Do nothing by default
-    }
-
-    @Override
+  @Override
     public boolean filter(E existingSubgraph, int newWord) {
         return existingSubgraph.isCanonicalSubgraphWithWord(newWord);
     }
@@ -296,22 +172,7 @@ public abstract class BasicComputation<E extends Subgraph>
         return true;
     }
 
-    @Override
-    public boolean aggregationFilter(E Subgraph) {
-        return true;
-    }
-
-    @Override
-    public boolean aggregationFilter(Pattern pattern) {
-        return true;
-    }
-
-    @Override
-    public void aggregationProcess(E Subgraph) {
-        // Empty by default
-    }
-
-    @Override
+  @Override
     public String computationLabel() {
        return null;
     }
@@ -326,7 +187,7 @@ public abstract class BasicComputation<E extends Subgraph>
     }
 
     @Override
-    public SubgraphEnumerator<E> forkConsumer(boolean local) {
+    public SubgraphEnumerator<E> forkEnumerator(boolean local) {
        BasicComputation<E> curr = this;
        SubgraphEnumerator<E> consumer = null;
 

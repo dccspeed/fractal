@@ -42,16 +42,6 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
   
   val wordFilterOpt: Option[WordFilterFunc[E]]
 
-  val shouldExpandOpt: Option[(E,Computation[E]) => Boolean]
-
-  val aggregationFilterOpt: Option[(E,Computation[E]) => Boolean]
-
-  val pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean]
-
-  val aggregationProcessOpt: Option[(E,Computation[E]) => Unit]
-
-  val handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit]
-  
   val getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection]
 
   val initOpt: Option[(Computation[E]) => Unit]
@@ -95,16 +85,6 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
         filterOpt,
       wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
-      shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
-        shouldExpandOpt,
-      aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] =
-        aggregationFilterOpt,
-      pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] =
-        pAggregationFilterOpt,
-      aggregationProcessOpt: Option[(E,Computation[E]) => Unit] =
-        aggregationProcessOpt,
-      handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] =
-        handleNoExpansionsOpt,
       getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
         getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
@@ -132,16 +112,6 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
         filterOpt,
       wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
-      shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
-        shouldExpandOpt,
-      aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] =
-        aggregationFilterOpt,
-      pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] =
-        pAggregationFilterOpt,
-      aggregationProcessOpt: Option[(E,Computation[E]) => Unit] =
-        aggregationProcessOpt,
-      handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] =
-        handleNoExpansionsOpt,
       getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
         getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
@@ -167,16 +137,6 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
         filterOpt,
       wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
-      shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
-        shouldExpandOpt,
-      aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] =
-        aggregationFilterOpt,
-      pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] =
-        pAggregationFilterOpt,
-      aggregationProcessOpt: Option[(E,Computation[E]) => Unit] =
-        aggregationProcessOpt,
-      handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] =
-        handleNoExpansionsOpt,
       getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
         getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
@@ -198,11 +158,6 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
     patternOpt = None,
     processOpt = Some((e,c) => {}),
     filterOpt = Some((e,c) => true),
-    shouldExpandOpt = Some((e,c) => true),
-    aggregationFilterOpt = Some((e,c) => true),
-    pAggregationFilterOpt = Some((e,c) => true),
-    aggregationProcessOpt = Some((e,c) => {}),
-    handleNoExpansionsOpt = Some((e,c) => {}),
     getPossibleExtensionsOpt = None,
     expandComputeOpt = Some((e,c) => Iterator.empty)
     )
@@ -230,11 +185,6 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
     processOpt: Option[(E,Computation[E]) => Unit] = None,
     filterOpt: Option[(E,Computation[E]) => Boolean] = None,
     wordFilterOpt: Option[WordFilterFunc[E]] = None,
-    shouldExpandOpt: Option[(E,Computation[E]) => Boolean] = None,
-    aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] = None,
-    pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] = None,
-    aggregationProcessOpt: Option[(E,Computation[E]) => Unit] = None,
-    handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = None,
     getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = None,
     initOpt: Option[(Computation[E]) => Unit] = None,
     initAggregationsOpt: Option[(Computation[E]) => Unit] = None,
@@ -269,32 +219,6 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
       }
     )
   }
-
-  @transient private lazy val _shouldExpand: (E,Computation[E]) => Boolean =
-    shouldExpandOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.shouldExpand(e)
-    )
-  
-  @transient private lazy val _aggregationFilter
-    : (E,Computation[E]) => Boolean =
-    aggregationFilterOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.aggregationFilter (e)
-    )
-  
-  @transient private lazy val _pAggregationFilter
-    : (Pattern,Computation[E]) => Boolean = pAggregationFilterOpt.getOrElse (
-      (p: Pattern, c: Computation[E]) => super.aggregationFilter (p)
-    )
-  
-  @transient private lazy val _aggregationProcess: (E,Computation[E]) => Unit =
-    aggregationProcessOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.aggregationProcess (e)
-    )
-  
-  @transient private lazy val _handleNoExpansions: (E,Computation[E]) => Unit =
-    handleNoExpansionsOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.handleNoExpansions (e)
-    )
 
   @transient private lazy val _getPossibleExtensions: (E,Computation[E]) => IntCollection =
     getPossibleExtensionsOpt.getOrElse (
@@ -349,8 +273,7 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
   @transient private lazy val _processCompute
     : (java.util.Iterator[E],Computation[E]) => Long =
     processComputeOpt.getOrElse (
-      (iter: java.util.Iterator[E], c: Computation[E]) =>
-        super.processCompute(iter)
+      (iter: java.util.Iterator[E], c: Computation[E]) => -1
     )
 
   @transient private lazy val _nextComputation
@@ -383,17 +306,7 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
         filterOpt,
       wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
-      shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
-        shouldExpandOpt,
-      aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] =
-        aggregationFilterOpt,
-      pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] =
-        pAggregationFilterOpt,
-      aggregationProcessOpt: Option[(E,Computation[E]) => Unit] =
-        aggregationProcessOpt,
-      handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = 
-        handleNoExpansionsOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = 
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
         getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         initOpt,
@@ -414,11 +327,6 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
       processOpt = processOpt,
       filterOpt = filterOpt,
       wordFilterOpt = wordFilterOpt,
-      shouldExpandOpt = shouldExpandOpt,
-      aggregationFilterOpt = aggregationFilterOpt,
-      pAggregationFilterOpt = pAggregationFilterOpt,
-      aggregationProcessOpt = aggregationProcessOpt,
-      handleNoExpansionsOpt = handleNoExpansionsOpt,
       getPossibleExtensionsOpt = getPossibleExtensionsOpt,
       initOpt = initOpt,
       initAggregationsOpt = initAggregationsOpt,
@@ -440,17 +348,7 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
         lastComputation.filterOpt,
       wordFilterOpt: Option[WordFilterFunc[E]] =
         lastComputation.wordFilterOpt,
-      shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
-        lastComputation.shouldExpandOpt,
-      aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] =
-        lastComputation.aggregationFilterOpt,
-      pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] =
-        lastComputation.pAggregationFilterOpt,
-      aggregationProcessOpt: Option[(E,Computation[E]) => Unit] =
-        lastComputation.aggregationProcessOpt,
-      handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = 
-        lastComputation.handleNoExpansionsOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = 
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
         lastComputation.getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         lastComputation.initOpt,
@@ -474,9 +372,8 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
 
     var lastComp = comps.pop()
     lastComp = lastComp.copy(computationLabelOpt, patternOpt,
-        processOpt, filterOpt, wordFilterOpt, shouldExpandOpt,
-        aggregationFilterOpt, pAggregationFilterOpt, aggregationProcessOpt,
-        handleNoExpansionsOpt, getPossibleExtensionsOpt,
+        processOpt, filterOpt, wordFilterOpt,
+        getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt, finishOpt,
         expandComputeOpt, processComputeOpt)
     
@@ -498,17 +395,7 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
         filterOpt,
       wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
-      shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
-        shouldExpandOpt,
-      aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] =
-        aggregationFilterOpt,
-      pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] =
-        pAggregationFilterOpt,
-      aggregationProcessOpt: Option[(E,Computation[E]) => Unit] =
-        aggregationProcessOpt,
-      handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = 
-        handleNoExpansionsOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = 
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
         getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         initOpt,
@@ -525,20 +412,13 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
       val nextComp = nextComputation.asInstanceOf[ComputationContainer[E]].
       withNewFunctionsAll (computationLabelOpt, patternOpt,
         processOpt, filterOpt, wordFilterOpt,
-        shouldExpandOpt, aggregationFilterOpt,
-        pAggregationFilterOpt, aggregationProcessOpt,
-        handleNoExpansionsOpt, getPossibleExtensionsOpt,
+        getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt,
         finishOpt, expandComputeOpt, processComputeOpt)
       this.copy (computationLabelOpt = computationLabelOpt,
         patternOpt = patternOpt,
         processOpt = processOpt, filterOpt = filterOpt,
         wordFilterOpt = wordFilterOpt,
-        shouldExpandOpt = shouldExpandOpt,
-        aggregationFilterOpt = aggregationFilterOpt,
-        pAggregationFilterOpt = pAggregationFilterOpt,
-        aggregationProcessOpt = aggregationProcessOpt,
-        handleNoExpansionsOpt = handleNoExpansionsOpt,
         getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
@@ -550,11 +430,6 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
         patternOpt = patternOpt,
         processOpt = processOpt, filterOpt = filterOpt,
         wordFilterOpt = wordFilterOpt,
-        shouldExpandOpt = shouldExpandOpt,
-        aggregationFilterOpt = aggregationFilterOpt,
-        pAggregationFilterOpt = pAggregationFilterOpt,
-        aggregationProcessOpt = aggregationProcessOpt,
-        handleNoExpansionsOpt = handleNoExpansionsOpt,
         getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
@@ -602,17 +477,6 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
   
   override def filter(e: E, w: Int): Boolean = _wordFilter (e, w, this)
 
-  override def shouldExpand(e: E): Boolean = _shouldExpand (e, this)
-
-  override def aggregationFilter(e: E): Boolean = _aggregationFilter (e, this)
-
-  override def aggregationFilter(p: Pattern): Boolean =
-    _pAggregationFilter (p, this)
-
-  override def aggregationProcess(e: E): Unit = _aggregationProcess (e, this)
-
-  override def handleNoExpansions(e: E): Unit = _handleNoExpansions (e, this)
-
   override def getPossibleExtensions(e: E): IntCollection =
     _getPossibleExtensions (e, this)
 
@@ -642,11 +506,6 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
     processOpt: Option[(E,Computation[E]) => Unit] = None,
     filterOpt: Option[(E,Computation[E]) => Boolean] = None,
     wordFilterOpt: Option[WordFilterFunc[E]] = None,
-    shouldExpandOpt: Option[(E,Computation[E]) => Boolean] = None,
-    aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] = None,
-    pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] = None,
-    aggregationProcessOpt: Option[(E,Computation[E]) => Unit] = None,
-    handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = None,
     getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = None,
     initOpt: Option[(Computation[E]) => Unit] = None,
     initAggregationsOpt: Option[(Computation[E]) => Unit] = None,
@@ -682,27 +541,6 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
     )
   }
 
-  @transient private lazy val _shouldExpand: (E,Computation[E]) => Boolean =
-    shouldExpandOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.shouldExpand(e))
-  
-  @transient private lazy val _aggregationFilter: (E,Computation[E]) => Boolean =
-    aggregationFilterOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.aggregationFilter (e))
-  
-  @transient private lazy val _pAggregationFilter
-    : (Pattern,Computation[E]) => Boolean =
-    pAggregationFilterOpt.getOrElse (
-      (p: Pattern, c: Computation[E]) => super.aggregationFilter (p))
-  
-  @transient private lazy val _aggregationProcess: (E,Computation[E]) => Unit =
-    aggregationProcessOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.aggregationProcess (e))
-  
-  @transient private lazy val _handleNoExpansions: (E,Computation[E]) => Unit =
-    handleNoExpansionsOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.handleNoExpansions (e))
-  
   @transient private lazy val _getPossibleExtensions: (E,Computation[E]) => IntCollection =
     getPossibleExtensionsOpt.getOrElse (
       (e: E, c: Computation[E]) => super.getPossibleExtensions (e))
@@ -750,8 +588,7 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
   @transient private lazy val _processCompute
     : (java.util.Iterator[E],Computation[E]) => Long =
     processComputeOpt.getOrElse (
-      (iter: java.util.Iterator[E], c: Computation[E]) =>
-        super.processCompute(iter)
+      (iter: java.util.Iterator[E], c: Computation[E]) => -1
     )
   
   @transient private lazy val _nextComputation
@@ -784,17 +621,7 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
         filterOpt,
       wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
-      shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
-        shouldExpandOpt,
-      aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] =
-        aggregationFilterOpt,
-      pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] =
-        pAggregationFilterOpt,
-      aggregationProcessOpt: Option[(E,Computation[E]) => Unit] =
-        aggregationProcessOpt,
-      handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = 
-        handleNoExpansionsOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = 
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
         getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         initOpt,
@@ -815,11 +642,6 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
       processOpt = processOpt,
       filterOpt = filterOpt,
       wordFilterOpt = wordFilterOpt,
-      shouldExpandOpt = shouldExpandOpt,
-      aggregationFilterOpt = aggregationFilterOpt,
-      pAggregationFilterOpt = pAggregationFilterOpt,
-      aggregationProcessOpt = aggregationProcessOpt,
-      handleNoExpansionsOpt = handleNoExpansionsOpt,
       getPossibleExtensionsOpt = getPossibleExtensionsOpt,
       initOpt = initOpt,
       initAggregationsOpt = initAggregationsOpt,
@@ -841,17 +663,7 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
         lastComputation.filterOpt,
       wordFilterOpt: Option[WordFilterFunc[E]] =
         lastComputation.wordFilterOpt,
-      shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
-        lastComputation.shouldExpandOpt,
-      aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] =
-        lastComputation.aggregationFilterOpt,
-      pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] =
-        lastComputation.pAggregationFilterOpt,
-      aggregationProcessOpt: Option[(E,Computation[E]) => Unit] =
-        lastComputation.aggregationProcessOpt,
-      handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = 
-        lastComputation.handleNoExpansionsOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = 
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
         lastComputation.getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         lastComputation.initOpt,
@@ -875,9 +687,8 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
 
     var lastComp = comps.pop()
     lastComp = lastComp.copy(computationLabelOpt, patternOpt,
-        processOpt, filterOpt, wordFilterOpt, shouldExpandOpt,
-        aggregationFilterOpt, pAggregationFilterOpt, aggregationProcessOpt,
-        handleNoExpansionsOpt, getPossibleExtensionsOpt,
+        processOpt, filterOpt, wordFilterOpt,
+        getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt, finishOpt,
         expandComputeOpt, processComputeOpt)
     
@@ -899,17 +710,7 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
         filterOpt,
       wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
-      shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
-        shouldExpandOpt,
-      aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] =
-        aggregationFilterOpt,
-      pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] =
-        pAggregationFilterOpt,
-      aggregationProcessOpt: Option[(E,Computation[E]) => Unit] =
-        aggregationProcessOpt,
-      handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = 
-        handleNoExpansionsOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = 
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
         getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         initOpt,
@@ -926,20 +727,13 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
       val nextComp = nextComputation.asInstanceOf[ComputationContainer[E]].
       withNewFunctionsAll (computationLabelOpt, patternOpt,
         processOpt, filterOpt, wordFilterOpt,
-        shouldExpandOpt, aggregationFilterOpt,
-        pAggregationFilterOpt, aggregationProcessOpt,
-        handleNoExpansionsOpt, getPossibleExtensionsOpt,
+        getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt,
         finishOpt, expandComputeOpt, processComputeOpt)
       this.copy (computationLabelOpt = computationLabelOpt,
         patternOpt = patternOpt,
         processOpt = processOpt, filterOpt = filterOpt,
         wordFilterOpt = wordFilterOpt,
-        shouldExpandOpt = shouldExpandOpt,
-        aggregationFilterOpt = aggregationFilterOpt,
-        pAggregationFilterOpt = pAggregationFilterOpt,
-        aggregationProcessOpt = aggregationProcessOpt,
-        handleNoExpansionsOpt = handleNoExpansionsOpt,
         getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
@@ -951,11 +745,6 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
         patternOpt = patternOpt,
         processOpt = processOpt, filterOpt = filterOpt,
         wordFilterOpt = wordFilterOpt,
-        shouldExpandOpt = shouldExpandOpt,
-        aggregationFilterOpt = aggregationFilterOpt,
-        pAggregationFilterOpt = pAggregationFilterOpt,
-        aggregationProcessOpt = aggregationProcessOpt,
-        handleNoExpansionsOpt = handleNoExpansionsOpt,
         getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
@@ -1003,17 +792,6 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
   
   override def filter(e: E, w: Int): Boolean = _wordFilter (e, w, this)
 
-  override def shouldExpand(e: E): Boolean = _shouldExpand (e, this)
-
-  override def aggregationFilter(e: E): Boolean = _aggregationFilter (e, this)
-
-  override def aggregationFilter(p: Pattern): Boolean =
-    _pAggregationFilter (p, this)
-
-  override def aggregationProcess(e: E): Unit = _aggregationProcess (e, this)
-
-  override def handleNoExpansions(e: E): Unit = _handleNoExpansions (e, this)
-  
   override def getPossibleExtensions(e: E): IntCollection =
     _getPossibleExtensions (e, this)
 
@@ -1043,11 +821,6 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
     processOpt: Option[(E,Computation[E]) => Unit] = None,
     filterOpt: Option[(E,Computation[E]) => Boolean] = None,
     wordFilterOpt: Option[WordFilterFunc[E]] = None,
-    shouldExpandOpt: Option[(E,Computation[E]) => Boolean] = None,
-    aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] = None,
-    pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] = None,
-    aggregationProcessOpt: Option[(E,Computation[E]) => Unit] = None,
-    handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = None,
     getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = None,
     initOpt: Option[(Computation[E]) => Unit] = None,
     initAggregationsOpt: Option[(Computation[E]) => Unit] = None,
@@ -1082,32 +855,6 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
       }
     )
   }
-
-  @transient private lazy val _shouldExpand: (E,Computation[E]) => Boolean =
-    shouldExpandOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.shouldExpand(e)
-    )
-  
-  @transient private lazy val _aggregationFilter
-    : (E,Computation[E]) => Boolean =
-    aggregationFilterOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.aggregationFilter (e)
-    )
-  
-  @transient private lazy val _pAggregationFilter
-    : (Pattern,Computation[E]) => Boolean = pAggregationFilterOpt.getOrElse (
-      (p: Pattern, c: Computation[E]) => super.aggregationFilter (p)
-    )
-  
-  @transient private lazy val _aggregationProcess: (E,Computation[E]) => Unit =
-    aggregationProcessOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.aggregationProcess (e)
-    )
-  
-  @transient private lazy val _handleNoExpansions: (E,Computation[E]) => Unit =
-    handleNoExpansionsOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.handleNoExpansions (e)
-    )
 
   @transient private lazy val _getPossibleExtensions: (E,Computation[E]) => IntCollection =
     getPossibleExtensionsOpt.getOrElse (
@@ -1162,8 +909,7 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
   @transient private lazy val _processCompute
     : (java.util.Iterator[E],Computation[E]) => Long =
     processComputeOpt.getOrElse (
-      (iter: java.util.Iterator[E], c: Computation[E]) =>
-        super.processCompute(iter)
+      (iter: java.util.Iterator[E], c: Computation[E]) => -1
     )
 
   @transient private lazy val _nextComputation
@@ -1196,17 +942,7 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
         filterOpt,
       wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
-      shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
-        shouldExpandOpt,
-      aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] =
-        aggregationFilterOpt,
-      pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] =
-        pAggregationFilterOpt,
-      aggregationProcessOpt: Option[(E,Computation[E]) => Unit] =
-        aggregationProcessOpt,
-      handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = 
-        handleNoExpansionsOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = 
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
         getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         initOpt,
@@ -1227,11 +963,6 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
       processOpt = processOpt,
       filterOpt = filterOpt,
       wordFilterOpt = wordFilterOpt,
-      shouldExpandOpt = shouldExpandOpt,
-      aggregationFilterOpt = aggregationFilterOpt,
-      pAggregationFilterOpt = pAggregationFilterOpt,
-      aggregationProcessOpt = aggregationProcessOpt,
-      handleNoExpansionsOpt = handleNoExpansionsOpt,
       getPossibleExtensionsOpt = getPossibleExtensionsOpt,
       initOpt = initOpt,
       initAggregationsOpt = initAggregationsOpt,
@@ -1253,17 +984,7 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
         lastComputation.filterOpt,
       wordFilterOpt: Option[WordFilterFunc[E]] =
         lastComputation.wordFilterOpt,
-      shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
-        lastComputation.shouldExpandOpt,
-      aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] =
-        lastComputation.aggregationFilterOpt,
-      pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] =
-        lastComputation.pAggregationFilterOpt,
-      aggregationProcessOpt: Option[(E,Computation[E]) => Unit] =
-        lastComputation.aggregationProcessOpt,
-      handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = 
-        lastComputation.handleNoExpansionsOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = 
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
         lastComputation.getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         lastComputation.initOpt,
@@ -1287,9 +1008,8 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
 
     var lastComp = comps.pop()
     lastComp = lastComp.copy(computationLabelOpt, patternOpt,
-        processOpt, filterOpt, wordFilterOpt, shouldExpandOpt,
-        aggregationFilterOpt, pAggregationFilterOpt, aggregationProcessOpt,
-        handleNoExpansionsOpt, getPossibleExtensionsOpt,
+        processOpt, filterOpt, wordFilterOpt,
+        getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt, finishOpt,
         expandComputeOpt, processComputeOpt)
     
@@ -1311,17 +1031,7 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
         filterOpt,
       wordFilterOpt: Option[WordFilterFunc[E]] =
         wordFilterOpt,
-      shouldExpandOpt: Option[(E,Computation[E]) => Boolean] =
-        shouldExpandOpt,
-      aggregationFilterOpt: Option[(E,Computation[E]) => Boolean] =
-        aggregationFilterOpt,
-      pAggregationFilterOpt: Option[(Pattern,Computation[E]) => Boolean] =
-        pAggregationFilterOpt,
-      aggregationProcessOpt: Option[(E,Computation[E]) => Unit] =
-        aggregationProcessOpt,
-      handleNoExpansionsOpt: Option[(E,Computation[E]) => Unit] = 
-        handleNoExpansionsOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = 
+      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
         getPossibleExtensionsOpt,
       initOpt: Option[(Computation[E]) => Unit] =
         initOpt,
@@ -1338,20 +1048,13 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
       val nextComp = nextComputation.asInstanceOf[ComputationContainer[E]].
       withNewFunctionsAll (computationLabelOpt, patternOpt,
         processOpt, filterOpt, wordFilterOpt,
-        shouldExpandOpt, aggregationFilterOpt,
-        pAggregationFilterOpt, aggregationProcessOpt,
-        handleNoExpansionsOpt, getPossibleExtensionsOpt,
+        getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt,
         finishOpt, expandComputeOpt, processComputeOpt)
       this.copy (computationLabelOpt = computationLabelOpt,
         patternOpt = patternOpt,
         processOpt = processOpt, filterOpt = filterOpt,
         wordFilterOpt = wordFilterOpt,
-        shouldExpandOpt = shouldExpandOpt,
-        aggregationFilterOpt = aggregationFilterOpt,
-        pAggregationFilterOpt = pAggregationFilterOpt,
-        aggregationProcessOpt = aggregationProcessOpt,
-        handleNoExpansionsOpt = handleNoExpansionsOpt,
         getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
@@ -1363,11 +1066,6 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
         patternOpt = patternOpt,
         processOpt = processOpt, filterOpt = filterOpt,
         wordFilterOpt = wordFilterOpt,
-        shouldExpandOpt = shouldExpandOpt,
-        aggregationFilterOpt = aggregationFilterOpt,
-        pAggregationFilterOpt = pAggregationFilterOpt,
-        aggregationProcessOpt = aggregationProcessOpt,
-        handleNoExpansionsOpt = handleNoExpansionsOpt,
         getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
@@ -1414,17 +1112,6 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
   override def filter(e: E): Boolean = _filter (e, this)
   
   override def filter(e: E, w: Int): Boolean = _wordFilter (e, w, this)
-
-  override def shouldExpand(e: E): Boolean = _shouldExpand (e, this)
-
-  override def aggregationFilter(e: E): Boolean = _aggregationFilter (e, this)
-
-  override def aggregationFilter(p: Pattern): Boolean =
-    _pAggregationFilter (p, this)
-
-  override def aggregationProcess(e: E): Unit = _aggregationProcess (e, this)
-
-  override def handleNoExpansions(e: E): Unit = _handleNoExpansions (e, this)
 
   override def getPossibleExtensions(e: E): IntCollection =
     _getPossibleExtensions (e, this)

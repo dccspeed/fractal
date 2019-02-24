@@ -7,8 +7,6 @@ import org.apache.hadoop.io.Writable;
 
 public interface CommonExecutionEngine<O extends Subgraph> {
 
-    void processExpansion(O expansion);
-
     <A extends Writable> A getAggregatedValue(String name);
     
     <K extends Writable, V extends Writable> AggregationStorage<K, V> getAggregationStorage(String name);

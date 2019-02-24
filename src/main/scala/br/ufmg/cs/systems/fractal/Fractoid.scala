@@ -578,21 +578,6 @@ case class Fractoid [S <: Subgraph : ClassTag](
   }
 
   /**
-   * Perform a expansion step in a particular way, defined by *expansionCompute*
-   *
-   * @param expandCompute function that receives an subgraph and returns zero
-   * or more Subgraphs (iterator)
-   *
-   * @return new result
-   */
-  def expand(expandCompute: (S,Computation[S]) => Iterator[S])
-    : Fractoid[S] = {
-    val expandComp = emptyComputation.
-      withExpandCompute(expandCompute)
-    handleNextResult(expandComp)
-  }
-
-  /**
    * Perform a expansion step in a particular way, defined by
    * *getPossibleExtensions*
    *
@@ -624,21 +609,6 @@ case class Fractoid [S <: Subgraph : ClassTag](
       withExpandCompute((e,c) => c.bypass(e)).
       withFilter(filter)
     handleNextResult(filterComp)
-  }
-
-  /**
-   * Filter the extensions of this computation
-   *
-   * @param efilter function that decides whether an extension is valid or not
-   *
-   * @return new result
-   */
-  def extensionfilter(
-      efilter: (S,Int,Computation[S]) => Boolean): Fractoid[S] = {
-    val filter = new WordFilterFunc [S] {
-      def apply(e: S, w: Int, c: Computation[S]): Boolean = efilter(e, w, c)
-    }
-    withWordFilter(filter)
   }
 
   /**
@@ -810,20 +780,6 @@ case class Fractoid [S <: Subgraph : ClassTag](
   }
 
   /**
-   * Updates the shouldExpand function of the underlying computation container.
-   *
-   * @param shouldExpand function that determines whether the Subgraphs
-   * produced must be extended or not.
-   */
-  def withShouldExpand (shouldExpand: (S,Computation[S]) => Boolean)
-    : Fractoid[S] = {
-    val newConfig = config.withNewComputation (
-      getComputationContainer[S].withNewFunctions (
-        shouldExpandOpt = Option(shouldExpand)))
-    this.copy (config = newConfig)
-  }
-
-  /**
    * Updates the shouldOutput function of the underlying computation container.
    *
    * @param shouldOutput function that determines whether we should output the
@@ -898,72 +854,6 @@ case class Fractoid [S <: Subgraph : ClassTag](
         //}
       }
     )
-  }
-
-  /**
-   * Updates the aggregationFilter function of the underlying computation
-   * container.
-   *
-   * @param filter function that filters Subgraphs in the aggregation phase.
-   *
-   * @return new result
-   */
-  def withAggregationFilter (filter: (S,Computation[S]) => Boolean)
-    : Fractoid[S] = {
-    val newConfig = config.withNewComputation (
-      getComputationContainer[S].withNewFunctions (
-        aggregationFilterOpt = Option(filter)))
-    this.copy (config = newConfig)
-  }
-
-  /**
-   * Updates the aggregationFilter function regarding patterns instead of
-   * subgraph.
-   *
-   * @param filter function that filters Subgraphs of a given pattern in the
-   * aggregation phase.
-   *
-   * @return new result
-   */
-  def withPatternAggregationFilter (
-      filter: (Pattern,Computation[S]) => Boolean): Fractoid[S] = {
-    val newConfig = config.withNewComputation (
-      getComputationContainer[S].withNewFunctions (
-        pAggregationFilterOpt = Option(filter)))
-    this.copy (config = newConfig)
-  }
-
-  /**
-   * Updates the aggregationProcess function of the underlying computation
-   * container.
-   *
-   * @param process function to be applied to each subgraph in the aggregation
-   * phase.
-   *
-   * @return new result
-   */
-  def withAggregationProcess (process: (S,Computation[S]) => Unit)
-    : Fractoid[S] = {
-    val newConfig = config.withNewComputation (
-      getComputationContainer[S].withNewFunctions (
-        aggregationProcessOpt = Option(process)))
-    this.copy (config = newConfig)
-  }
-
-  /**
-   * Updates the handleNoExpansions function of the underlying computation
-   * container.
-   *
-   * @param func callback for Subgraphs that do not produce any expansion.
-   *
-   * @return new result
-   */
-  def withHandleNoExpansions (func: (S,Computation[S]) => Unit)
-    : Fractoid[S] = {
-    val newConfig = config.withNewComputation (
-      getComputationContainer[S].withNewFunctions (
-        handleNoExpansionsOpt = Option(func)))
-    this.copy (config = newConfig)
   }
 
   /**
@@ -1252,38 +1142,6 @@ case class Fractoid [S <: Subgraph : ClassTag](
    */
   private def extensibleFrom [EE: ClassTag]: Boolean = {
     classTag[EE].runtimeClass == classTag[S].runtimeClass
-  }
-
-  /**
-   * Build a Motifs computation from the current computation
-   */
-  def motifs: Fractoid[VertexInducedSubgraph] = {
-    if (!extensibleFrom [VertexInducedSubgraph]) {
-      throw new RuntimeException (
-        s"${this} should be induced by vertices to be extended to Motifs")
-    } else {
-      val motifsRes = arabGraph.motifs.copy(stepByStep = stepByStep)
-      handleNextResult(
-        motifsRes.asInstanceOf[Fractoid[S]],
-        motifsRes.config.asInstanceOf[SparkConfiguration[S]]).
-      asInstanceOf[Fractoid[VertexInducedSubgraph]]
-    }
-  }
-
-  /**
-   * Build a Cliques computation from the current computation
-   */
-  def cliques: Fractoid[VertexInducedSubgraph] = {
-    if (!extensibleFrom [VertexInducedSubgraph]) {
-      throw new RuntimeException (
-        s"${this} should be induced by vertices to be extended to Cliques")
-    } else {
-      val cliquesRes = arabGraph.cliques.copy(stepByStep = stepByStep)
-      handleNextResult(
-        cliquesRes.asInstanceOf[Fractoid[S]],
-        cliquesRes.config.asInstanceOf[SparkConfiguration[S]]).
-      asInstanceOf[Fractoid[VertexInducedSubgraph]]
-    }
   }
 
   override def toString: String = {

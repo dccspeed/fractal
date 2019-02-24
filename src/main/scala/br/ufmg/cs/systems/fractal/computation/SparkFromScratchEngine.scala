@@ -81,22 +81,6 @@ case class SparkFromScratchEngine[E <: Subgraph](
       s" took ${elapsed} ms to compute.")
   }
 
-  /**
-   * Called whenever an subgraph survives the expand/filter process and must be
-   * carried on to the next superstep
-   *
-   * @param subgraph subgraph that must be processed
-   */
-  def addOutboundSubgraph(subgraph: E) = processExpansion (subgraph)
-
-  /**
-   * Adds an expansion (subgraph) to the outbound odags.
-   *
-   * @param expansion subgraph to be added to the stash of outbound odags
-   */
-  override def processExpansion(expansion: E) = {
-    numSubgraphsGenerated += 1
-  }
 }
 
 object SparkFromScratchEngine extends Logging {

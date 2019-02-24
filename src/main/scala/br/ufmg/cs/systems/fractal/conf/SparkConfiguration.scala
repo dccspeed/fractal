@@ -332,7 +332,10 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
 
     // aggregation
     updateIfExists ("incremental_aggregation", CONF_INCREMENTAL_AGGREGATION)
-   
+
+    // maximal
+    updateIfExists ("keep_maximal", CONF_KEEP_MAXIMAL)
+
     // multigraph
     updateIfExists ("multigraph", CONF_MAINGRAPH_MULTIGRAPH)
 
@@ -348,11 +351,6 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
       
       val startTag = System.currentTimeMillis
 
-      logInfo(s"BeforeFilter\n${getMainGraph[BasicMainGraph[_,_]].toDebugString()}")
-      getMainGraph[BasicMainGraph[_,_]].undoVertexFilter()
-      getMainGraph[BasicMainGraph[_,_]].undoEdgeFilter()
-      logInfo(s"AfterUndoFilter\n${getMainGraph[BasicMainGraph[_,_]].toDebugString()}")
-      
       val ret = (confs.get("vtag"), confs.get("etag")) match {
         case (Some(vtag : AtomicBitSetArray), Some(etag : AtomicBitSetArray)) =>
           tagApplied = true
@@ -369,6 +367,14 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
       }
 
       val startFilter = System.currentTimeMillis
+
+      if (!confs.contains("vfilter")) {
+        getMainGraph[BasicMainGraph[_,_]].undoVertexFilter()
+      }
+      
+      if (!confs.contains("efilter")) {
+        getMainGraph[BasicMainGraph[_,_]].undoEdgeFilter()
+      }
 
       def filterVertices[V,E](graph: BasicMainGraph[V,E],
           vpred: Predicate[_]): Int = {
@@ -409,8 +415,6 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
       if (ret + removedVertices + removedEdges > 0) {
         getMainGraph[BasicMainGraph[_,_]].buildSortedNeighborhood()
       }
-      
-      logInfo(s"AfterFilter\n${getMainGraph[BasicMainGraph[_,_]].toDebugString()}")
     }
   }
 

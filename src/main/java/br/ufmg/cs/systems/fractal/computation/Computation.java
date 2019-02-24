@@ -22,39 +22,22 @@ public interface Computation<E extends Subgraph> {
     void finish();
     // }}}
 
-    // {{{ Filter-Process model
+    // {{{
     // |
     // |- compute
     //    |
-    //    |- aggregationCompute
-    //    |  |- aggregationFilter
-    //    |  |- aggregationProcess
-    //    |
     //    |- expandCompute
-    //    |  |- handleNoExpansions
     //    |
     //    |- processCompute
     //       |- filter
     //       |- process
-    //       |- shouldExpand
-   
-    boolean aggregationCompute(E Subgraph);
-    boolean aggregationFilter(E Subgraph);
-    boolean aggregationFilter(Pattern pattern);
-    void aggregationProcess(E Subgraph);
-   
+
     Iterator<E> expandCompute(E Subgraph);
     IntCollection getPossibleExtensions(E Subgraph);
-    void handleNoExpansions(E Subgraph);
-
     long processCompute(Iterator<E> expansions);
     boolean filter(E Subgraph);
     void process(E Subgraph);
-    boolean shouldExpand(E newSubgraph);
     // }}}
-
-    // {{{ Other filter-hooks (performance/canonicality related)
-    void filter(E existingSubgraph, IntCollection extensionPoints);
 
     boolean filter(E existingSubgraph, int newWord);
     // }}}
@@ -96,10 +79,8 @@ public interface Computation<E extends Subgraph> {
     int setDepth(int depth);
     int getDepth();
 
-    SubgraphEnumerator<E> forkConsumer(boolean local);
+    SubgraphEnumerator<E> forkEnumerator(boolean local);
     void joinConsumer(SubgraphEnumerator<E> consumer);
-
-    void expand(E Subgraph);
 
     Class<? extends Subgraph> getSubgraphClass();
     

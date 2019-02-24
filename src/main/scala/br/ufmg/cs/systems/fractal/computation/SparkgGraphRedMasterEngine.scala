@@ -28,29 +28,29 @@ import scala.util.{Failure, Success}
  * It interacts directly with the RDD interface in Spark by handling the
  * SparkContext.
  */
-class SparkGraphRedMasterEngine[E <: Subgraph](
-    _config: SparkConfiguration[E],
-    _parentOpt: Option[SparkMasterEngine[E]]) extends SparkMasterEngine [E] {
+class SparkGraphRedMasterEngine[S <: Subgraph](
+    _config: SparkConfiguration[S],
+    _parentOpt: Option[SparkMasterEngine[S]]) extends SparkMasterEngine [S] {
 
   import SparkFromScratchMasterEngine._
   import SparkGraphRedMasterEngine._
 
   var repetition: Boolean = false
 
-  def config: SparkConfiguration[E] = _config
+  def config: SparkConfiguration[S] = _config
 
-  def parentOpt: Option[SparkMasterEngine[E]] = _parentOpt
+  def parentOpt: Option[SparkMasterEngine[S]] = _parentOpt
 
-  var gtagMasterActorRef: ActorRef = _
+  var masterActorRef: ActorRef = _
 
-  def this(_sc: SparkContext, config: SparkConfiguration[E]) {
+  def this(_sc: SparkContext, config: SparkConfiguration[S]) {
     this (config, None)
     sc = _sc
     init()
   }
 
-  def this(_sc: SparkContext, config: SparkConfiguration[E],
-      parent: SparkMasterEngine[E]) {
+  def this(_sc: SparkContext, config: SparkConfiguration[S],
+      parent: SparkMasterEngine[S]) {
     this (config, Option(parent))
     sc = _sc
     init()
@@ -67,10 +67,10 @@ class SparkGraphRedMasterEngine[E <: Subgraph](
     config.set("incremental_aggregation", true)
 
     // gtag actor
-    gtagMasterActorRef = ActorMessageSystem.createActor(this)
+    masterActorRef = ActorMessageSystem.createActor(this)
 
     logInfo(s"Started gtag-master-actor(step=${superstep}):" +
-      s" ${gtagMasterActorRef}")
+      s" ${masterActorRef}")
 
     val end = System.currentTimeMillis
 
@@ -82,11 +82,6 @@ class SparkGraphRedMasterEngine[E <: Subgraph](
    */
   lazy val next: Boolean = {
     computeNext()
-    //gtagMasterActorRef ! PoisonPill
-    //val tmp = new SparkBtagMasterEngine (sc, config.copy(), parentOpt.getOrElse(null))
-    //tmp.repetition = true
-    //tmp.previousAggregationsBc = previousAggregationsBc
-    //tmp.computeNext()
   }
 
   def computeNext(): Boolean = {
@@ -99,19 +94,19 @@ class SparkGraphRedMasterEngine[E <: Subgraph](
     logInfo(s"Computation step=${superstep} configId=${this.config.getId}")
 
     // save original container, i.e., without parents' computations
-    val originalContainer = config.computationContainer[E]
+    val originalContainer = config.computationContainer[S]
     logInfo (s"From scratch computation (${this})." +
       s" Original computation: ${originalContainer}")
 
     // find out how many computations are pipelined
     val (numComputations, numComputationsLastStep) = {
       var cc = originalContainer
-      var curr: SparkMasterEngine[E] = this
+      var curr: SparkMasterEngine[S] = this
       val numComputationsLastStep = curr.config.
-        computationContainer[E].setDepth(0)
+        computationContainer[S].setDepth(0)
       while (curr.parentOpt.isDefined) {
         curr = curr.parentOpt.get
-        cc = curr.config.computationContainer[E].withComputationAppended(cc)
+        cc = curr.config.computationContainer[S].withComputationAppended(cc)
       }
       (cc.setDepth(0), numComputationsLastStep)
     }
@@ -144,66 +139,22 @@ class SparkGraphRedMasterEngine[E <: Subgraph](
     var cc = originalContainer.withComputationLabel("last_step_begins")
 
     // accumulate parents' computations
-    var curr: SparkMasterEngine[E] = this
+    var curr: SparkMasterEngine[S] = this
     while (curr.parentOpt.isDefined) {
       curr = curr.parentOpt.get
-      cc = curr.config.computationContainer[E].withComputationAppended(cc)
+      cc = curr.config.computationContainer[S].withComputationAppended(cc)
     }
 
     // configure custom WordFilterFunc, except for computations of the last step
-    val wordFilterFuncs = new Array[WordFilterFunc[E]](numComputations)
-
-    //if ((numComputations - numComputationsLastStep) > 0) {
-    //  val wordFilterFunc = getWordFilterFunc(cfAccums, gfAccums, gfcfAccums, 0)
-    //  var j = 0
-    //  while (j < wordFilterFuncs.length) {
-    //    wordFilterFuncs(j) = wordFilterFunc
-    //    j += 1
-    //  }
-    //}
-
-    //if ((numComputations - numComputationsLastStep) > 0) {
-    //  wordFilterFuncs(0) = getWordFilterFunc(cfAccums, gfAccums, gfcfAccums, 0)
-    //}
-
-    //val lastIdx = if (!repetition) {
-    //  (numComputations - numComputationsLastStep) - 1
-    //} else {
-    //  numComputations - 1
-    //}
-    //if (lastIdx >= 0) {
-    //  wordFilterFuncs(lastIdx) =
-    //    getWordFilterFunc(cfAccums, gfAccums, gfcfAccums, 1)
-    //}
-
-    //val lastButOneIdx = if (!repetition) {
-    //  (numComputations - numComputationsLastStep) - 2
-    //} else {
-    //  numComputations - 2
-    //}
-    //if (lastButOneIdx >= 0) {
-    //  wordFilterFuncs(lastButOneIdx) =
-    //    getWordFilterFunc(cfAccums, gfAccums, gfcfAccums, 0)
-    //}
-
-    //val lastIdx = (numComputations - numComputationsLastStep) - 1
-    //val lastButOneIdx = (numComputations - numComputationsLastStep) - 2
-    //if (repetition && lastIdx >= 0) {
-    //  wordFilterFuncs(lastIdx) =
-    //    getWordFilterFunc(cfAccums, gfAccums, gfcfAccums, 1)
-    //}
-    //if (!repetition && lastButOneIdx >= 0) {
-    //  wordFilterFuncs(lastButOneIdx) =
-    //    getWordFilterFunc(cfAccums, gfAccums, gfcfAccums, 1)
-    //}
+    val wordFilterFuncs = new Array[WordFilterFunc[S]](numComputations)
 
     // configure custom ProcessComputeFunc and aggregations
     val processComputeFunc = getProcessComputeFunc(veAccums, ceAccums)
     cc = {
-      def withCustomFuncs(cc: ComputationContainer[E], depth: Int)
-        : ComputationContainer[E] = cc.nextComputationOpt match {
+      def withCustomFuncs(cc: ComputationContainer[S], depth: Int)
+        : ComputationContainer[S] = cc.nextComputationOpt match {
         case Some(c) =>
-          val ncc = withCustomFuncs(c.asInstanceOf[ComputationContainer[E]],
+          val ncc = withCustomFuncs(c.asInstanceOf[ComputationContainer[S]],
             depth + 1)
           val _cc = cc.shallowCopy(
             processComputeOpt = Option(processComputeFunc),
@@ -323,7 +274,7 @@ class SparkGraphRedMasterEngine[E <: Subgraph](
     }
 
     // master will send poison pills to all executor actors of this step
-    gtagMasterActorRef ! Reset
+    masterActorRef ! Reset
 
     val superstepFinish = System.currentTimeMillis
     logInfo (
@@ -412,8 +363,8 @@ class SparkGraphRedMasterEngine[E <: Subgraph](
   }
 
   def getProcessComputeFunc(_egAccums: Array[LongAccumulator],
-      _awAccums: Array[LongAccumulator]): ProcessComputeFunc[E] = {
-    new ProcessComputeFunc[E] with Logging {
+      _awAccums: Array[LongAccumulator]): ProcessComputeFunc[S] = {
+    new ProcessComputeFunc[S] with Logging {
       val numComputations = _egAccums.length
 
       val egAccums = _egAccums
@@ -424,18 +375,18 @@ class SparkGraphRedMasterEngine[E <: Subgraph](
 
       var enabledEdges: AtomicBitSetArray = _
 
-      var workStealingSys: WorkStealingSystem[E] = _
+      var workStealingSys: WorkStealingSystem[S] = _
 
       var totalNumWords: Int = _
 
-      var computations: Array[Computation[E]] = _
+      var computations: Array[Computation[S]] = _
 
-      var iterators: Array[JavaIterator[E]] = _
+      var iterators: Array[JavaIterator[S]] = _
 
-      def apply(iter: JavaIterator[E], c: Computation[E]): Long = {
+      def apply(iter: JavaIterator[S], c: Computation[S]): Long = {
         if (c.getDepth() == 0) {
           val config = c.getConfig()
-          val execEngine = c.getExecutionEngine().asInstanceOf[SparkEngine[E]]
+          val execEngine = c.getExecutionEngine().asInstanceOf[SparkEngine[S]]
 
           egAccums(c.getDepth) = execEngine.
             accums(s"${VALID_SUBGRAPHS}_${c.getDepth}")
@@ -471,9 +422,9 @@ class SparkGraphRedMasterEngine[E <: Subgraph](
 
           // setup work-stealing system
           val gtagExecutorActor = execEngine.
-            asInstanceOf[SparkFromScratchEngine[E]].gtagActorRef
+            asInstanceOf[SparkFromScratchEngine[S]].gtagActorRef
 
-          val callback = (consumer: SubgraphEnumerator[E], ret: Long) => {
+          val callback = (consumer: SubgraphEnumerator[S], ret: Long) => {
             if (ret > 0) {
               val subgraph = consumer.getSubgraph()
               val prefixSize = consumer.getPrefix().size()
@@ -482,7 +433,7 @@ class SparkGraphRedMasterEngine[E <: Subgraph](
             }
           }
 
-          workStealingSys = new WorkStealingSystem[E](
+          workStealingSys = new WorkStealingSystem[S](
             processCompute, gtagExecutorActor, new ConcurrentLinkedQueue(),
             callback = callback)
 
@@ -495,13 +446,13 @@ class SparkGraphRedMasterEngine[E <: Subgraph](
         }
       }
 
-      private def hasNextComputation(iter: JavaIterator[E],
-          c: Computation[E], nextComp: Computation[E]): Long = {
-        var currentSubgraph: E = null.asInstanceOf[E]
+      private def hasNextComputation(iter: JavaIterator[S],
+          c: Computation[S], nextComp: Computation[S]): Long = {
+        var currentSubgraph: S = null.asInstanceOf[S]
         var validChildren = 0L
         var _validChildren = 0L
         var addWords = 0L
-        var SubgraphsGenerated = 0L
+        var subgraphsGenerated = 0L
 
         while (iter.hasNext) {
           currentSubgraph = iter.next
@@ -509,7 +460,7 @@ class SparkGraphRedMasterEngine[E <: Subgraph](
 
           if (c.filter(currentSubgraph)) {
 
-            SubgraphsGenerated += 1
+            subgraphsGenerated += 1
             currentSubgraph.nextExtensionLevel
             _validChildren = nextComp.compute(currentSubgraph)
             currentSubgraph.previousExtensionLevel
@@ -524,22 +475,22 @@ class SparkGraphRedMasterEngine[E <: Subgraph](
         }
 
         awAccums(c.getDepth).add(addWords)
-        egAccums(c.getDepth).add(SubgraphsGenerated)
+        egAccums(c.getDepth).add(subgraphsGenerated)
 
         validChildren
       }
 
-      private def lastComputation(iter: JavaIterator[E],
-          c: Computation[E]): Long = {
-        var currentSubgraph: E = null.asInstanceOf[E]
+      private def lastComputation(iter: JavaIterator[S],
+          c: Computation[S]): Long = {
+        var currentSubgraph: S = null.asInstanceOf[S]
         var addWords = 0L
-        var SubgraphsGenerated = 0L
+        var subgraphsGenerated = 0L
 
         while (iter.hasNext) {
           currentSubgraph = iter.next
           addWords += 1
           if (c.filter(currentSubgraph)) {
-            SubgraphsGenerated += 1
+            subgraphsGenerated += 1
             c.process(currentSubgraph)
             currentSubgraph.applyTagFrom(c,
               enabledVertices, enabledEdges, currentSubgraph.getNumWords() - 1)
@@ -547,34 +498,34 @@ class SparkGraphRedMasterEngine[E <: Subgraph](
         }
 
         awAccums(c.getDepth).add(addWords)
-        egAccums(c.getDepth).add(SubgraphsGenerated)
+        egAccums(c.getDepth).add(subgraphsGenerated)
 
-        SubgraphsGenerated
+        subgraphsGenerated
       }
 
-      private def untaggedLastComputation(iter: JavaIterator[E],
-          c: Computation[E]): Long = {
-        var currentSubgraph: E = null.asInstanceOf[E]
+      private def untaggedLastComputation(iter: JavaIterator[S],
+          c: Computation[S]): Long = {
+        var currentSubgraph: S = null.asInstanceOf[S]
         var addWords = 0L
-        var SubgraphsGenerated = 0L
+        var subgraphsGenerated = 0L
 
         while (iter.hasNext) {
           currentSubgraph = iter.next
           addWords += 1
           if (c.filter(currentSubgraph)) {
-            SubgraphsGenerated += 1
+            subgraphsGenerated += 1
             c.process(currentSubgraph)
           }
         }
 
         awAccums(c.getDepth).add(addWords)
-        egAccums(c.getDepth).add(SubgraphsGenerated)
+        egAccums(c.getDepth).add(subgraphsGenerated)
 
-        SubgraphsGenerated
+        subgraphsGenerated
       }
 
-      private def processCompute(iter: JavaIterator[E],
-          c: Computation[E]): Long = {
+      private def processCompute(iter: JavaIterator[S],
+          c: Computation[S]): Long = {
         val nextComp = c.nextComputation()
 
         val ret = if (nextComp != null) {
@@ -588,8 +539,8 @@ class SparkGraphRedMasterEngine[E <: Subgraph](
     }
   }
 
-  def aggregationRegister(cc: ComputationContainer[E], depth: Int)
-    : (Computation[E]) => Unit = {
+  def aggregationRegister(cc: ComputationContainer[S], depth: Int)
+    : (Computation[S]) => Unit = {
 
     val aggStorageClass =
       classOf[AggregationStorage[NullWritable,AtomicBitSetArray]]
@@ -620,11 +571,11 @@ class SparkGraphRedMasterEngine[E <: Subgraph](
     // get the old init aggregations function in order to compose it
     val oldInitAggregation = cc.initAggregationsOpt match {
       case Some(initAggregations) => initAggregations
-      case None => (c: Computation[E]) => {}
+      case None => (c: Computation[S]) => {}
     }
 
     // construct an incremental init aggregations function
-    (c: Computation[E]) => {
+    (c: Computation[S]) => {
       oldInitAggregation (c) // init aggregations so far
       c.getConfig().registerAggregation [NullWritable,AtomicBitSetArray] (
         VPREV_ENUM,

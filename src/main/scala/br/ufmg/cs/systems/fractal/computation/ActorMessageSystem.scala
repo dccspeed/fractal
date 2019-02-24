@@ -537,8 +537,8 @@ object ActorMessageSystem extends Logging {
     val computations = SparkFromScratchEngine.localComputations[E](c.getStep())
     val numComputations = computations.length
 
-    val gtagBatchLow = c.getConfig().getGtagBatchSizeLow()
-    val gtagBatchHigh = c.getConfig().getGtagBatchSizeHigh()
+    val gtagBatchLow = c.getConfig().getWsBatchSizeLow()
+    val gtagBatchHigh = c.getConfig().getWsBatchSizeHigh()
     val batchSize = ThreadLocalRandom.current().nextInt(
       gtagBatchHigh - gtagBatchLow + 1) + gtagBatchLow
 
@@ -549,7 +549,7 @@ object ActorMessageSystem extends Logging {
     while (i < offset) {
       val currComp = computations(i % numComputations)
       if (currComp != null) {
-        val consumer = currComp.forkConsumer(false)
+        val consumer = currComp.forkEnumerator(false)
         if (consumer != null) {
           val ebytesOpt = serializeSubgraphBatch(consumer, batchSize)
           currComp.joinConsumer(consumer)
@@ -830,7 +830,7 @@ class WorkStealingSystem [E <: Subgraph] (
       while (i < computations.length) {
         val currComp = computations(i)
         if (currComp != null) {
-          val consumer = currComp.forkConsumer(true)
+          val consumer = currComp.forkEnumerator(true)
           if (consumer != null) {
             val label = consumer.computationLabel()
 

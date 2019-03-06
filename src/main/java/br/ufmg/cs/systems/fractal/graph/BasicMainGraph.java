@@ -816,7 +816,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       if (vertexIdx == -1) {
          //vertexIdx = vertexIdMap.size();
          vertexIdx = vertexId;
-         vertexIdMap.put(vertexId, vertexIdx);
+         //vertexIdMap.put(vertexId, vertexIdx);
          Vertex vertex = createVertex(vertexIdx, vertexId, vertexLabel);
          addVertex(vertex);
          return vertex;

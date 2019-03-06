@@ -45,42 +45,42 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
 
     @Override
     public int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag) {
-       throw new UnsupportedOperationException("Not implemented");
+       return underlyingMainGraph.filter(vtag, etag);
     }
 
     @Override
     public int undoVertexFilter() {
-       throw new UnsupportedOperationException("Not implemented");
+       return underlyingMainGraph.undoVertexFilter();
     }
     
     @Override
     public int undoEdgeFilter() {
-       throw new UnsupportedOperationException("Not implemented");
+       return underlyingMainGraph.undoEdgeFilter();
     }
 
     @Override
     public int filterVertices(Predicate vpred) {
-        throw new UnsupportedOperationException("Not implemented");
+       return underlyingMainGraph.filterVertices(vpred);
     }
 
     @Override
     public int filterVertices(AtomicBitSetArray tag) {
-       throw new UnsupportedOperationException("Not implemented");
+       return underlyingMainGraph.filterVertices(tag);
     }
     
     @Override
     public int filterEdges(AtomicBitSetArray tag) {
-       throw new UnsupportedOperationException("Not implemented");
+       return underlyingMainGraph.filterEdges(tag);
     }
 
     @Override
     public int filterEdges(Predicate epred) {
-        throw new UnsupportedOperationException("Not implemented");
+       return underlyingMainGraph.filterEdges(epred);
     }
 
     @Override
     public void buildSortedNeighborhood() {
-        throw new UnsupportedOperationException("Not implemented");
+       underlyingMainGraph.buildSortedNeighborhood();
     }
 
     @Override

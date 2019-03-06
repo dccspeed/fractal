@@ -354,7 +354,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
       val ret = (confs.get("vtag"), confs.get("etag")) match {
         case (Some(vtag : AtomicBitSetArray), Some(etag : AtomicBitSetArray)) =>
           tagApplied = true
-          getMainGraph[BasicMainGraph[_,_]].filter(vtag, etag)
+          getMainGraph[MainGraph[_,_]].filter(vtag, etag)
 
         case other =>
           0
@@ -369,14 +369,14 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
       val startFilter = System.currentTimeMillis
 
       if (!confs.contains("vfilter")) {
-        getMainGraph[BasicMainGraph[_,_]].undoVertexFilter()
+        getMainGraph[MainGraph[_,_]].undoVertexFilter()
       }
       
       if (!confs.contains("efilter")) {
-        getMainGraph[BasicMainGraph[_,_]].undoEdgeFilter()
+        getMainGraph[MainGraph[_,_]].undoEdgeFilter()
       }
 
-      def filterVertices[V,E](graph: BasicMainGraph[V,E],
+      def filterVertices[V,E](graph: MainGraph[V,E],
           vpred: Predicate[_]): Int = {
         graph.filterVertices(vpred.asInstanceOf[Predicate[Vertex[V]]])
       }
@@ -384,13 +384,13 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
       val removedVertices = confs.get("vfilter") match {
         case Some(vpred: Predicate[_]) =>
           tagApplied = true
-          filterVertices(getMainGraph[BasicMainGraph[_,_]], vpred)
+          filterVertices(getMainGraph[MainGraph[_,_]], vpred)
 
         case other =>
           0
       }
 
-      def filterEdges[V,E](graph: BasicMainGraph[V,E],
+      def filterEdges[V,E](graph: MainGraph[V,E],
           epred: Predicate[_]): Int = {
         graph.filterEdges(epred.asInstanceOf[Predicate[Edge[E]]])
       }
@@ -398,7 +398,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
       val removedEdges = confs.get("efilter") match {
         case Some(epred: Predicate[_]) =>
           tagApplied = true
-          filterEdges(getMainGraph[BasicMainGraph[_,_]], epred)
+          filterEdges(getMainGraph[MainGraph[_,_]], epred)
 
         case other =>
           0
@@ -413,7 +413,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
       }
 
       if (ret + removedVertices + removedEdges > 0) {
-        getMainGraph[BasicMainGraph[_,_]].buildSortedNeighborhood()
+        getMainGraph[MainGraph[_,_]].buildSortedNeighborhood()
       }
     }
   }
@@ -423,7 +423,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
     initialize(isMaster)
     if (!tagApplied) {
       val start = System.currentTimeMillis
-      val ret = getMainGraph[BasicMainGraph[_,_]].filter(vtag, etag)
+      val ret = getMainGraph[MainGraph[_,_]].filter(vtag, etag)
       System.gc()
       val elapsed = System.currentTimeMillis - start
       logInfo (s"GraphTagging took ${elapsed} ms. Return: ${ret}")
@@ -437,9 +437,9 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
       val start = System.currentTimeMillis
       val ec = createComputation.getSubgraphClass()
       val ret = if (ec == classOf[VertexInducedSubgraph]) {
-        getMainGraph[BasicMainGraph[_,_]].filterVertices(tag)
+        getMainGraph[MainGraph[_,_]].filterVertices(tag)
       } else if (ec == classOf[EdgeInducedSubgraph]) {
-        getMainGraph[BasicMainGraph[_,_]].filterEdges(tag)
+        getMainGraph[MainGraph[_,_]].filterEdges(tag)
       } else {
         throw new RuntimeException(s"Unknown subgraph type: ${ec}")
       }
@@ -548,7 +548,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
 
     // in case of the mainGraph is empty (no vertices and no edges), we try to
     // read it
-    getMainGraph[BasicMainGraph[_,_]].synchronized {
+    getMainGraph[MainGraph[_,_]].synchronized {
       if (!isMainGraphRead) {
         logInfo ("MainGraph is empty, gonna try reading it")
         readMainGraph()

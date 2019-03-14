@@ -12,7 +12,6 @@ import br.ufmg.cs.systems.fractal.util.Utils;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
-import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.hash.HashIntSet;
 import java.util.function.IntConsumer;
 
@@ -39,8 +38,6 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       updateEdgesConsumer = new UpdateEdgesConsumer();
    }
 
-   private ValidWordIdAdder extensionWordIdsAdder = new ValidWordIdAdder();
-   
    private EdgeTaggerConsumer edgeTagger = new EdgeTaggerConsumer();
 
    private ValidNeighborhoodPredicate validNeighborhoodPredicate =
@@ -60,11 +57,6 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    @Override
    public IntArrayList getWords() {
       return vertices;
-   }
-
-   @Override
-   public int getLastWord() {
-      return vertices.getLast();
    }
 
    @Override
@@ -92,7 +84,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    }
 
    @Override
-   public int getNumVerticesAddedWithExpansion() {
+   public int numVerticesAdded() {
       if (vertices.isEmpty()) {
          return 0;
       }
@@ -101,15 +93,9 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    }
 
    @Override
-   public int getNumEdgesAddedWithExpansion() {
+   public int numEdgesAdded() {
       // TODO: get this information via pattern edges
       return 0;
-   }
-
-   @Override
-   protected IntCollection getValidNeighboursForExpansion(int vertexId) {
-      return configuration.getMainGraph().getVertexNeighbourhood(vertexId).
-              getNeighborEdges();
    }
 
    @Override
@@ -198,30 +184,8 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    }
 
    @Override
-   protected void updateExtensibleWordIdsSimple(Computation computation) {
-      IntArrayList vertices = getVertices();
-      int numVertices = getNumVertices();
-
-      extensionWordIds().clear();
-
-      int wordId;
-      int lowerBound = vertices.getUnchecked(0);
-      IntCollection neighbourhood = null;
-
-      for (int i = numVertices - 1; i >= 0; --i) {
-         wordId = vertices.getUnchecked(i);
-         neighbourhood = getValidNeighboursForExpansion(wordId);
-
-         if (neighbourhood != null) {
-            neighbourhood.forEach(extensionWordIdsAdder.setBound(lowerBound));
-         }
-
-         lowerBound = Math.max(wordId, lowerBound);
-      }
-   }
-
-   @Override
-   protected void updateExtensionsInit(Computation computation, Pattern pattern) {
+   protected void updateInitExtensions(Computation computation) {
+      Pattern pattern = computation.getPattern();
       int totalNumWords = computation.getInitialNumWords();
       int numPartitions = computation.getNumberPartitions();
       int myPartitionId = computation.getPartitionId();
@@ -254,7 +218,8 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    }
 
    @Override
-   protected void updateExtensions(Computation computation, Pattern pattern) {
+   protected void updateExtensions(Computation computation) {
+      Pattern pattern = computation.getPattern();
 
       // vertices info and symmetry breaking conditions
       int numVertices = getNumVertices();

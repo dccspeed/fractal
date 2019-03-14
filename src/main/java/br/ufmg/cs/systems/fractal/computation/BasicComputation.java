@@ -121,7 +121,7 @@ public abstract class BasicComputation<E extends Subgraph>
 
     @Override
     public IntCollection getPossibleExtensions(E Subgraph) {
-       return Subgraph.getExtensibleWordIds(this);
+       return Subgraph.computeExtensions(this);
     }
 
   @Override

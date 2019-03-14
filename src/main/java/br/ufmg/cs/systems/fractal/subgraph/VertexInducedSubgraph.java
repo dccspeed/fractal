@@ -6,10 +6,9 @@ import br.ufmg.cs.systems.fractal.graph.VertexNeighbourhood;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
-import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.hash.HashIntSet;
 import java.util.function.IntConsumer;
-import org.apache.hadoop.io.IntWritable;
+
 import org.apache.log4j.Logger;
 
 import java.io.DataInput;
@@ -25,16 +24,6 @@ public class VertexInducedSubgraph extends BasicSubgraph {
    // Edge tracking for incremental modifications {{
    private IntArrayList numEdgesAddedWithWord;
    // }}
-
-   private ValidWordIdAdder extensionWordIdsAdder = new ValidWordIdAdder();
-   
-   private ValidWordIdAdderLast lastExtensionWordIdsAdder =
-      new ValidWordIdAdderLast();
-   
-   private ValidWordIdAdderPrevious previousExtensionWordIdsAdder =
-      new ValidWordIdAdderPrevious();
-
-   private IntWritable reusableInt = new IntWritable();
 
    private int lastPositionAdded = -1;
 
@@ -58,11 +47,6 @@ public class VertexInducedSubgraph extends BasicSubgraph {
    @Override
    public IntArrayList getWords() {
       return getVertices();
-   }
-
-   @Override
-   public int getLastWord() {
-      return vertices.getLast();
    }
 
    @Override
@@ -92,7 +76,7 @@ public class VertexInducedSubgraph extends BasicSubgraph {
 
 
    @Override
-   public int getNumVerticesAddedWithExpansion() {
+   public int numVerticesAdded() {
       if (vertices.isEmpty()) {
          return 0;
       }
@@ -101,7 +85,7 @@ public class VertexInducedSubgraph extends BasicSubgraph {
    }
 
    @Override
-   public int getNumEdgesAddedWithExpansion() {
+   public int numEdgesAdded() {
       ensureEdges();
       return numEdgesAddedWithWord.getLastOrDefault(0);
    }
@@ -119,10 +103,6 @@ public class VertexInducedSubgraph extends BasicSubgraph {
          updateEdges(vertices.get(lastPositionAdded + 1),
                lastPositionAdded + 1);
       }
-   }
-
-   protected IntCollection getValidNeighboursForExpansion(int vertexId) {
-      return configuration.getMainGraph().getVertexNeighbours(vertexId);
    }
 
    @Override
@@ -204,7 +184,7 @@ public class VertexInducedSubgraph extends BasicSubgraph {
    }
 
    //@Override
-   //protected void updateExtensibleWordIdsSimple(Computation computation) {
+   //protected void updateExtensions(Computation computation) {
    //   IntArrayList vertices = getVertices();
    //   int numVertices = getNumVertices();
 
@@ -227,7 +207,7 @@ public class VertexInducedSubgraph extends BasicSubgraph {
    //}
 
    @Override
-   protected void updateExtensibleWordIdsSimple(Computation computation) {
+   protected void updateExtensions(Computation computation) {
       IntArrayList vertices = getVertices();
       int numVertices = getNumVertices();
       HashIntSet extensionWordIds = extensionWordIds();
@@ -292,58 +272,6 @@ public class VertexInducedSubgraph extends BasicSubgraph {
       public void accept(int i) {
          edges.add(i);
          ++numAdded;
-      }
-   }
-
-   private class ValidWordIdAdderLast implements IntConsumer {
-      private int lowerBound;
-
-      public ValidWordIdAdderLast setBound(int lowerBound) {
-         this.lowerBound = lowerBound;
-         return this;
-      }
-      
-      @Override
-      public void accept(int w) {
-         if (w > lowerBound) {
-            extensionWordIds().add(w);
-         }
-      }
-   }
-
-   private class ValidWordIdAdderPrevious implements IntConsumer {
-      private int lowerBound;
-
-      public ValidWordIdAdderPrevious setBound(int lowerBound) {
-         this.lowerBound = lowerBound;
-         return this;
-      }
-      
-      @Override
-      public void accept(int w) {
-         if (w > lowerBound) {
-            extensionWordIds().add(w);
-         } else {
-            extensionWordIds().removeInt(w);
-         }
-      }
-   }
-
-   private class ValidWordIdAdder implements IntConsumer {
-      private int lowerBound;
-
-      public ValidWordIdAdder setBound(int lowerBound) {
-         this.lowerBound = lowerBound;
-         return this;
-      }
-
-      @Override
-      public void accept(int w) {
-         if (w > lowerBound) {
-            extensionWordIds().add(w);
-         } else {
-            extensionWordIds().removeInt(w);
-         }
       }
    }
 

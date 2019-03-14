@@ -2,6 +2,7 @@ package br.ufmg.cs.systems.fractal.computation
 
 import java.util.concurrent.atomic.AtomicInteger
 
+import br.ufmg.cs.systems.fractal.Primitive
 import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.subgraph._
@@ -32,8 +33,10 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
 
   val containerId: Int = ComputationContainer.nextContainerId.getAndIncrement
 
+  val primitiveOpt: Option[Primitive]
+
   val computationLabelOpt: Option[String]
-  
+
   val patternOpt: Option[Pattern]
 
   val processOpt: Option[(E,Computation[E]) => Unit]
@@ -68,6 +71,8 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
   def withComputationAppended(lastComputation: Computation[E])
     : ComputationContainer[E]
 
+  def withPrimitive(p: Primitive): ComputationContainer[E]
+  
   def withComputationLabel(label: String): ComputationContainer[E]
 
   def asLastComputation: ComputationContainer[E]
@@ -75,6 +80,8 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
   def take(n: Int): ComputationContainer[E]
 
   def shallowCopy(
+      primitiveOpt: Option[Primitive] =
+        primitiveOpt,
       computationLabelOpt: Option[String] =
         computationLabelOpt,
       patternOpt: Option[Pattern] =
@@ -102,6 +109,8 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
     ): ComputationContainer[E]
 
   def withNewFunctions(
+      primitiveOpt: Option[Primitive] =
+        primitiveOpt,
       computationLabelOpt: Option[String] =
         computationLabelOpt,
       patternOpt: Option[Pattern] =
@@ -127,6 +136,8 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
     ): ComputationContainer[E]
 
   def withNewFunctionsAll(
+      primitiveOpt: Option[Primitive] =
+        primitiveOpt,
       computationLabelOpt: Option[String] =
         computationLabelOpt,
       patternOpt: Option[Pattern] =
@@ -154,6 +165,7 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
   def shallowCopy(): ComputationContainer[E]
   
   def clear(): ComputationContainer[E] = withNewFunctions (
+    primitiveOpt = None,
     computationLabelOpt = None,
     patternOpt = None,
     processOpt = Some((e,c) => {}),
@@ -172,7 +184,9 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
   }
 
   override def toString: String = {
-    s"CC[${containerId}]" +
+    //s"${primitiveOpt.getOrElse(Primitive.None).name()}" +
+    //s"${nextComputationOpt.map(c => c.toString).getOrElse("")}"
+    s" CC[${containerId}]" +
     s"[${computationLabel()}]" +
     s"(${computationRepr.mkString(",")})" +
     s"${nextComputationOpt.map(c => "::" + c.toString).getOrElse("")}"
@@ -180,6 +194,7 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
 }
 
 case class EComputationContainer [E <: EdgeInducedSubgraph] (
+    primitiveOpt: Option[Primitive] = None,
     computationLabelOpt: Option[String] = None,
     patternOpt: Option[Pattern] = None,
     processOpt: Option[(E,Computation[E]) => Unit] = None,
@@ -200,6 +215,9 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
 
   @transient private lazy val _computationLabel: String =
     computationLabelOpt.getOrElse (containerId.toString)
+
+  @transient private lazy val _primitive: Primitive =
+    primitiveOpt.getOrElse (Primitive.None)
   
   @transient private lazy val _pattern: Pattern =
     patternOpt.getOrElse(null)
@@ -285,17 +303,24 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
   def shallowCopy(): ComputationContainer[E] = nextComputationOpt match {
     case Some(nextComputation : ComputationContainer[E]) =>
       this.copy(
+        primitiveOpt =
+          Option(primitiveOpt.getOrElse(Primitive.None)),
         computationLabelOpt =
           Option(computationLabelOpt.getOrElse(containerId.toString)),
         nextComputationOpt = Option(nextComputation.shallowCopy()))
     case None =>
-      this.copy(computationLabelOpt =
+      this.copy(
+        primitiveOpt =
+          Option(primitiveOpt.getOrElse(Primitive.None)),
+        computationLabelOpt =
           Option(computationLabelOpt.getOrElse(containerId.toString)))
     case _ =>
       throw new RuntimeException(s"Next computation should be a container")
   }
 
   def shallowCopy(
+      primitiveOpt: Option[Primitive] =
+        primitiveOpt,
       computationLabelOpt: Option[String] =
         computationLabelOpt,
       patternOpt: Option[Pattern] =
@@ -322,6 +347,7 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
         nextComputationOpt)
     : ComputationContainer[E] = {
     this.copy(
+      primitiveOpt = primitiveOpt,
       computationLabelOpt = computationLabelOpt,
       patternOpt = patternOpt,
       processOpt = processOpt,
@@ -338,6 +364,8 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
   }
 
   def withNewFunctions(
+      primitiveOpt: Option[Primitive] = 
+        primitiveOpt,
       computationLabelOpt: Option[String] =
         lastComputation.computationLabelOpt,
       patternOpt: Option[Pattern] =
@@ -371,7 +399,7 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
     }
 
     var lastComp = comps.pop()
-    lastComp = lastComp.copy(computationLabelOpt, patternOpt,
+    lastComp = lastComp.copy(primitiveOpt, computationLabelOpt, patternOpt,
         processOpt, filterOpt, wordFilterOpt,
         getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt, finishOpt,
@@ -385,6 +413,8 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
   }
 
   def withNewFunctionsAll(
+      primitiveOpt: Option[Primitive] =
+        primitiveOpt,
       computationLabelOpt: Option[String] =
         computationLabelOpt,
       patternOpt: Option[Pattern] =
@@ -410,12 +440,13 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
     : ComputationContainer[E] = nextComputationOpt match {
     case Some(nextComputation) =>
       val nextComp = nextComputation.asInstanceOf[ComputationContainer[E]].
-      withNewFunctionsAll (computationLabelOpt, patternOpt,
+      withNewFunctionsAll (primitiveOpt, computationLabelOpt, patternOpt,
         processOpt, filterOpt, wordFilterOpt,
         getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt,
         finishOpt, expandComputeOpt, processComputeOpt)
-      this.copy (computationLabelOpt = computationLabelOpt,
+      this.copy (primitiveOpt = primitiveOpt,
+        computationLabelOpt = computationLabelOpt,
         patternOpt = patternOpt,
         processOpt = processOpt, filterOpt = filterOpt,
         wordFilterOpt = wordFilterOpt,
@@ -426,7 +457,8 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
         nextComputationOpt = Some(nextComp))
 
     case None =>
-      this.copy (computationLabelOpt = computationLabelOpt,
+      this.copy (primitiveOpt = primitiveOpt,
+        computationLabelOpt = computationLabelOpt,
         patternOpt = patternOpt,
         processOpt = processOpt, filterOpt = filterOpt,
         wordFilterOpt = wordFilterOpt,
@@ -445,6 +477,10 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
         this.copy(nextComputationOpt = Option(_nextComputation))
       case None =>
         this.copy(nextComputationOpt = Option(lastComputation))
+  }
+
+  def withPrimitive(p: Primitive): ComputationContainer[E] = {
+    this.copy (primitiveOpt = Option(p))
   }
   
   def withComputationLabel(label: String): ComputationContainer[E] = {
@@ -497,10 +533,11 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
   
   override def getPattern(): Pattern = _pattern
   
-  override def toString: String = s"E${super.toString}"
+  //override def toString: String = s"E${super.toString}"
 }
 
 case class VComputationContainer [E <: VertexInducedSubgraph] (
+    primitiveOpt: Option[Primitive] = None,
     computationLabelOpt: Option[String] = None,
     patternOpt: Option[Pattern] = None,
     processOpt: Option[(E,Computation[E]) => Unit] = None,
@@ -518,6 +555,9 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
   
   private val pconfigOpt: Option[Configuration[E]] =
     patternOpt.map(_.getConfig().asInstanceOf[Configuration[E]])
+
+  @transient private lazy val _primitive: Primitive =
+    primitiveOpt.getOrElse (Primitive.None)
 
   @transient private lazy val _computationLabel: String =
     computationLabelOpt.getOrElse (containerId.toString)
@@ -600,17 +640,24 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
   def shallowCopy(): ComputationContainer[E] = nextComputationOpt match {
     case Some(nextComputation : ComputationContainer[E]) =>
       this.copy(
+        primitiveOpt =
+          Option(primitiveOpt.getOrElse(Primitive.None)),
         computationLabelOpt =
           Option(computationLabelOpt.getOrElse(containerId.toString)),
         nextComputationOpt = Option(nextComputation.shallowCopy()))
     case None =>
-      this.copy(computationLabelOpt =
+      this.copy(
+        primitiveOpt =
+          Option(primitiveOpt.getOrElse(Primitive.None)),
+        computationLabelOpt =
           Option(computationLabelOpt.getOrElse(containerId.toString)))
     case _ =>
       throw new RuntimeException(s"Next computation should be a container")
   }
   
   def shallowCopy(
+      primitiveOpt: Option[Primitive] =
+        primitiveOpt,
       computationLabelOpt: Option[String] =
         computationLabelOpt,
       patternOpt: Option[Pattern] =
@@ -637,6 +684,7 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
         nextComputationOpt)
     : ComputationContainer[E] = {
     this.copy(
+      primitiveOpt = primitiveOpt,
       computationLabelOpt = computationLabelOpt,
       patternOpt = patternOpt,
       processOpt = processOpt,
@@ -653,6 +701,8 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
   }
 
   def withNewFunctions(
+      primitiveOpt: Option[Primitive] =
+        primitiveOpt,
       computationLabelOpt: Option[String] =
         lastComputation.computationLabelOpt,
       patternOpt: Option[Pattern] =
@@ -686,7 +736,7 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
     }
 
     var lastComp = comps.pop()
-    lastComp = lastComp.copy(computationLabelOpt, patternOpt,
+    lastComp = lastComp.copy(primitiveOpt, computationLabelOpt, patternOpt,
         processOpt, filterOpt, wordFilterOpt,
         getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt, finishOpt,
@@ -700,6 +750,8 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
   }
 
   def withNewFunctionsAll(
+      primitiveOpt: Option[Primitive] =
+        primitiveOpt,
       computationLabelOpt: Option[String] =
         computationLabelOpt,
       patternOpt: Option[Pattern] =
@@ -725,12 +777,13 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
     : ComputationContainer[E] = nextComputationOpt match {
     case Some(nextComputation) =>
       val nextComp = nextComputation.asInstanceOf[ComputationContainer[E]].
-      withNewFunctionsAll (computationLabelOpt, patternOpt,
+      withNewFunctionsAll (primitiveOpt, computationLabelOpt, patternOpt,
         processOpt, filterOpt, wordFilterOpt,
         getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt,
         finishOpt, expandComputeOpt, processComputeOpt)
-      this.copy (computationLabelOpt = computationLabelOpt,
+      this.copy (primitiveOpt = primitiveOpt,
+        computationLabelOpt = computationLabelOpt,
         patternOpt = patternOpt,
         processOpt = processOpt, filterOpt = filterOpt,
         wordFilterOpt = wordFilterOpt,
@@ -741,7 +794,8 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
         nextComputationOpt = Some(nextComp))
 
     case None =>
-      this.copy (computationLabelOpt = computationLabelOpt,
+      this.copy (primitiveOpt = primitiveOpt,
+        computationLabelOpt = computationLabelOpt,
         patternOpt = patternOpt,
         processOpt = processOpt, filterOpt = filterOpt,
         wordFilterOpt = wordFilterOpt,
@@ -760,6 +814,10 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
         this.copy(nextComputationOpt = Option(_nextComputation))
       case None =>
         this.copy(nextComputationOpt = Option(lastComputation))
+  }
+
+  def withPrimitive(p: Primitive): ComputationContainer[E] = {
+    this.copy (primitiveOpt = Option(p))
   }
   
   def withComputationLabel(label: String): ComputationContainer[E] = {
@@ -812,10 +870,11 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
   
   override def getPattern(): Pattern = _pattern
   
-  override def toString: String = s"V${super.toString}"
+  //override def toString: String = s"V${super.toString}"
 }
 
 case class VEComputationContainer [E <: PatternInducedSubgraph](
+    primitiveOpt: Option[Primitive] = None,
     computationLabelOpt: Option[String] = None,
     patternOpt: Option[Pattern] = None,
     processOpt: Option[(E,Computation[E]) => Unit] = None,
@@ -833,6 +892,9 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
   
   private val pconfigOpt: Option[Configuration[E]] =
     patternOpt.map(_.getConfig().asInstanceOf[Configuration[E]])
+
+  @transient private lazy val _primitive: Primitive =
+    primitiveOpt.getOrElse (Primitive.None)
 
   @transient private lazy val _computationLabel: String =
     computationLabelOpt.getOrElse (containerId.toString)
@@ -921,17 +983,24 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
   def shallowCopy(): ComputationContainer[E] = nextComputationOpt match {
     case Some(nextComputation : ComputationContainer[E]) =>
       this.copy(
+        primitiveOpt =
+          Option(primitiveOpt.getOrElse(Primitive.None)),
         computationLabelOpt =
           Option(computationLabelOpt.getOrElse(containerId.toString)),
         nextComputationOpt = Option(nextComputation.shallowCopy()))
     case None =>
-      this.copy(computationLabelOpt =
+      this.copy(
+        primitiveOpt =
+          Option(primitiveOpt.getOrElse(Primitive.None)),
+        computationLabelOpt =
           Option(computationLabelOpt.getOrElse(containerId.toString)))
     case _ =>
       throw new RuntimeException(s"Next computation should be a container")
   }
 
   def shallowCopy(
+      primitiveOpt: Option[Primitive] =
+        primitiveOpt,
       computationLabelOpt: Option[String] =
         computationLabelOpt,
       patternOpt: Option[Pattern] =
@@ -958,6 +1027,7 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
         nextComputationOpt)
     : ComputationContainer[E] = {
     this.copy(
+      primitiveOpt = primitiveOpt,
       computationLabelOpt = computationLabelOpt,
       patternOpt = patternOpt,
       processOpt = processOpt,
@@ -974,6 +1044,8 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
   }
 
   def withNewFunctions(
+      primitiveOpt: Option[Primitive] =
+        primitiveOpt,
       computationLabelOpt: Option[String] =
         lastComputation.computationLabelOpt,
         patternOpt: Option[Pattern] =
@@ -1007,7 +1079,7 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
     }
 
     var lastComp = comps.pop()
-    lastComp = lastComp.copy(computationLabelOpt, patternOpt,
+    lastComp = lastComp.copy(primitiveOpt, computationLabelOpt, patternOpt,
         processOpt, filterOpt, wordFilterOpt,
         getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt, finishOpt,
@@ -1021,6 +1093,8 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
   }
 
   def withNewFunctionsAll(
+      primitiveOpt: Option[Primitive] =
+        primitiveOpt,
       computationLabelOpt: Option[String] =
         computationLabelOpt,
       patternOpt: Option[Pattern] =
@@ -1046,12 +1120,13 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
     : ComputationContainer[E] = nextComputationOpt match {
     case Some(nextComputation) =>
       val nextComp = nextComputation.asInstanceOf[ComputationContainer[E]].
-      withNewFunctionsAll (computationLabelOpt, patternOpt,
+      withNewFunctionsAll (primitiveOpt, computationLabelOpt, patternOpt,
         processOpt, filterOpt, wordFilterOpt,
         getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt,
         finishOpt, expandComputeOpt, processComputeOpt)
-      this.copy (computationLabelOpt = computationLabelOpt,
+      this.copy (primitiveOpt = primitiveOpt,
+        computationLabelOpt = computationLabelOpt,
         patternOpt = patternOpt,
         processOpt = processOpt, filterOpt = filterOpt,
         wordFilterOpt = wordFilterOpt,
@@ -1062,7 +1137,8 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
         nextComputationOpt = Some(nextComp))
 
     case None =>
-      this.copy (computationLabelOpt = computationLabelOpt,
+      this.copy (primitiveOpt = primitiveOpt,
+        computationLabelOpt = computationLabelOpt,
         patternOpt = patternOpt,
         processOpt = processOpt, filterOpt = filterOpt,
         wordFilterOpt = wordFilterOpt,
@@ -1081,6 +1157,10 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
         this.copy(nextComputationOpt = Option(_nextComputation))
       case None =>
         this.copy(nextComputationOpt = Option(lastComputation))
+  }
+
+  def withPrimitive(p: Primitive): ComputationContainer[E] = {
+    this.copy (primitiveOpt = Option(p))
   }
   
   def withComputationLabel(label: String): ComputationContainer[E] = {
@@ -1146,9 +1226,11 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
 
   override def getPattern(): Pattern = _pattern
   
-  override def toString: String = s"E${super.toString}"
+  //override def toString: String = s"E${super.toString}"
 }
 
 object ComputationContainer {
   val nextContainerId = new AtomicInteger(0)
 }
+
+

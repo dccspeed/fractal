@@ -24,7 +24,7 @@ public class CliqueInducedSubgraphs {
    public IntCollection extensions(Subgraph subgraph, Computation computation) {
       int numVertices = subgraph.getNumVertices();
       if (numVertices == 0) { // single vertices
-         return subgraph.getExtensibleWordIds(computation);
+         return subgraph.computeExtensions(computation);
       } else if (numVertices == 1) { // bootstrap from input graph
          bootstrap(subgraph, computation, subgraph.getVertices().getLast());
          return sgs.getLast().getAdjList().keySet();

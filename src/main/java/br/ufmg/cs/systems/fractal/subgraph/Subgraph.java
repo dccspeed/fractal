@@ -41,24 +41,18 @@ public interface Subgraph extends WritableObject, Externalizable {
 
     Pattern getPattern();
 
-    int getNumVerticesAddedWithExpansion();
+    int numVerticesAdded();
 
-    int getNumEdgesAddedWithExpansion();
+    int numEdgesAdded();
 
     void addWord(int word);
 
-    int getLastWord();
-    
     void removeLastWord();
 
-    IntCollection getExtensibleWordIds(Computation computation);
+    IntCollection computeExtensions(Computation computation);
     
     IntCollection extensions();
-    
-    IntCollection extensions(Computation computation);
-    
-    IntCollection extensions(Computation computation, Pattern pattern);
-    
+
     boolean isCanonicalSubgraphWithWord(int wordId);
 
     String toOutputString();

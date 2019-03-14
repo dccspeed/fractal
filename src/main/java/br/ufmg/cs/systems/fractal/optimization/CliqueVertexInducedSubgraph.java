@@ -7,7 +7,7 @@ import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 
 public class CliqueVertexInducedSubgraph extends VertexInducedSubgraph {
    @Override
-   protected void updateExtensibleWordIdsSimple(Computation computation) {
+   protected void updateExtensions(Computation computation) {
       if (dirtyExtensionWordIds) {
          extensionWordIds().clear();
 

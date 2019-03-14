@@ -744,7 +744,7 @@ class WorkStealingSystem [E <: Subgraph] (
           response.workOpt match {
             case Some(subgraphBatchBytes) =>
               val consumer = ActorMessageSystem.
-              deserializeSubgraphBatch(subgraphBatchBytes, c)
+                deserializeSubgraphBatch(subgraphBatchBytes, c)
               val computation = consumer.getComputation()
 
               //val start = System.currentTimeMillis

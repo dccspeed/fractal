@@ -17,8 +17,6 @@ import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntObjMap;
 import com.koloboke.collect.map.hash.HashIntObjMaps;
 import com.koloboke.collect.set.hash.HashIntSet;
-import java.util.function.IntConsumer;
-import com.koloboke.function.IntIntConsumer;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -32,8 +30,6 @@ public abstract class BasicSubgraph implements Subgraph {
    protected IntArrayList vertices;
    protected IntArrayList edges;
 
-   // Extension helper structures {{
-   protected HashIntSet extensionWordIds;
    protected IntIntMap extensionWordMaps;
    protected boolean dirtyExtensionWordIds;
 
@@ -41,29 +37,12 @@ public abstract class BasicSubgraph implements Subgraph {
    protected ObjArrayList<HashIntSet> extensionLevels;
    protected ObjArrayList<IntArrayList> extensionArrays;
    protected IntArrayList neighborhoodCuts;
-   protected IntArrayList lastWords;
 
    protected HashIntObjMap cacheStore;
 
    // state
    protected CliqueInducedSubgraphs state;
    protected GtrieExtender extender;
-
-   protected IntConsumer extensionWordIdsAdder = new IntConsumer() {
-      @Override
-      public void accept(int i) {
-         extensionWordIds().add(i);
-      }
-   };
-
-   protected BoundedWordIdAdder boundedExtensionsAdder =
-      new BoundedWordIdAdder();
-   
-   protected BoundedWordMapAdder boundedExtensionsMapAdder =
-      new BoundedWordMapAdder();
-   
-   protected BoundedWordMapAdderFixedSrc boundedExtensionsMapAdderFixedSrc =
-      new BoundedWordMapAdderFixedSrc();
 
    // }}
 
@@ -154,14 +133,6 @@ public abstract class BasicSubgraph implements Subgraph {
    protected HashIntSet extensionWordIds() {
       return extensionLevels.getLast();
    }
-   
-   protected HashIntSet extensionWordIds(int level) {
-      return extensionLevels.get(level);
-   }
-
-   protected HashIntSet previousExtensionWordIds() {
-      return extensionLevels.get(extensionLevels.size() - 2);
-   }
 
    @Override
    public void nextExtensionLevel() {
@@ -226,51 +197,26 @@ public abstract class BasicSubgraph implements Subgraph {
    }
 
    @Override
-   public IntCollection getExtensibleWordIds(Computation computation) {
+   public IntCollection computeExtensions(Computation computation) {
       // If we have to recompute the extensionVertexIds set
-      if (dirtyExtensionWordIds) {
-         if (getNumWords() > 0) {
-            updateExtensibleWordIdsSimple(computation);
-         } else {
-            updateInitExtensibleWordIds(computation);
-         }
-      }
-
-      return extensionWordIds();
-   }
-
-   @Override
-   public IntCollection extensions(Computation computation) {
       if (dirtyExtensionWordIds) {
          if (getNumWords() > 0) {
             updateExtensions(computation);
          } else {
-            updateInitExtensibleWordIds(computation);
+            updateInitExtensions(computation);
+         }
+
+         int numWords = getNumWords();
+         IntArrayList words = getWords();
+         for (int i = 0; i < numWords; ++i) {
+            extensionWordIds().removeInt(words.getUnchecked(i));
          }
       }
 
       return extensionWordIds();
    }
-   
-   @Override
-   public IntCollection extensions(Computation computation, Pattern pattern) {
-      if (dirtyExtensionWordIds) {
-         if (getNumWords() == 0) {
-            updateExtensionsInit(computation, pattern);
-         } else {
-            updateExtensions(computation, pattern);
-         }
 
-         int numVertices = getNumVertices();
-         for (int i = 0; i < numVertices; ++i) {
-            extensionWordIds().removeInt(vertices.getUnchecked(i));
-         }
-      }
-      
-      return extensionWordIds();
-   }
-
-   protected void updateInitExtensibleWordIds(Computation computation) {
+  protected void updateInitExtensions(Computation computation) {
       int totalNumWords = computation.getInitialNumWords();
       int numPartitions = computation.getNumberPartitions();
       int myPartitionId = computation.getPartitionId();
@@ -296,78 +242,9 @@ public abstract class BasicSubgraph implements Subgraph {
             (endMyWordRange - startMyWordRange));
    }
 
-   protected void updateExtensionsInit(Computation computation, Pattern pattern) {
-      int totalNumWords = computation.getInitialNumWords();
-      int numPartitions = computation.getNumberPartitions();
-      int myPartitionId = computation.getPartitionId();
-      int numWordsPerPartition = Math.max(totalNumWords / numPartitions, 1);
-      int startMyWordRange = myPartitionId * numWordsPerPartition;
-      int endMyWordRange = startMyWordRange + numWordsPerPartition;
+  protected abstract void updateExtensions(Computation computation);
 
-      // If we are the last partition or our range end goes over the total
-      // number of vertices, set the range end to the total number of vertices
-      if (myPartitionId == numPartitions - 1 ||
-            endMyWordRange > totalNumWords) {
-         endMyWordRange = totalNumWords;
-      }
-
-      for (int i = startMyWordRange; i < endMyWordRange; ++i) {
-         if (!computation.filter(this, i)) {
-            continue;
-         }
-
-         int word = i;
-         addWord(word);
-         if (pattern.testSymmetryBreakerPos(this, 1)) {
-            extensionWordIds().add(word);
-         }
-         removeLastWord();
-
-         word += computation.getInitialNumWords();
-         addWord(word);
-         if (pattern.testSymmetryBreakerPos(this, 1)) {
-            extensionWordIds().add(word);
-         }
-         removeLastWord();
-      }
-
-      computation.getExecutionEngine().aggregate(
-            Configuration.NEIGHBORHOOD_LOOKUPS(getNumWords()),
-            (endMyWordRange - startMyWordRange));
-   }
-
-   protected abstract void updateExtensibleWordIdsSimple(Computation computation);
-   
-   protected void updateExtensions(Computation computation, Pattern pattern) {
-      updateExtensions(computation);
-   }
-
-   protected void updateExtensions(Computation computation) {
-      IntArrayList vertices = getVertices();
-      int numVertices = getNumVertices();
-
-      extensionWordIds().clear();
-
-      for (int i = 0; i < numVertices; ++i) {
-         IntCollection neighbourhood = getValidNeighboursForExpansion(
-                 vertices.getUnchecked(i));
-
-         if (neighbourhood != null) {
-            neighbourhood.forEach(extensionWordIdsAdder);
-         }
-      }
-
-      IntArrayList words = getWords();
-      int numWords = getNumWords();
-
-      // Clean the words that are already in the subgraph
-      for (int i = 0; i < numWords; ++i) {
-         int wId = words.getUnchecked(i);
-         extensionWordIds().removeInt(wId);
-      }
-   }
-
-   @Override
+  @Override
    public boolean isCanonicalSubgraphWithWord(int wordId) {
       IntArrayList words = getWords();
       int numWords = words.size();
@@ -404,8 +281,6 @@ public abstract class BasicSubgraph implements Subgraph {
    }
 
    protected abstract boolean areWordsNeighbours(int wordId1, int wordId2);
-
-   protected abstract IntCollection getValidNeighboursForExpansion(int vId);
 
    @Override
    public void addWord(int word) {
@@ -453,67 +328,4 @@ public abstract class BasicSubgraph implements Subgraph {
       return Objects.hash(vertices, edges);
    }
 
-   private class BoundedWordIdAdder implements IntConsumer {
-      private int lowerBound = Integer.MIN_VALUE;
-      private int upperBound = Integer.MAX_VALUE;
-
-      public BoundedWordIdAdder setBounds(int lowerBound, int upperBound) {
-         this.lowerBound = lowerBound;
-         this.upperBound = upperBound;
-         return this;
-      }
-
-      @Override
-      public void accept(int i) {
-         if (i > lowerBound && i < upperBound) {
-            extensionWordIds().add(i);
-         }
-      }
-   }
-
-   private class BoundedWordMapAdder implements IntIntConsumer {
-      private int lowerBound = Integer.MIN_VALUE;
-      private int upperBound = Integer.MAX_VALUE;
-      private Pattern pattern;
-
-      public BoundedWordMapAdder setBounds(int lowerBound, int upperBound) {
-         this.lowerBound = lowerBound;
-         this.upperBound = upperBound;
-         return this;
-      }
-
-      public BoundedWordMapAdder setPattern(Pattern pattern) {
-         this.pattern = pattern;
-         return this;
-      }
-
-      @Override
-      public void accept(int k, int word) {
-         extensionWordMaps.put(k, word);
-         extensionWordIds().add(word);
-      }
-   }
-
-   private class BoundedWordMapAdderFixedSrc implements IntConsumer {
-      private int lowerBound = Integer.MIN_VALUE;
-      private int upperBound = Integer.MAX_VALUE;
-      private int k;
-
-      public BoundedWordMapAdderFixedSrc setBounds(
-            int lowerBound, int upperBound) {
-         this.lowerBound = lowerBound;
-         this.upperBound = upperBound;
-         return this;
-      }
-
-      public BoundedWordMapAdderFixedSrc setK(int k) {
-         this.k = k;
-         return this;
-      }
-
-      @Override
-      public void accept(int word) {
-         extensionWordIds().add(word);
-      }
-   }
 }

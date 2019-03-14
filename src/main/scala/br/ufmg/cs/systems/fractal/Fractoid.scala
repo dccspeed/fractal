@@ -25,7 +25,6 @@ import scala.reflect.{ClassTag, classTag}
  */
 case class Fractoid [S <: Subgraph : ClassTag](
   arabGraph: FractalGraph,
-  stepByStep: Boolean,
   mustSync: Boolean,
   scope: Int,
   step: Int,
@@ -38,11 +37,11 @@ case class Fractoid [S <: Subgraph : ClassTag](
   storageLevel: StorageLevel) extends Logging {
 
   def this(arabGraph: FractalGraph, config: SparkConfiguration[S]) = {
-    this(arabGraph, false, false, 0, 0,
+    this(arabGraph, false, 0, 0,
       None, config, Map.empty, StorageLevel.NONE)
   }
 
-  def sparkContext: SparkContext = arabGraph.arabContext.sparkContext
+  def sparkContext: SparkContext = arabGraph.fractalContext.sparkContext
 
   if (!config.isInitialized) {
     config.initialize(isMaster = true)
@@ -129,12 +128,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
           s" masterEngineStep=${_masterEngine.superstep} thisStep=${this.step}")
 
         logInfo (s"Computing ${this}. Engine: ${_masterEngine}")
-        _masterEngine = if (stepByStep) {
-          _masterEngine.next
-          _masterEngine
-        } else {
-          _masterEngine.compute
-        }
+        _masterEngine.next
 
         _masterEngine.finalizeComputation
         masterEngineOpt = Some(_masterEngine)
@@ -215,15 +209,15 @@ case class Fractoid [S <: Subgraph : ClassTag](
   /**
    * Get aggregation mappings defined by the user or empty if it does not exist
    */
-  def aggregation [K <: Writable, V <: Writable] (name: String,
-      shouldAggregate: (S,Computation[S]) => Boolean): Map[K,V] = {
-    withAggregation [K,V] (name, shouldAggregate).aggregation (name)
+  def aggregationMap [K <: Writable, V <: Writable](name: String,
+                                                    shouldAggregate: (S,Computation[S]) => Boolean): Map[K,V] = {
+    withAggregation [K,V] (name, shouldAggregate).aggregationMap (name)
   }
 
   /**
    * Get aggregation mappings defined by the user or empty if it does not exist
    */
-  def aggregation [K <: Writable, V <: Writable] (name: String): Map[K,V] = {
+  def aggregationMap [K <: Writable, V <: Writable](name: String): Map[K,V] = {
     val aggValue = aggregationStorage [K,V] (name)
     if (aggValue == null) Map.empty[K,V]
     else aggValue.getMapping
@@ -241,10 +235,10 @@ case class Fractoid [S <: Subgraph : ClassTag](
    * Get aggregations defined by the user as an RDD or empty if it does not
    * exist.
    */
-  def aggregationRDD [K <: Writable, V <: Writable] (name: String,
-      shouldAggregate: (S,Computation[S]) => Boolean)
+  def aggregation [K <: Writable, V <: Writable](name: String,
+                                                 shouldAggregate: (S,Computation[S]) => Boolean)
     : RDD[(SerializableWritable[K],SerializableWritable[V])] = {
-    sparkContext.parallelize (aggregation [K,V] (name, shouldAggregate).toSeq.
+    sparkContext.parallelize (aggregationMap [K,V] (name, shouldAggregate).toSeq.
     map {
       case (k,v) => (new SerializableWritable(k), new SerializableWritable(v))
     }, config.numPartitions)
@@ -254,15 +248,15 @@ case class Fractoid [S <: Subgraph : ClassTag](
    * Get aggregations defined by the user as an RDD or empty if it does not
    * exist.
    */
-  def aggregationRDD [K <: Writable, V <: Writable] (name: String)
+  def aggregation [K <: Writable, V <: Writable](name: String)
     : RDD[(SerializableWritable[K],SerializableWritable[V])] = {
-    sparkContext.parallelize (aggregation [K,V] (name).toSeq.map {
+    sparkContext.parallelize (aggregationMap [K,V] (name).toSeq.map {
       case (k,v) => (new SerializableWritable(k), new SerializableWritable(v))
     }, config.numPartitions)
   }
 
   /**
-   * Saves Subgraphs as sequence files (HDFS):
+   * Saves subgraphs as sequence files (HDFS):
    * [[org.apache.hadoop.io.NullWritable, ResultSubgraph]]
    * Behavior:
    *  - If at this point no computation was performed we just configure
@@ -275,7 +269,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    */
   def saveSubgraphsAsSequenceFile(path: String): Unit = SubgraphsOpt match {
     case None =>
-      logInfo ("no emebeddings found, computing them ... ")
+      logInfo ("no subgraphs found, computing them ... ")
       config.setOutputPath (path)
       subgraphs.count
 
@@ -290,7 +284,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
   }
 
   /**
-   * Saves the Subgraphs as text
+   * Saves the subgraphs as text
    *
    * @param path hdfs(hdfs://) or local(file://) path
    */
@@ -300,22 +294,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
       saveAsTextFile (path)
   }
 
-  /**
-   * Explore steps undefinitely. It is only safe if the last computation has an
-   * well defined stop condition
-   */
-  def exploreAll(): Fractoid[S] = {
-    this.copy(stepByStep = false)
-  }
-
-  /**
-   * Alias for exploring one single step
-   */
-  def explore: Fractoid[S] = {
-    explore(1)
-  }
-
-  def exploreExp(n: Int): Fractoid[S] = {
+  def explore(n: Int): Fractoid[S] = {
     var currResult = this
     var results: List[Fractoid[S]] = List(currResult)
     var numResults = 1
@@ -335,95 +314,6 @@ case class Fractoid [S <: Subgraph : ClassTag](
         j += 1
       }
       i += 1
-    }
-
-    currResult
-  }
-
-  /**
-   * Explore *numComputations* times the last computation
-   *
-   * @param numComputations how many times the last computation must be repeated
-   *
-   * @return new result
-   * TODO: review this function, there are potential inconsistencies
-   */
-  def explore(numComputations: Int, stepLen: Int = 1): Fractoid[S] = {
-    var results = new Array[Fractoid[S]](stepLen)
-    var currResult = this
-    for (i <- (stepLen - 1) to 0 by -1) {
-      results(i) = currResult
-      currResult = currResult.parentOpt.getOrElse(currResult)
-    }
-    currResult = this
-
-    // we support forward and backward exploration
-    if (numComputations > 0) {
-      // forward target represents how many computations we should append
-      // target is handled differently at depth 0 because we want the first
-      // *explore* to reach the level of Subgraphs from an empty state, i.e.,
-      // an empty subgraph.
-      val target = numComputations
-
-      for (i <- 0 until target) if (results(0).mustSync) {
-        // in case of this result cannot be pipelined
-        val newScope = currResult.scope + 1
-        for (i <- 0 until results.length) {
-          currResult = results(i).copy (scope = newScope,
-            step = currResult.step + 1,
-            parentOpt = Some(currResult),
-            storageLevel = StorageLevel.NONE)
-          logInfo (s"Synchronization included after ${results(i)}." +
-            s" Result: ${currResult}")
-        }
-      } else if (stepLen <= 1) {
-        // in case of this result can be pipelined with the previous computation
-        currResult = currResult.withNextComputation (
-          getComputationContainer[S].lastComputation
-        )
-        logInfo (s"Computation appended to ${this}. Result: ${currResult}")
-      } else {
-        currResult = currResult.withNextComputation (
-          results(0).getComputationContainer[S]
-        )
-        for (i <- 1 until results.length) {
-            currResult = results(i).copy (
-              step = currResult.step + 1,
-              parentOpt = Some(currResult),
-              storageLevel = StorageLevel.NONE)
-              logInfo (s"Synchronization included after ${results(i)}." +
-                s" Result: ${currResult}")
-        }
-      }
-      logInfo (s"Forward exploration from ${this} to ${currResult}")
-
-    } else if (numComputations < 0) {
-      // backward target here represents the depth we want to reach
-      val target = (depth + numComputations) max 0
-
-      while (currResult.depth != target) {
-        if (currResult.depth - currResult.numComputations >= target) {
-          // in this case the target lies outside the current result
-          currResult = currResult.parentOpt.get
-          logInfo (s"Target(${target}) not in the current result." +
-            s" Proceeding to ${currResult}.")
-
-        } else {
-          // in this case the target lies within this result, we then walk
-          // through the computations and detach the sub-pipeline wanted
-          val _target = currResult.numComputations - (
-            currResult.depth - target) max 0
-          val curr = getComputationContainer[S].take(_target)
-          val newConfig = config.withNewComputation (curr)
-          currResult = currResult.copy(config = newConfig)
-
-          // this should always holds, breaking this loop right after
-          assert (currResult.depth == target,
-            s"depth=${currResult.depth} target=${target} _target=${_target}" +
-            s" numComputations=${currResult.numComputations}")
-        }
-      }
-      logInfo (s"Backward exploration from ${this} to ${currResult}")
     }
 
     currResult
@@ -501,11 +391,11 @@ case class Fractoid [S <: Subgraph : ClassTag](
    * Auxiliary function for handling computation containers that were not set in
    * this result
    */
-  private def getComputationContainer [E <: Subgraph]
-    : ComputationContainer[E] = {
+  private def getComputationContainer [S <: Subgraph]
+    : ComputationContainer[S] = {
     try {
-      var container: Computation[E] = config.computationContainer[E]
-      container.asInstanceOf[ComputationContainer[E]]
+      var container: Computation[S] = config.computationContainer[S]
+      container.asInstanceOf[ComputationContainer[S]]
     } catch {
       case e: RuntimeException =>
         logWarning (s"No computation container was set." +
@@ -532,27 +422,30 @@ case class Fractoid [S <: Subgraph : ClassTag](
     withNextComputation (nextContainer, newConfig)
   }
 
+  private def emptyComputation: Fractoid[S] = {
+    emptyComputation(Primitive.None)
+  }
+
   /**
    * Create an empty computation that inherits all this result's configurations
    * but the computation container itself
    */
-  private def emptyComputation: Fractoid[S] = {
+  private def emptyComputation(p: Primitive): Fractoid[S] = {
     val ec = config.confs.get(SparkConfiguration.COMPUTATION_CONTAINER) match {
       case Some(cc: ComputationContainer[_]) =>
         this.set(
           SparkConfiguration.COMPUTATION_CONTAINER,
-          cc.asLastComputation.clear())
+          cc.asLastComputation.clear().withPrimitive(p))
       case _ =>
         this
     }
     ec.unset(SparkConfiguration.MASTER_COMPUTATION_CONTAINER)
   }
 
-  /****** fractal Scala API: High Level API ******/
+  /****** Fractal Scala API: High Level API ******/
 
   /**
-   * Perform a single standard expansion step over the existing Subgraphs
-   *
+   * Perform a one-step expansion
    * @return new result
    */
   def expand: Fractoid[S] = {
@@ -563,10 +456,9 @@ case class Fractoid [S <: Subgraph : ClassTag](
   }
 
   /**
-   * Perform *n* expansion steps at once
+   * Perform *n* expansion iterations
    *
    * @param n number of expansions
-   *
    * @return new result
    */
   def expand(n: Int): Fractoid[S] = {
@@ -583,7 +475,6 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @param getPossibleExtensions function that receives an subgraph and
    * returns zero or more Subgraphs (collection)
-   *
    * @return new result
    */
   def extend(getPossibleExtensions: (S,Computation[S]) => IntCollection)
@@ -595,31 +486,28 @@ case class Fractoid [S <: Subgraph : ClassTag](
   }
 
   /**
-   * Filter the existing Subgraphs based on a function
+   * Filter the existing subgraphs based on a function
    *
    * @param filter function that decides whether an subgraph should be kept or
    * discarded
-   *
    * @return new result
    */
   def filter(filter: (S,Computation[S]) => Boolean): Fractoid[S] = {
     ClosureCleaner.clean(filter)
-    val filterComp = emptyComputation.
-      //withExpandCompute((e,c) => Iterator(e)).
+    val filterComp = emptyComputation(Primitive.F).
       withExpandCompute((e,c) => c.bypass(e)).
       withFilter(filter)
     handleNextResult(filterComp)
   }
 
   /**
-   * Filter the existing Subgraphs based on a aggregation
+   * Filter the existing subgraphs based on a aggregation
    *
    * @param filter function that decides whether an subgraph should be kept or
    * discarded
-   *
    * @return new result
    */
-  def filterByAgg [K <: Writable : ClassTag, V <: Writable : ClassTag] (
+  def filter [K <: Writable : ClassTag, V <: Writable : ClassTag](
       agg: String)(
       filter: (S,AggregationStorage[K,V]) => Boolean): Fractoid[S] = {
 
@@ -641,7 +529,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @param name custom name of this aggregation --> this is used later for
    * retrieving the aggregation results
-   * @param aggregationKey function that extracts the key from the embeddding
+   * @param aggregationKey function that extracts the key from the subgraph
    * @param aggregationValue function that extracts the value from the subgraph
    * @param reductionFunction function used to reduce the values
    *
@@ -709,7 +597,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
     handleNextResult(filterComp)
   }
 
-  /****** fractal Scala API: ComputationContainer ******/
+  /****** Fractal Scala API: ComputationContainer ******/
 
   /**
    * Updates the process function of the underlying computation container.
@@ -1152,13 +1040,16 @@ case class Fractoid [S <: Subgraph : ClassTag](
         s"${config.getString(Configuration.CONF_COMPUTATION_CLASS,"")}"
     }
 
-    s"Fractoid(scope=${scope}, step=${step}, depth=${depth}," +
-    s" stepByStep=${stepByStep}," +
-    s" computation=${computationToString}," +
-    s" mustSync=${mustSync}, storageLevel=${storageLevel}," +
-    s" config=${config}," +
-    s" outputPath=${config.getOutputPath}," +
-    s" isOutputActive=${config.isOutputActive})"
+    s"Fractoid(" +
+      //s"scope=${scope}, " +
+      s"step=${step}," +
+      s" depth=${depth}," +
+      s" computation=${computationToString}" +
+      //s" mustSync=${mustSync}, storageLevel=${storageLevel}," +
+      //s" config=${config}," +
+      //s" outputPath=${config.getOutputPath}," +
+      //s" isOutputActive=${config.isOutputActive}" +
+      s")"
   }
 
   def toDebugString: String = parentOpt match {

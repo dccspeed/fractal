@@ -187,7 +187,7 @@ public abstract class BasicPattern implements Pattern {
             addVertex(SubgraphVertices.getUnchecked(i));
         }
 
-        numVerticesAddedFromPrevious = subgraph.getNumVerticesAddedWithExpansion();
+        numVerticesAddedFromPrevious = subgraph.numVerticesAdded();
 
         IntArrayList SubgraphEdges = subgraph.getEdges();
 
@@ -195,7 +195,7 @@ public abstract class BasicPattern implements Pattern {
             addEdge(SubgraphEdges.getUnchecked(i));
         }
 
-        numAddedEdgesFromPrevious = subgraph.getNumEdgesAddedWithExpansion();
+        numAddedEdgesFromPrevious = subgraph.numEdgesAdded();
 
         updateUsedSubgraphFromScratch(subgraph);
     }
@@ -253,8 +253,8 @@ public abstract class BasicPattern implements Pattern {
     private void setSubgraphIncremental(Subgraph subgraph) {
         resetToPrevious();
 
-        numVerticesAddedFromPrevious = subgraph.getNumVerticesAddedWithExpansion();
-        numAddedEdgesFromPrevious = subgraph.getNumEdgesAddedWithExpansion();
+        numVerticesAddedFromPrevious = subgraph.numVerticesAdded();
+        numAddedEdgesFromPrevious = subgraph.numEdgesAdded();
 
         ensureCanStoreNewVertices(numVerticesAddedFromPrevious);
         ensureCanStoreNewEdges(numAddedEdgesFromPrevious);
@@ -502,23 +502,7 @@ public abstract class BasicPattern implements Pattern {
        return vsymmetryBreaker;
     }
 
-    public boolean testSymmetryBreaker(Subgraph subgraph) {
-       ObjArrayList<IntArrayList> symmetryBreaker = vsymmetryBreaker();
-       IntArrayList vertices = subgraph.getVertices();
-       int numVertices = vertices.size();
-       for (int i = 0; i < numVertices; ++i) {
-          int targetVertex = vertices.get(i);
-          IntCursor sbCur = symmetryBreaker.get(i).cursor();
-          while (sbCur.moveNext()) {
-             if (targetVertex < vertices.get(sbCur.elem())) {
-                return false;
-             }
-          }
-       }
-       return true;
-    }
-
-    @Override
+  @Override
     public boolean testSymmetryBreakerPos(Subgraph subgraph, int i) {
        ObjArrayList<IntArrayList> symmetryBreaker = vsymmetryBreaker();
        IntArrayList vertices = subgraph.getVertices();

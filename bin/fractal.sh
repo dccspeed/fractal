@@ -32,6 +32,9 @@ case "$alg" in
 	cliques)
 	required="inputgraph steps"
 	;;
+	cliquesopt)
+	required="inputgraph steps"
+	;;
 	gquerying)
 	required="inputgraph steps query"
 	;;

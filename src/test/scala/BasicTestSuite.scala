@@ -6,6 +6,7 @@ import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
   private val numPartitions: Int = 2
   private val appName: String = "fractal-test"
+  private val logLevel: String = "error"
 
   private var master: String = _
   private var sampleGraphPath: String = _
@@ -22,9 +23,8 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
       setAppName(appName)
 
     sc = new SparkContext(conf)
-    fc = new FractalContext(sc, "info")
-
-    val loader = classOf[BasicTestSuite].getClassLoader
+    sc.setLogLevel(logLevel)
+    fc = new FractalContext(sc, logLevel)
 
     sampleGraphPath = "data/cube.graph"
     fgraph = fc.textFile (sampleGraphPath)
@@ -48,10 +48,10 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
     for (k <- 0 to (numSubgraph.size - 1)) {
       val motifsRes = fgraph.motifs.
         set ("num_partitions", numPartitions).
-        exploreExp(k)
-      val Subgraphs = motifsRes.subgraphs
+        explore(k)
+      val subgraphs = motifsRes.subgraphs
 
-      assert(Subgraphs.count() == numSubgraph(k))
+      assert(subgraphs.count() == numSubgraph(k))
     }
 
   }
@@ -64,7 +64,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
     for (k <- 0 to (numSubgraph.size - 1)) {
       val cliqueRes = fgraph.cliques.
         set ("num_partitions", numPartitions).
-        exploreExp(k)
+        explore(k)
 
       val Subgraphs = cliqueRes.subgraphs
       assert(Subgraphs.count == numSubgraph(k))
@@ -88,10 +88,24 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
         set ("num_partitions", numPartitions)
 
       val freqPatterns = fsmRes.
-        aggregation [Pattern,DomainSupport] ("frequent_patterns")
+        aggregationMap [Pattern,DomainSupport] ("frequent_patterns")
 
       assert(freqPatterns.size == numFreqPatterns(k))
     }
+  }
+
+  test ("[cube,gquerying]", Tag("cube.gquerying")) {
+    // Expected output
+    val numSubgraph = List(8, 12, 0)
+    
+    val subgraph = new FractalGraph("data/triangle.graph", fgraph.fractalContext)
+
+    val cliqueRes = fgraph.gquerying(subgraph).
+      set ("num_partitions", numPartitions).
+      explore(2)
+
+    val subgraphs = cliqueRes.subgraphs
+    assert(subgraphs.count == 0)
   }
 
   test ("[cube,vfilter]", Tag("cube.vfilter")) {

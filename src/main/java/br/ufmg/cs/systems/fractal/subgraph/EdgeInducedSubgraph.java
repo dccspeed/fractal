@@ -6,9 +6,7 @@ import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.VertexNeighbourhood;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
-import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.hash.HashIntSet;
-import java.util.function.IntConsumer;
 
 import java.io.DataInput;
 import java.io.IOException;
@@ -21,8 +19,6 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
       super();
       numVerticesAddedWithWord = new IntArrayList();
    }
-
-   private ValidWordIdAdder extensionWordIdsAdder = new ValidWordIdAdder();
 
    @Override
    public void init(Configuration config) {
@@ -38,11 +34,6 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
    @Override
    public IntArrayList getWords() {
       return getEdges();
-   }
-
-   @Override
-   public int getLastWord() {
-      return edges.getLast();
    }
 
    @Override
@@ -70,12 +61,12 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
    }
 
    @Override
-   public int getNumVerticesAddedWithExpansion() {
+   public int numVerticesAdded() {
       return numVerticesAddedWithWord.getLastOrDefault(0);
    }
 
    @Override
-   public int getNumEdgesAddedWithExpansion() {
+   public int numEdgesAdded() {
       if (edges.isEmpty()) {
          return 0;
       }
@@ -83,13 +74,7 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
       return 1;
    }
 
-   @Override
-   protected IntCollection getValidNeighboursForExpansion(int vertexId) {
-      return configuration.getMainGraph().getVertexNeighbourhood(vertexId).
-              getNeighborEdges();
-   }
-
-   @Override
+  @Override
    protected boolean areWordsNeighbours(int wordId1, int wordId2) {
       return configuration.getMainGraph().areEdgesNeighbors(wordId1, wordId2);
    }
@@ -158,7 +143,7 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
    }
 
    //@Override
-   //protected void updateExtensibleWordIdsSimple(Computation computation) {
+   //protected void updateExtensions(Computation computation) {
    //   IntArrayList vertices = getVertices();
    //   IntArrayList edges = getEdges();
    //   int numVertices = getNumVertices();
@@ -197,7 +182,7 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
    //}
    
    @Override
-   protected void updateExtensibleWordIdsSimple(Computation computation) {
+   protected void updateExtensions(Computation computation) {
       IntArrayList vertices = getVertices();
       IntArrayList edges = getEdges();
       int numVertices = getNumVertices();
@@ -257,27 +242,6 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
             neighborhoodLookups);
    }
 
-   //@Override
-   //protected void updateExtensions(
-   //      Computation computation, PatternEdge pedge) {
-   //   int srcPos = pedge.getSrcPos();
-   //   int destPos = pedge.getDestPos();
-
-   //   super.updateExtensions(computation, srcPos, destPos);
-
-   //   if (srcPos <= 1 || destPos <= 1) {
-   //      int tmp = vertices.get(0);
-   //      vertices.set(0, vertices.get(1));
-   //      vertices.set(1, tmp);
-
-   //      super.updateExtensions(computation, srcPos, destPos);
-   //      
-   //      tmp = vertices.get(0);
-   //      vertices.set(0, vertices.get(1));
-   //      vertices.set(1, tmp);
-   //   }
-   //}
-
    @Override
    public void readFields(DataInput in) throws IOException {
       reset();
@@ -297,24 +261,6 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
    public void readExternal(ObjectInput objInput)
            throws IOException, ClassNotFoundException {
       readFields(objInput);
-   }
-
-   private class ValidWordIdAdder implements IntConsumer {
-      private int lowerBound;
-
-      public ValidWordIdAdder setBound(int lowerBound) {
-         this.lowerBound = lowerBound;
-         return this;
-      }
-
-      @Override
-      public void accept(int i) {
-         if (i > lowerBound) {
-            extensionWordIds().add(i);
-         } else {
-            extensionWordIds().removeInt(i);
-         }
-      }
    }
 
    @Override

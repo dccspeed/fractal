@@ -290,7 +290,7 @@ public abstract class GtrieExtender extends Extender {
       int numVertices = vertices.size();
 
       if (numVertices == 0) {
-         return e.getExtensibleWordIds(c);
+         return e.computeExtensions(c);
       }
 
       MainGraph graph = c.getConfig().getMainGraph();

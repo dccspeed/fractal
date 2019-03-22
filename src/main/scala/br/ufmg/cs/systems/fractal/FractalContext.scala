@@ -9,21 +9,13 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.SparkContext
 
 /**
-  * Creates an fractal Context from a Spark Context
-  *
-  * Example of usage:
-  * {{{
-  * import br.ufmg.cs.systems.fractal.fractalContext
-  * val arab = new fractalContext(sc)
-  * arab: br.ufmg.cs.systems.fractal.fractalContext = br.ufmg.cs.systems.fractal.fractalContext@3a996bbc
-  * }}}
-  *
-  * @param sc a [[SparkContext]] instance
-  * @return an [[br.ufmg.cs.systems.fractal.FractalContext]]
-  *
- */
+  * Starting point for Fractal execution engine (currently Spark)
+  * @param sc Spark context
+  * @param logLevel log level: "error", "warn", "info"
+  * @param tmpDir temporary directory to store fractal data/metadata
+  */
 class FractalContext(sc: SparkContext, logLevel: String = "info",
-                     tmpDir: String = "/tmp/fractal")
+                     tmpDir: String = Configuration.CONF_TMP_DIR_DEFAULT)
     extends Logging {
 
   private val uuid: UUID = UUID.randomUUID
@@ -33,19 +25,11 @@ class FractalContext(sc: SparkContext, logLevel: String = "info",
   def sparkContext: SparkContext = sc
 
   /**
-    *  Indicates the path for input graph
-    *
-    * {{{
-    *  val file_path = "~/input.graph" // Set the input file path
-    *  graph = arab.textFile(file_path)
-    *  graph: br.ufmg.cs.systems.fractal.fractalGraph = br.ufmg.cs.systems.fractal.fractalGraph@2310a619
-    * }}}
-    *
-    * @param path a string indicating the path for input graph
-    * @param local TODO: Describe local variable
-    * @return an [[br.ufmg.cs.systems.fractal.FractalGraph]]
-    * @see [[https://github.com/viniciusvdias/fractal/blob/master/README.md]]
-    * for how to prepare the input file
+    * Read graph from text file
+    * @param path
+    * @param graphClass specifies how the graph is read (default adj. lists)
+    * @param local specifies whether this path is in the local fs or not
+    * @return fractal graph
     */
   def textFile (path: String,
       graphClass: String = Configuration.CONF_MAINGRAPH_CLASS_DEFAULT,
@@ -54,10 +38,7 @@ class FractalContext(sc: SparkContext, logLevel: String = "info",
   }
 
   /**
-    * Stops an [[br.ufmg.cs.systems.fractal.FractalContext]] application
-    * {{{
-    * arab.stop()
-    * }}}
+    * Stop this context, cleaning the temporary directory
     */
   def stop() = {
     val fs = FileSystem.get (sc.hadoopConfiguration)

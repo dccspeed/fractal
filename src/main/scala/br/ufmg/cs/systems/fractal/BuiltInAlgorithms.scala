@@ -213,7 +213,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
       s" cummDensities=${cummDensities.mkString(",")}")
 
     self.vfractoid.
-      withFilter((e,c) => (e.getNumEdges() / maxDensity) +
+      filter((e,c) => (e.getNumEdges() / maxDensity) +
         cummDensities(e.getNumVertices() - 1) >= minDensity).
       explore(numSteps)
   }
@@ -549,11 +549,11 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
         }
         extensions
       }.
-      withAggregationRegistered [IntWritable,LongWritable] (MAXIMAL_CLIQUE_COUNTING) (
-        (e,c,k) => k,
-        (e,c,v) => v,
-        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 }
-        )
+      aggregate [IntWritable,LongWritable] (
+        MAXIMAL_CLIQUE_COUNTING,
+        (e,c,k) => { k },
+        (e,c,v) => { v },
+        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
   }
 
   @Experimental
@@ -978,7 +978,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
       set ("input_graph_class", "br.ufmg.cs.systems.fractal.gmlib.keywordsearch.KeywordSearchGraph").
       set ("edge_labelled", true).
       set ("keep_maximal", true).
-      withFilter (lastWordIsValid).
+      filter (lastWordIsValid).
       //filter (lastWordIsValid).
       //efilter (lastWordIsValid2).
       //withWordFilter(lastWordIsValid3).

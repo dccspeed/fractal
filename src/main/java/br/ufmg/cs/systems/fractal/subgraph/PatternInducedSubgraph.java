@@ -63,26 +63,21 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    public int getNumWords() {
       return vertices.size();
    }
-   
+
    @Override
    public String toOutputString() {
       StringBuilder sb = new StringBuilder();
 
-      int numEdges = getNumEdges();
-      IntArrayList edges = getEdges();
+      IntArrayList vertices = getVertices();
 
-      for (int i = 0; i < numEdges; ++i) {
-         Edge edge = configuration.getMainGraph().
-                 getEdge(edges.getUnchecked(i));
-         sb.append(edge.getSourceId());
-         sb.append("-");
-         sb.append(edge.getDestinationId());
+      for (int i = 0; i < vertices.size(); ++i) {
+         sb.append(vertices.getUnchecked(i));
          sb.append(" ");
       }
 
       return sb.toString();
    }
-
+   
    @Override
    public int numVerticesAdded() {
       if (vertices.isEmpty()) {

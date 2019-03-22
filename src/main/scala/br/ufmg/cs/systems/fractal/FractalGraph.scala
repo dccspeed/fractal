@@ -205,7 +205,6 @@ class FractalGraph(
 
   /**
     * Pattern-induced fractoid from a pattern template
-    * @return Fractoid with the initial state of pattern-induced computation
     * @param pattern
     * @return Fractoid with the initial state of pattern-induced computation
     */

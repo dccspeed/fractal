@@ -24,24 +24,21 @@ import scala.reflect.{ClassTag, classTag}
  * Fractal workflow state.
  */
 case class Fractoid [S <: Subgraph : ClassTag](
-  arabGraph: FractalGraph,
-  mustSync: Boolean,
-  scope: Int,
-  step: Int,
-  parentOpt: Option[Fractoid[S]],
-  config: SparkConfiguration[S],
-  aggFuncs: Map[String,(
+    fractalGraph: FractalGraph,
+    private val mustSync: Boolean,
+    private val scope: Int,
+    step: Int,
+    parentOpt: Option[Fractoid[S]],
+    config: SparkConfiguration[S],
+    private val aggFuncs: Map[String,(
     (S,Computation[S],_ <: Writable) => _ <: Writable,
-    (S,Computation[S],_ <: Writable) => _ <: Writable
-  )],
-  storageLevel: StorageLevel) extends Logging {
+    (S,Computation[S],_ <: Writable) => _ <: Writable)]) extends Logging {
 
   def this(arabGraph: FractalGraph, config: SparkConfiguration[S]) = {
-    this(arabGraph, false, 0, 0,
-      None, config, Map.empty, StorageLevel.NONE)
+    this(arabGraph, false, 0, 0, None, config, Map.empty)
   }
 
-  def sparkContext: SparkContext = arabGraph.fractalContext.sparkContext
+  def sparkContext: SparkContext = fractalGraph.fractalContext.sparkContext
 
   if (!config.isInitialized) {
     config.initialize(isMaster = true)
@@ -78,33 +75,11 @@ case class Fractoid [S <: Subgraph : ClassTag](
   }
 
   /**
-   * Mark this result to be persisted in memory only
-   */
-  def cache: Fractoid[S] = persist (StorageLevel.MEMORY_ONLY)
-
-  /**
-   * Mark this result to be persisted according to a specific persistence level
-   */
-  def persist(sl: StorageLevel): Fractoid[S] = {
-    this.copy(storageLevel = sl)
-  }
-
-  /**
-   * Unpersist this result
-   */
-  def unpersist: Fractoid[S] = persist(StorageLevel.NONE)
-
-  /**
-   * Check if this result is marked as persisted in some way
-   */
-  def isPersisted: Boolean = storageLevel != StorageLevel.NONE
-
-  /**
    * Lazy evaluation for the results
    */
   private var masterEngineOpt: Option[SparkMasterEngine[S]] = None
 
-  def masterEngine: SparkMasterEngine[S] = synchronized {
+  private def masterEngine: SparkMasterEngine[S] = synchronized {
     masterEngineOpt match {
       case None =>
 
@@ -120,8 +95,6 @@ case class Fractoid [S <: Subgraph : ClassTag](
           case None =>
             SparkMasterEngine [S] (sparkContext, config)
         }
-
-        _masterEngine.persist(storageLevel)
 
         assert (_masterEngine.superstep == this.step,
           s"masterEngineNext=${_masterEngine.next}" +
@@ -257,7 +230,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
 
   /**
    * Saves subgraphs as sequence files (HDFS):
-   * [[org.apache.hadoop.io.NullWritable, ResultSubgraph]]
+   * key=org.apache.hadoop.io.NullWritable value=ResultSubgraph
    * Behavior:
    *  - If at this point no computation was performed we just configure
    *  the execution engine and force the computation(count action)
@@ -411,11 +384,10 @@ case class Fractoid [S <: Subgraph : ClassTag](
    */
   private def handleNextResult(result: Fractoid[S],
                                newConfig: SparkConfiguration[S] = config)
-    : Fractoid[S] = if (result.mustSync || isPersisted) {
+    : Fractoid[S] = if (result.mustSync) {
     logInfo (s"Adding sync barrier between ${this} and ${result}")
     result.copy(scope = this.scope + 1,
-      step = this.step + 1, parentOpt = Some(this),
-      storageLevel = StorageLevel.NONE)
+      step = this.step + 1, parentOpt = Some(this))
   } else {
     logInfo (s"Next result. Appending ${result} to ${this}")
     val nextContainer = result.getComputationContainer[S]
@@ -573,6 +545,12 @@ case class Fractoid [S <: Subgraph : ClassTag](
     withAggregationIterator(name, func)
   }
 
+  /**
+    * Graph reduction filter for vertices
+    * @param vfilter
+    * @tparam V
+    * @return new fractoid with graph filtering
+    */
   def vfilter [V] (vfilter: Vertex[V] => Boolean): Fractoid[S] = {
     val vpred = new VertexFilterFunc[V] {
       override def test(v: Vertex[V]): Boolean = vfilter(v)
@@ -584,7 +562,13 @@ case class Fractoid [S <: Subgraph : ClassTag](
       copy(mustSync = true)
     handleNextResult(filterComp)
   }
-  
+
+  /**
+    * Graph reduction filter for edges
+    * @param efilter
+    * @tparam E
+    * @return new fractoid with graph filtering
+    */
   def efilter [E] (efilter: Edge[E] => Boolean): Fractoid[S] = {
     val epred = new EdgeFilterFunc[E] {
       override def test(e: Edge[E]): Boolean = efilter(e)
@@ -606,7 +590,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withProcess (process: (S,Computation[S]) => Unit): Fractoid[S] = {
+  private def withProcess (process: (S,Computation[S]) => Unit): Fractoid[S] = {
     val newComp = getComputationContainer[S].withNewFunctions (
       processOpt = Option(process))
     val newConfig = config.withNewComputation (newComp)
@@ -620,7 +604,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withProcessInc (func: (S,Computation[S]) => Unit): Fractoid[S] = {
+  private def withProcessInc (func: (S,Computation[S]) => Unit): Fractoid[S] = {
     // get the current process function
     val oldProcess = getComputationContainer[S].processOpt match {
       case Some(process) => process
@@ -644,7 +628,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withFilter (filter: (S,Computation[S]) => Boolean): Fractoid[S] = {
+  private def withFilter (filter: (S,Computation[S]) => Boolean): Fractoid[S] = {
     val newConfig = config.withNewComputation (
       getComputationContainer[S].withNewFunctions (filterOpt = Option(filter)))
     this.copy (config = newConfig)
@@ -658,7 +642,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withWordFilter (
+  private def withWordFilter (
       filter: WordFilterFunc[S]): Fractoid[S] = {
 
     val newConfig = config.withNewComputation (
@@ -673,7 +657,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    * @param shouldOutput function that determines whether we should output the
    * subgraph or not
    */
-  def withOutput (shouldOutput: (S,Computation[S]) => Boolean)
+  private def withOutput (shouldOutput: (S,Computation[S]) => Boolean)
     : Fractoid[S] = {
 
     withProcessInc (
@@ -693,7 +677,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withAggregationIterator [K <: Writable, V <: Writable] (name: String,
+  private def withAggregationIterator [K <: Writable, V <: Writable] (name: String,
       func: (S,Computation[S]) => Iterator[(K,V)]): Fractoid[S] = {
 
     withProcessInc (
@@ -715,7 +699,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withAggregation [K <: Writable, V <: Writable] (name: String,
+  private def withAggregation [K <: Writable, V <: Writable] (name: String,
       shouldAggregate: (S,Computation[S]) => Boolean): Fractoid[S] = {
 
     if (!aggFuncs.get(name).isDefined) {
@@ -752,7 +736,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withGetPossibleExtensions (func: (S,Computation[S]) => IntCollection)
+  private def withGetPossibleExtensions (func: (S,Computation[S]) => IntCollection)
     : Fractoid[S] = {
     val newConfig = config.withNewComputation (
       getComputationContainer[S].withNewFunctions (
@@ -768,7 +752,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withInit (init: (Computation[S]) => Unit): Fractoid[S] = {
+  private def withInit (init: (Computation[S]) => Unit): Fractoid[S] = {
     val newConfig = config.withNewComputation (
       getComputationContainer[S].withNewFunctions (initOpt = Option(init)))
     this.copy (config = newConfig)
@@ -783,7 +767,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withInitAggregations (initAggregations: (Computation[S]) => Unit)
+  private def withInitAggregations (initAggregations: (Computation[S]) => Unit)
     : Fractoid[S] = {
     val newConfig = config.withNewComputation (
       getComputationContainer[S].withNewFunctions (
@@ -804,7 +788,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withAggregationRegisteredIterator [
+  private def withAggregationRegisteredIterator [
         K <: Writable : ClassTag, V <: Writable: ClassTag
       ] (
       name: String,
@@ -861,7 +845,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withAggregationRegistered [
+  private def withAggregationRegistered [
         K <: Writable : ClassTag, V <: Writable: ClassTag
       ] (
       name: String,
@@ -919,7 +903,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withAggregationRegistered [
+  private def withAggregationRegistered [
       K <: Writable : ClassTag, V <: Writable : ClassTag
       ] (name: String)(
         aggregationKey: (S, Computation[S], K) => K,
@@ -943,7 +927,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withAggregationRegistered [
+  private def withAggregationRegistered [
       K <: Writable : ClassTag, V <: Writable : ClassTag
       ] (name: String, reductionFunction: (V,V) => V,
       endAggregationFunction: (AggregationStorage[K,V]) => Unit)
@@ -960,7 +944,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withExpandCompute (expandCompute: (S,Computation[S]) => Iterator[S])
+  private def withExpandCompute (expandCompute: (S,Computation[S]) => Iterator[S])
     : Fractoid[S] = {
     val newConfig = if (expandCompute != null) {
       config.withNewComputation (
@@ -979,14 +963,14 @@ case class Fractoid [S <: Subgraph : ClassTag](
   /**
    * Return a new result with the computation appended.
    */
-  def withNextComputation (nextComputation: Computation[S],
+  private def withNextComputation (nextComputation: Computation[S],
       newConfig: SparkConfiguration[S] = config)
     : Fractoid[S] = {
     logInfo (s"Appending ${nextComputation} to ${getComputationContainer[S]}")
     val _newConfig = newConfig.withNewComputation (
       getComputationContainer[S].withComputationAppended (nextComputation)
     )
-    this.copy (config = _newConfig, storageLevel = StorageLevel.NONE)
+    this.copy (config = _newConfig)
   }
 
   /****** fractal Scala API: MasterComputationContainer ******/
@@ -999,7 +983,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withMasterInit (init: (MasterComputation) => Unit): Fractoid[S] = {
+  private def withMasterInit (init: (MasterComputation) => Unit): Fractoid[S] = {
     val newConfig = config.withNewMasterComputation (
       config.masterComputationContainer.withNewFunctions (
         initOpt = Option(init))
@@ -1015,15 +999,13 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  def withMasterCompute (compute: (MasterComputation) => Unit)
+  private def withMasterCompute (compute: (MasterComputation) => Unit)
     : Fractoid[S] = {
     val newConfig = config.withNewMasterComputation (
       config.masterComputationContainer.withNewFunctions (
         computeOpt = Option(compute)))
     this.copy (config = newConfig)
   }
-
-  /****** fractal Scala API: Built-in algorithms ******/
 
   /**
    * Check whether the current subgraph parameter is compatible with another
@@ -1045,7 +1027,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
       s"step=${step}," +
       s" depth=${depth}," +
       s" computation=${computationToString}" +
-      //s" mustSync=${mustSync}, storageLevel=${storageLevel}," +
+      //s" mustSync=${mustSync}, +
       //s" config=${config}," +
       //s" outputPath=${config.getOutputPath}," +
       //s" isOutputActive=${config.isOutputActive}" +

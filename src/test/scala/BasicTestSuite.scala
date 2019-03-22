@@ -96,16 +96,22 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
 
   test ("[cube,gquerying]", Tag("cube.gquerying")) {
     // Expected output
-    val numSubgraph = List(8, 12, 0)
-    
-    val subgraph = new FractalGraph("data/triangle.graph", fgraph.fractalContext)
+    val numSubgraph = Map("triangles" -> 0, "squares" -> 2)
 
-    val cliqueRes = fgraph.gquerying(subgraph).
+    // triangles
+    val triangle = new FractalGraph("data/triangle.graph", fgraph.fractalContext)
+    val triangles = fgraph.gquerying(triangle).
       set ("num_partitions", numPartitions).
       explore(2)
+    assert(triangles.subgraphs.count == numSubgraph("triangles"))
 
-    val subgraphs = cliqueRes.subgraphs
-    assert(subgraphs.count == 0)
+    // squares
+    val square = new FractalGraph("data/square.graph", fgraph.fractalContext)
+    val squares = fgraph.gquerying(square).
+      set ("num_partitions", numPartitions).
+      explore(3)
+    assert (squares.subgraphs.count == numSubgraph("squares"))
+
   }
 
   test ("[cube,vfilter]", Tag("cube.vfilter")) {

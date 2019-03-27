@@ -21,6 +21,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
     val AGG_MOTIFS = "motifs"
     self.vfractoid.
+      expand(1).
       aggregate [Pattern,LongWritable] (
         AGG_MOTIFS,
         (e,c,k) => { e.getPattern },
@@ -35,6 +36,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
   def cliques: Fractoid[VertexInducedSubgraph] = {
     val CLIQUE_COUNTING = "clique_counting"
     self.vfractoid.
+      expand(1).
       filter { (e,c) =>
         e.numEdgesAdded == e.getNumVertices - 1
       }.
@@ -61,6 +63,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     val AGG_FREQS = "frequent_patterns"
 
     val bootstrap = self.efractoid.
+      expand(1).
       aggregate [Pattern,DomainSupport] (AGG_FREQS,
         (e,c,k) => { e.getPattern },
         (e,c,v) => { v.setSupport(support); v.setFromSubgraph(e); v },
@@ -146,6 +149,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     val SUBGRAPH_COUNTING = "subgraph_counting"
 
     val computation = self.pfractoid(qpattern).
+      expand(1).
       aggregate [IntWritable,LongWritable] (
         SUBGRAPH_COUNTING,
         (e,c,k) => { k.set(0); k },
@@ -168,6 +172,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     val SUBGRAPH_COUNTING = "subgraph_counting"
 
     val computation = self.pfractoid(qpattern).
+      expand(1).
       filter { (e,c) =>
         val p = e.getPattern
         p.equals(c.getPattern, p.getNumberOfEdges)
@@ -213,6 +218,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
       s" cummDensities=${cummDensities.mkString(",")}")
 
     self.vfractoid.
+      expand(1).
       filter((e,c) => (e.getNumEdges() / maxDensity) +
         cummDensities(e.getNumVertices() - 1) >= minDensity).
       explore(numSteps)
@@ -559,13 +565,9 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
   @Experimental
   def keywordSearch(
       numPartitions: Int,
-      _keywords: Array[String]): Fractoid[EdgeInducedSubgraph] = {
-    import java.io._
-    import java.util.Comparator
+      keywords: Array[String]): Fractoid[EdgeInducedSubgraph] = {
     import java.util.function.IntConsumer
 
-    import br.ufmg.cs.systems.fractal.gmlib.keywordsearch.QueryScorer
-    import br.ufmg.cs.systems.fractal.util._
     import br.ufmg.cs.systems.fractal.util.collection._
     import com.koloboke.collect.ObjCursor
     import com.koloboke.collect.set.hash.HashObjSet
@@ -573,20 +575,11 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
     import scala.collection.mutable.Map
 
-    val keywords = _keywords
-
-    logInfo (s"KeywordSearch keywords=${_keywords.mkString("[", ",", "]")}" +
-      s" stemmedKeywords=${keywords.mkString("[", ",", "]")}")
+    logInfo (s"KeywordSearch keywords=${keywords.mkString(",")}")
 
     val INVERTED_INDEX = "inverted_index"
     val PREDICATE_INDEX = "predicate_index"
     val VALID_VERTICES = "valid_vertices"
-    val SCORES = "scores"
-
-    // TODO: should be parameter
-    val maxResults = 20
-    val alpha = 0.5
-    val beta = 0.5
 
     var start = 0L
     var elapsed = 0L
@@ -653,6 +646,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     }
 
     val idxRes = self.efractoid.
+      expand(1).
       set ("num_partitions", numPartitions).
       set ("input_graph_class", "br.ufmg.cs.systems.fractal.gmlib.keywordsearch.KeywordSearchGraph").
       set ("edge_labelled", true).
@@ -781,106 +775,21 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     elapsed = System.currentTimeMillis() - start
 
     logInfo (s"KeywordSearchLocalAggregation validEdgeIds=${validEdgeIds}" +
+      s" validVertexIds=${validVertexIds}" +
       s" totalFreq=${totalFreq} totalInvIdx=${totalInvIdx}" +
       s" totalInvPredicate=${totalInvPredicate}" +
       s" took ${elapsed} ms")
 
     /**
-     * KeywordSearchSecondPass: generate and rank subgraphs
+     * KeywordSearchSecondPass: actual enumeration of subgraphs
      */
 
     start = System.currentTimeMillis()
 
     val fc = self.fractalContext
-    val keywordIndexBc = fc.sparkContext.broadcast(keywordIndex)
     val validEdgeIdsBc = fc.sparkContext.broadcast(validEdgeIds)
     val validVertexIdsBc = fc.sparkContext.broadcast(validVertexIds)
     val invIdxsBc = fc.sparkContext.broadcast(invIdxs)
-    //val invPredicatesBc = arab.sparkContext.broadcast(invPredicates)
-    val invPredicatesBc = fc.sparkContext.broadcast(invPredicates2)
-    val totalInvIdxBc = fc.sparkContext.broadcast(totalInvIdx)
-    val totalInvPredicateBc = fc.sparkContext.broadcast(totalInvPredicate)
-
-    //val configBc = idxRes.masterEngine.configBc
-    //idxRes.masterEngine.superstepRDD.mapPartitions { iter =>
-    //  configBc.value.initializeWithTag(
-    //    //new VAtomicBitSetArray(),
-    //    new EAtomicBitSetArray(validVertexIdsBc.value),
-    //    new EAtomicBitSetArray(validEdgeIdsBc.value))
-    //  iter
-    //}.foreachPartition(_ => {})
-
-    // equation 6
-    val pqiDj = (qi: Int, dj: Int) => {
-      (alpha) *
-        (invIdxsBc.value(qi).getFreq(dj) / totalInvIdxBc.value.getFreq(dj).toDouble) +
-      (1 - alpha) *
-        (invPredicatesBc.value(qi).getTotalFreq() / totalFreq.toDouble)
-    }
-
-    // equation 6
-    val pqiRj = (qi: Int, rj: Int) => {
-      (alpha) *
-        (invPredicatesBc.value(qi).getFreq(rj) / totalInvPredicateBc.value.getFreq(rj).toDouble) +
-      (1 - alpha) *
-        (invPredicatesBc.value(qi).getTotalFreq() / totalFreq.toDouble)
-    }
-
-    val pR = (r: Int) => {
-      totalInvPredicateBc.value.getFreq(r) / totalFreq.toDouble
-    }
-
-    val total = new Array[Double](invIdxs.length)
-
-    val cur = totalInvPredicateBc.value.docCursor()
-    while (cur.moveNext()) {
-      val r = cur.elem()
-      var qi = 0
-      while (qi < total.length) {
-        total(qi) += pqiRj(qi, r) * pR(r)
-        qi += 1
-      }
-    }
-
-    val totalBc = fc.sparkContext.broadcast(total)
-
-    // equation 7
-    val pRjqi = (rj: Int, qi: Int) => {
-      val part = pqiRj(qi, rj) * pR(rj)
-      part / totalBc.value(qi)
-    }
-
-    // equation 5
-    val pqiDjrj = (qi: Int, dj: Int, rj: Int) => {
-      val qiDj = pqiDj(qi, dj)
-      (beta) * qiDj * pRjqi (rj, qi) + (1 - beta) * qiDj
-    }
-
-    // equation 2
-    val pqiG = (qi: Int, e: EdgeInducedSubgraph) => {
-      val n = e.getNumWords()
-      val words = e.getWords()
-      var total = 0.0
-      var i = 0
-      while (i < n) {
-        val dj = words.getUnchecked(i)
-        val rj = e.labelledEdge(dj).getEdgeLabel()
-        total += (1 / n.toDouble) * pqiDjrj(qi, dj, rj)
-        i += 1
-      }
-      total
-    }
-
-    // equation 1
-    val pQG = (e: EdgeInducedSubgraph) => {
-      var total = 1.0
-      var qi = 0
-      while (qi < invIdxsBc.value.length) {
-        total *= pqiG(qi, e)
-        qi += 1
-      }
-      total
-    }
 
     val lastWordIsValid = (e: EdgeInducedSubgraph,
         c: Computation[EdgeInducedSubgraph]) => {
@@ -911,124 +820,18 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
       valid
     }
 
-    val lastWordIsValid2 = (e: EdgeInducedSubgraph, w: Int,
-        c: Computation[EdgeInducedSubgraph]) => {
-      val words = e.getWords()
-      val numWords = words.size()
-      val invIdxs = invIdxsBc.value
-      var valid = false
-      if (validEdgeIdsBc.value.contains(w)) {
-        var i = 0
-        while (i < invIdxs.length) {
-          val ii = invIdxs(i)
-          if (ii.containsDoc(w)) {
-            var j = 0
-            while (j < numWords && !ii.containsDoc(words.get(j))) j += 1
-            if (j == numWords) {
-              valid = true
-              i = invIdxs.length - 1
-            }
-          }
-          i += 1
-        }
-      }
-      valid
-    }
-
-    val lastWordIsValid3 = new WordFilterFunc[EdgeInducedSubgraph] {
-      def apply(e: EdgeInducedSubgraph, w: Int, c: Computation[EdgeInducedSubgraph]): Boolean = {
-        val words = e.getWords()
-        val numWords = words.size()
-        val invIdxs = invIdxsBc.value
-        var valid = false
-        if (validEdgeIdsBc.value.contains(w)) {
-          var i = 0
-          while (i < invIdxs.length) {
-            val ii = invIdxs(i)
-            if (ii.containsDoc(w)) {
-              var j = 0
-              while (j < numWords && !ii.containsDoc(words.getUnchecked(j))) j += 1
-              if (j == numWords) {
-                valid = true
-                i = invIdxs.length - 1
-              }
-            }
-            i += 1
-          }
-        }
-        valid
-      }
-    }
-
-    val scorer = new QueryScorer(keywordIndexBc,invIdxsBc, totalInvIdxBc,
-      invPredicatesBc, totalInvPredicateBc, totalBc, totalFreq, alpha, beta)
-
-    // we use reverse ordering to always remove the least scored subgraph from
-    // the bounded priority queue
-    //val ord = Ordering.by[PairWritable[DoubleWritable,IntArrayList], Double](t => - t.getLeft().get())
-    val comparator = new Comparator[PairWritable[DoubleWritable,IntArrayList]] with Serializable {
-      def compare(p1: PairWritable[DoubleWritable,IntArrayList],
-          p2: PairWritable[DoubleWritable,IntArrayList]) = {
-        - p1.getLeft().compareTo(p2.getLeft())
-      }
-    }
-
-    val kwsRes = self.efractoid.
+    // filtered input graph
+    var kws = self.efractoid.
+      efilter [HashObjSet[String]] (e => validEdgeIdsBc.value.contains(e.getEdgeId())).
       set ("num_partitions", numPartitions).
       set ("input_graph_class", "br.ufmg.cs.systems.fractal.gmlib.keywordsearch.KeywordSearchGraph").
       set ("edge_labelled", true).
-      set ("keep_maximal", true).
-      filter (lastWordIsValid).
-      //filter (lastWordIsValid).
-      //efilter (lastWordIsValid2).
-      //withWordFilter(lastWordIsValid3).
-      explore(keywords.size - 1)//.
-      //aggregate [IntWritable,BoundedPriorityQueue[PairWritable[DoubleWritable,IntArrayList]]] (
-      //  SCORES,
-      //  (e,c,k) => { k.set(maxResults); k },
-      //  (e,c,v) => {
-      //    var p = v.peek()
-      //    if (p == null) {
-      //      v.init(maxResults, comparator)
-      //      p = new PairWritable(new DoubleWritable(), new IntArrayList())
-      //    }
-      //    //p.getLeft().set(scorer.score(e))
-      //    p.getLeft().set(0.0)
-      //    p.getRight().clear()
-      //    p.getRight().addAll(e.getVertices)
-      //    v
-      //  },
-      //  //new Function3[EdgeInducedSubgraph,Computation[EdgeInducedSubgraph],BoundedPriorityQueue[PairWritable[DoubleWritable,IntArrayList]],BoundedPriorityQueue[PairWritable[DoubleWritable,IntArrayList]]] with Serializable {
-      //  //  @transient lazy val reusableDouble = new DoubleWritable()
-      //  //  @transient lazy val reusableArray = new IntArrayList()
-      //  //  @transient lazy val reusablePair = new PairWritable[DoubleWritable,IntArrayList](reusableDouble, reusableArray)
-      //  //  @transient lazy val pqueue = new BoundedPriorityQueue(maxResults, reusablePair, comparator)
-      //  //  def apply(e: EdgeInducedSubgraph, c: Computation[EdgeInducedSubgraph], v: BoundedPriorityQueue[PairWritable[DoubleWritable,IntArrayList]]) = {
-      //  //    //reusableDouble.set(pQG(e))
-      //  //    reusableDouble.set(0.0)
-      //  //    reusableArray.clear()
-      //  //    reusableArray.addAll(e.getVertices())
-      //  //    pqueue
-      //  //  }
-      //  //},
-      //  (q1,q2) => { q1.merge(q2); q1 }
-      //)
+      set ("keep_maximal", true)
 
-    kwsRes.subgraphs((_, _) => false).count
+    for (i <- 0 until keywords.size) {
+      kws = kws.expand(1).filter(lastWordIsValid)
+    }
 
-    // get aggregation scores
-    //val topResults = kwsRes.
-    //  aggregation [IntWritable,BoundedPriorityQueue[PairWritable[DoubleWritable,IntArrayList]]] (SCORES).
-    //  get (new IntWritable(maxResults)).get
-
-    elapsed = System.currentTimeMillis() - start
-
-    logInfo (s"KeywordSearchScoring took ${elapsed} ms")
-
-    //topResults.foreach { pair =>
-    //  logInfo (s"KeywordSearchScore words=${pair.getLeft()} score=${pair.getRight()}")
-    //}
-
-    kwsRes
+    kws
   }
 }

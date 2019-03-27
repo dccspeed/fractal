@@ -972,9 +972,11 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
          int src = edge.getSourceId();
          int dst = edge.getDestinationId();
          VertexNeighbourhood neighborhood =
-            BasicMainGraph.this.vertexNeighborhoods[src];
+                 BasicMainGraph.this.vertexNeighborhoods[src];
+         if (neighborhood == null) return;
          neighborhood.addEdge(dst, edge.getEdgeId());
          neighborhood = BasicMainGraph.this.vertexNeighborhoods[dst];
+         if (neighborhood == null) return;
          neighborhood.addEdge(src, edge.getEdgeId());
          BasicMainGraph.this.edgeIndexF[edge.getEdgeId()] = edge;
       }

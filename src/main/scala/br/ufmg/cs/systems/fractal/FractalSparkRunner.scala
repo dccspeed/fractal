@@ -13,7 +13,7 @@ class VSubgraphsApp(val arabGraph: FractalGraph,
                     numPartitions: Int,
                     explorationSteps: Int) extends FractalSparkApp {
   def execute: Unit = {
-    val vsubgraphsRes = arabGraph.vfractoid.
+    val vsubgraphsRes = arabGraph.vfractoidAndExpand.
       set ("comm_strategy", commStrategy).
       set ("num_partitions", numPartitions).
       explore (explorationSteps)

@@ -414,18 +414,29 @@ case class Fractoid [S <: Subgraph : ClassTag](
     ec.unset(SparkConfiguration.MASTER_COMPUTATION_CONTAINER)
   }
 
-  /****** Fractal Scala API: High Level API ******/
+  private def withFirstComputation: Fractoid[S] = {
+    val computation = {
+      val sclass = classTag[S].runtimeClass
+      if (sclass == classOf[VertexInducedSubgraph]) {
+        new VComputationContainer(processOpt = Option(null),
+          primitiveOpt = Option(Primitive.E))
+      } else if (sclass == classOf[EdgeInducedSubgraph]) {
+        new EComputationContainer(processOpt = Option(null),
+          primitiveOpt = Option(Primitive.E))
+      } else if (sclass == classOf[PatternInducedSubgraph]) {
+        val pattern = config.confs("pattern").asInstanceOf[Pattern]
+        new VEComputationContainer(processOpt = Option(null),
+          patternOpt = Option(pattern), primitiveOpt = Option(Primitive.E))
+      } else {
+        throw new RuntimeException(s"Unsupported subgraph type ${sclass}")
+      }
+    }
 
-  /**
-   * Perform a one-step expansion
-   * @return new result
-   */
-  def expand: Fractoid[S] = {
-    val expandComp = emptyComputation.
-      withExpandCompute(null).
-      copy(mustSync = false)
-    handleNextResult(expandComp)
+    this.copy(config = config.withNewComputation(
+      computation.asInstanceOf[Computation[S]]))
   }
+
+  /****** Fractal Scala API: High Level API ******/
 
   /**
    * Perform *n* expansion iterations
@@ -436,7 +447,20 @@ case class Fractoid [S <: Subgraph : ClassTag](
   def expand(n: Int): Fractoid[S] = {
     var curr = this
     logInfo(s"ExpandBefore ${curr}")
-    for (i <- 0 until n) curr = curr.expand
+    for (i <- 0 until n) {
+
+      // first computation, create a new computation
+      if (getComputationContainer[S] == null) {
+        curr = curr.withFirstComputation
+
+      // computation exists, append to the current one
+      } else {
+        val expandComp = emptyComputation.
+          withExpandCompute(null).
+          copy(mustSync = false)
+        curr = handleNextResult(expandComp)
+      }
+    }
     logInfo(s"ExpandAfter ${curr}")
     curr
   }
@@ -451,10 +475,17 @@ case class Fractoid [S <: Subgraph : ClassTag](
    */
   def extend(getPossibleExtensions: (S,Computation[S]) => IntCollection)
     : Fractoid[S] = {
-    val newConfig = config.withNewComputation (
-      getComputationContainer[S].
+
+    val curr = if (getComputationContainer[S] == null) {
+      this.withFirstComputation
+    } else {
+      this
+    }
+
+    val newConfig = curr.config.withNewComputation (
+      curr.getComputationContainer[S].
       withNewFunctions (getPossibleExtensionsOpt = Option(getPossibleExtensions)))
-    this.copy (config = newConfig)
+    curr.copy (config = newConfig)
   }
 
   /**
@@ -556,11 +587,17 @@ case class Fractoid [S <: Subgraph : ClassTag](
       override def test(v: Vertex[V]): Boolean = vfilter(v)
     }
 
-    val filterComp = emptyComputation.
-      withExpandCompute((e,c) => c.bypass(e)).
-      set("vfilter", vpred).
-      copy(mustSync = true)
-    handleNextResult(filterComp)
+    if (getComputationContainer[S] == null) {
+      withFirstComputation.
+        withExpandCompute((e,c) => c.bypass(e)).
+        set("vfilter", vpred)
+    } else {
+      val filterComp = emptyComputation.
+        withExpandCompute((e,c) => c.bypass(e)).
+        set("vfilter", vpred).
+        copy(mustSync = true)
+      handleNextResult(filterComp)
+    }
   }
 
   /**
@@ -574,11 +611,17 @@ case class Fractoid [S <: Subgraph : ClassTag](
       override def test(e: Edge[E]): Boolean = efilter(e)
     }
 
-    val filterComp = emptyComputation.
-      withExpandCompute((e,c) => c.bypass(e)).
-      set("efilter", epred).
-      copy(mustSync = true)
-    handleNextResult(filterComp)
+    if (getComputationContainer[S] == null) {
+      withFirstComputation.
+        withExpandCompute((e, c) => c.bypass(e)).
+        set("efilter", epred)
+    } else {
+      val filterComp = emptyComputation.
+        withExpandCompute((e, c) => c.bypass(e)).
+        set("efilter", epred).
+        copy(mustSync = true)
+      handleNextResult(filterComp)
+    }
   }
 
   /****** Fractal Scala API: ComputationContainer ******/
@@ -685,6 +728,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
         val iter = func(e, c)
         while (iter.hasNext()) {
           val kv = iter.next()
+          println(s"%% ${kv}")
           c.map(name, kv._1, kv._2)
         }
       }

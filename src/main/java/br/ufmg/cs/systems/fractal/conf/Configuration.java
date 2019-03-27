@@ -95,9 +95,6 @@ public class Configuration<O extends Subgraph> implements Serializable {
     public static final String CONF_AGGREGATION_STORAGE_CLASS = "fractal.aggregation.storage.class";
     public static final String CONF_AGGREGATION_STORAGE_CLASS_DEFAULT = "br.ufmg.cs.systems.fractal.aggregation.AggregationStorage";
 
-    public static final String CONF_KEEP_MAXIMAL = "fractal.keep.maximal";
-    public static final boolean CONF_KEEP_MAXIMAL_DEFAULT = false;
-
     // work stealing {{
     public static final String CONF_WS_EXTERNAL_BATCHSIZE_LOW = "fractal.ws.external.batchsize.low";
     public static final int CONF_WS_EXTERNAL_BATCHSIZE_LOW_DEFAULT = 1;
@@ -602,10 +599,6 @@ public class Configuration<O extends Subgraph> implements Serializable {
 
     public String getMasterHostname() {
        return getString(CONF_MASTER_HOSTNAME, CONF_MASTER_HOSTNAME_DEFAULT);
-    }
-
-    public boolean keepMaximal() {
-      return getBoolean(CONF_KEEP_MAXIMAL, CONF_KEEP_MAXIMAL_DEFAULT);
     }
 
     public int getWsBatchSizeLow() {

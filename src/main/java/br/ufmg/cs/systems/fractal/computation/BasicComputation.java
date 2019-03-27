@@ -110,11 +110,7 @@ public abstract class BasicComputation<E extends Subgraph>
         if (possibleExtensions == null) {
             return emptyIter;
         }
-        
-        if (possibleExtensions.isEmpty() && getConfig().keepMaximal()) {
-          return bypass(subgraph);
-        }
-       
+
         currentSubgraph = subgraph;
         return subgraphEnumerator.set(this, subgraph, possibleExtensions);
     }
@@ -124,7 +120,7 @@ public abstract class BasicComputation<E extends Subgraph>
        return Subgraph.computeExtensions(this);
     }
 
-  @Override
+    @Override
     public boolean filter(E existingSubgraph, int newWord) {
         return existingSubgraph.isCanonicalSubgraphWithWord(newWord);
     }

@@ -13,6 +13,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
   private var sc: SparkContext = _
   private var fc: FractalContext = _
   private var fgraph: FractalGraph = _
+  private var fgraphEdgeLabel: FractalGraph = _
 
   /** set up spark context */
   override def beforeAll: Unit = {
@@ -28,6 +29,8 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
 
     sampleGraphPath = "data/cube.graph"
     fgraph = fc.textFile (sampleGraphPath)
+
+    fgraphEdgeLabel = fc.textFile ("data/cube-edge-label.graph")
 
   }
 
@@ -117,7 +120,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
   test ("[cube,vfilter]", Tag("cube.vfilter")) {
     val numSubgraph = List(3)
     for (k <- 0 to (numSubgraph.size - 1)) {
-      val frac = fgraph.vfractoid.
+      val frac = fgraph.vfractoidAndExpand.
         vfilter [String] (v => v.getVertexLabel() == 1).
         set ("num_partitions", numPartitions)
       val subgraphs = frac.subgraphs
@@ -129,11 +132,22 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
     val numSubgraph = List(2)
     for (k <- 0 to (numSubgraph.size - 1)) {
       val frac = fgraph.vfractoid.
+        expand(1).
         efilter [String] (e => e.getSourceId() == 1).
-        expand.
+        expand(1).
         set ("num_partitions", numPartitions)
       val subgraphs = frac.subgraphs
       assert(subgraphs.count == numSubgraph(k))
     }
+  }
+
+  test ("[cube,kws]", Tag("cube.kws")) {
+    val keywords = Array("a", "b")
+    val kws = fgraphEdgeLabel.keywordSearch(numPartitions, keywords)
+
+    val subgraphs = kws.subgraphs.collect
+    println(subgraphs.mkString("\n"))
+
+    assert (subgraphs.size == 2)
   }
 }

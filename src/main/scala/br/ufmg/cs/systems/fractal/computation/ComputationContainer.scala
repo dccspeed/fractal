@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal.computation
 
+import java.util
 import java.util.concurrent.atomic.AtomicInteger
 
 import br.ufmg.cs.systems.fractal.Primitive

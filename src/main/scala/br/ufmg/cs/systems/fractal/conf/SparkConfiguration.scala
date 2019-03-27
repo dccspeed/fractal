@@ -333,9 +333,6 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
     // aggregation
     updateIfExists ("incremental_aggregation", CONF_INCREMENTAL_AGGREGATION)
 
-    // maximal
-    updateIfExists ("keep_maximal", CONF_KEEP_MAXIMAL)
-
     // multigraph
     updateIfExists ("multigraph", CONF_MAINGRAPH_MULTIGRAPH)
 
@@ -368,13 +365,13 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
 
       val startFilter = System.currentTimeMillis
 
-      if (!confs.contains("vfilter")) {
+      //if (!confs.contains("vfilter")) {
         getMainGraph[MainGraph[_,_]].undoVertexFilter()
-      }
+      //}
       
-      if (!confs.contains("efilter")) {
+      //if (!confs.contains("efilter")) {
         getMainGraph[MainGraph[_,_]].undoEdgeFilter()
-      }
+      //}
 
       def filterVertices[V,E](graph: MainGraph[V,E],
           vpred: Predicate[_]): Int = {

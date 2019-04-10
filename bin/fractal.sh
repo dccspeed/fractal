@@ -38,6 +38,9 @@ case "$alg" in
 	gquerying)
 	required="inputgraph steps query"
 	;;
+	kws)
+	required="inputgraph steps query"
+	;;
 	*)
 	echo "Invalid algorithm: ${alg}"
 	exit 1
@@ -62,6 +65,7 @@ inputformat=${inputformat:-al}
 comm=${comm:-scratch}
 total_cores=$((num_workers * worker_cores))
 deploy_mode=${deploy_mode:-client}
+log_level=${log_level:-info}
 
 cmd="spark-submit --master $spark_master --deploy-mode $deploy_mode \\
 	--driver-memory $master_memory \\
@@ -71,7 +75,7 @@ cmd="spark-submit --master $spark_master --deploy-mode $deploy_mode \\
         --class br.ufmg.cs.systems.fractal.FractalSparkRunner \\
 	--jars $FRACTAL_HOME/build/libs/fractal-SPARK-2.2.0-all.jar \\
 	$FRACTAL_HOME/build/libs/fractal-SPARK-2.2.0-all.jar \\
-	$inputformat $inputgraph $alg $comm $total_cores $steps info $fsmsupp $keywords $mindensity $query $configs"
+	$inputformat $inputgraph $alg $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $configs"
 
 echo $cmd
 bash -c "$cmd"

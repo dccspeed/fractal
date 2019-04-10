@@ -9,7 +9,6 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
   private val logLevel: String = "error"
 
   private var master: String = _
-  private var sampleGraphPath: String = _
   private var sc: SparkContext = _
   private var fc: FractalContext = _
   private var fgraph: FractalGraph = _
@@ -27,8 +26,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
     sc.setLogLevel(logLevel)
     fc = new FractalContext(sc, logLevel)
 
-    sampleGraphPath = "data/cube.graph"
-    fgraph = fc.textFile (sampleGraphPath)
+    fgraph = fc.textFile ("data/cube.graph")
 
     fgraphEdgeLabel = fc.textFile ("data/cube-edge-label.graph")
 
@@ -145,9 +143,6 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
     val keywords = Array("a", "b")
     val kws = fgraphEdgeLabel.keywordSearch(numPartitions, keywords)
 
-    val subgraphs = kws.subgraphs.collect
-    println(subgraphs.mkString("\n"))
-
-    assert (subgraphs.size == 2)
+    assert (kws.subgraphs.count == 2)
   }
 }

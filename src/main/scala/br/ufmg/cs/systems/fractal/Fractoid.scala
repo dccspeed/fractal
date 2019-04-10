@@ -728,7 +728,6 @@ case class Fractoid [S <: Subgraph : ClassTag](
         val iter = func(e, c)
         while (iter.hasNext()) {
           val kv = iter.next()
-          println(s"%% ${kv}")
           c.map(name, kv._1, kv._2)
         }
       }

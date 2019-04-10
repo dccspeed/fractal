@@ -273,12 +273,11 @@ object FractalSparkRunner {
 
     if (!sc.isLocal) {
       // TODO: this is ugly but have to make sure all spark executors are up by
-      // the time we start running things
+      // the time we start executing fractal applications
       Thread.sleep(10000)
     }
 
-    val arab = new FractalContext(sc, logLevel,
-      "/scratch/dossantosdias.1/tmp/fractal")
+    val arab = new FractalContext(sc, logLevel)
     val arabGraph = arab.textFile (graphPath, graphClass = graphClass)
 
     val app = algorithm.toLowerCase match {

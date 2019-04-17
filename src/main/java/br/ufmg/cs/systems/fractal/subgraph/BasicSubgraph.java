@@ -2,7 +2,6 @@ package br.ufmg.cs.systems.fractal.subgraph;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
-import br.ufmg.cs.systems.fractal.gmlib.motif.GtrieExtender;
 import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.LabelledEdge;
 import br.ufmg.cs.systems.fractal.graph.Vertex;
@@ -42,7 +41,6 @@ public abstract class BasicSubgraph implements Subgraph {
 
    // state
    protected CliqueInducedSubgraphs state;
-   protected GtrieExtender extender;
 
    // }}
 
@@ -103,16 +101,6 @@ public abstract class BasicSubgraph implements Subgraph {
    @Override
    public HashIntObjMap cacheStore() {
       return cacheStore;
-   }
-
-   @Override
-   public GtrieExtender getExtender() {
-      return extender;
-   }
-
-   @Override
-   public void setExtender(GtrieExtender extender) {
-      this.extender = extender;
    }
 
    @Override
@@ -294,7 +282,7 @@ public abstract class BasicSubgraph implements Subgraph {
 
    @Override
    public String toString() {
-      return "Subgraph{" +
+      return "subgraph{" +
               "vertices=" + vertices + ", " +
               "edges=" + edges +
               "} " + super.toString();

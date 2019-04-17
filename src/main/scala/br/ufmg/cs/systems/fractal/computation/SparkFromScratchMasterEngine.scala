@@ -299,8 +299,6 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
 
       var workStealingSys: WorkStealingSystem[S] = _
 
-      var validSubgraphs: AtomicLong = _
-
       var lastStepConsumer: LastStepConsumer[S] = _
 
       def apply(iter: JavaIterator[S], c: Computation[S]): Long = {
@@ -328,8 +326,6 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
           }
 
           lastStepConsumer = new LastStepConsumer[S]()
-
-          validSubgraphs = execEngine.validSubgraphs
 
           var start = System.currentTimeMillis
           val ret = processCompute(iter, c)
@@ -365,14 +361,13 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
           c: Computation[S], nextComp: Computation[S]): Long = {
         var currentSubgraph: S = null.asInstanceOf[S]
         var addWords = 0L
-        var SubgraphsGenerated = 0L
+        var subgraphsGenerated = 0L
 
         while (iter.hasNext) {
           currentSubgraph = iter.next
           addWords += 1
           if (c.filter(currentSubgraph)) {
-            SubgraphsGenerated += 1
-            validSubgraphs.incrementAndGet
+            subgraphsGenerated += 1
             currentSubgraph.nextExtensionLevel
             nextComp.compute(currentSubgraph)
             currentSubgraph.previousExtensionLevel
@@ -380,7 +375,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
         }
 
         awAccums(c.getDepth).add(addWords)
-        egAccums(c.getDepth).add(SubgraphsGenerated)
+        egAccums(c.getDepth).add(subgraphsGenerated)
 
         0
       }
@@ -411,29 +406,39 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
       private def lastComputation(iter: JavaIterator[S],
           c: Computation[S]): Long = {
 
-        try {       
+        //try {
           val embIter = iter.asInstanceOf[SubgraphEnumerator[S]]
-          lastStepConsumer.set(embIter.getSubgraph(), c)
-          embIter.getWordIds().forEach(lastStepConsumer)
-          awAccums(c.getDepth).add(lastStepConsumer.addWords)
-          egAccums(c.getDepth).add(lastStepConsumer.SubgraphsGenerated)
-        } catch {
-          case e: Exception =>
-            var currentSubgraph: S = null.asInstanceOf[S]
-            var addWords = 0L
-            var subgraphsGenerated = 0L
-
-            while (iter.hasNext) {
-              currentSubgraph = iter.next
-              addWords += 1
-              if (c.filter(currentSubgraph)) {
-                subgraphsGenerated += 1
-                c.process(currentSubgraph)
-              }
+          val wordIds = embIter.getWordIds()
+          if (wordIds != null) {
+            lastStepConsumer.set(embIter.getSubgraph(), c)
+            wordIds.forEach(lastStepConsumer)
+            awAccums(c.getDepth).add(lastStepConsumer.addWords)
+            egAccums(c.getDepth).add(lastStepConsumer.subgraphsGenerated)
+          } else {
+            val subgraph = embIter.next()
+            awAccums(c.getDepth).add(1)
+            if (c.filter(subgraph)) {
+              egAccums(c.getDepth).add(1)
+              c.process(subgraph)
             }
-            awAccums(c.getDepth).add(addWords)
-            egAccums(c.getDepth).add(subgraphsGenerated)
-        }
+          }
+        //} catch {
+        //  case e: Exception =>
+        //    var currentSubgraph: S = null.asInstanceOf[S]
+        //    var addWords = 0L
+        //    var subgraphsGenerated = 0L
+
+        //    while (iter.hasNext) {
+        //      currentSubgraph = iter.next
+        //      addWords += 1
+        //      if (c.filter(currentSubgraph)) {
+        //        subgraphsGenerated += 1
+        //        c.process(currentSubgraph)
+        //      }
+        //    }
+        //    awAccums(c.getDepth).add(addWords)
+        //    egAccums(c.getDepth).add(subgraphsGenerated)
+        //}
 
 
         0
@@ -461,13 +466,13 @@ class LastStepConsumer[E <: Subgraph] extends IntConsumer {
   var subgraph: E = _
   var computation: Computation[E] = _
   var addWords: Long = _
-  var SubgraphsGenerated: Long = _
+  var subgraphsGenerated: Long = _
 
   def set(subgraph: E, computation: Computation[E]): LastStepConsumer[E] = {
     this.subgraph = subgraph
     this.computation = computation
     this.addWords = 0L
-    this.SubgraphsGenerated = 0L
+    this.subgraphsGenerated = 0L
     this
   }
 
@@ -475,7 +480,7 @@ class LastStepConsumer[E <: Subgraph] extends IntConsumer {
     addWords += 1
     subgraph.addWord(w)
     if (computation.filter(subgraph)) {
-      SubgraphsGenerated += 1
+      subgraphsGenerated += 1
       computation.process(subgraph)
     }
     subgraph.removeLastWord()

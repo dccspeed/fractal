@@ -319,6 +319,9 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
     updateIfExists ("ws_internal", CONF_WS_INTERNAL)
     updateIfExists ("ws_external", CONF_WS_EXTERNAL)
 
+    // enumerator class
+    updateIfExists ("senum_class", CONF_ENUMERATOR_CLASS)
+
     // input
     updateIfExists ("input_graph_class", CONF_MAINGRAPH_CLASS)
     updateIfExists ("input_graph_path", CONF_MAINGRAPH_PATH)
@@ -515,6 +518,11 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
     setPatternClass (
       getClass (CONF_PATTERN_CLASS, CONF_PATTERN_CLASS_DEFAULT).
       asInstanceOf[Class[_ <: Pattern]]
+    )
+
+    setSubgraphEnumClass(
+      getClass (CONF_ENUMERATOR_CLASS, CONF_ENUMERATOR_CLASS_DEFAULT).
+      asInstanceOf[Class[_ <: SubgraphEnumerator[E]]]
     )
     
     isGraphMulti = getBoolean(CONF_MAINGRAPH_MULTIGRAPH,

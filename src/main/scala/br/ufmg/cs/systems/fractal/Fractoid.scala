@@ -496,7 +496,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    * @return new result
    */
   def filter(filter: (S,Computation[S]) => Boolean): Fractoid[S] = {
-    ClosureCleaner.clean(filter)
+    //ClosureCleaner.clean(filter)
     val filterComp = emptyComputation(Primitive.F).
       withExpandCompute((e,c) => c.bypass(e)).
       withFilter(filter)

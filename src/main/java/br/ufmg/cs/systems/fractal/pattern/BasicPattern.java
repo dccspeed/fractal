@@ -158,7 +158,7 @@ public abstract class BasicPattern implements Pattern {
                 setSubgraphFromScratch(subgraph);
             }
         } catch (RuntimeException e) {
-            LOG.error("Subgraph: " + subgraph + " " + e);
+            LOG.error("subgraph: " + subgraph + " " + e);
             throw e;
         }
     }

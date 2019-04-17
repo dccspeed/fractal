@@ -22,8 +22,6 @@ case class SparkFromScratchEngine[E <: Subgraph](
 
   @transient var gtagActorRef: ActorRef = _
 
-  var validSubgraphs: AtomicLong = _
-
   override def init() = {
     val start = System.currentTimeMillis
 
@@ -42,8 +40,6 @@ case class SparkFromScratchEngine[E <: Subgraph](
 
     logInfo(s"Started slave-actor(step=${superstep}," +
       s" partitionId=${partitionId}): ${gtagActorRef}")
-
-    validSubgraphs = new AtomicLong(0)
 
     val end = System.currentTimeMillis
 

@@ -66,9 +66,7 @@ public interface Computation<E extends Subgraph> {
 
     Configuration<E> getConfig();
 
-    E getCurrentSubgraph();
-
-    SubgraphEnumerator<E> bypass(E subgraph);
+  SubgraphEnumerator<E> bypass(E subgraph);
     // }}}
 
     // {{{ Internal
@@ -79,7 +77,8 @@ public interface Computation<E extends Subgraph> {
     int setDepth(int depth);
     int getDepth();
 
-    SubgraphEnumerator<E> forkEnumerator(boolean local);
+    SubgraphEnumerator<E> getSubgraphEnumerator();
+    SubgraphEnumerator<E> extend();
     void joinConsumer(SubgraphEnumerator<E> consumer);
 
     Class<? extends Subgraph> getSubgraphClass();

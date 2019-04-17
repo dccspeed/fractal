@@ -38,20 +38,6 @@ class MotifsApp(val arabGraph: FractalGraph,
   }
 }
 
-class MotifsGtrieApp(val arabGraph: FractalGraph,
-                     commStrategy: String,
-                     numPartitions: Int,
-                     explorationSteps: Int) extends FractalSparkApp {
-  def execute: Unit = {
-    val motifsRes = arabGraph.motifsGtrie(explorationSteps + 1).
-      set ("comm_strategy", commStrategy).
-      set ("num_partitions", numPartitions).
-      explore(explorationSteps)
-
-    motifsRes.compute()
-  }
-}
-
 class CliquesNaiveApp(val arabGraph: FractalGraph,
                       commStrategy: String,
                       numPartitions: Int,
@@ -286,9 +272,6 @@ object FractalSparkRunner {
           numPartitions, explorationSteps)
       case "motifs" =>
         new MotifsApp(arabGraph, commStrategy,
-          numPartitions, explorationSteps)
-      case "motifsgtrie" =>
-        new MotifsGtrieApp(arabGraph, commStrategy,
           numPartitions, explorationSteps)
       case "cliquesnaive" =>
         new CliquesNaiveApp(arabGraph, commStrategy,

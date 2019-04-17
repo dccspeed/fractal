@@ -6,6 +6,7 @@ import br.ufmg.cs.systems.fractal.aggregation.EndAggregationFunction;
 import br.ufmg.cs.systems.fractal.aggregation.reductions.ReductionFunction;
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.computation.MasterComputation;
+import br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.optimization.OptimizationSet;
 import br.ufmg.cs.systems.fractal.optimization.OptimizationSetDescriptor;
@@ -86,6 +87,9 @@ public class Configuration<O extends Subgraph> implements Serializable {
     public static final String CONF_PATTERN_CLASS = "fractal.pattern.class";
     public static final String CONF_PATTERN_CLASS_DEFAULT = "br.ufmg.cs.systems.fractal.pattern.JBlissPattern";
 
+    public static final String CONF_ENUMERATOR_CLASS = "fractal.enumerator.class";
+    public static final String CONF_ENUMERATOR_CLASS_DEFAULT = "br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator";
+
     public static final String CONF_OUTPUT_PATH = "fractal.output.path";
     public static final String CONF_OUTPUT_PATH_DEFAULT = "Output";
 
@@ -132,6 +136,7 @@ public class Configuration<O extends Subgraph> implements Serializable {
     private Class<? extends Computation> computationClass;
     private Class<? extends MasterComputation> masterComputationClass;
     private Class<? extends Subgraph> subgraphClass;
+    private Class<? extends SubgraphEnumerator> subgraphEnumClass;
 
     private String outputPath;
 
@@ -391,9 +396,9 @@ public class Configuration<O extends Subgraph> implements Serializable {
     }
 
     public <E extends Subgraph> E createSubgraph() {
-        E Subgraph = (E) ReflectionUtils.newInstance(subgraphClass);
-        Subgraph.init(this);
-        return Subgraph;
+        E subgraph = (E) ReflectionUtils.newInstance(subgraphClass);
+        subgraph.init(this);
+        return subgraph;
     }
 
     public Class<? extends Subgraph> getSubgraphClass() {
@@ -402,6 +407,16 @@ public class Configuration<O extends Subgraph> implements Serializable {
 
     public void setSubgraphClass(Class<? extends Subgraph> SubgraphClass) {
         this.subgraphClass = SubgraphClass;
+    }
+
+    public SubgraphEnumerator<O> createSubgraphEnumerator() {
+        SubgraphEnumerator<O> senum = (SubgraphEnumerator<O>) ReflectionUtils.newInstance(subgraphEnumClass);
+        senum.init(this);
+        return senum;
+    }
+
+    public void setSubgraphEnumClass(Class<? extends SubgraphEnumerator> subgraphEnumClass) {
+        this.subgraphEnumClass = subgraphEnumClass;
     }
 
     public <G extends MainGraph> G getMainGraph() {

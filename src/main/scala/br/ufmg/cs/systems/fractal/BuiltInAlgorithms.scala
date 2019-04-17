@@ -1,7 +1,7 @@
 package br.ufmg.cs.systems.fractal
 
 import br.ufmg.cs.systems.fractal.annotation.Experimental
-import br.ufmg.cs.systems.fractal.computation.Computation
+import br.ufmg.cs.systems.fractal.computation.{Computation, SubgraphEnumerator}
 import br.ufmg.cs.systems.fractal.graph.MainGraph
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
@@ -48,7 +48,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
   }
 
   /**
-    * Frequent Subgraph Mining (FSM)
+    * Frequent subgraph Mining (FSM)
     * @param support threshold to determine what is frequent according to
     *                the (minimum image)
     * @param numSteps maximum number of exploration steps
@@ -137,7 +137,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
   }
 
   /**
-    * Subgraph Querying
+    * subgraph Querying
     * @param subgraph query graph
     * @return Fractoid with the initial state for subraph querying
     */
@@ -160,7 +160,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
   }
 
   /**
-    * Subgraph Querying (naive implementation)
+    * subgraph Querying (naive implementation)
     * @param subgraph
     * @return Fractoid with the initial state for subgraph querying
     */
@@ -227,29 +227,6 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
   /**
     * Experimental algorithms
     */
-
-  @Experimental
-  def motifsGtrie(size: Int): Fractoid[VertexInducedSubgraph] = {
-    import br.ufmg.cs.systems.fractal.gmlib.motif.GtrieExtender
-    import org.apache.hadoop.io.{IntWritable, LongWritable}
-
-    val AGG_MOTIFS = "motifs"
-    self.vfractoid.
-      extend { (e,c) =>
-        var extender = e.getExtender()
-        if (extender == null) {
-          extender = GtrieExtender.create(size)
-          e.setExtender(extender)
-        }
-        extender.extend(e,c)
-      }.
-      aggregate [IntWritable,LongWritable] (
-        AGG_MOTIFS,
-        (e,c,k) => { k.set(e.getExtender().pattern(e)); k },
-        (e,c,v) => { v.set(1); v },
-        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
-  }
-
   @Experimental
   def maximalcliques: Fractoid[VertexInducedSubgraph] = {
     import java.util.Random

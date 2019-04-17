@@ -64,6 +64,7 @@ shadowJar {
 }
 
 task scalaTest(dependsOn: ['testClasses'], type: JavaExec) {
+  environment "SPARK_SCALA_VERSION", "2.11"
   main = 'org.scalatest.tools.Runner'
   args = ['-R', 'build/classes/scala/test', '-o']
   classpath = sourceSets.test.runtimeClasspath

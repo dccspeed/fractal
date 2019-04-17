@@ -374,17 +374,6 @@ class SlaveActor [E <: Subgraph](
       s"partitionId=${computation.getPartitionId}," +
       s"${engine.getStatsAccumulators}," +
       reportMemoryStats() + "}")
-    //engine.printStatsAccumulators
-
-    //val atomicValidSubgraphs = engine.validSubgraphs
-
-    //if (atomicValidSubgraphs != null) {
-    //  val validSubgraphs = atomicValidSubgraphs.get()
-    //  masterRef ! Stats(validSubgraphs)
-    //  atomicValidSubgraphs.addAndGet(-validSubgraphs)
-    //}
-
-    // reportMemoryStats()
   }
 
   private def reportMemoryStats(): String = {
@@ -549,7 +538,7 @@ object ActorMessageSystem extends Logging {
     while (i < offset) {
       val currComp = computations(i % numComputations)
       if (currComp != null) {
-        val consumer = currComp.forkEnumerator(false)
+        val consumer = currComp.extend()
         if (consumer != null) {
           val ebytesOpt = serializeSubgraphBatch(consumer, batchSize)
           currComp.joinConsumer(consumer)
@@ -573,8 +562,8 @@ object ActorMessageSystem extends Logging {
   /**
    */
   def serializeSubgraphBatch [E <: Subgraph] (
-                                               consumer: SubgraphEnumerator[E],
-                                               batchSize: Int): Option[Array[Byte]] = {
+      consumer: SubgraphEnumerator[E],
+      batchSize: Int): Option[Array[Byte]] = {
 
     if (!consumer.hasNext) {
       return None
@@ -652,10 +641,10 @@ object ActorMessageSystem extends Logging {
         i += 1
       }
 
-      val currIterator = curr.asInstanceOf[BasicComputation[E]].
-        getSubgraphEnumerator()
+      val currIterator = curr.getSubgraphEnumerator()
 
-      currIterator.setFromRemote(curr, subgraph, wordIds)
+      currIterator.set(curr, subgraph)
+      currIterator.set(wordIds)
 
     } finally {
       ois.close
@@ -747,25 +736,25 @@ class WorkStealingSystem [E <: Subgraph] (
                 deserializeSubgraphBatch(subgraphBatchBytes, c)
               val computation = consumer.getComputation()
 
-              //val start = System.currentTimeMillis
-              //val numStealedWords = consumer.getWordIds().size()
-              //gtagExecutorActor ! Log(s"WorkStealedRemote" +
-              //  s" step=${c.getStep}" +
-              //  s" stealedByPartitionId=${computation.getPartitionId}" +
-              //  s" prefix=${consumer.getPrefix()}" +
-              //  s" numStealedWords=${numStealedWords}")
+              val start = System.currentTimeMillis
+              val numStealedWords = consumer.getWordIds().size()
+              gtagExecutorActor ! Log(s"WorkStealedRemote" +
+                s" step=${c.getStep}" +
+                s" stealedByPartitionId=${computation.getPartitionId}" +
+                s" prefix=${consumer.getPrefix()}" +
+                s" numStealedWords=${numStealedWords}")
 
               val ret = processCompute(consumer, computation)
               callback(consumer, ret)
               externalSteals += 1
 
-              //val end = System.currentTimeMillis
-              //gtagExecutorActor ! Log(s"WorkStealedAndProcessedRemote" +
-              //  s" step=${c.getStep}" +
-              //  s" stealedByPartitionId=${computation.getPartitionId}" +
-              //  s" prefix=${consumer.getPrefix()}" +
-              //  s" numStealedWords=${numStealedWords}" +
-              //  s" elapsed=${(end - start)}ms")
+              val end = System.currentTimeMillis
+              gtagExecutorActor ! Log(s"WorkStealedAndProcessedRemote" +
+                s" step=${c.getStep}" +
+                s" stealedByPartitionId=${computation.getPartitionId}" +
+                s" prefix=${consumer.getPrefix()}" +
+                s" numStealedWords=${numStealedWords}" +
+                s" elapsed=${(end - start)}ms")
 
               if (remoteCancellable != null) {
                 remoteCancellable.cancel()
@@ -830,7 +819,7 @@ class WorkStealingSystem [E <: Subgraph] (
       while (i < computations.length) {
         val currComp = computations(i)
         if (currComp != null) {
-          val consumer = currComp.forkEnumerator(true)
+          val consumer = currComp.extend()
           if (consumer != null) {
             val label = consumer.computationLabel()
 

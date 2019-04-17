@@ -18,8 +18,6 @@ public abstract class BasicComputation<E extends Subgraph>
 
     private transient int depth;
     
-    private transient SubgraphEnumerator<E> emptyIter;
-    
     private transient SubgraphEnumerator<E> bypassIter;
     
     private transient SubgraphEnumerator<E> subgraphEnumerator;
@@ -27,9 +25,8 @@ public abstract class BasicComputation<E extends Subgraph>
     private transient CommonExecutionEngine<E> executionEngine;
     private transient MainGraph mainGraph;
     private transient Configuration configuration;
-    private transient E currentSubgraph;
 
-    @Override
+  @Override
     public final void setExecutionEngine(
           CommonExecutionEngine<E> executionEngine) {
         this.executionEngine = executionEngine;
@@ -54,23 +51,34 @@ public abstract class BasicComputation<E extends Subgraph>
         configuration = config;
         mainGraph = configuration.getMainGraph();
 
-        emptyIter = new SubgraphEnumerator<E>() {
-           @Override
-           public boolean hasNext() {
-              return false;
-           }
-        };
-
+        // subgraph enumerator used to bypass a computation depth, i.e.,
+        // without subgraph expansion
         bypassIter = new SubgraphEnumerator<E>() {
            private boolean hasNext;
 
            @Override
            public synchronized SubgraphEnumerator<E> set(
-                 Computation<E> computation, E Subgraph) {
+                 Computation<E> computation, E subgraph) {
               this.computation = computation;
-              this.Subgraph = Subgraph;
+              this.subgraph = subgraph;
               this.hasNext = true;
               return this;
+           }
+
+           @Override
+           public synchronized SubgraphEnumerator<E> set(IntCollection wordIds) {
+             this.wordIds = wordIds;
+             return this;
+           }
+
+           @Override
+           public synchronized SubgraphEnumerator<E> forkEnumerator() {
+             return this;
+           }
+
+           @Override
+           public boolean isActive() {
+             return false;
            }
 
            @Override
@@ -81,11 +89,17 @@ public abstract class BasicComputation<E extends Subgraph>
            @Override
            public E next() {
               hasNext = false;
-              return Subgraph;
+              return subgraph;
+           }
+
+           @Override
+           public String toString() {
+             return "emptyEnumerator";
            }
         };
 
-        subgraphEnumerator = new SubgraphEnumerator<E>();
+        subgraphEnumerator = configuration.createSubgraphEnumerator();
+        subgraphEnumerator.init(configuration);
     }
 
     @Override
@@ -95,7 +109,8 @@ public abstract class BasicComputation<E extends Subgraph>
 
     @Override
     public final long compute(E subgraph) {
-       return processCompute(expandCompute(subgraph));
+      subgraphEnumerator.set(this, subgraph);
+      return processCompute(expandCompute(subgraph));
     }
 
     @Override
@@ -105,19 +120,13 @@ public abstract class BasicComputation<E extends Subgraph>
 
     @Override
     public Iterator<E> expandCompute(E subgraph) {
-        IntCollection possibleExtensions = getPossibleExtensions(subgraph);
-        
-        if (possibleExtensions == null) {
-            return emptyIter;
-        }
-
-        currentSubgraph = subgraph;
-        return subgraphEnumerator.set(this, subgraph, possibleExtensions);
+      subgraphEnumerator.computeExtensions();
+      return subgraphEnumerator;
     }
 
     @Override
-    public IntCollection getPossibleExtensions(E Subgraph) {
-       return Subgraph.computeExtensions(this);
+    public IntCollection getPossibleExtensions(E subgraph) {
+       return subgraph.computeExtensions(this);
     }
 
     @Override
@@ -168,29 +177,31 @@ public abstract class BasicComputation<E extends Subgraph>
         return true;
     }
 
-  @Override
+    @Override
     public String computationLabel() {
        return null;
     }
 
     @Override
     public SubgraphEnumerator<E> bypass(E subgraph) {
-       return bypassIter.set(this, subgraph);
+      bypassIter.set(this, subgraph);
+      return bypassIter.set(null);
     }
 
+    @Override
     public SubgraphEnumerator<E> getSubgraphEnumerator() {
        return this.subgraphEnumerator;
     }
 
     @Override
-    public SubgraphEnumerator<E> forkEnumerator(boolean local) {
+    public SubgraphEnumerator<E> extend() {
        BasicComputation<E> curr = this;
        SubgraphEnumerator<E> consumer = null;
 
        while (curr != null && curr.nextComputation() != null) {
           if (curr.subgraphEnumerator != null &&
                 curr.subgraphEnumerator.isActive()) {
-             consumer = curr.subgraphEnumerator.forkConsumer(local);
+             consumer = curr.subgraphEnumerator.forkEnumerator();
              if (consumer.hasNext()) {
                 return consumer;
              } else {
@@ -233,12 +244,7 @@ public abstract class BasicComputation<E extends Subgraph>
        return this.depth;
     }
 
-    @Override
-    public E getCurrentSubgraph() {
-       return currentSubgraph;
-    }
-
-    @Override
+  @Override
     public Pattern getPattern() {
        return null;
     }

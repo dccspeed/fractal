@@ -1,13 +1,14 @@
 package br.ufmg.cs.systems.fractal.optimization;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
+import br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import com.koloboke.collect.IntCollection;
 
-public class CliqueInducedSubgraphs {
+public class CliqueInducedSubgraphs extends SubgraphEnumerator {
 
    private ObjArrayList<CliqueInducedSubgraph> sgs;
    private int cliqueSize;
@@ -28,7 +29,7 @@ public class CliqueInducedSubgraphs {
       } else if (numVertices == 1) { // bootstrap from input graph
          bootstrap(subgraph, computation, subgraph.getVertices().getLast());
          return sgs.getLast().getAdjList().keySet();
-      } else if (numVertices < cliqueSize - 1) { // extend from previous
+      } else if (numVertices < cliqueSize - 1) { // forkEnumerator from previous
          extend(subgraph, computation,
                subgraph.getVertices().getLast());
          return sgs.getLast().getAdjList().keySet();
@@ -42,7 +43,6 @@ public class CliqueInducedSubgraphs {
    }
 
    private void bootstrap(Subgraph subgraph, Computation computation, int u) {
-      MainGraph graph = computation.getConfig().getMainGraph();
       sgs.clear();
       CliqueInducedSubgraph sg = CliqueInducedSubgraph.bootstrap(
             computation.getConfig(), u);

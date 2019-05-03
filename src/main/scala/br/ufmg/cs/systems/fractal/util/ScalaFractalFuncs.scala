@@ -33,12 +33,12 @@ trait EdgeProcessFunc
     ]
     with Serializable
 
-trait WordFilterFunc [E <: Subgraph] extends Serializable {
-  def apply(t1: E, t2: Int, t3: Computation[E]): Boolean
+trait WordFilterFunc [S <: Subgraph] extends Serializable {
+  def apply(t1: S, t2: Int, t3: Computation[S]): Boolean
 }
 
-trait ProcessComputeFunc [E <: Subgraph]
-    extends Function2[java.util.Iterator[E], Computation[E], Long]
+trait ProcessComputeFunc [S <: Subgraph]
+    extends Function2[SubgraphEnumerator[S], Computation[S], Long]
     with Serializable
 
 trait MasterComputeFunc

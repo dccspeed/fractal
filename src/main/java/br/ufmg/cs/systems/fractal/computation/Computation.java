@@ -7,43 +7,27 @@ import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import com.koloboke.collect.IntCollection;
 import org.apache.hadoop.io.Writable;
 
-import java.util.Iterator;
+public interface Computation<S extends Subgraph> {
 
-public interface Computation<E extends Subgraph> {
-    // {{{ Initialization, computation and finish hooks
-    void init(Configuration<E> config);
-
-    void initAggregations(Configuration<E> config);
-
-    long compute(E Subgraph);
-
-    Computation<E> nextComputation();
-
+    // {{{ initialization
+    void init(Configuration<S> config);
+    void initAggregations(Configuration<S> config);
+    long compute(S Subgraph);
+    Computation<S> nextComputation();
     void finish();
     // }}}
 
-    // {{{
-    // |
-    // |- compute
-    //    |
-    //    |- expandCompute
-    //    |
-    //    |- processCompute
-    //       |- filter
-    //       |- process
-
-    Iterator<E> expandCompute(E Subgraph);
-    IntCollection getPossibleExtensions(E Subgraph);
-    long processCompute(Iterator<E> expansions);
-    boolean filter(E Subgraph);
-    void process(E Subgraph);
-    // }}}
-
-    boolean filter(E existingSubgraph, int newWord);
+    // {{{ runtime
+    SubgraphEnumerator<S> expandCompute(S Subgraph);
+    IntCollection getPossibleExtensions(S Subgraph);
+    long processCompute(SubgraphEnumerator<S> expansions);
+    boolean filter(S Subgraph);
+    void process(S Subgraph);
+    boolean filter(S existingSubgraph, int newWord);
     // }}}
 
     // {{{ Output
-    void output(E Subgraph);
+    void output(S Subgraph);
     // }}}
 
     // {{{ Aggregation-related stuff
@@ -64,22 +48,21 @@ public interface Computation<E extends Subgraph> {
 
     int getNumberPartitions();
 
-    Configuration<E> getConfig();
+    Configuration<S> getConfig();
 
-  SubgraphEnumerator<E> bypass(E subgraph);
+    boolean shouldBypass();
     // }}}
 
     // {{{ Internal
-    void setExecutionEngine(CommonExecutionEngine<E> executionEngine);
-    CommonExecutionEngine<E> getExecutionEngine();
+    void setExecutionEngine(CommonExecutionEngine<S> executionEngine);
+    CommonExecutionEngine<S> getExecutionEngine();
     
     String computationLabel();
     int setDepth(int depth);
     int getDepth();
 
-    SubgraphEnumerator<E> getSubgraphEnumerator();
-    SubgraphEnumerator<E> extend();
-    void joinConsumer(SubgraphEnumerator<E> consumer);
+    SubgraphEnumerator<S> getSubgraphEnumerator();
+    SubgraphEnumerator<S> forkEnumerator(Computation<S> computation);
 
     Class<? extends Subgraph> getSubgraphClass();
     

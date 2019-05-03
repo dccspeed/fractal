@@ -5,7 +5,6 @@ import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.LabelledEdge;
 import br.ufmg.cs.systems.fractal.graph.Vertex;
-import br.ufmg.cs.systems.fractal.optimization.CliqueInducedSubgraphs;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
@@ -38,9 +37,6 @@ public abstract class BasicSubgraph implements Subgraph {
    protected IntArrayList neighborhoodCuts;
 
    protected HashIntObjMap cacheStore;
-
-   // state
-   protected CliqueInducedSubgraphs state;
 
    // }}
 
@@ -101,16 +97,6 @@ public abstract class BasicSubgraph implements Subgraph {
    @Override
    public HashIntObjMap cacheStore() {
       return cacheStore;
-   }
-
-   @Override
-   public CliqueInducedSubgraphs getState() {
-      return state;
-   }
-
-   @Override
-   public void setState(CliqueInducedSubgraphs state) {
-      this.state = state;
    }
 
    @Override

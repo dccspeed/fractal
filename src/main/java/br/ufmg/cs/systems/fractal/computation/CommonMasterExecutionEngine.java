@@ -4,7 +4,7 @@ import org.apache.hadoop.io.Writable;
 
 public interface CommonMasterExecutionEngine {
 
-    long getSuperstep();
+    long getStep();
 
     void haltComputation();
     

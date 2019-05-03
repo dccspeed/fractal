@@ -17,7 +17,7 @@ public interface CommonExecutionEngine<O extends Subgraph> {
 
     int getNumberPartitions();
 
-    long getSuperstep();
+    long getStep();
 
     void aggregate(String name, LongWritable value);
     

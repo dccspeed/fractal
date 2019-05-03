@@ -15,7 +15,7 @@ public class MasterComputation {
     }
 
     public int getStep() {
-        return (int) executionEngine.getSuperstep();
+        return (int) executionEngine.getStep();
     }
 
     public void haltComputation() {

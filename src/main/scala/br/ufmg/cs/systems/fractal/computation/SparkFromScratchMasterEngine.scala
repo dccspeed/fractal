@@ -3,7 +3,6 @@ package br.ufmg.cs.systems.fractal.computation
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicLong
 import java.util.function.IntConsumer
-import java.util.{Iterator => JavaIterator}
 
 import akka.actor._
 import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
@@ -64,7 +63,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
     // gtag actor
     masterActorRef = ActorMessageSystem.createActor(this)
 
-    logInfo(s"Started gtag-master-actor(step=${superstep}):" +
+    logInfo(s"Started gtag-master-actor(step=${step}):" +
       s" ${masterActorRef}")
 
     val end = System.currentTimeMillis
@@ -78,8 +77,8 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
   lazy val next: Boolean = {
 
 
-    logInfo (s"${this} Computation starting from ${superstepRDD}," +
-      s", StorageLevel=${superstepRDD.getStorageLevel}")
+    logInfo (s"${this} Computation starting from ${stepRDD}," +
+      s", StorageLevel=${stepRDD.getStorageLevel}")
 
     // save original container, i.e., without parents' computations
     val originalContainer = config.computationContainer[S]
@@ -96,6 +95,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
       }
       cc.setDepth(0)
     }
+
 
     // adding accumulators to each computation
     val egAccums = new Array[LongAccumulator](numComputations)
@@ -119,12 +119,6 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
 
       i += 1
     }
-
-    // debug accumulators
-    aggAccums.update("kws-filter", sc.longAccumulator("kws-filter"))
-    aggAccums.update("kws-filter-outerLoop", sc.longAccumulator("kws-filter-outerLoop"))
-    aggAccums.update("kws-filter-innerLoop", sc.longAccumulator("kws-filter-innerLoop"))
-    //
 
     // we will contruct the pipeline in this var
     var cc = originalContainer.withComputationLabel("last_step_begins")
@@ -174,7 +168,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
 
     val initStart = System.currentTimeMillis
     val _configBc = configBc
-    superstepRDD.mapPartitions { iter =>
+    stepRDD.mapPartitions { iter =>
       _configBc.value.initializeWithTag(isMaster = false)
       iter
     }.foreachPartition(_ => {})
@@ -190,8 +184,8 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
     val _aggAccums = aggAccums
 
     val execEngines = getExecutionEngines (
-      superstepRDD = superstepRDD,
-      superstep = superstep,
+      superstepRDD = stepRDD,
+      superstep = step,
       configBc = configBc,
       aggAccums = _aggAccums,
       previousAggregationsBc = previousAggregationsBc)
@@ -201,7 +195,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
 
     val enumerationElapsed = System.currentTimeMillis - enumerationStart
 
-    logInfo(s"Enumeration step=${superstep} took ${enumerationElapsed} ms")
+    logInfo(s"Enumeration step=${step} took ${enumerationElapsed} ms")
 
     /** [1] We extract and aggregate the *aggregations* globally.
      */
@@ -217,7 +211,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
           val mapping = agg.getMapping
           val numMappings = agg.getNumberMappings
           logInfo (s"Aggregation[${name}][numMappings=${numMappings}][${agg}]\n" +
-            s"${mapping.take(10).map(t => s"Aggregation[${name}][${superstep}]" +
+            s"${mapping.take(10).map(t => s"Aggregation[${name}][${step}]" +
             s" ${t._1}: ${t._2}").mkString("\n")}\n...")
         }
 
@@ -238,7 +232,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
 
     // print stats
     aggAccums.foreach { case (name, accum) =>
-      logInfo (s"Accumulator[${superstep}][${name}]: ${accum.value}")
+      logInfo (s"Accumulator[${step}][${name}]: ${accum.value}")
     }
 
     // master will send poison pills to all executor actors of this step
@@ -246,7 +240,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
 
     val superstepFinish = System.currentTimeMillis
     logInfo (
-      s"Superstep $superstep finished in ${superstepFinish - superstepStart} ms"
+      s"Superstep $step finished in ${superstepFinish - superstepStart} ms"
     )
 
     // make sure we maintain the engine's original state
@@ -272,7 +266,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
 
       val execEngine = new SparkFromScratchEngine [E] (
         partitionId = idx,
-        superstep = superstep,
+        step = superstep,
         accums = aggAccums,
         previousAggregationsBc = previousAggregationsBc,
         configurationId = configBc.value.getId
@@ -301,7 +295,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
 
       var lastStepConsumer: LastStepConsumer[S] = _
 
-      def apply(iter: JavaIterator[S], c: Computation[S]): Long = {
+      def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
         if (c.getDepth() == 0) {
           val config = c.getConfig()
           val execEngine = c.getExecutionEngine().
@@ -340,7 +334,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
           // setup work-stealing system
           start = System.currentTimeMillis
           if (config.wsEnabled()) {
-            val gtagExecutorActor = execEngine.gtagActorRef
+            val gtagExecutorActor = execEngine.slaveActorRef
             workStealingSys = new WorkStealingSystem[S](
               processCompute, gtagExecutorActor, new ConcurrentLinkedQueue())
 
@@ -357,103 +351,94 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
         }
       }
 
-      private def lastStepBeginsOnNextComputation(iter: JavaIterator[S],
+      private def hasNextComputation(iter: SubgraphEnumerator[S],
           c: Computation[S], nextComp: Computation[S]): Long = {
         var currentSubgraph: S = null.asInstanceOf[S]
         var addWords = 0L
         var subgraphsGenerated = 0L
+        var ret = 0L
 
         while (iter.hasNext) {
-          currentSubgraph = iter.next
+          val nextEnum = iter.extend()
+          currentSubgraph = iter.getSubgraph()
           addWords += 1
           if (c.filter(currentSubgraph)) {
             subgraphsGenerated += 1
-            currentSubgraph.nextExtensionLevel
-            nextComp.compute(currentSubgraph)
-            currentSubgraph.previousExtensionLevel
+            currentSubgraph.nextExtensionLevel()
+            ret += nextComp.compute(currentSubgraph)
+            currentSubgraph.previousExtensionLevel()
           }
         }
+
+        //while (senum.hasNext) {
+        //  currentSubgraph = senum.next
+        //  addWords += 1
+        //  if (c.filter(currentSubgraph)) {
+        //    subgraphsGenerated += 1
+        //    currentSubgraph.nextExtensionLevel
+        //    nextComp.compute(currentSubgraph)
+        //    currentSubgraph.previousExtensionLevel
+        //  }
+        //}
 
         awAccums(c.getDepth).add(addWords)
         egAccums(c.getDepth).add(subgraphsGenerated)
 
-        0
+        ret
       }
 
-      private def hasNextComputation(iter: JavaIterator[S],
-          c: Computation[S], nextComp: Computation[S]): Long = {
-        var currentSubgraph: S = null.asInstanceOf[S]
-        var addWords = 0L
-        var SubgraphsGenerated = 0L
-
-        while (iter.hasNext) {
-          currentSubgraph = iter.next
-          addWords += 1
-          if (c.filter(currentSubgraph)) {
-            SubgraphsGenerated += 1
-            currentSubgraph.nextExtensionLevel
-            nextComp.compute(currentSubgraph)
-            currentSubgraph.previousExtensionLevel
-          }
-        }
-
-        awAccums(c.getDepth).add(addWords)
-        egAccums(c.getDepth).add(SubgraphsGenerated)
-
-        0
-      }
-
-      private def lastComputation(iter: JavaIterator[S],
+      private def lastComputation(iter: SubgraphEnumerator[S],
           c: Computation[S]): Long = {
 
+        var addWords = 0L
+        var subgraphsGenerated = 0L
+
         //try {
-          val embIter = iter.asInstanceOf[SubgraphEnumerator[S]]
-          val wordIds = embIter.getWordIds()
+          val wordIds = iter.getWordIds()
           if (wordIds != null) {
-            lastStepConsumer.set(embIter.getSubgraph(), c)
+            lastStepConsumer.set(iter.getSubgraph(), c)
             wordIds.forEach(lastStepConsumer)
-            awAccums(c.getDepth).add(lastStepConsumer.addWords)
-            egAccums(c.getDepth).add(lastStepConsumer.subgraphsGenerated)
+            addWords += lastStepConsumer.addWords
+            subgraphsGenerated += lastStepConsumer.subgraphsGenerated
           } else {
-            val subgraph = embIter.next()
-            awAccums(c.getDepth).add(1)
+            val subgraph = iter.next()
+            addWords += 1
             if (c.filter(subgraph)) {
-              egAccums(c.getDepth).add(1)
+              subgraphsGenerated += 1
               c.process(subgraph)
             }
           }
         //} catch {
         //  case e: Exception =>
-        //    var currentSubgraph: S = null.asInstanceOf[S]
-        //    var addWords = 0L
-        //    var subgraphsGenerated = 0L
+        //    throw new RuntimeException(s"${e} ${iter} ${c}")
+        //    //var currentSubgraph: S = null.asInstanceOf[S]
+        //    //var addWords = 0L
+        //    //var subgraphsGenerated = 0L
 
-        //    while (iter.hasNext) {
-        //      currentSubgraph = iter.next
-        //      addWords += 1
-        //      if (c.filter(currentSubgraph)) {
-        //        subgraphsGenerated += 1
-        //        c.process(currentSubgraph)
-        //      }
-        //    }
-        //    awAccums(c.getDepth).add(addWords)
-        //    egAccums(c.getDepth).add(subgraphsGenerated)
+        //    //while (iter.hasNext) {
+        //    //  currentSubgraph = iter.next
+        //    //  addWords += 1
+        //    //  if (c.filter(currentSubgraph)) {
+        //    //    subgraphsGenerated += 1
+        //    //    c.process(currentSubgraph)
+        //    //  }
+        //    //}
+        //    //awAccums(c.getDepth).add(addWords)
+        //    //egAccums(c.getDepth).add(subgraphsGenerated)
         //}
 
+        awAccums(c.getDepth).add(addWords)
+        egAccums(c.getDepth).add(subgraphsGenerated)
 
-        0
+        subgraphsGenerated
       }
 
-      private def processCompute(iter: JavaIterator[S],
+      private def processCompute(iter: SubgraphEnumerator[S],
         c: Computation[S]): Long = {
-          val nextComp = c.nextComputation()
+        val nextComp = c.nextComputation()
 
-          if (nextComp != null) {
-          if (nextComp.computationLabel() == "last_step_begins") {
-            lastStepBeginsOnNextComputation(iter, c, nextComp)
-          } else {
-            hasNextComputation(iter, c, nextComp)
-          }
+        if (nextComp != null) {
+          hasNextComputation(iter, c, nextComp)
         } else {
           lastComputation(iter, c)
         }
@@ -505,8 +490,6 @@ object SparkFromScratchMasterEngine {
   }
 
   val CANONICAL_SUBGRAPHS = "canonical_subgraphs"
-
   val VALID_SUBGRAPHS = "valid_subgraphs"
-
   val AGG_CANONICAL_FILTER = "canonical_filter"
 }

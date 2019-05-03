@@ -230,19 +230,6 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
   }
 
   /**
-   * Clears this configuration's container, if it exists
-   */
-  def clearComputationContainer: Boolean = {
-    confs.get(SparkConfiguration.COMPUTATION_CONTAINER) match {
-      case Some(cc: ComputationContainer[_]) =>
-        set (SparkConfiguration.COMPUTATION_CONTAINER, cc.clear())
-        true
-      case _ =>
-        false
-    }
-  }
-
-  /**
    * This function accounts for the master computation instance that can be set
    * in this configuration. If this is the case we just return the computation,
    * otherwise we create an extended one by calling the method from super.
@@ -320,7 +307,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
     updateIfExists ("ws_external", CONF_WS_EXTERNAL)
 
     // enumerator class
-    updateIfExists ("senum_class", CONF_ENUMERATOR_CLASS)
+    updateIfExists ("subgraph_enumerator", CONF_ENUMERATOR_CLASS)
 
     // input
     updateIfExists ("input_graph_class", CONF_MAINGRAPH_CLASS)

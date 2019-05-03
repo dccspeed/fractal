@@ -1,6 +1,5 @@
 package br.ufmg.cs.systems.fractal.computation
 
-import java.util
 import java.util.concurrent.atomic.AtomicInteger
 
 import br.ufmg.cs.systems.fractal.Primitive
@@ -10,7 +9,6 @@ import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.{Logging, WordFilterFunc}
 import com.koloboke.collect.IntCollection
 
-import scala.collection.JavaConversions._
 import scala.collection.mutable.Stack
 
 // TODO: Refactor me!
@@ -54,9 +52,11 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
 
   val finishOpt: Option[(Computation[E]) => Unit]
 
-  val expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]]
+  val expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]]
+
+  val shouldBypassOpt: Option[Boolean]
   
-  val processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long]
+  val processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long]
 
   val nextComputationOpt: Option[Computation[E]]
  
@@ -101,9 +101,11 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
+      shouldBypassOpt: Option[Boolean] =
+        shouldBypassOpt,
+      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
         processComputeOpt,
       nextComputationOpt: Option[Computation[E]] =
         nextComputationOpt
@@ -130,9 +132,11 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
+      shouldBypassOpt: Option[Boolean] =
+        shouldBypassOpt,
+      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
         processComputeOpt
     ): ComputationContainer[E]
 
@@ -157,9 +161,11 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
+      shouldBypassOpt: Option[Boolean] =
+        shouldBypassOpt,
+      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
         processComputeOpt
     ): ComputationContainer[E]
 
@@ -172,11 +178,14 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
     processOpt = Some((e,c) => {}),
     filterOpt = Some((e,c) => true),
     getPossibleExtensionsOpt = None,
-    expandComputeOpt = Some((e,c) => Iterator.empty)
+    //expandComputeOpt = Some((e,c) => Iterator.empty)
+    expandComputeOpt = None
     )
 
   @transient lazy val computationRepr: Array[String] = {
-    Array(expandComputeOpt.map(_ => "ec").getOrElse("_"),
+    Array(
+      shouldBypassOpt.map(b => s"bypass=${b}").getOrElse("bypass=false"),
+      expandComputeOpt.map(_ => "ec").getOrElse("_"),
       getPossibleExtensionsOpt.map(_ => "ex").getOrElse("_"),
       wordFilterOpt.map(_ => "wf").getOrElse("_"),
       filterOpt.map(_ => "f").getOrElse("_"),
@@ -205,8 +214,9 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
     initOpt: Option[(Computation[E]) => Unit] = None,
     initAggregationsOpt: Option[(Computation[E]) => Unit] = None,
     finishOpt: Option[(Computation[E]) => Unit] = None,
-    expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] = None,
-    processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
+    expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] = None,
+    shouldBypassOpt: Option[Boolean] = None,
+    processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
       None,
     nextComputationOpt: Option[Computation[E]] = None)
   extends EdgeInducedComputation[E] with ComputationContainer[E] {
@@ -284,15 +294,19 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
   }
 
   @transient private lazy val _expandCompute
-    : (E,Computation[E]) => java.util.Iterator[E] =
+    : (E,Computation[E]) => SubgraphEnumerator[E] =
     expandComputeOpt.getOrElse (
       (e: E, c: Computation[E]) => super.expandCompute(e)
     )
 
+  @transient private lazy val _shouldBypass: Boolean = {
+    shouldBypassOpt.getOrElse(super.shouldBypass())
+  }
+
   @transient private lazy val _processCompute
-    : (java.util.Iterator[E],Computation[E]) => Long =
+    : (SubgraphEnumerator[E],Computation[E]) => Long =
     processComputeOpt.getOrElse (
-      (iter: java.util.Iterator[E], c: Computation[E]) => -1
+      (iter: SubgraphEnumerator[E], c: Computation[E]) => -1
     )
 
   @transient private lazy val _nextComputation
@@ -340,9 +354,11 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
+      shouldBypassOpt: Option[Boolean] =
+        shouldBypassOpt,
+      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
         processComputeOpt,
       nextComputationOpt: Option[Computation[E]] =
         nextComputationOpt)
@@ -359,6 +375,7 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
       initAggregationsOpt = initAggregationsOpt,
       finishOpt = finishOpt,
       expandComputeOpt = expandComputeOpt,
+      shouldBypassOpt = shouldBypassOpt,
       processComputeOpt = processComputeOpt,
       nextComputationOpt = nextComputationOpt
     )
@@ -385,9 +402,11 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
         lastComputation.initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         lastComputation.finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
         lastComputation.expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
+      shouldBypassOpt: Option[Boolean] =
+        lastComputation.shouldBypassOpt,
+      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
         lastComputation.processComputeOpt)
     : ComputationContainer[E] = {
 
@@ -404,7 +423,7 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
         processOpt, filterOpt, wordFilterOpt,
         getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt, finishOpt,
-        expandComputeOpt, processComputeOpt)
+        expandComputeOpt, shouldBypassOpt, processComputeOpt)
     
     while (!comps.isEmpty) {
       lastComp = comps.pop().copy(nextComputationOpt = Some(lastComp))
@@ -434,9 +453,11 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
+      shouldBypassOpt: Option[Boolean] =
+        shouldBypassOpt,
+      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
         processComputeOpt)
     : ComputationContainer[E] = nextComputationOpt match {
     case Some(nextComputation) =>
@@ -445,7 +466,7 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
         processOpt, filterOpt, wordFilterOpt,
         getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt,
-        finishOpt, expandComputeOpt, processComputeOpt)
+        finishOpt, expandComputeOpt, shouldBypassOpt, processComputeOpt)
       this.copy (primitiveOpt = primitiveOpt,
         computationLabelOpt = computationLabelOpt,
         patternOpt = patternOpt,
@@ -454,6 +475,7 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
         getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
+        shouldBypassOpt = shouldBypassOpt,
         processComputeOpt = processComputeOpt,
         nextComputationOpt = Some(nextComp))
 
@@ -466,6 +488,7 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
         getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
+        shouldBypassOpt = shouldBypassOpt,
         processComputeOpt = processComputeOpt, nextComputationOpt = None)
   }
   
@@ -524,10 +547,12 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
 
   override def finish(): Unit = _finish (this)
   
-  override def expandCompute(e: E): java.util.Iterator[E] =
+  override def expandCompute(e: E): SubgraphEnumerator[E] =
     _expandCompute (e, this)
 
-  override def processCompute(iter: java.util.Iterator[E]) =
+  override def shouldBypass(): Boolean = _shouldBypass
+
+  override def processCompute(iter: SubgraphEnumerator[E]) =
     _processCompute (iter, this)
   
   override def nextComputation(): Computation[E] = _nextComputation
@@ -548,8 +573,9 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
     initOpt: Option[(Computation[E]) => Unit] = None,
     initAggregationsOpt: Option[(Computation[E]) => Unit] = None,
     finishOpt: Option[(Computation[E]) => Unit] = None,
-    expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] = None,
-    processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
+    expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] = None,
+    shouldBypassOpt: Option[Boolean] = None,
+    processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
       None,
     nextComputationOpt: Option[Computation[E]] = None)
   extends VertexInducedComputation[E] with ComputationContainer[E] {
@@ -621,15 +647,19 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
   }
   
   @transient private lazy val _expandCompute
-    : (E,Computation[E]) => java.util.Iterator[E] =
+    : (E,Computation[E]) => SubgraphEnumerator[E] =
     expandComputeOpt.getOrElse (
       (e: E, c: Computation[E]) => super.expandCompute(e)
     )
+
+  @transient private lazy val _shouldBypass: Boolean = {
+    shouldBypassOpt.getOrElse(super.shouldBypass())
+  }
   
   @transient private lazy val _processCompute
-    : (java.util.Iterator[E],Computation[E]) => Long =
+    : (SubgraphEnumerator[E],Computation[E]) => Long =
     processComputeOpt.getOrElse (
-      (iter: java.util.Iterator[E], c: Computation[E]) => -1
+      (iter: SubgraphEnumerator[E], c: Computation[E]) => -1
     )
   
   @transient private lazy val _nextComputation
@@ -677,9 +707,11 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
+      shouldBypassOpt: Option[Boolean] =
+        shouldBypassOpt,
+      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
         processComputeOpt,
       nextComputationOpt: Option[Computation[E]] =
         nextComputationOpt)
@@ -696,6 +728,7 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
       initAggregationsOpt = initAggregationsOpt,
       finishOpt = finishOpt,
       expandComputeOpt = expandComputeOpt,
+      shouldBypassOpt = shouldBypassOpt,
       processComputeOpt = processComputeOpt,
       nextComputationOpt = nextComputationOpt
     )
@@ -722,9 +755,11 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
         lastComputation.initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         lastComputation.finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
         lastComputation.expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
+      shouldBypassOpt: Option[Boolean] =
+        lastComputation.shouldBypassOpt,
+      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
         lastComputation.processComputeOpt)
     : ComputationContainer[E] = {
 
@@ -741,7 +776,7 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
         processOpt, filterOpt, wordFilterOpt,
         getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt, finishOpt,
-        expandComputeOpt, processComputeOpt)
+        expandComputeOpt, shouldBypassOpt, processComputeOpt)
     
     while (!comps.isEmpty) {
       lastComp = comps.pop().copy(nextComputationOpt = Some(lastComp))
@@ -771,9 +806,11 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
+      shouldBypassOpt: Option[Boolean] =
+        shouldBypassOpt,
+      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
         processComputeOpt)
     : ComputationContainer[E] = nextComputationOpt match {
     case Some(nextComputation) =>
@@ -782,7 +819,7 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
         processOpt, filterOpt, wordFilterOpt,
         getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt,
-        finishOpt, expandComputeOpt, processComputeOpt)
+        finishOpt, expandComputeOpt, shouldBypassOpt, processComputeOpt)
       this.copy (primitiveOpt = primitiveOpt,
         computationLabelOpt = computationLabelOpt,
         patternOpt = patternOpt,
@@ -791,6 +828,7 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
         getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
+        shouldBypassOpt = shouldBypassOpt,
         processComputeOpt = processComputeOpt,
         nextComputationOpt = Some(nextComp))
 
@@ -803,6 +841,7 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
         getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
+        shouldBypassOpt = shouldBypassOpt,
         processComputeOpt = processComputeOpt, nextComputationOpt = None)
   }
   
@@ -861,10 +900,12 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
 
   override def finish(): Unit = _finish (this)
 
-  override def expandCompute(e: E): java.util.Iterator[E] =
+  override def expandCompute(e: E): SubgraphEnumerator[E] =
     _expandCompute (e, this)
+
+  override def shouldBypass(): Boolean = _shouldBypass
   
-  override def processCompute(iter: java.util.Iterator[E]) =
+  override def processCompute(iter: SubgraphEnumerator[E]) =
     _processCompute (iter, this)
   
   override def nextComputation(): Computation[E] = _nextComputation
@@ -885,8 +926,9 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
     initOpt: Option[(Computation[E]) => Unit] = None,
     initAggregationsOpt: Option[(Computation[E]) => Unit] = None,
     finishOpt: Option[(Computation[E]) => Unit] = None,
-    expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] = None,
-    processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
+    expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] = None,
+    shouldBypassOpt: Option[Boolean] = None,
+    processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
       None,
     nextComputationOpt: Option[Computation[E]] = None)
   extends PatternInducedComputation[E] with ComputationContainer[E] {
@@ -964,15 +1006,19 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
   }
 
   @transient private lazy val _expandCompute
-    : (E,Computation[E]) => java.util.Iterator[E] =
+    : (E,Computation[E]) => SubgraphEnumerator[E] =
     expandComputeOpt.getOrElse (
       (e: E, c: Computation[E]) => super.expandCompute(e)
     )
 
+  @transient private lazy val _shouldBypass: Boolean = {
+    shouldBypassOpt.getOrElse(super.shouldBypass())
+  }
+
   @transient private lazy val _processCompute
-    : (java.util.Iterator[E],Computation[E]) => Long =
+    : (SubgraphEnumerator[E],Computation[E]) => Long =
     processComputeOpt.getOrElse (
-      (iter: java.util.Iterator[E], c: Computation[E]) => -1
+      (iter: SubgraphEnumerator[E], c: Computation[E]) => -1
     )
 
   @transient private lazy val _nextComputation
@@ -1020,9 +1066,11 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
+      shouldBypassOpt: Option[Boolean] =
+        shouldBypassOpt,
+      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
         processComputeOpt,
       nextComputationOpt: Option[Computation[E]] =
         nextComputationOpt)
@@ -1039,6 +1087,7 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
       initAggregationsOpt = initAggregationsOpt,
       finishOpt = finishOpt,
       expandComputeOpt = expandComputeOpt,
+      shouldBypassOpt = shouldBypassOpt,
       processComputeOpt = processComputeOpt,
       nextComputationOpt = nextComputationOpt
     )
@@ -1065,9 +1114,11 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
         lastComputation.initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         lastComputation.finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
         lastComputation.expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
+      shouldBypassOpt: Option[Boolean] =
+        lastComputation.shouldBypassOpt,
+      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
         lastComputation.processComputeOpt)
     : ComputationContainer[E] = {
 
@@ -1084,7 +1135,7 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
         processOpt, filterOpt, wordFilterOpt,
         getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt, finishOpt,
-        expandComputeOpt, processComputeOpt)
+        expandComputeOpt, shouldBypassOpt, processComputeOpt)
     
     while (!comps.isEmpty) {
       lastComp = comps.pop().copy(nextComputationOpt = Some(lastComp))
@@ -1114,9 +1165,11 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
         initAggregationsOpt,
       finishOpt: Option[(Computation[E]) => Unit] =
         finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => java.util.Iterator[E]] =
+      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
         expandComputeOpt,
-      processComputeOpt: Option[(java.util.Iterator[E],Computation[E]) => Long] =
+      shouldBypassOpt: Option[Boolean] =
+        shouldBypassOpt,
+      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
         processComputeOpt)
     : ComputationContainer[E] = nextComputationOpt match {
     case Some(nextComputation) =>
@@ -1125,7 +1178,7 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
         processOpt, filterOpt, wordFilterOpt,
         getPossibleExtensionsOpt,
         initOpt, initAggregationsOpt,
-        finishOpt, expandComputeOpt, processComputeOpt)
+        finishOpt, expandComputeOpt, shouldBypassOpt, processComputeOpt)
       this.copy (primitiveOpt = primitiveOpt,
         computationLabelOpt = computationLabelOpt,
         patternOpt = patternOpt,
@@ -1134,6 +1187,7 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
         getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
+        shouldBypassOpt = shouldBypassOpt,
         processComputeOpt = processComputeOpt,
         nextComputationOpt = Some(nextComp))
 
@@ -1146,6 +1200,7 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
         getPossibleExtensionsOpt = getPossibleExtensionsOpt,
         initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
         finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
+        shouldBypassOpt = shouldBypassOpt,
         processComputeOpt = processComputeOpt, nextComputationOpt = None)
   }
   
@@ -1217,10 +1272,12 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
 
   override def finish(): Unit = _finish (this)
   
-  override def expandCompute(e: E): java.util.Iterator[E] =
+  override def expandCompute(e: E): SubgraphEnumerator[E] =
     _expandCompute (e, this)
 
-  override def processCompute(iter: java.util.Iterator[E]) =
+  override def shouldBypass(): Boolean = _shouldBypass
+
+  override def processCompute(iter: SubgraphEnumerator[E]) =
     _processCompute (iter, this)
 
   override def nextComputation(): Computation[E] = _nextComputation

@@ -29,12 +29,12 @@ trait SparkMasterEngine [E <: Subgraph]
    *  The following describe general engine parameters
    */
   
-  lazy val superstep: Int = parentOpt.map(_.superstep + 1).getOrElse(0)
+  lazy val step: Int = parentOpt.map(_.step + 1).getOrElse(0)
 
   var sc: SparkContext = _
 
   def config: SparkConfiguration[E]
-  
+
   var mutableConfigBc: Broadcast[SparkConfiguration[E]] = _
 
   def configBc: Broadcast[SparkConfiguration[E]] = {
@@ -43,9 +43,9 @@ trait SparkMasterEngine [E <: Subgraph]
     }
     mutableConfigBc
   }
-  
+
   def parentOpt: Option[SparkMasterEngine[E]]
-  
+
   var masterComputation: MasterComputation = _
 
   var isComputationHalted: Boolean = false
@@ -54,17 +54,17 @@ trait SparkMasterEngine [E <: Subgraph]
 
   /** Computation State
    *  The following fields are set by specialized engines as an output state
-   *  w.r.t a superstep
+   *  w.r.t a step
    */
 
   var storageLevel: StorageLevel = StorageLevel.NONE
 
-  var superstepRDD: RDD[Unit] = _
+  var stepRDD: RDD[Unit] = _
 
   var aggAccums: Map[String,LongAccumulator] = _
 
   var previousAggregationsBc: Broadcast[_] = _
-  
+
   var aggregations
     : Map[String,AggregationStorage[_ <: Writable, _ <: Writable]] = _
 
@@ -79,7 +79,7 @@ trait SparkMasterEngine [E <: Subgraph]
     logInfo (s"Setting log level to ${config.getLogLevel}")
     setLogLevel (config.getLogLevel)
     sc.setLogLevel (config.getLogLevel.toUpperCase)
-    logInfo (s"Setting num_partitions to " + 
+    logInfo (s"Setting num_partitions to " +
       s"${config.confs.get("num_partitions").getOrElse(sc.defaultParallelism)}")
     config.setIfUnset ("num_partitions", sc.defaultParallelism)
     config.setHadoopConfig (sc.hadoopConfiguration)
@@ -93,7 +93,7 @@ trait SparkMasterEngine [E <: Subgraph]
           s"Output path ${config.getOutputPath} exists. Choose another one."
           )
     }
-    
+
     // master computation
     masterComputation = config.createMasterComputation()
     masterComputation.setUnderlyingExecutionEngine(this)
@@ -109,10 +109,6 @@ trait SparkMasterEngine [E <: Subgraph]
 
     // default accumulators
     aggAccums = Map.empty
-    aggAccums.update (AGG_SUBGRAPHS_GENERATED,
-      sc.longAccumulator (AGG_SUBGRAPHS_GENERATED))
-    aggAccums.update (AGG_SUBGRAPHS_PROCESSED,
-      sc.longAccumulator (AGG_SUBGRAPHS_PROCESSED))
     aggAccums.update (AGG_SUBGRAPHS_OUTPUT,
       sc.longAccumulator (AGG_SUBGRAPHS_OUTPUT))
 
@@ -120,13 +116,13 @@ trait SparkMasterEngine [E <: Subgraph]
     parentOpt match {
       case Some(parent) =>
         // start with parent's state
-        superstepRDD = parent.superstepRDD
+        stepRDD = parent.stepRDD
         previousAggregationsBc = parent.previousAggregationsBc
         aggregations = Map() ++ parent.aggregations
 
       case None =>
-        // superstep rdd
-        superstepRDD = sc.makeRDD(
+        // step rdd
+        stepRDD = sc.makeRDD(
           Seq.empty[Unit], numPartitions
         ).persist(storageLevel)
 
@@ -158,7 +154,7 @@ trait SparkMasterEngine [E <: Subgraph]
   }
 
   /**
-   * Master's computation takes place here, superstep by superstep
+   * Master's computation takes place here, step by step
    */
   def compute(): SparkMasterEngine[E] = {
     logInfo (s"Computing remaining steps of computation ${this}")
@@ -172,7 +168,7 @@ trait SparkMasterEngine [E <: Subgraph]
   /**
    * Compute the step referring to this computation
    *
-   * @return true if there are more supersteps with this computation or false
+   * @return true if there are more steps with this computation or false
    * otherwise
    */
   def next: Boolean
@@ -181,19 +177,19 @@ trait SparkMasterEngine [E <: Subgraph]
 
   def getNumberPartitions: Int = numPartitions
 
-  override def getSuperstep(): Long = superstep
+  override def getStep(): Long = step
 
   /**
-   * Merges or replaces the aggregations for the next superstep. We can have one
+   * Merges or replaces the aggregations for the next step. We can have one
    * of the following scenarios:
-   * (1) In any superstep we are interested in all aggregations seen so far.
+   * (1) In any step we are interested in all aggregations seen so far.
    *     Thus, the aggregations are incrementally composed.
-   * (2) In any superstep we are interested only in the previous
+   * (2) In any step we are interested only in the previous
    *     aggregations. Thus, we discard the old aggregations and replace it with
-   *     the new aggregations for the next superstep.
+   *     the new aggregations for the next step.
    *
    *  @param aggregations current aggregations
-   *  @param previousAggregations aggregations found in the superstep that just
+   *  @param previousAggregations aggregations found in the step that just
    *  finished
    *
    *  @return the new choice for aggregations obtained by composing or replacing
@@ -248,7 +244,6 @@ trait SparkMasterEngine [E <: Subgraph]
         execEngine => execEngine.flushAggregationsByName[K,V](name)
       ).partitionBy(new HashPartitioner(execEngines.partitions.length)).values
 
-      val step = superstep
       val emptyAggregation = {
         val _configBc = configBc
         val factory = new AggregationStorageFactory(_configBc.value)
@@ -315,7 +310,7 @@ trait SparkMasterEngine [E <: Subgraph]
    * Functions that retrieve the results of this computation.
    * Current fields:
    *  - Subgraphs if the output is enabled. Our choice is to read the results
-   *  produced by the supersteps from external storage. We avoid memory issues
+   *  produced by the steps from external storage. We avoid memory issues
    *  by not keeping all the Subgraphs in memory.
    */
 
@@ -325,13 +320,13 @@ trait SparkMasterEngine [E <: Subgraph]
       return sc.emptyRDD[ResultSubgraph[_]]
     }
 
-    val embeddPath = s"${config.getOutputPath}"
+    val subgraphsPath = s"${config.getOutputPath}"
     val fs = FileSystem.get (sc.hadoopConfiguration)
-    val outputPath = new Path(embeddPath)
+    val outputPath = new Path(subgraphsPath)
 
     if (!fs.exists(outputPath)) {
       logWarning (s"Trying to get Subgraphs" +
-        s" but output path does not exist: ${embeddPath}")
+        s" but output path does not exist: ${subgraphsPath}")
       return sc.emptyRDD[ResultSubgraph[_]]
     }
 
@@ -339,7 +334,7 @@ trait SparkMasterEngine [E <: Subgraph]
 
     config.getOutputFormat match {
       case SparkConfiguration.OUTPUT_PLAIN_TEXT =>
-        sc.textFile (s"${embeddPath}/*").map (ResultSubgraph(_))
+        sc.textFile (s"${subgraphsPath}/*").map (ResultSubgraph(_))
 
       case SparkConfiguration.OUTPUT_SEQUENCE_FILE =>
         // we must decide at runtime the concrete Writable to be used
@@ -355,7 +350,7 @@ trait SparkMasterEngine [E <: Subgraph]
             classOf[ResultSubgraph[_]]
         }
 
-        sc.sequenceFile (s"${embeddPath}/*",
+        sc.sequenceFile (s"${subgraphsPath}/*",
           classOf[NullWritable], resSubgraphClass).map {
             case (_,e: ESubgraph) => e.copy()
             case (_,e: VSubgraph) => e.copy()
@@ -365,7 +360,7 @@ trait SparkMasterEngine [E <: Subgraph]
   }
 
   override def toString: String = {
-    s"${this.getClass.getName}(${superstep})"
+    s"${this.getClass.getName}(${step})"
   }
 }
 
@@ -374,8 +369,6 @@ object SparkMasterEngine {
   import SparkConfiguration._
 
   // macros for spark accumulators
-  val AGG_SUBGRAPHS_PROCESSED = "subgraphs_processed"
-  val AGG_SUBGRAPHS_GENERATED = "subgraphs_generated"
   val AGG_SUBGRAPHS_OUTPUT = "subgraphs_output"
 
   def apply[E <: Subgraph] (sc: SparkContext, config: SparkConfiguration[E])

@@ -409,8 +409,14 @@ public class Configuration<O extends Subgraph> implements Serializable {
         this.subgraphClass = SubgraphClass;
     }
 
-    public SubgraphEnumerator<O> createSubgraphEnumerator() {
-        SubgraphEnumerator<O> senum = (SubgraphEnumerator<O>) ReflectionUtils.newInstance(subgraphEnumClass);
+    public SubgraphEnumerator<O> createSubgraphEnumerator(boolean bypass) {
+        SubgraphEnumerator<O> senum;
+        if (!bypass) {
+            senum = (SubgraphEnumerator<O>) ReflectionUtils.newInstance(subgraphEnumClass);
+        } else {
+            senum = (SubgraphEnumerator<O>) ReflectionUtils.newInstance(
+                    br.ufmg.cs.systems.fractal.computation.BypassSubgraphEnumerator.class);
+        }
         senum.init(this);
         return senum;
     }

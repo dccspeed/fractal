@@ -3,7 +3,7 @@ package br.ufmg.cs.systems.fractal.computation
 import java.io._
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue, ThreadLocalRandom}
-import java.util.{Arrays, Comparator, Properties, Iterator => JavaIterator}
+import java.util.{Arrays, Comparator, Properties}
 
 import akka.actor._
 import akka.dispatch.MessageDispatcher
@@ -485,24 +485,24 @@ object ActorMessageSystem extends Logging {
   def createActor(engine: SparkMasterEngine[_]): ActorRef = {
     val remotePath = s"akka.tcp://fractal-msgsys@" +
       s"${engine.config.getMasterHostname}:2552" +
-      s"/user/master-actor-${engine.config.getId}-${engine.superstep}"
+      s"/user/master-actor-${engine.config.getId}-${engine.step}"
     akkaSys(engine).actorOf(
       Props(classOf[MasterActor], remotePath, engine.numPartitions).
         withDispatcher("akka.actor.default-dispatcher"),
-      s"master-actor-${engine.config.getId}-${engine.superstep}")
+      s"master-actor-${engine.config.getId}-${engine.step}")
   }
 
   def createActor [E <: Subgraph] (engine: SparkEngine[E]): ActorRef = {
     val remotePath = s"akka.tcp://fractal-msgsys@" +
       s"${engine.configuration.getMasterHostname}:2552" +
       s"/user/master-actor-${engine.configuration.getId}" +
-      s"-${engine.superstep}"
+      s"-${engine.step}"
     val slaveActorRef = akkaSys(engine).actorOf(
       Props(classOf[SlaveActor[E]],
         engine.partitionId, engine.computation, remotePath).
         withDispatcher("akka.actor.default-dispatcher"),
       s"slave-actor" +
-        s"-${engine.configuration.getId}-${engine.superstep}" +
+        s"-${engine.configuration.getId}-${engine.step}" +
         s"-${engine.partitionId}-${getNextActorId}")
 
     // wait for this slave to know the all other slaves before proceed
@@ -514,7 +514,7 @@ object ActorMessageSystem extends Logging {
 
     // ensure that local computation structures are properly created
     SparkFromScratchEngine.createComputationsMap(
-      engine.superstep, engine.configuration.taskCounter())
+      engine.step, engine.configuration.taskCounter())
 
     slaveActorRef
   }
@@ -538,10 +538,9 @@ object ActorMessageSystem extends Logging {
     while (i < offset) {
       val currComp = computations(i % numComputations)
       if (currComp != null) {
-        val consumer = currComp.extend()
+        val consumer = currComp.forkEnumerator(c)
         if (consumer != null) {
           val ebytesOpt = serializeSubgraphBatch(consumer, batchSize)
-          currComp.joinConsumer(consumer)
           if (ebytesOpt.isDefined) {
             return ebytesOpt
           }
@@ -643,8 +642,13 @@ object ActorMessageSystem extends Logging {
 
       val currIterator = curr.getSubgraphEnumerator()
 
+
       currIterator.set(curr, subgraph)
       currIterator.set(wordIds)
+      currIterator.rebuildState()
+
+      currIterator
+
 
     } finally {
       ois.close
@@ -652,14 +656,14 @@ object ActorMessageSystem extends Logging {
   }
 }
 
-class WorkStealingSystem [E <: Subgraph] (
-    processCompute: (JavaIterator[E],Computation[E]) => Long,
+class WorkStealingSystem [S <: Subgraph] (
+    processCompute: (SubgraphEnumerator[S],Computation[S]) => Long,
     gtagExecutorActor: ActorRef,
     remoteWorkQueue: ConcurrentLinkedQueue[StealWorkResponse],
-    callback: (SubgraphEnumerator[E], Long) => Unit =
-      (e: SubgraphEnumerator[E], ret: Long) => {}) extends Logging {
+    callback: (SubgraphEnumerator[S], Long) => Unit =
+      (e: SubgraphEnumerator[S], ret: Long) => {}) extends Logging {
 
-  def workStealingCompute(c: Computation[E]): Unit = {
+  def workStealingCompute(c: Computation[S]): Unit = {
     implicit val executionContext = ActorMessageSystem.akkaExecutorContext
     var workStealed = true
     @volatile var remoteRequestSent = false
@@ -736,25 +740,25 @@ class WorkStealingSystem [E <: Subgraph] (
                 deserializeSubgraphBatch(subgraphBatchBytes, c)
               val computation = consumer.getComputation()
 
-              val start = System.currentTimeMillis
-              val numStealedWords = consumer.getWordIds().size()
-              gtagExecutorActor ! Log(s"WorkStealedRemote" +
-                s" step=${c.getStep}" +
-                s" stealedByPartitionId=${computation.getPartitionId}" +
-                s" prefix=${consumer.getPrefix()}" +
-                s" numStealedWords=${numStealedWords}")
+              //val start = System.currentTimeMillis
+              //val numStealedWords = consumer.getWordIds().size()
+              //gtagExecutorActor ! Log(s"WorkStealedRemote" +
+              //  s" step=${c.getStep}" +
+              //  s" stealedByPartitionId=${computation.getPartitionId}" +
+              //  s" prefix=${consumer.getPrefix()}" +
+              //  s" numStealedWords=${numStealedWords}")
 
               val ret = processCompute(consumer, computation)
               callback(consumer, ret)
               externalSteals += 1
 
-              val end = System.currentTimeMillis
-              gtagExecutorActor ! Log(s"WorkStealedAndProcessedRemote" +
-                s" step=${c.getStep}" +
-                s" stealedByPartitionId=${computation.getPartitionId}" +
-                s" prefix=${consumer.getPrefix()}" +
-                s" numStealedWords=${numStealedWords}" +
-                s" elapsed=${(end - start)}ms")
+              //val end = System.currentTimeMillis
+              //gtagExecutorActor ! Log(s"WorkStealedAndProcessedRemote" +
+              //  s" step=${c.getStep}" +
+              //  s" stealedByPartitionId=${computation.getPartitionId}" +
+              //  s" prefix=${consumer.getPrefix()}" +
+              //  s" numStealedWords=${numStealedWords}" +
+              //  s" elapsed=${(end - start)}ms")
 
               if (remoteCancellable != null) {
                 remoteCancellable.cancel()
@@ -808,8 +812,8 @@ class WorkStealingSystem [E <: Subgraph] (
 
   }
 
-  private def workStealingComputeLocal(c: Computation[E]): Long = {
-    val computations = SparkFromScratchEngine.localComputations[E](c.getStep())
+  private def workStealingComputeLocal(c: Computation[S]): Long = {
+    val computations = SparkFromScratchEngine.localComputations[S](c.getStep())
 
     var internalSteals = 0L
     var _internalSteals = 0L
@@ -819,7 +823,7 @@ class WorkStealingSystem [E <: Subgraph] (
       while (i < computations.length) {
         val currComp = computations(i)
         if (currComp != null) {
-          val consumer = currComp.extend()
+          val consumer = currComp.forkEnumerator(c)
           if (consumer != null) {
             val label = consumer.computationLabel()
 
@@ -848,8 +852,6 @@ class WorkStealingSystem [E <: Subgraph] (
             //  s" stealedByPartitionId=${curr.getPartitionId}" +
             //  s" stealedFromPartitionId=${currComp.getPartitionId}" +
             //  s" elapsed=${(end - start)}ms")
-
-            currComp.joinConsumer(consumer)
           }
         }
         i += 1

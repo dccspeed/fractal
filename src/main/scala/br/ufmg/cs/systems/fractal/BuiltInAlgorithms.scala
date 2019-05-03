@@ -2,6 +2,7 @@ package br.ufmg.cs.systems.fractal
 
 import br.ufmg.cs.systems.fractal.annotation.Experimental
 import br.ufmg.cs.systems.fractal.computation.{Computation, SubgraphEnumerator}
+import br.ufmg.cs.systems.fractal.gmlib.clique.KClistEnumerator
 import br.ufmg.cs.systems.fractal.graph.MainGraph
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
@@ -34,17 +35,24 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     * @return Fractoid with the initial state for cliques
     */
   def cliques: Fractoid[VertexInducedSubgraph] = {
-    val CLIQUE_COUNTING = "clique_counting"
     self.vfractoid.
       expand(1).
       filter { (e,c) =>
         e.numEdgesAdded == e.getNumVertices - 1
-      }.
-      aggregate [IntWritable,LongWritable] (
-        CLIQUE_COUNTING,
-        (e,c,k) => { k.set(0); k },
-        (e,c,v) => { v.set(1); v },
-        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
+      }
+  }
+
+  /**
+    * All-cliques listing implementing the efficient DAG structure from
+    * [[https://dl.acm.org/citation.cfm?id=3186125]]
+    * @param cliqueSize
+    * @return Fractoid with the initial state for cliques
+    */
+  def cliquesKClist(cliqueSize: Int): Fractoid[VertexInducedSubgraph] = {
+    self.vfractoid.
+      expand(1).
+      set ("subgraph_enumerator",
+        "br.ufmg.cs.systems.fractal.gmlib.clique.KClistEnumerator")
   }
 
   /**
@@ -115,48 +123,14 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
   }
 
   /**
-    * All-cliques listing implementing the efficient DAG structure from
-    * [[https://dl.acm.org/citation.cfm?id=3186125]]
-    * @param cliqueSize
-    * @return Fractoid with the initial state for cliques
-    */
-  def cliquesDAG(cliqueSize: Int): Fractoid[VertexInducedSubgraph] = {
-    import br.ufmg.cs.systems.fractal.optimization.CliqueInducedSubgraphs
-    self.vfractoid.
-      extend { (e,c) =>
-        var state = e.getState()
-        if (state == null) {
-          state = new CliqueInducedSubgraphs(cliqueSize)
-          val extensions = state.extensions(e, c)
-          e.setState(state)
-          extensions
-        } else {
-          state.extensions(e, c)
-        }
-      }
-  }
-
-  /**
     * subgraph Querying
     * @param subgraph query graph
     * @return Fractoid with the initial state for subraph querying
     */
   def gquerying(subgraph: FractalGraph): Fractoid[PatternInducedSubgraph] = {
     val qpattern = subgraph.asPattern
-
     logInfo (s"Querying pattern ${qpattern} in ${this}")
-
-    val SUBGRAPH_COUNTING = "subgraph_counting"
-
-    val computation = self.pfractoid(qpattern).
-      expand(1).
-      aggregate [IntWritable,LongWritable] (
-        SUBGRAPH_COUNTING,
-        (e,c,k) => { k.set(0); k },
-        (e,c,v) => { v.set(1); v },
-        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
-
-    computation
+    self.pfractoid(qpattern).expand(1)
   }
 
   /**
@@ -164,26 +138,15 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     * @param subgraph
     * @return Fractoid with the initial state for subgraph querying
     */
-  def gqueryingNaive(subgraph: FractalGraph): Fractoid[PatternInducedSubgraph] = {
+  def gqueryingNaive(subgraph: FractalGraph): Fractoid[EdgeInducedSubgraph] = {
     val qpattern = subgraph.asPattern
-
     logInfo (s"Querying pattern ${qpattern} in ${this}")
-
-    val SUBGRAPH_COUNTING = "subgraph_counting"
-
-    val computation = self.pfractoid(qpattern).
+    self.efractoid.
       expand(1).
       filter { (e,c) =>
         val p = e.getPattern
-        p.equals(c.getPattern, p.getNumberOfEdges)
-      }.
-      aggregate [IntWritable,LongWritable] (
-        SUBGRAPH_COUNTING,
-        (e,c,k) => { k.set(0); k },
-        (e,c,v) => { v.set(1); v },
-        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
-
-    computation
+        p.equals(qpattern, p.getNumberOfEdges)
+      }
   }
 
   /**

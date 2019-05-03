@@ -301,14 +301,6 @@ class FractalGraph(
   override def toString(): String = s"FractalGraph(${path})"
 }
 
-class VAtomicBitSetArray extends AtomicBitSetArray {
-  override def contains(v: Int) = true
-}
-
-class EAtomicBitSetArray(validEdgeIds: IntSet) extends AtomicBitSetArray {
-  override def contains(v: Int) = validEdgeIds.contains(v)
-}
-
 object FractalGraph {
   val nextGraphId: AtomicInteger = new AtomicInteger(0)
   def newGraphId(): Int = nextGraphId.getAndIncrement()
@@ -316,8 +308,4 @@ object FractalGraph {
   implicit def fgraphWithBuiltInAlgorithms(fgraph: FractalGraph): BuiltInAlgorithms = {
     new BuiltInAlgorithms(fgraph)
   }
-
-  val KWS_FILTER = "kws-filter"
-  val KWS_FILTER_OUTERLOOP = "kws-filter-outerLoop"
-  val KWS_FILTER_INNERLOOP = "kws-filter-innerLoop"
 }

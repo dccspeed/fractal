@@ -1,4 +1,4 @@
-# Fractal: Efficient and Interactive Graph Pattern Mining System
+# Fractal: A General-Purpose Graph Pattern Mining System
 
 *Current Version:* SPARK-2.2.0
 

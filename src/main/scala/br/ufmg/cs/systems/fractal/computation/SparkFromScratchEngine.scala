@@ -14,13 +14,13 @@ import scala.collection.mutable.Map
 /**
  */
 case class SparkFromScratchEngine[E <: Subgraph](
-    partitionId: Int,
-    superstep: Int,
-    accums: Map[String,LongAccumulator],
-    previousAggregationsBc: Broadcast[_],
-    configurationId: Int) extends SparkEngine[E] {
+                                                  partitionId: Int,
+                                                  step: Int,
+                                                  accums: Map[String,LongAccumulator],
+                                                  previousAggregationsBc: Broadcast[_],
+                                                  configurationId: Int) extends SparkEngine[E] {
 
-  @transient var gtagActorRef: ActorRef = _
+  @transient var slaveActorRef: ActorRef = _
 
   override def init() = {
     val start = System.currentTimeMillis
@@ -28,22 +28,20 @@ case class SparkFromScratchEngine[E <: Subgraph](
     super.init()
 
     // accumulators
-    numSubgraphsProcessed = 0
-    numSubgraphsGenerated = 0
     numSubgraphsOutput = 0
 
-    // gtag actor
-    gtagActorRef = ActorMessageSystem.createActor(this)
-    
+    // actor
+    slaveActorRef = ActorMessageSystem.createActor(this)
+
     // register computation
     SparkFromScratchEngine.registerComputation(computation)
 
-    logInfo(s"Started slave-actor(step=${superstep}," +
-      s" partitionId=${partitionId}): ${gtagActorRef}")
+    logInfo(s"Started slave-actor(step=${step}," +
+      s" partitionId=${partitionId}): ${slaveActorRef}")
 
     val end = System.currentTimeMillis
 
-    logInfo(s"SparkFromScratchEngine(step=${superstep},partitionId=${partitionId}" +
+    logInfo(s"SparkFromScratchEngine(step=${step},partitionId=${partitionId}" +
       s" took ${(end - start)} ms to initialize.")
   }
 
@@ -52,10 +50,10 @@ case class SparkFromScratchEngine[E <: Subgraph](
    */
   override def finalize() = {
     super.finalize()
-    gtagActorRef = null
+    slaveActorRef = null
     // make sure we close writers
     if (outputStreamOpt.isDefined) outputStreamOpt.get.close
-    if (SubgraphWriterOpt.isDefined) SubgraphWriterOpt.get.close
+    if (subgraphWriterOpt.isDefined) subgraphWriterOpt.get.close
   }
 
   /**
@@ -65,15 +63,15 @@ case class SparkFromScratchEngine[E <: Subgraph](
    */
   def compute(): Unit = {
     val start = System.currentTimeMillis
-    val initialEmbedd: E = configuration.createSubgraph()
-    computation.compute (initialEmbedd)
+    val subgraph: E = configuration.createSubgraph()
+    val ret = computation.compute (subgraph)
     aggregationStorages.foreach {
       case (name, agg) =>
         aggregateAndSplitFinalAggregation(name, agg)
     }
     flushStatsAccumulators
     val elapsed = System.currentTimeMillis - start
-    logInfo(s"SparkFromScratchEngine(step=${superstep},partitionId=${partitionId}" +
+    logInfo(s"SparkFromScratchEngine(step=${step},partitionId=${partitionId}" +
       s" took ${elapsed} ms to compute.")
   }
 

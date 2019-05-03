@@ -13,27 +13,16 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.log4j.Logger;
 
-public class SubgraphEnumerator<E extends Subgraph> implements Iterator<E> {
-   private static final Logger LOG = Logger.getLogger(SubgraphEnumerator.class);
-
-   private static final SubgraphEnumerator emptyIter = new SubgraphEnumerator() {
-      @Override
-      public boolean isActive() {
-         return false;
-      }
-      @Override
-      public boolean hasNext() {
-         return false;
-      }
-   };
+public class SubgraphEnumerator<S extends Subgraph> implements Iterator<S> {
+   protected static final Logger LOG = Logger.getLogger(SubgraphEnumerator.class);
 
    protected ReentrantLock rlock;
 
-   protected Computation<E> computation;
+   protected Computation<S> computation;
 
    protected IntArrayList prefix;
    
-   protected E subgraph;
+   protected S subgraph;
 
    protected boolean lastHasNext;
 
@@ -60,22 +49,54 @@ public class SubgraphEnumerator<E extends Subgraph> implements Iterator<E> {
       this.prefix = IntArrayListPool.instance().createObject();
    }
 
-   public void init(Configuration<E> config) {
+   /**
+    * Enumerator initialization. We assume a default no-parameter constructor
+    * for the subgraph enumerator and use this method to initialize any internal
+    * structures the custom implementation may need.
+    * @param config current configuration
+    */
+   public void init(Configuration<S> config) {
+      // empty by default
    }
 
-   public synchronized SubgraphEnumerator<E> set(
-           Computation<E> computation, E subgraph) {
+   /**
+    * Called after a internal/external work-stealing to reconstruct this
+    * enumerator state for an alternative execution thread.
+    */
+   public void rebuildState() {
+      // empty by default
+   }
+
+   /**
+    * This method is used to generate the set of extensions in preparation for
+    * extension routines.
+    */
+   public void computeExtensions() {
+      IntCollection extensions = subgraph.computeExtensions(computation);
+      set(extensions);
+   }
+
+   /**
+    * An extend call consumes an extension and returns the next enumerator,
+    * equivalent to the current one plus the extension. The default
+    * implementation is memory efficient because it reuses the same structure
+    * in-place for further extensions (returns 'this').
+    * @return the updated extended subgraph enumerator
+    */
+   public SubgraphEnumerator<S> extend() {
+      next();
+      return this;
+   }
+
+   public synchronized SubgraphEnumerator<S> set(
+           Computation<S> computation, S subgraph) {
       this.computation = computation;
       this.subgraph = subgraph;
       return this;
    }
 
-   public synchronized void computeExtensions() {
-      IntCollection extensions = subgraph.computeExtensions(computation);
-      set(extensions);
-   }
 
-   public synchronized SubgraphEnumerator<E> set(IntCollection wordIds) {
+   public synchronized SubgraphEnumerator<S> set(IntCollection wordIds) {
       this.prefix.clear();
       this.prefix.addAll(subgraph.getWords());
       this.lastHasNext = false;
@@ -87,13 +108,14 @@ public class SubgraphEnumerator<E extends Subgraph> implements Iterator<E> {
       return this;
    }
 
-   public synchronized SubgraphEnumerator<E> forkEnumerator() {
+   public synchronized SubgraphEnumerator<S> forkEnumerator(Computation<S> computation) {
       // create new consumer, adding just enough to verify if there is still
       // work in it
-      SubgraphEnumerator<E> iter = new SubgraphEnumerator<E>();
+      SubgraphEnumerator<S> iter = computation.
+              getConfig().createSubgraphEnumerator(computation.shouldBypass());
       iter.subgraph = computation.getConfig().createSubgraph();
       iter.rlock = this.rlock;
-      iter.computation = this.computation;
+      iter.computation = computation;
       iter.lastHasNext = false;
       iter.cur = this.cur;
       iter.wordIds = this.wordIds;
@@ -102,7 +124,7 @@ public class SubgraphEnumerator<E extends Subgraph> implements Iterator<E> {
 
       // expensive operations, only do if iterator is not empty
       if (iter.hasNext()) {
-         iter.prefix = IntArrayListPool.instance().createObject();
+         iter.prefix.clear();
          iter.prefix.addAll(this.prefix);
 
          if (prefix.size() > 0) {
@@ -114,14 +136,14 @@ public class SubgraphEnumerator<E extends Subgraph> implements Iterator<E> {
             iter.subgraph.addWord(prefix.getUnchecked(i));
          }
 
-         iter.subgraph.setState(null);
+         iter.rebuildState();
       }
 
       return iter;
    }
 
    public synchronized void joinConsumer() {
-      IntArrayListPool.instance().reclaimObject(prefix);
+      //IntArrayListPool.instance().reclaimObject(prefix);
    }
 
    private void maybeRemoveLastWord() {
@@ -158,15 +180,13 @@ public class SubgraphEnumerator<E extends Subgraph> implements Iterator<E> {
             maybeRemoveLastWord();
          }
          return false;
-      } catch (java.util.ConcurrentModificationException e) {
-         throw new RuntimeException(e + " " + this);
       } finally {
          rlock.unlock();
       }
    }
 
    @Override
-   public synchronized E next() {
+   public S next() {
       shouldRemoveLastWord = true;
       subgraph.addWord(nextElem());
       return subgraph;
@@ -182,7 +202,7 @@ public class SubgraphEnumerator<E extends Subgraph> implements Iterator<E> {
       throw new UnsupportedOperationException();
    }
 
-   public Computation<E> getComputation() {
+   public Computation<S> getComputation() {
       return this.computation;
    }
 
@@ -190,7 +210,7 @@ public class SubgraphEnumerator<E extends Subgraph> implements Iterator<E> {
       return prefix;
    }
 
-   public E getSubgraph() {
+   public S getSubgraph() {
       return subgraph;
    }
 

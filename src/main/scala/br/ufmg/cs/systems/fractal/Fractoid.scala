@@ -96,9 +96,9 @@ case class Fractoid [S <: Subgraph : ClassTag](
             SparkMasterEngine [S] (sparkContext, config)
         }
 
-        assert (_masterEngine.superstep == this.step,
+        assert (_masterEngine.step == this.step,
           s"masterEngineNext=${_masterEngine.next}" +
-          s" masterEngineStep=${_masterEngine.superstep} thisStep=${this.step}")
+          s" masterEngineStep=${_masterEngine.step} thisStep=${this.step}")
 
         logInfo (s"Computing ${this}. Engine: ${_masterEngine}")
         _masterEngine.next
@@ -116,17 +116,28 @@ case class Fractoid [S <: Subgraph : ClassTag](
     masterEngine.aggAccums.map{case (k,v) => (k, v.value.longValue)}
   }
 
+  def numValidSubgraphs(): Long = {
+    val prefix = SparkFromScratchMasterEngine.VALID_SUBGRAPHS
+    compute().
+      filter {case (k,v) => k.contains(prefix)}.
+      map {case (k,v) => (k.stripPrefix(s"${prefix}_").toInt, v)}.
+      toArray.
+      sortBy {case (k,v) => k}.last._2
+  }
+
   /**
-   * Output: Subgraphs
+   * Output: subgraphs
    */
-  private var SubgraphsOpt: Option[RDD[ResultSubgraph[_]]] = None
+  private var subgraphsOpt: Option[RDD[ResultSubgraph[_]]] = None
 
   def subgraphs: RDD[ResultSubgraph[_]] = subgraphs((_, _) => true)
 
   def subgraphs(shouldOutput: (S,Computation[S]) => Boolean)
     : RDD[ResultSubgraph[_]] = {
     if (config.confs.contains(SparkConfiguration.COMPUTATION_CONTAINER)) {
-      val thisWithOutput = withOutput(shouldOutput).set(
+      var thisWithOutput = withOutput(shouldOutput)
+      logInfo (s"Before setting path: ${thisWithOutput}")
+      thisWithOutput = thisWithOutput.set(
         "output_path",
         s"${config.getOutputPath}-${step}"
         )
@@ -136,10 +147,10 @@ case class Fractoid [S <: Subgraph : ClassTag](
       logInfo (s"Output to get Subgraphs: ${this} ${thisWithOutput}")
       thisWithOutput.masterEngine.getSubgraphs
     } else {
-      SubgraphsOpt match {
+      subgraphsOpt match {
         case None if config.isOutputActive =>
           val _Subgraphs = masterEngine.getSubgraphs
-          SubgraphsOpt = Some(_Subgraphs)
+          subgraphsOpt = Some(_Subgraphs)
           _Subgraphs
 
         case Some(_Subgraphs) if config.isOutputActive =>
@@ -147,7 +158,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
 
         case _ =>
           masterEngineOpt = None
-          SubgraphsOpt = None
+          subgraphsOpt = None
           config.set ("output_active", true)
           subgraphs
       }
@@ -240,7 +251,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @param path hdfs (hdfs://) or local (file://) path
    */
-  def saveSubgraphsAsSequenceFile(path: String): Unit = SubgraphsOpt match {
+  def saveSubgraphsAsSequenceFile(path: String): Unit = subgraphsOpt match {
     case None =>
       logInfo ("no subgraphs found, computing them ... ")
       config.setOutputPath (path)
@@ -251,7 +262,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
         s"found results, renaming from ${config.getOutputPath} to ${path}")
       val fs = FileSystem.get(sparkContext.hadoopConfiguration)
       fs.rename (new Path(config.getOutputPath), new Path(path))
-      if (config.getOutputPath != path) SubgraphsOpt = None
+      if (config.getOutputPath != path) subgraphsOpt = None
       config.setOutputPath (path)
 
   }
@@ -456,6 +467,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
       // computation exists, append to the current one
       } else {
         val expandComp = emptyComputation.
+          withShouldBypass(false).
           withExpandCompute(null).
           copy(mustSync = false)
         curr = handleNextResult(expandComp)
@@ -498,9 +510,12 @@ case class Fractoid [S <: Subgraph : ClassTag](
   def filter(filter: (S,Computation[S]) => Boolean): Fractoid[S] = {
     //ClosureCleaner.clean(filter)
     val filterComp = emptyComputation(Primitive.F).
-      withExpandCompute((e,c) => c.bypass(e)).
+      //withExpandCompute((e,c) => c.bypass(e)).
+      withShouldBypass(true).
       withFilter(filter)
-    handleNextResult(filterComp)
+    val result = handleNextResult(filterComp)
+    logInfo (s"Filter before: ${this} after: ${result}")
+    result
   }
 
   /**
@@ -518,12 +533,21 @@ case class Fractoid [S <: Subgraph : ClassTag](
       filter(e, c.readAggregation(agg))
     }
 
-    val filterComp = emptyComputation.
-      withExpandCompute((e,c) => Iterator(e)).
+    var filterComp = emptyComputation.
+      //withExpandCompute((e,c) => c.bypass(e)).
+      withShouldBypass(true)
+
+    logInfo (s"FilterCompBefore ${filterComp}")
+
+    filterComp = filterComp.
       withFilter(filterFunc).
       copy(mustSync = true)
 
-    handleNextResult(filterComp)
+    logInfo (s"FilterCompAfter ${filterComp}")
+
+    val result = handleNextResult(filterComp)
+    logInfo (s"FilterAgg before: ${this} after: ${result}")
+    result
   }
 
   /**
@@ -589,11 +613,13 @@ case class Fractoid [S <: Subgraph : ClassTag](
 
     if (getComputationContainer[S] == null) {
       withFirstComputation.
-        withExpandCompute((e,c) => c.bypass(e)).
+        //withExpandCompute((e,c) => c.bypass(e)).
+        withShouldBypass(true).
         set("vfilter", vpred)
     } else {
       val filterComp = emptyComputation.
-        withExpandCompute((e,c) => c.bypass(e)).
+        //withExpandCompute((e,c) => c.bypass(e)).
+        withShouldBypass(true).
         set("vfilter", vpred).
         copy(mustSync = true)
       handleNextResult(filterComp)
@@ -613,11 +639,13 @@ case class Fractoid [S <: Subgraph : ClassTag](
 
     if (getComputationContainer[S] == null) {
       withFirstComputation.
-        withExpandCompute((e, c) => c.bypass(e)).
+        //withExpandCompute((e, c) => c.bypass(e)).
+        withShouldBypass(true).
         set("efilter", epred)
     } else {
       val filterComp = emptyComputation.
-        withExpandCompute((e, c) => c.bypass(e)).
+        //withExpandCompute((e, c) => c.bypass(e)).
+        withShouldBypass(true).
         set("efilter", epred).
         copy(mustSync = true)
       handleNextResult(filterComp)
@@ -637,7 +665,10 @@ case class Fractoid [S <: Subgraph : ClassTag](
     val newComp = getComputationContainer[S].withNewFunctions (
       processOpt = Option(process))
     val newConfig = config.withNewComputation (newComp)
-    this.copy (config = newConfig)
+    val result = this.copy (config = newConfig)
+    logInfo (s"WithProcess before: ${this} after: ${result}")
+    logInfo (s"WithProcessComp before: ${getComputationContainer[S]} after: ${newComp}")
+    result
   }
 
   /**
@@ -987,12 +1018,12 @@ case class Fractoid [S <: Subgraph : ClassTag](
    *
    * @return new result
    */
-  private def withExpandCompute (expandCompute: (S,Computation[S]) => Iterator[S])
+  private def withExpandCompute (expandCompute: (S,Computation[S]) => SubgraphEnumerator[S])
     : Fractoid[S] = {
     val newConfig = if (expandCompute != null) {
       config.withNewComputation (
         getComputationContainer[S].withNewFunctions (
-          expandComputeOpt = Option((e,c) => expandCompute(e,c).asJava)
+          expandComputeOpt = Option((e,c) => expandCompute(e,c))
         )
       )
     } else {
@@ -1000,6 +1031,14 @@ case class Fractoid [S <: Subgraph : ClassTag](
         getComputationContainer[S].withNewFunctions (expandComputeOpt = None)
       )
     }
+    this.copy (config = newConfig)
+  }
+
+  private def withShouldBypass (bypass: Boolean): Fractoid[S] = {
+    val newConfig = config.withNewComputation(
+      getComputationContainer[S].withNewFunctions(
+        shouldBypassOpt = Option(bypass), expandComputeOpt = Option(null))
+    )
     this.copy (config = newConfig)
   }
 
@@ -1013,7 +1052,9 @@ case class Fractoid [S <: Subgraph : ClassTag](
     val _newConfig = newConfig.withNewComputation (
       getComputationContainer[S].withComputationAppended (nextComputation)
     )
-    this.copy (config = _newConfig)
+    val result = this.copy (config = _newConfig)
+    logInfo (s"Result after appending: ${result}")
+    result
   }
 
   /****** fractal Scala API: MasterComputationContainer ******/

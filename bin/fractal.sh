@@ -38,6 +38,9 @@ case "$alg" in
 	gquerying)
 	required="inputgraph steps query"
 	;;
+	gqueryingnaive)
+	required="inputgraph steps query"
+	;;
 	kws)
 	required="inputgraph steps query"
 	;;

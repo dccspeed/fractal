@@ -20,9 +20,9 @@ trait SparkEngine [E <: Subgraph]
 
   var computed = false
 
-  // superstep arguments
+  // step arguments
   val partitionId: Int
-  val superstep: Int
+  val step: Int
   val accums: Map[String,LongAccumulator]
   val previousAggregationsBc: Broadcast[_]
   def configurationId: Int
@@ -51,9 +51,6 @@ trait SparkEngine [E <: Subgraph]
    */
   def getNumberPartitions: Int = configuration.numPartitions
 
-  // accumulators
-  var numSubgraphsProcessed: Long = _
-  var numSubgraphsGenerated: Long = _
   var numSubgraphsOutput: Long = _
 
   def init(): Unit = {
@@ -66,14 +63,12 @@ trait SparkEngine [E <: Subgraph]
       currComp = currComp.nextComputation()
     }
     computation.setDepth(0)
-    
+
     aggregationStorageFactory = new AggregationStorageFactory(configuration)
 
     if (configuration.getSubgraphClass() == null) {
       configuration.setSubgraphClass (computation.getSubgraphClass())
     }
-    numSubgraphsProcessed = 0
-    numSubgraphsGenerated = 0
     numSubgraphsOutput = 0
     configuration.getAggregationsMetadata.asScala.keys.foreach { name =>
       val agg = aggregationStorageFactory.createAggregationStorage (name)
@@ -85,21 +80,17 @@ trait SparkEngine [E <: Subgraph]
     computation = null
     aggregationStorageFactory = null
     if (outputStreamOpt.isDefined) outputStreamOpt.get.close
-    if (SubgraphWriterOpt.isDefined) SubgraphWriterOpt.get.close
+    if (subgraphWriterOpt.isDefined) subgraphWriterOpt.get.close
   }
 
   /**
    * Any Spark accumulator used for stats accounting is flushed here
    */
   def flushStatsAccumulators: Unit = {
-    accums(SparkMasterEngine.AGG_SUBGRAPHS_PROCESSED).
-      add(numSubgraphsProcessed)
-    accums(SparkMasterEngine.AGG_SUBGRAPHS_GENERATED).
-      add(numSubgraphsGenerated)
     accums(SparkMasterEngine.AGG_SUBGRAPHS_OUTPUT).
       add(numSubgraphsOutput)
     accums.foreach { case (name, accum) =>
-      logInfo (s"Accumulator[${superstep}][${partitionId}][${name}]:" +
+      logInfo (s"Accumulator[${step}][${partitionId}][${name}]:" +
         s" ${accum.value}")
     }
   }
@@ -131,20 +122,20 @@ trait SparkEngine [E <: Subgraph]
    */
   def aggregateAndSplitFinalAggregation[K <: Writable, V <: Writable](
       name: String, aggStorage: AggregationStorage[K,V]): Unit = {
-   
+
     // we lose the unserialized version of this aggregation
     aggregationStorages.remove(name)
-    
+
     // the following function does the final local aggregation
     // e.g. for motifs, turns quick patterns into canonical ones
     def aggregate[K <: Writable, V <: Writable](agg1: AggregationStorage[K,V],
         agg2: AggregationStorage[_,_]) = {
       agg1.finalLocalAggregate (agg2.asInstanceOf[AggregationStorage[K,V]])
     }
-    
+
     val start = System.currentTimeMillis
     logInfo(s"LocalAggregationStorage name=${name}" +
-      s" step=${superstep} partitionId=${partitionId}" +
+      s" step=${step} partitionId=${partitionId}" +
       s" aggStorage=${aggStorage}")
 
     aggregate (
@@ -154,7 +145,7 @@ trait SparkEngine [E <: Subgraph]
     // get a single local (same worker) version of this aggregation
     // this is a shared reference between every engine in this worker
     val (_finalAggStorage, barrier) = configuration.
-        maybeReclaimFinalAggStorage(superstep, name)
+        maybeReclaimFinalAggStorage(step, name)
 
     val finalAggStorage = _finalAggStorage.asInstanceOf[AggregationStorage[K,V]]
 
@@ -201,7 +192,7 @@ trait SparkEngine [E <: Subgraph]
     }
 
     val splitMapStr = aggStorageSplits.map(_.getNumberMappings()).mkString(",")
-    logInfo (s"FinalAggregationSplit step=${superstep}" +
+    logInfo (s"FinalAggregationSplit step=${step}" +
       s" partitionId=${partitionId}" +
       s" aggregationName=${name}" +
       s" keysConsumerSize=${keysConsumer.size()}" +
@@ -220,7 +211,7 @@ trait SparkEngine [E <: Subgraph]
       aggStorageSplits(i) = null
       i += 1
     }
-    
+
     // update the serialized version of those splits
     // not that at this point we already lose the unserilized version
     aggregationStorageSplits.update(name, serializedSplits)
@@ -248,7 +239,7 @@ trait SparkEngine [E <: Subgraph]
    * @param name identifies the aggregator
    * @param key key to account for
    * @param value value to be accounted for key in that aggregator
-   * 
+   *
    */
   override def map[K <: Writable, V <: Writable](name: String,
       key: K, value: V) = {
@@ -279,7 +270,7 @@ trait SparkEngine [E <: Subgraph]
   override def aggregate(name: String, value: LongWritable) = {
     aggregate(name, value.get)
   }
-  
+
   override def aggregate(name: String, value: Long) = {
     if (accums.contains(name)) {
       accums(name).add(value)
@@ -306,7 +297,7 @@ trait SparkEngine [E <: Subgraph]
     }
   }
 
-  @transient var SubgraphWriterOpt: Option[SeqWriter] = None
+  @transient var subgraphWriterOpt: Option[SeqWriter] = None
 
   @transient var outputStreamOpt: Option[OutputStreamWriter] = None
 
@@ -323,8 +314,8 @@ trait SparkEngine [E <: Subgraph]
    * Output subgraph to a sequence file
    */
   private def outputSequenceFile(subgraph: Subgraph) = {
-    if (SubgraphWriterOpt.isDefined) {
-      val SubgraphWriter = SubgraphWriterOpt.get
+    if (subgraphWriterOpt.isDefined) {
+      val SubgraphWriter = subgraphWriterOpt.get
       val resSubgraph = ResultSubgraph (subgraph, configuration)
       SubgraphWriter.append (NullWritable.get, resSubgraph)
       numSubgraphsOutput += 1
@@ -340,11 +331,11 @@ trait SparkEngine [E <: Subgraph]
         classOf[ResultSubgraph[_]] // not allowed, will crash
 
       // instantiate the subgraph writer (sequence file)
-      val superstepPath = new Path(outputPath, s"${getSuperstep}")
-      val partitionPath = new Path(superstepPath, s"${partitionId}")
+      val stepPath = new Path(outputPath, s"${getStep}")
+      val partitionPath = new Path(stepPath, s"${partitionId}")
 
       logInfo (s"Output stream (sequence-file) created: " +
-        s" step=${getSuperstep} partitionId=${partitionId}" +
+        s" step=${getStep} partitionId=${partitionId}" +
         s" partitionPath=${partitionPath}")
 
       val SubgraphWriter = SequenceFile.createWriter(configuration.hadoopConf,
@@ -352,8 +343,8 @@ trait SparkEngine [E <: Subgraph]
         SeqWriter.keyClass(classOf[NullWritable]),
         SeqWriter.valueClass(resSubgraphClass))
 
-      SubgraphWriterOpt = Some(SubgraphWriter)
-      
+      subgraphWriterOpt = Some(SubgraphWriter)
+
       val resSubgraph = ResultSubgraph (subgraph, configuration)
       SubgraphWriter.append (NullWritable.get, resSubgraph)
       numSubgraphsOutput += 1
@@ -370,11 +361,11 @@ trait SparkEngine [E <: Subgraph]
       outputStream.write("\n")
     } else {
       val fs = FileSystem.get(configuration.hadoopConf)
-      val superstepPath = new Path(outputPath, s"${getSuperstep}")
-      val partitionPath = new Path(superstepPath, s"${partitionId}")
+      val stepPath = new Path(outputPath, s"${getStep}")
+      val partitionPath = new Path(stepPath, s"${partitionId}")
 
       logInfo (s"Output stream (text-file) created: " +
-        s" step=${getSuperstep} partitionId=${partitionId}" +
+        s" step=${getStep} partitionId=${partitionId}" +
         s" partitionPath=${partitionPath}")
 
       val outputStream = new OutputStreamWriter(fs.create(partitionPath))
@@ -383,11 +374,11 @@ trait SparkEngine [E <: Subgraph]
       outputStream.write("\n")
     }
   }
-  
+
   // other functions
   override def getPartitionId() = partitionId
 
-  override def getSuperstep() = superstep
+  override def getStep() = step
 
   def getConfig: SparkConfiguration[E] = configuration
 }

@@ -1,7 +1,6 @@
 package br.ufmg.cs.systems.fractal.computation
 
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.{Iterator => JavaIterator}
 
 import akka.actor._
 import br.ufmg.cs.systems.fractal.aggregation._
@@ -35,8 +34,6 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
   import SparkFromScratchMasterEngine._
   import SparkGraphRedMasterEngine._
 
-  var repetition: Boolean = false
-
   def config: SparkConfiguration[S] = _config
 
   def parentOpt: Option[SparkMasterEngine[S]] = _parentOpt
@@ -69,7 +66,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
     // gtag actor
     masterActorRef = ActorMessageSystem.createActor(this)
 
-    logInfo(s"Started gtag-master-actor(step=${superstep}):" +
+    logInfo(s"Started gtag-master-actor(step=${step}):" +
       s" ${masterActorRef}")
 
     val end = System.currentTimeMillis
@@ -88,10 +85,10 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
 
     val superstepStart = System.currentTimeMillis
 
-    logInfo (s"${this} Computation starting from ${superstepRDD}," +
-      s", StorageLevel=${superstepRDD.getStorageLevel}")
+    logInfo (s"${this} Computation starting from ${stepRDD}," +
+      s", StorageLevel=${stepRDD.getStorageLevel}")
 
-    logInfo(s"Computation step=${superstep} configId=${this.config.getId}")
+    logInfo(s"Computation step=${step} configId=${this.config.getId}")
 
     // save original container, i.e., without parents' computations
     val originalContainer = config.computationContainer[S]
@@ -191,7 +188,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
     val initStart = System.currentTimeMillis
     val _configBc = configBc
     val _previousAggregationsBc = previousAggregationsBc
-    superstepRDD.mapPartitions { iter =>
+    stepRDD.mapPartitions { iter =>
       val prevAggs = _previousAggregationsBc.value.asInstanceOf[Map[String,_]]
       (prevAggs.get(VPREV_ENUM), prevAggs.get(EPREV_ENUM)) match {
         case (Some(vagg), Some(eagg)) =>
@@ -222,8 +219,8 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
     val _aggAccums = aggAccums
 
     val execEngines = getExecutionEngines (
-      superstepRDD = superstepRDD,
-      superstep = superstep,
+      superstepRDD = stepRDD,
+      superstep = step,
       configBc = configBc,
       aggAccums = _aggAccums,
       previousAggregationsBc = previousAggregationsBc)
@@ -233,7 +230,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
 
     val enumerationElapsed = System.currentTimeMillis - superstepStart
 
-    logInfo(s"Enumeration step=${superstep} took ${enumerationElapsed} ms")
+    logInfo(s"Enumeration step=${step} took ${enumerationElapsed} ms")
 
     /** [1] We extract and aggregate the *aggregations* globally.
      */
@@ -250,7 +247,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
           val mapping = agg.getMapping
           val numMappings = agg.getNumberMappings
           logInfo (s"Aggregation[${name}][numMappings=${numMappings}]\n" +
-            s"${mapping.map(t => s"Aggregation[${name}][${superstep}]" +
+            s"${mapping.map(t => s"Aggregation[${name}][${step}]" +
             s" ${t._1}: ${t._2}").mkString("\n")}")
         }
 
@@ -269,7 +266,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
 
     // print stats
     aggAccums.foreach { case (name, accum) =>
-      logInfo (s"Accumulator[${superstep}][${name}]: ${accum.value}")
+      logInfo (s"Accumulator[${step}][${name}]: ${accum.value}")
       accum.reset()
     }
 
@@ -278,7 +275,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
 
     val superstepFinish = System.currentTimeMillis
     logInfo (
-      s"Superstep $superstep finished in ${superstepFinish - superstepStart} ms"
+      s"Superstep $step finished in ${superstepFinish - superstepStart} ms"
     )
 
     // make sure we maintain the engine's original state
@@ -344,7 +341,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
 
       val execEngine = new SparkFromScratchEngine [E] (
         partitionId = idx,
-        superstep = superstep,
+        step = superstep,
         accums = aggAccums,
         previousAggregationsBc = previousAggregationsBc,
         configurationId = configBc.value.getId
@@ -381,9 +378,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
 
       var computations: Array[Computation[S]] = _
 
-      var iterators: Array[JavaIterator[S]] = _
-
-      def apply(iter: JavaIterator[S], c: Computation[S]): Long = {
+      def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
         if (c.getDepth() == 0) {
           val config = c.getConfig()
           val execEngine = c.getExecutionEngine().asInstanceOf[SparkEngine[S]]
@@ -422,7 +417,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
 
           // setup work-stealing system
           val gtagExecutorActor = execEngine.
-            asInstanceOf[SparkFromScratchEngine[S]].gtagActorRef
+            asInstanceOf[SparkFromScratchEngine[S]].slaveActorRef
 
           val callback = (consumer: SubgraphEnumerator[S], ret: Long) => {
             if (ret > 0) {
@@ -446,7 +441,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
         }
       }
 
-      private def hasNextComputation(iter: JavaIterator[S],
+      private def hasNextComputation(iter: SubgraphEnumerator[S],
           c: Computation[S], nextComp: Computation[S]): Long = {
         var currentSubgraph: S = null.asInstanceOf[S]
         var validChildren = 0L
@@ -480,7 +475,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
         validChildren
       }
 
-      private def lastComputation(iter: JavaIterator[S],
+      private def lastComputation(iter: SubgraphEnumerator[S],
           c: Computation[S]): Long = {
         var currentSubgraph: S = null.asInstanceOf[S]
         var addWords = 0L
@@ -503,7 +498,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
         subgraphsGenerated
       }
 
-      private def untaggedLastComputation(iter: JavaIterator[S],
+      private def untaggedLastComputation(iter: SubgraphEnumerator[S],
           c: Computation[S]): Long = {
         var currentSubgraph: S = null.asInstanceOf[S]
         var addWords = 0L
@@ -524,7 +519,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
         subgraphsGenerated
       }
 
-      private def processCompute(iter: JavaIterator[S],
+      private def processCompute(iter: SubgraphEnumerator[S],
           c: Computation[S]): Long = {
         val nextComp = c.nextComputation()
 

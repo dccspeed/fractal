@@ -243,6 +243,21 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
    }
 
    @Override
+   protected void updateAllExtensions(Computation computation) {
+      HashIntSet extensionWordIds = extensionWordIds();
+      for (int i = 0; i < vertices.size(); ++i) {
+         VertexNeighbourhood neighborhood = configuration.getMainGraph().
+                 getVertexNeighbourhood(vertices.getUnchecked(i));
+         if (neighborhood != null) {
+            IntArrayList orderedEdges = neighborhood.getOrderedEdges();
+            for (int j = 0; j < orderedEdges.size(); ++j) {
+               extensionWordIds.add(orderedEdges.getUnchecked(j));
+            }
+         }
+      }
+   }
+
+   @Override
    public void readFields(DataInput in) throws IOException {
       reset();
 

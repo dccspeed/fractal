@@ -5,6 +5,7 @@ import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.LabelledEdge;
 import br.ufmg.cs.systems.fractal.graph.Vertex;
+import br.ufmg.cs.systems.fractal.graph.VertexNeighbourhood;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
@@ -190,7 +191,27 @@ public abstract class BasicSubgraph implements Subgraph {
       return extensionWordIds();
    }
 
-  protected void updateInitExtensions(Computation computation) {
+   @Override
+   public IntCollection computeAllExtensions(Computation computation) {
+      // If we have to recompute the extensionVertexIds set
+      if (dirtyExtensionWordIds) {
+         if (getNumWords() > 0) {
+            updateAllExtensions(computation);
+         } else {
+            updateInitExtensions(computation);
+         }
+
+         int numWords = getNumWords();
+         IntArrayList words = getWords();
+         for (int i = 0; i < numWords; ++i) {
+            extensionWordIds().removeInt(words.getUnchecked(i));
+         }
+      }
+
+      return extensionWordIds();
+   }
+
+   protected void updateInitExtensions(Computation computation) {
       int totalNumWords = computation.getInitialNumWords();
       int numPartitions = computation.getNumberPartitions();
       int myPartitionId = computation.getPartitionId();
@@ -216,7 +237,9 @@ public abstract class BasicSubgraph implements Subgraph {
             (endMyWordRange - startMyWordRange));
    }
 
-  protected abstract void updateExtensions(Computation computation);
+   protected abstract void updateExtensions(Computation computation);
+
+   protected abstract void updateAllExtensions(Computation computation);
 
   @Override
    public boolean isCanonicalSubgraphWithWord(int wordId) {

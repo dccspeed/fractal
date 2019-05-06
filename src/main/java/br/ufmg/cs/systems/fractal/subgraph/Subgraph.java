@@ -48,7 +48,9 @@ public interface Subgraph extends WritableObject, Externalizable {
     void removeLastWord();
 
     IntCollection computeExtensions(Computation computation);
-    
+
+    IntCollection computeAllExtensions(Computation computation);
+
     IntCollection extensions();
 
     boolean isCanonicalSubgraphWithWord(int wordId);

@@ -200,33 +200,6 @@ class GQueryingApp(val fractalGraph: FractalGraph,
   }
 }
 
-class GQueryingNaiveApp(val fractalGraph: FractalGraph,
-                        commStrategy: String,
-                        numPartitions: Int,
-                        explorationSteps: Int,
-                        subgraphPath: String) extends FractalSparkApp {
-  def execute: Unit = {
-
-    val subgraph = new FractalGraph(
-      subgraphPath, fractalGraph.fractalContext, "warn")
-
-    val gquerying = fractalGraph.gqueryingNaive(subgraph).
-      set ("comm_strategy", commStrategy).
-      set ("num_partitions", numPartitions).
-      explore(explorationSteps)
-
-    val (accums, elapsed) = FractalSparkRunner.time {
-      gquerying.compute()
-    }
-
-    println (s"GQueryingNaiveApp comm=${commStrategy}" +
-      s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
-      s" graph=${fractalGraph} subgraph=${subgraph}" +
-      s" counting=${gquerying.numValidSubgraphs()} elapsed=${elapsed}"
-      )
-  }
-}
-
 object FractalSparkRunner {
   def time[R](block: => R): (R, Long) = {
     val t0 = System.currentTimeMillis()
@@ -308,11 +281,6 @@ object FractalSparkRunner {
         i += 1
         val subgraphPath = args(i)
         new GQueryingApp(fractalGraph, commStrategy,
-          numPartitions, explorationSteps, subgraphPath)
-      case "gqueryingnaive" =>
-        i += 1
-        val subgraphPath = args(i)
-        new GQueryingNaiveApp(fractalGraph, commStrategy,
           numPartitions, explorationSteps, subgraphPath)
       case appName =>
         throw new RuntimeException(s"Unknown app: ${appName}")

@@ -585,7 +585,6 @@ public abstract class BasicPattern implements Pattern {
        }
     }
 
-
     public int[][] esymmetryBreaker() {
        int numEdges = getNumberOfEdges();
        int[][] symmetryBreaker = new int[numEdges][numEdges];

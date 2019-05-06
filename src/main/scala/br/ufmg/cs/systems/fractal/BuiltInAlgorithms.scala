@@ -134,22 +134,6 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
   }
 
   /**
-    * subgraph Querying (naive implementation)
-    * @param subgraph
-    * @return Fractoid with the initial state for subgraph querying
-    */
-  def gqueryingNaive(subgraph: FractalGraph): Fractoid[EdgeInducedSubgraph] = {
-    val qpattern = subgraph.asPattern
-    logInfo (s"Querying pattern ${qpattern} in ${this}")
-    self.efractoid.
-      expand(1).
-      filter { (e,c) =>
-        val p = e.getPattern
-        p.equals(qpattern, p.getNumberOfEdges)
-      }
-  }
-
-  /**
     * Vertex-induced implementation of quasi-cliques
     * @param numSteps maximum number of steps
     * @param minDensity density of edges between 0 and 1.
@@ -189,6 +173,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
   /**
     * Experimental algorithms
+    /def gque
     */
   @Experimental
   def maximalcliques: Fractoid[VertexInducedSubgraph] = {

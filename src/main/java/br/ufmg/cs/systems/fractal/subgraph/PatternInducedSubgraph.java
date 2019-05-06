@@ -399,6 +399,21 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    }
 
    @Override
+   protected void updateAllExtensions(Computation computation) {
+      HashIntSet extensionWordIds = extensionWordIds();
+      for (int i = 0; i < vertices.size(); ++i) {
+         VertexNeighbourhood neighborhood = configuration.getMainGraph().
+                 getVertexNeighbourhood(vertices.getUnchecked(i));
+         if (neighborhood != null) {
+            IntArrayList orderedVertices = neighborhood.getOrderedVertices();
+            for (int j = 0; j < orderedVertices.size(); ++j) {
+               extensionWordIds.add(orderedVertices.getUnchecked(j));
+            }
+         }
+      }
+   }
+
+   @Override
    public void readFields(DataInput in) throws IOException {
       reset();
 

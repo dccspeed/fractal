@@ -12,7 +12,9 @@ import br.ufmg.cs.systems.fractal.util.Utils;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
+import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.hash.HashIntSet;
+
 import java.util.function.IntConsumer;
 
 import java.io.DataInput;
@@ -21,31 +23,33 @@ import java.io.ObjectInput;
 import java.util.function.IntPredicate;
 
 public class PatternInducedSubgraph extends BasicSubgraph {
-   // Consumers {{
+   // Consumers and Predicates {{
    private UpdateEdgesConsumer updateEdgesConsumer;
+   private EdgeTaggerConsumer edgeTagger;
+   private ValidNeighborhoodPredicate validNeighborhoodPredicate;
    // }}
 
    // Edge tracking for incremental modifications {{
    private IntArrayList numEdgesAddedWithWord;
-   // }}
-
    private IntArrayList numVerticesAddedWithWord;
+   // }}
 
    public PatternInducedSubgraph() {
       super();
       numVerticesAddedWithWord = new IntArrayList();
       numEdgesAddedWithWord = new IntArrayList();
       updateEdgesConsumer = new UpdateEdgesConsumer();
+      edgeTagger = new EdgeTaggerConsumer();
    }
-
-   private EdgeTaggerConsumer edgeTagger = new EdgeTaggerConsumer();
-
-   private ValidNeighborhoodPredicate validNeighborhoodPredicate =
-      new ValidNeighborhoodPredicate();
 
    @Override
    public void init(Configuration config) {
       super.init(config);
+      if (config.isGraphEdgeLabelled()) {
+         validNeighborhoodPredicate = new ValidNeighborhoodPredicate();
+      } else {
+         validNeighborhoodPredicate = new TrueNeighborhoodPredicate();
+      }
    }
 
    @Override
@@ -398,22 +402,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
 
    }
 
-   @Override
-   protected void updateAllExtensions(Computation computation) {
-      HashIntSet extensionWordIds = extensionWordIds();
-      for (int i = 0; i < vertices.size(); ++i) {
-         VertexNeighbourhood neighborhood = configuration.getMainGraph().
-                 getVertexNeighbourhood(vertices.getUnchecked(i));
-         if (neighborhood != null) {
-            IntArrayList orderedVertices = neighborhood.getOrderedVertices();
-            for (int j = 0; j < orderedVertices.size(); ++j) {
-               extensionWordIds.add(orderedVertices.getUnchecked(j));
-            }
-         }
-      }
-   }
-
-   @Override
+  @Override
    public void readFields(DataInput in) throws IOException {
       reset();
 
@@ -434,25 +423,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       readFields(objInput);
    }
 
-   private class ValidWordIdAdder implements IntConsumer {
-      private int lowerBound;
-
-      public ValidWordIdAdder setBound(int lowerBound) {
-         this.lowerBound = lowerBound;
-         return this;
-      }
-
-      @Override
-      public void accept(int i) {
-         if (i > lowerBound) {
-            extensionWordIds().add(i);
-         } else {
-            extensionWordIds().removeInt(i);
-         }
-      }
-   }
-
-   @Override
+  @Override
    public void applyTagFrom(Computation computation,
          AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos) {
       PatternEdgeArrayList patternEdges = computation.getPattern().getEdges();
@@ -544,8 +515,15 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       }
    }
 
+   private class TrueNeighborhoodPredicate extends ValidNeighborhoodPredicate {
+      @Override
+      public boolean test(int dst) {
+         return true;
+      }
+   }
+
    private class ValidNeighborhoodPredicate implements IntPredicate {
-      
+
       private MainGraph mainGraph;
       private int src;
       private EdgeLabelPredicate edgeLabelPredicate = new EdgeLabelPredicate();
@@ -560,11 +538,10 @@ public class PatternInducedSubgraph extends BasicSubgraph {
 
       @Override
       public boolean test(int dst) {
-         //IntCollection edgeIds = mainGraph.getEdgeIds(src, dst);
-         //return !edgeIds.forEachWhile(
-         //      edgeLabelPredicate.setModifier(src < dst ? 1 : -1)
-         //      );
-         return true;
+         IntCollection edgeIds = mainGraph.getEdgeIds(src, dst);
+         return !edgeIds.forEachWhile(
+               edgeLabelPredicate.setModifier(src < dst ? 1 : -1)
+               );
       }
    }
 

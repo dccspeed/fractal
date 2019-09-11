@@ -12,7 +12,7 @@ Fractal is open-source with the Apache 2.0 license.
 
 ## Requirements for running
 
-* OpenJDK 8+
+* OpenJDK 8
 * Spark 2.x.x
 
 ## Preparing your input

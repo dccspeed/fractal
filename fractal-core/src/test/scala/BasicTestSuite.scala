@@ -26,9 +26,9 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
     sc.setLogLevel(logLevel)
     fc = new FractalContext(sc, logLevel)
 
-    fgraph = fc.textFile ("data/cube.graph")
+    fgraph = fc.textFile ("../data/cube.graph")
 
-    fgraphEdgeLabel = fc.textFile ("data/cube-edge-label.graph")
+    fgraphEdgeLabel = fc.textFile ("../data/cube-edge-label.graph")
   }
 
   /** stop spark context */
@@ -109,14 +109,14 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
     val numSubgraph = Map("triangles" -> 0, "squares" -> 2)
 
     // triangles
-    val triangle = new FractalGraph("data/triangle-test.graph", fgraph.fractalContext)
+    val triangle = new FractalGraph("../data/triangle-test.graph", fgraph.fractalContext)
     val triangles = fgraph.gquerying(triangle).
       set ("num_partitions", numPartitions).
       explore(2)
     assert(triangles.numValidSubgraphs() == numSubgraph("triangles"))
 
     // squares
-    val square = new FractalGraph("data/square-test.graph", fgraph.fractalContext)
+    val square = new FractalGraph("../data/square-test.graph", fgraph.fractalContext)
     val squares = fgraph.gquerying(square).
       set ("num_partitions", numPartitions).
       explore(3)

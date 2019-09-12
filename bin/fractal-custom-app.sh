@@ -14,41 +14,7 @@ else
 	echo "SPARK_HOME is set to $SPARK_HOME"
 fi
 
-argname="alg"
-if [ -z ${!argname+x} ]; then
-	echo "$argname is unset"
-	exit 1
-else
-	echo "$argname is set to '${!argname}'"
-fi
-
-case "$alg" in
-	fsm)
-	required="inputgraph steps fsmsupp"
-	;;
-	motifs)
-	required="inputgraph steps"
-	;;
-	cliques)
-	required="inputgraph steps"
-	;;
-	cliquesopt)
-	required="inputgraph steps"
-	;;
-	gquerying)
-	required="inputgraph steps query"
-	;;
-	gqueryingnaive)
-	required="inputgraph steps query"
-	;;
-	kws)
-	required="inputgraph steps query"
-	;;
-	*)
-	echo "Invalid algorithm: ${alg}"
-	exit 1
-	;;
-esac
+required="app_class"
 
 for argname in $required; do
 	if [ -z ${!argname+x} ]; then
@@ -68,18 +34,15 @@ inputformat=${inputformat:-al}
 comm=${comm:-scratch}
 total_cores=$((num_workers * worker_cores))
 deploy_mode=${deploy_mode:-client}
-log_level=${log_level:-info}
 
-cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
-        --deploy-mode $deploy_mode \\
+cmd="$SPARK_HOME/bin/spark-submit --master $spark_master --deploy-mode $deploy_mode \\
 	--driver-memory $master_memory \\
 	--num-executors $num_workers \\
 	--executor-cores $worker_cores \\
 	--executor-memory $worker_memory \\
-        --class br.ufmg.cs.systems.fractal.FractalSparkRunner \\
+        --class $app_class \\
 	--jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-SPARK-2.2.0.jar \\
-	$FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-SPARK-2.2.0.jar \\
-	$inputformat $inputgraph $alg $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $configs"
+	$FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-SPARK-2.2.0.jar $@"
 
 echo $cmd
 bash -c "$cmd"

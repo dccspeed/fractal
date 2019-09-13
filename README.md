@@ -1,4 +1,5 @@
 # Fractal: A General-Purpose Graph Pattern Mining System
+[![Build Status](https://travis-ci.com/dccspeed/fractal.svg?branch=master)](https://travis-ci.com/dccspeed/fractal)
 
 *Current Version:* SPARK-2.2.0
 

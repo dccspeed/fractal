@@ -59,10 +59,10 @@ for argname in $required; do
 	fi
 done
 
-spark_master=${spark_master:-local[1]}
 master_memory=${master_memory:-2g}
 num_workers=${num_workers:-1}
 worker_cores=${worker_cores:-1}
+spark_master=${spark_master:-local[${worker_cores}]}
 worker_memory=${worker_memory:-2g}
 inputformat=${inputformat:-al}
 comm=${comm:-scratch}
@@ -71,12 +71,12 @@ deploy_mode=${deploy_mode:-client}
 log_level=${log_level:-info}
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
-        --deploy-mode $deploy_mode \\
+  --deploy-mode $deploy_mode \\
 	--driver-memory $master_memory \\
 	--num-executors $num_workers \\
 	--executor-cores $worker_cores \\
 	--executor-memory $worker_memory \\
-        --class br.ufmg.cs.systems.fractal.FractalSparkRunner \\
+  --class br.ufmg.cs.systems.fractal.FractalSparkRunner \\
 	--jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-SPARK-2.2.0.jar \\
 	$FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-SPARK-2.2.0.jar \\
 	$inputformat $inputgraph $alg $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $configs"

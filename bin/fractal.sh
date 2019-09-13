@@ -59,10 +59,10 @@ for argname in $required; do
 	fi
 done
 
-spark_master=${spark_master:-local[1]}
 master_memory=${master_memory:-2g}
 num_workers=${num_workers:-1}
 worker_cores=${worker_cores:-1}
+spark_master=${spark_master:-local[${worker_cores}]}
 worker_memory=${worker_memory:-2g}
 inputformat=${inputformat:-al}
 comm=${comm:-scratch}
@@ -70,7 +70,7 @@ total_cores=$((num_workers * worker_cores))
 deploy_mode=${deploy_mode:-client}
 log_level=${log_level:-info}
 
-cmd="spark-submit --master $spark_master --deploy-mode $deploy_mode \\
+cmd="$SPARK_HOME/bin/spark-submit --master $spark_master --deploy-mode $deploy_mode \\
 	--driver-memory $master_memory \\
 	--num-executors $num_workers \\
 	--executor-cores $worker_cores \\

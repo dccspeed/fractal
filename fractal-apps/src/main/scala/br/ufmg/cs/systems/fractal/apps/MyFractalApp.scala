@@ -6,16 +6,15 @@ import br.ufmg.cs.systems.fractal.util.Logging
 import org.apache.hadoop.io.LongWritable
 import org.apache.spark.{SparkConf, SparkContext}
 
-object MyFractalApp extends Logging {
+object MyMotifsApp extends Logging {
   def main(args: Array[String]): Unit = {
     // environment setup
-    val conf = new SparkConf().setAppName("MotifsApp")
+    val conf = new SparkConf().setAppName("MyMotifsApp")
     val sc = new SparkContext(conf)
     val fc = new FractalContext(sc)
     val graphPath = args(0) // input graph
     val fgraph = fc.textFile (graphPath)
 
-    // motifs application
     val AGG_MOTIFS = "motifs"
     val motifs = fgraph.vfractoid.
       expand(1).
@@ -30,7 +29,7 @@ object MyFractalApp extends Logging {
     for ((motif,count) <- motifsMap) {
       logInfo(s"motif=${motif} count=${count}")
     }
-
+    
     // environment cleaning
     fc.stop()
     sc.stop()

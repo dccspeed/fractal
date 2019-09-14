@@ -62,7 +62,58 @@ Fractal includes the following built-in applications (GPM kernels):
 Please check out our [Fractal paper](https://dl.acm.org/citation.cfm?id=3319875) for more details on
 those kernels. You can run those applications through the ```bin/fractal.sh``` script:
 
-The following example submits the cliques kernel with k=2 extension steps
+```
+Description: Script launcher for Fractal built-in algorithms
+
+info: FRACTAL_HOME is set to ...
+info: SPARK_HOME is set to ...
+error: alg is unset
+
+Usage:
+app=fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws [OPTION]... [ALGOPTION]... fractal.sh
+
+OPTION:
+   master_memory=512m|1g|2g|...            'Master memory'                      Default: 2g
+   num_workers=1|2|3|...                   'Number of workers'                  Default: 1
+   worker_cores=1|2|3|...                  'Number of cores per worker'         Default: 1
+   worker_memory=512m|1g|2g|...            'Workers memory'                     Default: 2g
+   input_format=al|el                      'al: adjacency list; el: edge list'  Default: al
+   comm=scratch|graphred                   'Execution strategy'                 Default: scratch
+   spark_master=local[1]|local[2]|yarn|... 'Spark master URL'                   Default: local[worker_cores]
+   deploy_mode=server|client               'Spark deploy mode'                  Default: client
+   log_level=info|warn|error               'Log vebosity'                       Default: info
+```
+
+If you specify `alg` to this command you get parameters for specific applications, such as `cliques`:
+
+```
+Description: Script launcher for Fractal built-in algorithms
+
+info: FRACTAL_HOME is set to ...
+info: SPARK_HOME is set to ...
+info: alg is set to 'cliques'
+error: inputgraph is unset
+
+Usage:
+app=fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws [OPTION]... [ALGOPTION]... fractal.sh
+
+OPTION:
+   master_memory=512m|1g|2g|...            'Master memory'                      Default: 2g
+   num_workers=1|2|3|...                   'Number of workers'                  Default: 1
+   worker_cores=1|2|3|...                  'Number of cores per worker'         Default: 1
+   worker_memory=512m|1g|2g|...            'Workers memory'                     Default: 2g
+   input_format=al|el                      'al: adjacency list; el: edge list'  Default: al
+   comm=scratch|graphred                   'Execution strategy'                 Default: scratch
+   spark_master=local[1]|local[2]|yarn|... 'Spark master URL'                   Default: local[worker_cores]
+   deploy_mode=server|client               'Spark deploy mode'                  Default: client
+   log_level=info|warn|error               'Log vebosity'                       Default: info 
+
+ALGOPTION for 'cliques':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+```
+
+For example, the following example submits the cliques kernel with k=2 extension steps
 (i.e., cliques with k+1=3 vertices) over the dataset ```citeseer-single-label.graph```:
 ```
 steps=2 inputgraph=$FRACTAL_HOME/data/citeseer-single-label.graph alg=cliques ./bin/fractal.sh
@@ -78,7 +129,6 @@ code with the ```bin/fractal-custom-app.sh``` script:
 ```
 ./bin/fractal-custom-app.sh
 ```
-
 
 For example, lets create a custom application that counts motifs with 3 vertices.
 We just have to add the file ```MyMotifsApp.scala``` into

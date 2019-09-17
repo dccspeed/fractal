@@ -16,6 +16,3 @@ include 'services:webservice'
 */
 
 rootProject.name = 'fractal'
-
-include 'fractal-core'
-include 'fractal-apps'

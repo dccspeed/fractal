@@ -383,9 +383,9 @@ case class Fractoid [S <: Subgraph : ClassTag](
     } catch {
       case e: RuntimeException =>
         logWarning (s"No computation container was set." +
-          s" Please start with 'edgeInducedComputation' or" +
-          s" 'vertexInducedComputation' from fractalGraph." +
-          s" Error message: ${e.getMessage}")
+          s" Please start with 'vfractoid' or" +
+          s" 'efractoid' or 'pfractoid' from fractalGraph." +
+          s" Exception message: ${e.getMessage}")
         return null
     }
   }

@@ -243,8 +243,8 @@ object FractalSparkRunner {
       Thread.sleep(10000)
     }
 
-    val arab = new FractalContext(sc, logLevel)
-    val fractalGraph = arab.textFile (graphPath, graphClass = graphClass)
+    val fc = new FractalContext(sc, logLevel)
+    val fractalGraph = fc.textFile (graphPath, graphClass = graphClass)
 
     val app = algorithm.toLowerCase match {
       case "vsubgraphs" =>
@@ -298,7 +298,7 @@ object FractalSparkRunner {
 
     app.execute
 
-    arab.stop()
+    fc.stop()
     sc.stop()
   }
 }

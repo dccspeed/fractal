@@ -63,11 +63,11 @@ Please check out our [Fractal paper](https://dl.acm.org/citation.cfm?id=3319875)
 those kernels. You can run those applications through the ```bin/fractal.sh``` script:
 
 ```
-Description: Script launcher for Fractal built-in algorithms
+Description: Script launcher for Fractal built-in applications
 
 info: FRACTAL_HOME is set to ...
 info: SPARK_HOME is set to ...
-error: alg is unset
+error: app is unset
 
 Usage:
 app=fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws [OPTION]... [ALGOPTION]... fractal.sh
@@ -84,14 +84,14 @@ OPTION:
    log_level=info|warn|error               'Log vebosity'                       Default: info
 ```
 
-If you specify `alg` to this command you get parameters for specific applications, such as `cliques`:
+If you specify `app` to this command you get parameters for specific applications, such as `cliques`:
 
 ```
-Description: Script launcher for Fractal built-in algorithms
+Description: Script launcher for Fractal built-in application
 
 info: FRACTAL_HOME is set to ...
 info: SPARK_HOME is set to ...
-info: alg is set to 'cliques'
+info: app is set to 'cliques'
 error: inputgraph is unset
 
 Usage:
@@ -116,7 +116,7 @@ ALGOPTION for 'cliques':
 For example, the following example submits the cliques kernel with k=2 extension steps
 (i.e., cliques with k+1=3 vertices) over the dataset ```citeseer-single-label.graph```:
 ```
-steps=2 inputgraph=$FRACTAL_HOME/data/citeseer-single-label.graph alg=cliques ./bin/fractal.sh
+steps=2 inputgraph=$FRACTAL_HOME/data/citeseer-single-label.graph app=cliques ./bin/fractal.sh
 ```
 
 ## Running custom applications

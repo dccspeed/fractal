@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
-printf "Description: Script launcher for Fractal built-in algorithms\n\n"
+printf "Description: Script launcher for Fractal built-in applications\n\n"
 
-algs="fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws"
+apps="fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws"
 
 usage="
 Usage:
-app=$algs [OPTION]... [ALGOPTION]... $(basename "$0")
+app=$apps [OPTION]... [ALGOPTION]... $(basename "$0")
 
 OPTION:
    master_memory=512m|1g|2g|...            'Master memory'                      Default: 2g
@@ -34,7 +34,7 @@ else
 	echo "info: SPARK_HOME is set to $SPARK_HOME"
 fi
 
-argname="alg"
+argname="app"
 if [ -z ${!argname+x} ]; then
         printf "error: $argname is unset\n"
         printf "$usage\n"
@@ -43,74 +43,74 @@ else
 	echo "info: $argname is set to '${!argname}'"
 fi
 
-case "$alg" in
+case "$app" in
 	fsm)
 	required="inputgraph steps fsmsupp"
-        algusage="
+        appusage="
 
-ALGOPTION for '$alg':
+ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
 	;;
 	motifs)
 	required="inputgraph steps"
-        algusage="
+        appusage="
 
-ALGOPTION for '$alg':
+ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 	cliques)
 	required="inputgraph steps"
-        algusage="
+        appusage="
 
-ALGOPTION for '$alg':
+ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 	cliquesopt)
 	required="inputgraph steps"
-        algusage="
+        appusage="
 
-ALGOPTION for '$alg':
+ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 	gquerying)
 	required="inputgraph steps query"
-        algusage="
+        appusage="
 
-ALGOPTION for '$alg':
+ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 	gqueryingnaive)
 	required="inputgraph steps query"
-        algusage="
+        appusage="
 
-ALGOPTION for '$alg':
+ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 	kws)
 	required="inputgraph steps query"
-        algusage="
+        appusage="
 
-ALGOPTION for '$alg':
+ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=\"keyword1 keyword2 ...\"           'Keywords for the query'"
 	;;
 	*)
-	echo "Invalid algorithm: ${alg}"
+	echo "Invalid application: ${app}"
 	exit 1
 	;;
 esac
 
-wholeusage="$usage $algusage"
+wholeusage="$usage $appusage"
 
 for argname in $required; do
 	if [ -z ${!argname+x} ]; then
@@ -142,7 +142,7 @@ cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --class br.ufmg.cs.systems.fractal.FractalSparkRunner \\
    --jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-SPARK-2.2.0.jar \\
    $FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-SPARK-2.2.0.jar \\
-      $input_format $inputgraph $alg $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $configs"
+      $input_format $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $configs"
 
 printf "info: Submitting command:\n$cmd\n\n"
 bash -c "$cmd"

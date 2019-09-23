@@ -1,6 +1,0 @@
-computation: io.arabesque.gmlib.triangles.CountingTrianglesComputation
-input_graph_path: citeseer-single-label.graph
-output_path: Triangles_Output
-
-optimizations:
-  - io.arabesque.optimization.CliqueOptimization

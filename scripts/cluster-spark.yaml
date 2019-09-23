@@ -1,5 +1,0 @@
-execution_engine: spark
-spark_master: local[*]
-num_workers: 2
-num_compute_threads: 32
-output_active: no

@@ -1,33 +1,23 @@
-[![Build Status](https://travis-ci.org/dccspeed/Arabesque.svg?branch=master)](https://travis-ci.org/dccspeed/Arabesque)
+# Fractal: A General-Purpose Graph Pattern Mining System
+[![Build Status](https://travis-ci.com/dccspeed/fractal.svg?branch=master)](https://travis-ci.com/dccspeed/fractal)
 
-# Arabesque: Distributed graph mining made simple
+*Current Version:* SPARK-2.2.0
 
-[http://arabesque.io](http://arabesque.io)
+Fractal is a high performance and high productivity system for supporting distributed graph
+pattern mining (GPM) applications. Our current version is built on top of Spark 2.x.x.
+Fractal features include:
+* Interactive and intuitive API specifically designed for Graph Pattern Mining.
+* Scalable and efficient.
 
-*Current Version:* 1.0.0-SPARK
-
-Arabesque is a distributed graph mining system that enables quick and easy
-development of graph mining algorithms, while providing a scalable and efficient
-execution engine running on top of Hadoop.
-
-Benefits of Arabesque:
-* Simple and intuitive API, specially tailored for Graph Mining algorithms.
-* Transparently handling of all complexities associated with these algorithms.
-* Scalable to hundreds of workers.
-* Efficient implementation: negligible overhead compared to equivalent centralized solutions.
-
-Arabesque is open-source with the Apache 2.0 license.
+Fractal is open-source with the Apache 2.0 license. Fractal paper is available [here](https://dl.acm.org/citation.cfm?id=3319875).
 
 ## Requirements for running
 
-* Linux/Mac with 64-bit JVM
-* At least one of the supported execution engines installed (local or in a cluster):
-   * [Hadoop2/Giraph](http://www.alexjf.net/blog/distributed-systems/hadoop-yarn-installation-definitive-guide/) or
-   * [Spark](https://chongyaorobin.wordpress.com/2015/07/01/step-by-step-of-installing-apache-spark-on-apache-hadoop/)
-
+* OpenJDK 8
+* Spark 2.x.x
 
 ## Preparing your input
-Arabesque currently takes as input graphs with the following format:
+Fractal currently takes as input graphs with the following format:
 
 ```
 # <num vertices> <num edges>
@@ -38,120 +28,159 @@ Arabesque currently takes as input graphs with the following format:
 
 Vertex ids are expected to be sequential integers between 0 and (total number of vertices - 1).
 
-## Test/Execute the included algorithms
+## Installing Fractal
 
-You can find an execution-helper script and several configuration files for the different algorithms under the [scripts
-folder in the repository](https://github.com/Qatar-Computing-Research-Institute/Arabesque/tree/master/scripts):
-
-* `run_arabesque.sh` - Launcher for arabesque executions. Takes as parameters one or more yaml files describing the configuration of the execution to be run. Configurations are applied in sequence with configurations in subsequent yaml files overriding entries of previous ones.
-* `cluster.yaml` - File with configurations related to the cluster and, so, common to all algorithms: execution engine, number of workers, number of threads per worker, number of partitions, etc.
-* `<algorithm>.yaml` - Files with configurations related to particular algorithm executions using as input the [provided citeseer graph](https://github.com/Qatar-Computing-Research-Institute/Arabesque/tree/master/data):
-  * `fsm.yaml` - Run frequent subgraph mining over the citeseer graph.
-  * `cliques.yaml` - Run clique finding over the citeseer graph.
-  * `motifs.yaml` - Run motif counting over the citeseer graph.
-  * `triangles.yaml` - Run triangle counting over the citeseer graph.
-
-**Steps:**
-
-1. Compile Arabesque using 
-  ```
-  mvn package
-  ```
-  You will find the jar file under `target/`
-  
-2. Copy the newly generated jar file, the `run_arabesque.sh` script and the desired yaml files onto a folder on a computer with access to an Hadoop cluster. 
-
-3. Upload the input graph to HDFS. Sample graphs are under the `data` directory. Make sure you have initialized HDFS first.
-
-  ```
-  hdfs dfs -put <input graph file> <destination graph file in HDFS>
-  ```
-
-4. Configure the `cluster.yaml` file with the desired number of containers, threads per container and other cluster-wide configurations. Remember to include the desirable execution engine: (i) 'spark' for [Spark](http://spark.apache.org/) or 'giraph' [Hadoop2/Giraph](http://giraph.apache.org/). In case of Spark, include also the [master URL](http://spark.apache.org/docs/latest/submitting-applications.html#master-urls) (`spark_master`) which indicates the desirable deployment. See folder `scripts` for examples.
-
-5. Configure the algorithm-specific yamls to reflect the HDFS location of your input graph as well as the parameters you want to use (max size for motifs and cliques or support for FSM).
-
-6. Run your desired algorithm by executing:
-
-  ```
-  # giraph
-  ./run_arabesque.sh cluster-giraph.yaml <algorithm>.yaml
-  # or spark (make sure SPARK_HOME is set)
-  ./run_arabesque.sh cluster-spark.yaml <algorithm>.yaml
-  ```
-
-7. Follow execution progress by checking the logs of the Hadoop containers or
-   local logs.
-
-8. Check any output (generated with calls to the `output` function) in the HDFS path indicated by the `output_path` configuration entry.
-
-
-## Implementing your own algorithms
-The easiest way to get to code your own implementations on top of Arabesque is by forking our [Arabesque Skeleton Project](https://github.com/Qatar-Computing-Research-Institute/Arabesque-Skeleton). You can do this via
-[Github](https://help.github.com/articles/fork-a-repo/) or manually by executing the following:
+1. Download and configure Spark 2.x.x:
 
 ```
-git clone https://github.com/Qatar-Computing-Research-Institute/Arabesque-Skeleton.git $PROJECT_PATH
-cd $PROJECT_PATH
-git remote rename origin upstream
-git remote add origin $YOUR_REPO_URL
+export JAVA_HOME=<openjdk-8-installation-folder>
+cd <repositories-folder>
+wget https://archive.apache.org/dist/spark/spark-2.2.0/spark-2.2.0-bin-hadoop2.7.tgz
+mv spark-2.2.0-bin-hadoop2.7.tgz spark
+cd spark
+export SPARK_HOME=`pwd` 
 ```
 
-## Arabesque notebook
+2. Clone and build Fractal:
+```
+cd <repositories-folder>
+git clone https://github.com/dccspeed/fractal.git
+cd fractal
+export FRACTAL_HOME=`pwd`
+./gradlew assemble
+```
 
-Arabesque notebook runs in [Toree](https://github.com/apache/incubator-toree),
-which deploy Spark in Jupyter notebook environment. Follow these steps:
-   1. Configure the env variables for Spark and Arabesque:
+## Running built-in applications
 
-   ```
-   export SPARK_HOME=<path_to_spark_installation>
-   export ARABESQUE_HOME=<path_to_arabesque_installation>
-   ```
+Fractal includes the following built-in applications (GPM kernels):
 
-   You can do it by setting ```arabesque-env.sh``` (root of the project) and sourcing it:
+- Motifs Enumeration & Counting
+- Cliques Enumeration & Counting
+- Frequent Subgraph Mining (FSM)
+- Subgraph Querying
 
-   ```
-   source arabesque-env.sh
-   ```
+Please check out our [Fractal paper](https://dl.acm.org/citation.cfm?id=3319875) for more details on
+those kernels. You can run those applications through the ```bin/fractal.sh``` script:
 
-   2. [Install Jupyter](http://jupyter.readthedocs.org/en/latest/install.html) 
+```
+Description: Script launcher for Fractal built-in applications
 
-   3. Install toree using pip installer:
+info: FRACTAL_HOME is set to ...
+info: SPARK_HOME is set to ...
+error: app is unset
 
-   ```
-   pip install toree
-   ```
+Usage:
+app=fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws [OPTION]... [ALGOPTION]... fractal.sh
 
-   4. Register toree kernel with jupyter:
+OPTION:
+   master_memory=512m|1g|2g|...            'Master memory'                      Default: 2g
+   num_workers=1|2|3|...                   'Number of workers'                  Default: 1
+   worker_cores=1|2|3|...                  'Number of cores per worker'         Default: 1
+   worker_memory=512m|1g|2g|...            'Workers memory'                     Default: 2g
+   input_format=al|el                      'al: adjacency list; el: edge list'  Default: al
+   comm=scratch|graphred                   'Execution strategy'                 Default: scratch
+   spark_master=local[1]|local[2]|yarn|... 'Spark master URL'                   Default: local[worker_cores]
+   deploy_mode=server|client               'Spark deploy mode'                  Default: client
+   log_level=info|warn|error               'Log vebosity'                       Default: info
+```
 
-   ```
-   jupyter toree install \
-      --spark_home=$SPARK_HOME \
-      --spark_opts="--master local[*] --jars target/arabesque-1.0.2-BETA-jar-with-dependencies.jar" \
-      --kernel_name="arabesque_1.0.2" \
-      --user
-   ```
+If you specify `app` to this command you get parameters for specific applications, such as `cliques`:
 
-   5. Start jupyter notebook:
+```
+Description: Script launcher for Fractal built-in application
 
-   ```
-   cd $ARABESQUE_HOME
-   jupyter notebook
-   ```
+info: FRACTAL_HOME is set to ...
+info: SPARK_HOME is set to ...
+info: app is set to 'cliques'
+error: inputgraph is unset
 
-   6. The last step will open jupyter's web interface. Just click on
-      ```arabesque-demo.ipynb``` and try some concepts/snippets.
+Usage:
+app=fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws [OPTION]... [ALGOPTION]... fractal.sh
 
-## Embedding communication strategies for Spark
+OPTION:
+   master_memory=512m|1g|2g|...            'Master memory'                      Default: 2g
+   num_workers=1|2|3|...                   'Number of workers'                  Default: 1
+   worker_cores=1|2|3|...                  'Number of cores per worker'         Default: 1
+   worker_memory=512m|1g|2g|...            'Workers memory'                     Default: 2g
+   input_format=al|el                      'al: adjacency list; el: edge list'  Default: al
+   comm=scratch|graphred                   'Execution strategy'                 Default: scratch
+   spark_master=local[1]|local[2]|yarn|... 'Spark master URL'                   Default: local[worker_cores]
+   deploy_mode=server|client               'Spark deploy mode'                  Default: client
+   log_level=info|warn|error               'Log vebosity'                       Default: info 
 
-The system supports the following communication strategies in Spark mode:
+ALGOPTION for 'cliques':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+```
 
-* `odag`: the produced embeddings from each superstep are distributed in a
-  compressed structure called ODAG (refer to the paper for details). This mode
-  is activated with the following property (included in yaml files or Scala API):
-  * key: `comm_strategy`; value: `odag`
-* `embedding`: the produced embeddings are packed together and distributed over
-  the network. In this mode we do not leverage graph properties for compressing,
-  however we gain in access time if memory is not an issue. This mode is
-  activated with the following property (included in yaml files or Scala API):
-  * key: `comm_strategy`; value: `embedding`
+For example, the following example submits the cliques kernel with k=2 extension steps
+(i.e., cliques with k+1=3 vertices) over the dataset ```citeseer-single-label.graph```:
+```
+steps=2 inputgraph=$FRACTAL_HOME/data/citeseer-single-label.graph app=cliques ./bin/fractal.sh
+```
+
+## Running custom applications
+
+You can also implement your own application using Fractal API. We provide the subproject 
+"fractal-apps" to make this process easier. All you need to do is to add your application class
+into ```fractal-apps/src/```, re-compile the project with ```./gradlew assemble```, and run your
+code with the ```bin/fractal-custom-app.sh``` script:
+
+```
+./bin/fractal-custom-app.sh
+```
+
+For example, lets create a custom application that counts motifs with 3 vertices.
+We just have to add the file ```MyMotifsApp.scala``` into
+```fractal-apps/src/main/scala/br/ufmg/cs/systems/fractal/apps/```:
+```
+// file: fractal-apps/src/main/scala/br/ufmg/cs/systems/fractal/apps/MyMotifsApp.scala
+package br.ufmg.cs.systems.fractal.apps
+
+import br.ufmg.cs.systems.fractal._
+import br.ufmg.cs.systems.fractal.pattern.Pattern
+import br.ufmg.cs.systems.fractal.util.Logging
+import org.apache.hadoop.io.LongWritable
+import org.apache.spark.{SparkConf, SparkContext}
+
+object MyFractalApp extends Logging {
+  def main(args: Array[String]): Unit = {
+    // environment setup
+    val conf = new SparkConf().setAppName("MotifsApp")
+    val sc = new SparkContext(conf)
+    val fc = new FractalContext(sc)
+    val graphPath = args(0) // input graph
+    val fgraph = fc.textFile (graphPath)
+
+    // motifs application
+    val AGG_MOTIFS = "motifs"
+    val motifs = fgraph.vfractoid.
+      expand(1).
+      aggregate [Pattern,LongWritable] (
+        AGG_MOTIFS,
+        (e,c,k) => { e.getPattern },
+        (e,c,v) => { v.set(1); v },
+        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 }).
+      explore(2)
+
+    val motifsMap = motifs.aggregationMap[Pattern,LongWritable](AGG_MOTIFS)
+    for ((motif,count) <- motifsMap) {
+      logInfo(s"motif=${motif} count=${count}")
+    }
+
+    // environment cleaning
+    fc.stop()
+    sc.stop()
+  }
+}
+```
+
+Next, we re-compile the project with ```./gradlew assemble``` and run the application over
+the dataset ```data/citeseer.graph```:
+
+```
+app_class=br.ufmg.cs.systems.fractal.apps.MyMotifsApp ./bin/fractal-custom-app.sh data/citeseer.graph
+```
+
+Obs. You can use the template in ```fractal-apps/src/main/scala/br/ufmg/cs/systems/fractal/apps/MyFractalApp.scala```
+for a quick start.

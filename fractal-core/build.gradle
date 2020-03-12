@@ -41,9 +41,9 @@ repositories {
 
 dependencies {
     // framework to be probed
-    compile 'org.apache.spark:spark-core_2.11:2.2.0'
-    
-    compile 'org.apache.spark:spark-graphx_2.11:2.2.0'
+    compile 'org.apache.spark:spark-core_2.11:2.4.5'
+
+    compile 'org.apache.spark:spark-graphx_2.11:2.4.5'
     
     compile 'com.koloboke:koloboke-api-jdk8:1.0.0'
     

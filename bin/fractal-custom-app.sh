@@ -29,11 +29,14 @@ spark_master=${spark_master:-local[1]}
 master_memory=${master_memory:-2g}
 num_workers=${num_workers:-1}
 worker_cores=${worker_cores:-1}
+spark_master=${spark_master:-local[${worker_cores}]}
 worker_memory=${worker_memory:-2g}
-inputformat=${inputformat:-al}
+input_format=${input_format:-al}
 comm=${comm:-scratch}
 total_cores=$((num_workers * worker_cores))
 deploy_mode=${deploy_mode:-client}
+log_level=${log_level:-info}
+packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master --deploy-mode $deploy_mode \\
 	--driver-memory $master_memory \\
@@ -41,8 +44,9 @@ cmd="$SPARK_HOME/bin/spark-submit --master $spark_master --deploy-mode $deploy_m
 	--executor-cores $worker_cores \\
 	--executor-memory $worker_memory \\
         --class $app_class \\
+        --packages=$packages \\
 	--jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-SPARK-2.2.0.jar \\
 	$FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-SPARK-2.2.0.jar $@"
 
-echo $cmd
+printf "info: Submitting command:\n$cmd\n\n"
 bash -c "$cmd"

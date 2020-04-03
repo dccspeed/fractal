@@ -47,7 +47,7 @@ cd <repositories-folder>
 git clone https://github.com/dccspeed/fractal.git
 cd fractal
 export FRACTAL_HOME=`pwd`
-./gradlew assemble
+./gradlew jar test
 ```
 
 ## Running built-in applications
@@ -123,7 +123,7 @@ steps=2 inputgraph=$FRACTAL_HOME/data/citeseer-single-label.graph app=cliques ./
 
 You can also implement your own application using Fractal API. We provide the subproject 
 "fractal-apps" to make this process easier. All you need to do is to add your application class
-into ```fractal-apps/src/```, re-compile the project with ```./gradlew assemble```, and run your
+into ```fractal-apps/src/```, re-compile the project with ```./gradlew jar test```, and run your
 code with the ```bin/fractal-custom-app.sh``` script:
 
 ```
@@ -175,7 +175,7 @@ object MyFractalApp extends Logging {
 }
 ```
 
-Next, we re-compile the project with ```./gradlew assemble``` and run the application over
+Next, we re-compile the project with ```./gradlew jar test``` and run the application over
 the dataset ```data/citeseer.graph```:
 
 ```

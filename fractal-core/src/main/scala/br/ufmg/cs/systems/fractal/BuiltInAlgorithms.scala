@@ -1,14 +1,15 @@
 package br.ufmg.cs.systems.fractal
 
 import br.ufmg.cs.systems.fractal.annotation.Experimental
-import br.ufmg.cs.systems.fractal.computation.{Computation, SubgraphEnumerator}
-import br.ufmg.cs.systems.fractal.gmlib.clique.KClistEnumerator
+import br.ufmg.cs.systems.fractal.computation.Computation
 import br.ufmg.cs.systems.fractal.graph.MainGraph
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
-import br.ufmg.cs.systems.fractal.util.{Logging, Utils}
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool
+import br.ufmg.cs.systems.fractal.util.{Logging, Utils}
 import org.apache.hadoop.io.{IntWritable, LongWritable}
+
+import scala.collection.mutable
 
 class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
@@ -819,16 +820,18 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
     self.efractoid.expand(1).filter { (e, _) =>
       val numEdges = e.getNumEdges
-      val degrees = Map[Int, Int]().withDefaultValue(0)
+      val edges = e.getEdges
+
+      val degrees = mutable.Map[Int, Int]().withDefaultValue(0)
       var ones = 0
       var isPath = true
 
       try {
-        for (id <- 0 to numEdges) {
-          val edge = e.edge(id)
+        for (id <- 0 to numEdges - 1) {
+          val edge = e.edge(edges.getUnchecked(id))
 
-          degrees.updated(edge.getDestinationId, degrees(edge.getDestinationId) + 1)
-          degrees.updated(edge.getSourceId, degrees(edge.getSourceId) + 1)
+          degrees(edge.getSourceId) = degrees(edge.getSourceId) + 1
+          degrees(edge.getDestinationId) =  degrees(edge.getDestinationId) + 1
 
           if (degrees(edge.getDestinationId) > 2 || degrees(edge.getSourceId) > 2) break
         }

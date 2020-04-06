@@ -13,48 +13,6 @@ import org.apache.hadoop.io.{IntWritable, LongWritable}
 class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
   /**
-   * All paths listing.
-   *
-   * @return Fractoid with the initial state for paths
-   */
-  def paths: Fractoid[EdgeInducedSubgraph] = {
-    import scala.util.control.Breaks.break
-    import scala.util.control.ControlThrowable
-
-    self.efractoid.expand(1).filter { (e, _) =>
-      val numEdges = e.getNumEdges
-      val degrees = Map[Int, Int]().withDefaultValue(0)
-      var ones = 0
-      var isPath = true
-
-      try {
-        for (id <- 0 to numEdges) {
-          val edge = e.edge(id)
-
-          degrees.updated(edge.getDestinationId, degrees(edge.getDestinationId) + 1)
-          degrees.updated(edge.getSourceId, degrees(edge.getSourceId) + 1)
-
-          if (degrees(edge.getDestinationId) > 2 || degrees(edge.getSourceId) > 2) break
-        }
-
-        degrees.values.foreach { degree =>
-          if (degree == 1) {
-            ones += 1
-            if (ones > 2) break
-          }
-
-          else if (degree > 2) break
-        }
-      } catch {
-        case _: ControlThrowable => isPath = false
-      }
-
-      isPath
-    }
-  }
-
-
-  /**
    * Motifs counting
    *
    * @return Fractoid with the initial state for motifs
@@ -850,5 +808,45 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     kws
   }
 
+  /**
+   * All paths listing.
+   *
+   * @return Fractoid with the initial state for paths
+   */
+  def paths: Fractoid[EdgeInducedSubgraph] = {
+    import scala.util.control.Breaks.break
+    import scala.util.control.ControlThrowable
+
+    self.efractoid.expand(1).filter { (e, _) =>
+      val numEdges = e.getNumEdges
+      val degrees = Map[Int, Int]().withDefaultValue(0)
+      var ones = 0
+      var isPath = true
+
+      try {
+        for (id <- 0 to numEdges) {
+          val edge = e.edge(id)
+
+          degrees.updated(edge.getDestinationId, degrees(edge.getDestinationId) + 1)
+          degrees.updated(edge.getSourceId, degrees(edge.getSourceId) + 1)
+
+          if (degrees(edge.getDestinationId) > 2 || degrees(edge.getSourceId) > 2) break
+        }
+
+        degrees.values.foreach { degree =>
+          if (degree == 1) {
+            ones += 1
+            if (ones > 2) break
+          }
+
+          else if (degree > 2) break
+        }
+      } catch {
+        case _: ControlThrowable => isPath = false
+      }
+
+      isPath
+    }
+  }
 
 }

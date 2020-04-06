@@ -456,25 +456,26 @@ case class Fractoid [S <: Subgraph : ClassTag](
    * @return new result
    */
   def expand(n: Int): Fractoid[S] = {
-    var curr = this
-    logInfo(s"ExpandBefore ${curr}")
-    for (i <- 0 until n) {
+    // base step, no effect
+    if (n == 0) return this
 
-      // first computation, create a new computation
-      if (getComputationContainer[S] == null) {
-        curr = curr.withFirstComputation
+    var stepResult: Fractoid[S] = null
 
-      // computation exists, append to the current one
-      } else {
-        val expandComp = emptyComputation.
-          withShouldBypass(false).
-          withExpandCompute(null).
-          copy(mustSync = false)
-        curr = handleNextResult(expandComp)
-      }
+    // first computation, create a new computation
+    if (getComputationContainer[S] == null) {
+      stepResult = withFirstComputation
+      logInfo(s"ExpandNewComputation(n=${n}): before=${this} after=${stepResult}")
+    } else {
+      val expandComp = emptyComputation.
+        withShouldBypass(false).
+        withExpandCompute(null).
+        copy(mustSync = false)
+      stepResult = handleNextResult(expandComp)
+      logInfo(s"ExpandAppendComputation(n=${n}): before=${this} after=${stepResult}")
     }
-    logInfo(s"ExpandAfter ${curr}")
-    curr
+
+    // recursive call
+    stepResult.expand(n - 1)
   }
 
   /**

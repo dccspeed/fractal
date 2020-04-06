@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# IMPORTANT: this version must match the "build.gradle" one
+fractal_version="SPARK-2.4.5"
+
 printf "Description: Script launcher for Fractal built-in applications\n\n"
 
 apps="fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws"
@@ -132,6 +135,7 @@ comm=${comm:-scratch}
 total_cores=$((num_workers * worker_cores))
 deploy_mode=${deploy_mode:-client}
 log_level=${log_level:-info}
+packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\
@@ -140,8 +144,9 @@ cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --executor-cores $worker_cores \\
    --executor-memory $worker_memory \\
    --class br.ufmg.cs.systems.fractal.FractalSparkRunner \\
-   --jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-SPARK-2.2.0.jar \\
-   $FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-SPARK-2.2.0.jar \\
+   --jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-${fractal_version}.jar \\
+   --packages=$packages \\
+   $FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-${fractal_version}.jar \\
       $input_format $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $configs"
 
 printf "info: Submitting command:\n$cmd\n\n"

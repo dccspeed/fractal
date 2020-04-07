@@ -9,8 +9,6 @@ import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool
 import br.ufmg.cs.systems.fractal.util.{Logging, Utils}
 import org.apache.hadoop.io.{IntWritable, LongWritable}
 
-import scala.collection.mutable
-
 class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
   /**
@@ -817,22 +815,20 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
   def paths: Fractoid[EdgeInducedSubgraph] = {
     import scala.util.control.Breaks.break
     import scala.util.control.ControlThrowable
+    import scala.collection.mutable.Map
 
     self.efractoid.expand(1).filter { (e, _) =>
       val numEdges = e.getNumEdges
       val edges = e.getEdges
-
-      val degrees = mutable.Map[Int, Int]().withDefaultValue(0)
+      val degrees = Map.empty[Int, Int].withDefaultValue(0)
       var ones = 0
       var isPath = true
 
       try {
         for (id <- 0 to numEdges - 1) {
           val edge = e.edge(edges.getUnchecked(id))
-
-          degrees(edge.getSourceId) = degrees(edge.getSourceId) + 1
-          degrees(edge.getDestinationId) =  degrees(edge.getDestinationId) + 1
-
+          degrees.update(edge.getSourceId, degrees(edge.getSourceId) + 1)
+          degrees.update(edge.getDestinationId, degrees(edge.getDestinationId) + 1)
           if (degrees(edge.getDestinationId) > 2 || degrees(edge.getSourceId) > 2) break
         }
 
@@ -841,7 +837,6 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
             ones += 1
             if (ones > 2) break
           }
-
           else if (degree > 2) break
         }
       } catch {

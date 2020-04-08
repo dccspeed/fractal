@@ -1,21 +1,21 @@
 package br.ufmg.cs.systems.fractal
 
 import br.ufmg.cs.systems.fractal.annotation.Experimental
-import br.ufmg.cs.systems.fractal.computation.{Computation, SubgraphEnumerator}
-import br.ufmg.cs.systems.fractal.gmlib.clique.KClistEnumerator
+import br.ufmg.cs.systems.fractal.computation.Computation
 import br.ufmg.cs.systems.fractal.graph.MainGraph
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
-import br.ufmg.cs.systems.fractal.util.{Logging, Utils}
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool
+import br.ufmg.cs.systems.fractal.util.{Logging, Utils}
 import org.apache.hadoop.io.{IntWritable, LongWritable}
 
 class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
   /**
-    * Motifs counting
-    * @return Fractoid with the initial state for motifs
-    */
+   * Motifs counting
+   *
+   * @return Fractoid with the initial state for motifs
+   */
   def motifs: Fractoid[VertexInducedSubgraph] = {
     import br.ufmg.cs.systems.fractal.pattern.Pattern
     import org.apache.hadoop.io.LongWritable
@@ -25,29 +25,31 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
       expand(1).
       aggregate [Pattern,LongWritable] (
         AGG_MOTIFS,
-        (e,c,k) => { e.getPattern },
-        (e,c,v) => { v.set(1); v },
-        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
+        (e, c, k) => { e.getPattern },
+        (e, c, v) => { v.set(1); v },
+        (v1, v2) => { v1.set(v1.get() + v2.get()); v1 })
   }
 
   /**
-    * All-cliques listing.
-    * @return Fractoid with the initial state for cliques
-    */
+   * All-cliques listing.
+   *
+   * @return Fractoid with the initial state for cliques
+   */
   def cliques: Fractoid[VertexInducedSubgraph] = {
     self.vfractoid.
       expand(1).
-      filter { (e,c) =>
+      filter { (e, c) =>
         e.numEdgesAdded == e.getNumVertices - 1
       }
   }
 
   /**
-    * All-cliques listing implementing the efficient DAG structure from
-    * [[https://dl.acm.org/citation.cfm?id=3186125]]
-    * @param cliqueSize
-    * @return Fractoid with the initial state for cliques
-    */
+   * All-cliques listing implementing the efficient DAG structure from
+   * [[https://dl.acm.org/citation.cfm?id=3186125]]
+   *
+   * @param cliqueSize
+   * @return Fractoid with the initial state for cliques
+   */
   def cliquesKClist(cliqueSize: Int): Fractoid[VertexInducedSubgraph] = {
     self.vfractoid.
       expand(1).
@@ -56,12 +58,13 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
   }
 
   /**
-    * Frequent subgraph Mining (FSM)
-    * @param support threshold to determine what is frequent according to
-    *                the (minimum image)
-    * @param numSteps maximum number of exploration steps
-    * @return Fractoid with the initial state for FSM
-    */
+   * Frequent subgraph Mining (FSM)
+   *
+   * @param support  threshold to determine what is frequent according to
+   *                 the (minimum image)
+   * @param numSteps maximum number of exploration steps
+   * @return Fractoid with the initial state for FSM
+   */
   def fsm(support: Int, numSteps: Int): Fractoid[EdgeInducedSubgraph] = {
     import br.ufmg.cs.systems.fractal.gmlib.fsm._
     import br.ufmg.cs.systems.fractal.pattern.Pattern
@@ -82,9 +85,9 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     var iteration = 0
     var freqFrac = bootstrap
     var freqPatts = bootstrap.
-      aggregationStorage[Pattern,DomainSupport](AGG_FREQS)
+      aggregationStorage[Pattern, DomainSupport](AGG_FREQS)
 
-    freqPatts.getMapping().asScala.foreach { case (pattern,supp) =>
+    freqPatts.getMapping().asScala.foreach { case (pattern, supp) =>
       logInfo(s"FrequentPattern iteration=${iteration} ${pattern} ${supp}")
     }
 
@@ -95,22 +98,22 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     while (continue) {
       iteration += 1
       freqFrac = freqFrac.
-        filter [Pattern,DomainSupport] (AGG_FREQS) {
+        filter [Pattern, DomainSupport] (AGG_FREQS) {
           (e,a) =>
             a.containsKey(e.getPattern)
         }.
         expand(1).
-        aggregate [Pattern,DomainSupport] (AGG_FREQS,
-          (e,c,k) => { e.getPattern },
-          (e,c,v) => { v.setSupport(support); v.setFromSubgraph(e); v },
-          (v1,v2) => { v1.aggregate(v2); v1 },
+        aggregate [Pattern, DomainSupport] (AGG_FREQS,
+          (e, c, k) => { e.getPattern },
+          (e, c, v) => { v.setSupport(support); v.setFromSubgraph(e); v },
+          (v1, v2) => { v1.aggregate(v2); v1 },
           new DomainSupportEndAggregationFunction(),
           isIncremental = true)
 
       freqPatts = freqFrac.
-        aggregationStorage[Pattern,DomainSupport](AGG_FREQS)
+        aggregationStorage[Pattern, DomainSupport](AGG_FREQS)
 
-      freqPatts.getMapping().asScala.foreach { case (pattern,supp) =>
+      freqPatts.getMapping().asScala.foreach { case (pattern, supp) =>
         logInfo(s"FrequentPattern iteration=${iteration} ${pattern} ${supp}")
       }
 
@@ -123,22 +126,24 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
   }
 
   /**
-    * subgraph Querying
-    * @param subgraph query graph
-    * @return Fractoid with the initial state for subraph querying
-    */
+   * subgraph Querying
+   *
+   * @param subgraph query graph
+   * @return Fractoid with the initial state for subraph querying
+   */
   def gquerying(subgraph: FractalGraph): Fractoid[PatternInducedSubgraph] = {
     val qpattern = subgraph.asPattern
-    logInfo (s"Querying pattern ${qpattern} in ${this}")
+    logInfo(s"Querying pattern ${qpattern} in ${this}")
     self.pfractoid(qpattern).expand(1)
   }
 
   /**
-    * Vertex-induced implementation of quasi-cliques
-    * @param numSteps maximum number of steps
-    * @param minDensity density of edges between 0 and 1.
-    * @return Fractoid with the initial state for quasi-cliques
-    */
+   * Vertex-induced implementation of quasi-cliques
+   *
+   * @param numSteps   maximum number of steps
+   * @param minDensity density of edges between 0 and 1.
+   * @return Fractoid with the initial state for quasi-cliques
+   */
   def quasiCliques(
       numSteps: Int,
       minDensity: Double): Fractoid[VertexInducedSubgraph] = {
@@ -166,15 +171,15 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
     self.vfractoid.
       expand(1).
-      filter((e,c) => (e.getNumEdges() / maxDensity) +
+      filter((e, c) => (e.getNumEdges() / maxDensity) +
         cummDensities(e.getNumVertices() - 1) >= minDensity).
       explore(numSteps)
   }
 
   /**
-    * Experimental algorithms
-    /def gque
-    */
+   * Experimental algorithms
+   * /def gque
+   */
   @Experimental
   def maximalcliques: Fractoid[VertexInducedSubgraph] = {
     import java.util.Random
@@ -185,7 +190,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
     val vertexNeighborhood = (c: Computation[_], vertexId: Int) => {
       val neighborhood = c.getConfig().
-        getMainGraph[MainGraph[_,_]]().
+        getMainGraph[MainGraph[_, _]]().
         getVertexNeighbourhood(vertexId)
       if (neighborhood != null) {
         neighborhood.getOrderedVertices()
@@ -195,8 +200,8 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     }
 
     val aggregateMaximalClique = (c: Computation[_], k: Int, v: Long) => {
-      val aggStorage = c.getAggregationStorage [
-      IntWritable,LongWritable] (MAXIMAL_CLIQUE_COUNTING)
+      val aggStorage = c.getAggregationStorage[
+        IntWritable, LongWritable](MAXIMAL_CLIQUE_COUNTING)
       val reusableKey = aggStorage.reusableKey()
       val reusableValue = aggStorage.reusableValue()
       reusableKey.set(k)
@@ -221,7 +226,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     }
 
     val generateBestPivot2 = (
-        c: Computation[_], p: IntArrayList, x: IntArrayList) => {
+       c: Computation[_], p: IntArrayList, x: IntArrayList) => {
 
       var bestU = -1
       var bestUSize = Int.MinValue
@@ -234,7 +239,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
           bestU = u
           bestUSize = uSize
         }
-        i +=1
+        i += 1
       }
 
       i = 0
@@ -245,7 +250,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
           bestU = u
           bestUSize = uSize
         }
-        i +=1
+        i += 1
       }
 
       bestU
@@ -288,7 +293,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     }
 
     self.vfractoid.
-      extend { (e,c) =>
+      extend { (e, c) =>
         val numWords = e.getNumWords
         val cacheStore = e.cacheStore().asInstanceOf[HashIntObjMap[IntArrayList]]
         val extensions = e.extensions()
@@ -480,17 +485,17 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
         }
         extensions
       }.
-      aggregate [IntWritable,LongWritable] (
+      aggregate[IntWritable, LongWritable](
         MAXIMAL_CLIQUE_COUNTING,
-        (e,c,k) => { k },
-        (e,c,v) => { v },
-        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
+        (e, c, k) => { k },
+        (e, c, v) => { v },
+        (v1, v2) => { v1.set(v1.get() + v2.get()); v1 })
   }
 
   @Experimental
   def keywordSearch(
-      numPartitions: Int,
-      keywords: Array[String]): Fractoid[EdgeInducedSubgraph] = {
+     numPartitions: Int,
+     keywords: Array[String]): Fractoid[EdgeInducedSubgraph] = {
     import java.util.function.IntConsumer
 
     import br.ufmg.cs.systems.fractal.util.collection._
@@ -500,7 +505,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
     import scala.collection.mutable.Map
 
-    logInfo (s"KeywordSearch keywords=${keywords.mkString(",")}")
+    logInfo(s"KeywordSearch keywords=${keywords.mkString(",")}")
 
     val INVERTED_INDEX = "inverted_index"
     val PREDICATE_INDEX = "predicate_index"
@@ -572,15 +577,15 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
     val idxRes = self.efractoid.
       expand(1).
-      set ("num_partitions", numPartitions).
-      set ("input_graph_class", "br.ufmg.cs.systems.fractal.gmlib.keywordsearch.KeywordSearchGraph").
-      set ("edge_labelled", true).
-      aggregateAll [Text,InvertedIndexMap] (
+      set("num_partitions", numPartitions).
+      set("input_graph_class", "br.ufmg.cs.systems.fractal.gmlib.keywordsearch.KeywordSearchGraph").
+      set("edge_labelled", true).
+      aggregateAll[Text, InvertedIndexMap](
         INVERTED_INDEX,
         (e: EdgeInducedSubgraph, c: Computation[EdgeInducedSubgraph]) => {
           val reusableTuple = (new Text(), new InvertedIndexMap())
           val singleEdge = e.getEdges().getUnchecked(0)
-          docIterator(e,c).filter (w => keywords.contains(w)).map { word =>
+          docIterator(e, c).filter(w => keywords.contains(w)).map { word =>
             reusableTuple._1.set(word)
             reusableTuple._2.clear()
             reusableTuple._2.appendDoc(singleEdge, 1)
@@ -589,13 +594,13 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
         },
         (ii1: InvertedIndexMap, ii2: InvertedIndexMap) => {ii1.merge(ii2); ii1}
       ).
-      aggregateAll [Text,InvertedIndexMap] (
+      aggregateAll[Text, InvertedIndexMap](
         PREDICATE_INDEX,
         (e: EdgeInducedSubgraph, c: Computation[EdgeInducedSubgraph]) => {
           val reusableTuple = (new Text(), new InvertedIndexMap())
           val singleEdge = e.getEdges().getUnchecked(0)
           val predicate = e.labelledEdge(singleEdge).getEdgeLabel()
-          docIterator(e,c).map { word =>
+          docIterator(e, c).map { word =>
             reusableTuple._1.set(word)
             reusableTuple._2.clear()
             reusableTuple._2.appendDoc(predicate, 1)
@@ -604,10 +609,10 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
         },
         (ii1: InvertedIndexMap, ii2: InvertedIndexMap) => {ii1.merge(ii2); ii1}
       ).
-      aggregateAll [Text,IntSet] (
+      aggregateAll[Text, IntSet](
         VALID_VERTICES,
         (e: EdgeInducedSubgraph, c: Computation[EdgeInducedSubgraph]) => {
-          if (!docIterator(e,c).filter (w => keywords.contains(w)).isEmpty) {
+          if (!docIterator(e, c).filter(w => keywords.contains(w)).isEmpty) {
             val reusableTuple = (new Text(VALID_VERTICES), new IntSet())
             val edgeId = e.getEdges().getUnchecked(0)
             val edge = e.labelledEdge(edgeId)
@@ -626,19 +631,19 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
     // mapping from words to their respective inverted indexes
     val wordToIdx = idxRes.
-      aggregationMap[Text,InvertedIndexMap](INVERTED_INDEX).toArray
+      aggregationMap[Text, InvertedIndexMap](INVERTED_INDEX).toArray
 
     // mapping from words to their respective predicate
     val wordToPredicate = idxRes.
-      aggregationMap[Text,InvertedIndexMap](PREDICATE_INDEX).toArray
+      aggregationMap[Text, InvertedIndexMap](PREDICATE_INDEX).toArray
 
     // valid vertices
-    val validVertexIds = idxRes.aggregationMap[Text,IntSet](
+    val validVertexIds = idxRes.aggregationMap[Text, IntSet](
       VALID_VERTICES)(new Text(VALID_VERTICES))
 
     elapsed = System.currentTimeMillis() - start
 
-    logInfo (s"KeywordSearchFirstPass" +
+    logInfo(s"KeywordSearchFirstPass" +
       s" distinctWords=${wordToPredicate.length} took ${elapsed} ms")
 
     /**
@@ -664,7 +669,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     }
 
     var totalFreq = 0L
-    val keywordToIndex = Map.empty[String,Int]
+    val keywordToIndex = Map.empty[String, Int]
     val totalInvPredicate = new InvertedIndexMap()
     val invPredicates = new Array[InvertedIndexMap](wordToPredicate.length)
     var i = 0
@@ -672,7 +677,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
       val (pword, invPredicate) = wordToPredicate(i)
       val wordStr = pword.toString()
       if (keywords.contains(wordStr)) {
-        keywordToIndex.update (wordStr, i)
+        keywordToIndex.update(wordStr, i)
       }
       invPredicate.forEachDoc(consumerLabel)
       totalInvPredicate.merge(invPredicate)
@@ -699,7 +704,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
     elapsed = System.currentTimeMillis() - start
 
-    logInfo (s"KeywordSearchLocalAggregation validEdgeIds=${validEdgeIds}" +
+    logInfo(s"KeywordSearchLocalAggregation validEdgeIds=${validEdgeIds}" +
       s" validVertexIds=${validVertexIds}" +
       s" totalFreq=${totalFreq} totalInvIdx=${totalInvIdx}" +
       s" totalInvPredicate=${totalInvPredicate}" +
@@ -747,11 +752,11 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
     // filtered input graph
     var kws = self.efractoid.
-      efilter [HashObjSet[String]] (e => validEdgeIdsBc.value.contains(e.getEdgeId())).
-      set ("num_partitions", numPartitions).
-      set ("input_graph_class", "br.ufmg.cs.systems.fractal.gmlib.keywordsearch.KeywordSearchGraph").
-      set ("edge_labelled", true).
-      set ("keep_maximal", true)
+      efilter[HashObjSet[String]](e => validEdgeIdsBc.value.contains(e.getEdgeId())).
+      set("num_partitions", numPartitions).
+      set("input_graph_class", "br.ufmg.cs.systems.fractal.gmlib.keywordsearch.KeywordSearchGraph").
+      set("edge_labelled", true).
+      set("keep_maximal", true)
 
     for (i <- 0 until keywords.size) {
       kws = kws.expand(1).filter(lastWordIsValid)
@@ -759,4 +764,45 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
     kws
   }
+
+  /**
+   * All paths listing.
+   *
+   * @return Fractoid with the initial state for paths
+   */
+  def paths: Fractoid[EdgeInducedSubgraph] = {
+    import scala.util.control.Breaks.break
+    import scala.util.control.ControlThrowable
+    import scala.collection.mutable.Map
+
+    self.efractoid.expand(1).filter { (e, _) =>
+      val numEdges = e.getNumEdges
+      val edges = e.getEdges
+      val degrees = Map.empty[Int, Int].withDefaultValue(0)
+      var ones = 0
+      var isPath = true
+
+      try {
+        for (id <- 0 to numEdges - 1) {
+          val edge = e.edge(edges.getUnchecked(id))
+          degrees.update(edge.getSourceId, degrees(edge.getSourceId) + 1)
+          degrees.update(edge.getDestinationId, degrees(edge.getDestinationId) + 1)
+          if (degrees(edge.getDestinationId) > 2 || degrees(edge.getSourceId) > 2) break
+        }
+
+        degrees.values.foreach { degree =>
+          if (degree == 1) {
+            ones += 1
+            if (ones > 2) break
+          }
+          else if (degree > 2) break
+        }
+      } catch {
+        case _: ControlThrowable => isPath = false
+      }
+
+      isPath
+    }
+  }
+
 }

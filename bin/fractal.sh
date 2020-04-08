@@ -5,7 +5,7 @@ fractal_version="SPARK-2.4.5"
 
 printf "Description: Script launcher for Fractal built-in applications\n\n"
 
-apps="fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws"
+apps="fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws|paths"
 
 usage="
 Usage:
@@ -56,6 +56,7 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
 	;;
+
 	motifs)
 	required="inputgraph steps"
         appusage="
@@ -64,6 +65,7 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
+
 	cliques)
 	required="inputgraph steps"
         appusage="
@@ -72,6 +74,7 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
+
 	cliquesopt)
 	required="inputgraph steps"
         appusage="
@@ -80,6 +83,7 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
+
 	gquerying)
 	required="inputgraph steps query"
         appusage="
@@ -89,6 +93,7 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
+
 	gqueryingnaive)
 	required="inputgraph steps query"
         appusage="
@@ -98,6 +103,7 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
+
 	kws)
 	required="inputgraph steps query"
         appusage="
@@ -107,6 +113,16 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=\"keyword1 keyword2 ...\"           'Keywords for the query'"
 	;;
+
+	paths)
+	required="inputgraph steps"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
+	;;
+
 	*)
 	echo "Invalid application: ${app}"
 	exit 1

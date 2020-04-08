@@ -200,6 +200,28 @@ class GQueryingApp(val fractalGraph: FractalGraph,
   }
 }
 
+class PathsApp(val fractalGraph: FractalGraph,
+                 commStrategy: String,
+                 numPartitions: Int,
+                 explorationSteps: Int) extends FractalSparkApp {
+  def execute: Unit = {
+    val pathsRes = fractalGraph.paths.
+      set ("comm_strategy", commStrategy).
+      set ("num_partitions", numPartitions).
+      explore(explorationSteps)
+
+    val (accums, elapsed) = FractalSparkRunner.time {
+      pathsRes.compute()
+    }
+
+    logInfo (s"PathsApp comm=${commStrategy}" +
+      s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
+      s" graph=${fractalGraph} " +
+      s" numValidSubgraphs=${pathsRes.numValidSubgraphs()} elapsed=${elapsed}"
+    )
+  }
+}
+
 object FractalSparkRunner {
   def time[R](block: => R): (R, Long) = {
     val t0 = System.currentTimeMillis()
@@ -282,6 +304,9 @@ object FractalSparkRunner {
         val subgraphPath = args(i)
         new GQueryingApp(fractalGraph, commStrategy,
           numPartitions, explorationSteps, subgraphPath)
+      case "paths" =>
+        new PathsApp(fractalGraph, commStrategy,
+          numPartitions, explorationSteps)
       case appName =>
         throw new RuntimeException(s"Unknown app: ${appName}")
     }

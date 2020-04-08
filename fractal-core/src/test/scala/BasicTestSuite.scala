@@ -124,6 +124,19 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
 
   }
 
+  test ("[cube,paths]", Tag("cube.paths")) {
+    val numSubgraph = List(12, 24, 48)
+
+    for (k <- 0 to (numSubgraph.size - 1)) {
+      val pathsRes = fgraph.paths.
+        set("num_partitions", numPartitions).
+        explore(k)
+
+      val subgraphs = pathsRes.subgraphs
+      assert(subgraphs.count == numSubgraph(k))
+    }
+  }
+
   test ("[cube,vfilter]", Tag("cube.vfilter")) {
     val numSubgraph = List(3)
     for (k <- 0 to (numSubgraph.size - 1)) {

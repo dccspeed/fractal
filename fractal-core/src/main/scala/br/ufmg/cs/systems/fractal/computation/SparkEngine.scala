@@ -100,7 +100,7 @@ trait SparkEngine [E <: Subgraph]
       s"${name}:${accum.value}"
     }.mkString(",")
   }
-
+  
   /**
    * Flush a serialized aggregation by name
    *

@@ -75,6 +75,25 @@ case class Fractoid [S <: Subgraph : ClassTag](
   }
 
   /**
+   * Get an array with *all* primitives within this workflow. *All* meaning
+   * primitives of this fractoid and parent (recursively)
+   */
+  def primitives: Array[Primitive] = {
+    val thisPrimitives = if (getComputationContainer[S] != null) {
+      getComputationContainer[S].primitives()
+    } else {
+      Array[Primitive]()
+    }
+
+    parentOpt match {
+      case Some(p) =>
+        p.primitives ++ thisPrimitives
+      case None =>
+        thisPrimitives
+    }
+  }
+
+  /**
    * Lazy evaluation for the results
    */
   private var masterEngineOpt: Option[SparkMasterEngine[S]] = None
@@ -101,6 +120,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
           s" masterEngineStep=${_masterEngine.step} thisStep=${this.step}")
 
         logInfo (s"Computing ${this}. Engine: ${_masterEngine}")
+        _masterEngine.config.set("primitives_workflow", primitives)
         _masterEngine.next
 
         _masterEngine.finalizeComputation
@@ -456,25 +476,26 @@ case class Fractoid [S <: Subgraph : ClassTag](
    * @return new result
    */
   def expand(n: Int): Fractoid[S] = {
-    var curr = this
-    logInfo(s"ExpandBefore ${curr}")
-    for (i <- 0 until n) {
+    // base step, no effect
+    if (n == 0) return this
 
-      // first computation, create a new computation
-      if (getComputationContainer[S] == null) {
-        curr = curr.withFirstComputation
+    var stepResult: Fractoid[S] = null
 
-      // computation exists, append to the current one
-      } else {
-        val expandComp = emptyComputation.
-          withShouldBypass(false).
-          withExpandCompute(null).
-          copy(mustSync = false)
-        curr = handleNextResult(expandComp)
-      }
+    // first computation, create a new computation
+    if (getComputationContainer[S] == null) {
+      stepResult = withFirstComputation
+      logInfo(s"ExpandNewComputation(n=${n}): before=${this} after=${stepResult}")
+    } else {
+      val expandComp = emptyComputation(Primitive.E).
+        withShouldBypass(false).
+        withExpandCompute(null).
+        copy(mustSync = false)
+      stepResult = handleNextResult(expandComp)
+      logInfo(s"ExpandAppendComputation(n=${n}): before=${this} after=${stepResult}")
     }
-    logInfo(s"ExpandAfter ${curr}")
-    curr
+
+    // recursive call
+    stepResult.expand(n - 1)
   }
 
   /**

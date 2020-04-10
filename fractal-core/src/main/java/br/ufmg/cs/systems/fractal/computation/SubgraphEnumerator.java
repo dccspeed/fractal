@@ -49,6 +49,16 @@ public class SubgraphEnumerator<S extends Subgraph> implements Iterator<S> {
       this.prefix = IntArrayListPool.instance().createObject();
    }
 
+   public synchronized void terminate() {
+      if (active == null || rlock == null) return;
+      try {
+         rlock.lock();
+         active.set(false);
+      } finally {
+         rlock.unlock();
+      }
+   }
+
    /**
     * Enumerator initialization. We assume a default no-parameter constructor
     * for the subgraph enumerator and use this method to initialize any internal
@@ -112,7 +122,7 @@ public class SubgraphEnumerator<S extends Subgraph> implements Iterator<S> {
       // create new consumer, adding just enough to verify if there is still
       // work in it
       SubgraphEnumerator<S> iter = computation.
-              getConfig().createSubgraphEnumerator(computation.shouldBypass());
+              getConfig().createSubgraphEnumerator(computation);
       iter.subgraph = computation.getConfig().createSubgraph();
       iter.rlock = this.rlock;
       iter.computation = computation;

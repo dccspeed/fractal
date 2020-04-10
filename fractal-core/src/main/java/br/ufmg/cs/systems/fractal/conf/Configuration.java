@@ -307,6 +307,10 @@ public class Configuration<O extends Subgraph> implements Serializable {
        return initialized;
     }
 
+    public <T> T getObject(String key, T defaultValue) {
+       return null;
+    }
+
     public String getString(String key, String defaultValue) {
         return null;
     }
@@ -324,6 +328,10 @@ public class Configuration<O extends Subgraph> implements Serializable {
     }
 
     public Float getFloat(String key, Float defaultValue) {
+        return null;
+    }
+    
+    public Double getDouble(String key, Double defaultValue) {
         return null;
     }
 
@@ -409,24 +417,25 @@ public class Configuration<O extends Subgraph> implements Serializable {
         this.subgraphClass = SubgraphClass;
     }
 
-    public SubgraphEnumerator<O> createSubgraphEnumerator(boolean bypass) {
-        SubgraphEnumerator<O> senum;
-        if (!bypass) {
-            senum = (SubgraphEnumerator<O>) ReflectionUtils.newInstance(subgraphEnumClass);
-        } else {
-            senum = (SubgraphEnumerator<O>) ReflectionUtils.newInstance(
-                    br.ufmg.cs.systems.fractal.computation.BypassSubgraphEnumerator.class);
-        }
-        senum.init(this);
-        return senum;
+    public SubgraphEnumerator<O> createSubgraphEnumerator(Computation<O> computation) {
+       boolean bypass = computation.shouldBypass();
+       SubgraphEnumerator<O> senum;
+       if (!bypass) {
+          senum = (SubgraphEnumerator<O>) ReflectionUtils.newInstance(subgraphEnumClass);
+       } else {
+          senum = (SubgraphEnumerator<O>) ReflectionUtils.newInstance(
+                br.ufmg.cs.systems.fractal.computation.BypassSubgraphEnumerator.class);
+       }
+       senum.init(computation.getConfig());
+       return senum;
     }
 
     public void setSubgraphEnumClass(Class<? extends SubgraphEnumerator> subgraphEnumClass) {
-        this.subgraphEnumClass = subgraphEnumClass;
+       this.subgraphEnumClass = subgraphEnumClass;
     }
 
     public <G extends MainGraph> G getMainGraph() {
-        return (G) mainGraph;
+       return (G) mainGraph;
     }
 
     public <G extends MainGraph> void setMainGraph(G mainGraph) {

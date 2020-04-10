@@ -75,7 +75,12 @@ case object ReportStats
 /**
  * Stats message
  */
-case class Stats(validSubgraphs: Long)
+case class Stats(partitionId: Int, validSubgraphs: Long)
+
+/**
+ * Termination message
+ */
+case object Terminate
 
 /**
  * Gtag actor
@@ -93,20 +98,25 @@ abstract class MSActor(masterPath: String) extends Actor with Logging {
 /**
  * Master actor
  */
-class MasterActor(masterPath: String, numSlaves: Int)
+class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
     extends MSActor(masterPath) {
 
   override def masterRef: ActorRef = self
 
+  private val numSlaves = engine.numPartitions
+
   private var slaves: Array[ActorRef] = new Array[ActorRef](numSlaves)
+  
+  private var validSubgraphs: Array[Long] = new Array[Long](numSlaves)
 
   private var slavesRouter: Router = new Router(new BroadcastRoutingLogic())
 
   private var registeredSlaves: Int = 0
 
-  private var validSubgraphs: Long = 0
-
-  private var nextReportValidSubgraphs: Long = 1000000
+  private var totalValidSubgraphs: Long = 0
+  
+  private var maxValidSubgraphs: Long = engine.config.getLong(
+    "max_valid_subgraphs", Long.MaxValue)
 
   def receive = {
     case HelloMaster(partitionId, slaveRef) =>
@@ -128,11 +138,40 @@ class MasterActor(masterPath: String, numSlaves: Int)
     case Log(msg) =>
       logInfo(msg)
 
-    case Stats(_validSubgraphs) =>
-      validSubgraphs += _validSubgraphs
-      if (validSubgraphs >= nextReportValidSubgraphs) {
-        logInfo(s"Stats(${masterPath}) validSubgraphs=${validSubgraphs}")
-        nextReportValidSubgraphs += 1000000
+    case Stats(partitionId, _validSubgraphs) =>
+
+      // increment in the number of valid subgraphs
+      val diff = _validSubgraphs - validSubgraphs(partitionId)
+      
+      // update valid subgraphs for slave
+      validSubgraphs(partitionId) = Math.max(
+        validSubgraphs(partitionId), _validSubgraphs)
+
+      // account for increment
+      if (diff > 0) {
+        totalValidSubgraphs += diff
+      }
+      
+      logInfo(s"ValidSubgraphsUpdate [${validSubgraphs.mkString(",")}]" +
+        s" total=${totalValidSubgraphs}/${maxValidSubgraphs}" +
+        s" total(%)=${(totalValidSubgraphs / maxValidSubgraphs.toDouble)*100}/100"
+        )
+
+      // if we reach *maxValidSubgraphs* then stop execution, we are done
+      if (totalValidSubgraphs >= maxValidSubgraphs) {
+        logInfo(s"Reached the limit of ${maxValidSubgraphs} valid subgraphs." +
+          s" Terminating slaves=${slaves.mkString(",")}")
+
+        // send termination messages to all known slaves
+        var i = 0
+        while (i < slaves.length) {
+          val s = slaves(i)
+          if (s != null) {
+            logInfo(s"Sending termination message to ${s} (id=${i})")
+            s ! Terminate
+          }
+          i += 1
+        }
       }
 
     case Reset =>
@@ -140,6 +179,9 @@ class MasterActor(masterPath: String, numSlaves: Int)
       slavesRouter = new Router(new BroadcastRoutingLogic())
       slaves = new Array[ActorRef](numSlaves)
       registeredSlaves = 0
+      totalValidSubgraphs = 0
+      maxValidSubgraphs = engine.config.getLong(
+        "max_valid_subgraphs", Long.MaxValue)
 
     case Terminated(p: ActorRef) =>
 
@@ -344,6 +386,16 @@ class SlaveActor [E <: Subgraph](
 
     case ReceiveTimeout =>
       // ignore
+      
+    case Terminate =>
+      // stop all subgraph enumerators
+      logInfo(s"Terminating computation ${computation}")
+      var currComp = computation
+      while (currComp != null) {
+        var senum = currComp.getSubgraphEnumerator()
+        if (senum != null) senum.terminate()
+        currComp = currComp.nextComputation()
+      }
   }
 
   private def sendEmptyResponse(ref: ActorRef): Unit = {
@@ -374,6 +426,15 @@ class SlaveActor [E <: Subgraph](
       s"partitionId=${computation.getPartitionId}," +
       s"${engine.getStatsAccumulators}," +
       reportMemoryStats() + "}")
+
+    var validSubgraphsDepth = 0
+    while (engine.accums.contains(s"valid_subgraphs_${validSubgraphsDepth}")) {
+      validSubgraphsDepth += 1
+    }
+    validSubgraphsDepth -= 1
+
+    masterRef ! Stats(computation.getPartitionId,
+      engine.accums(s"valid_subgraphs_${validSubgraphsDepth}").value)
   }
 
   private def reportMemoryStats(): String = {
@@ -487,7 +548,7 @@ object ActorMessageSystem extends Logging {
       s"${engine.config.getMasterHostname}:2552" +
       s"/user/master-actor-${engine.config.getId}-${engine.step}"
     akkaSys(engine).actorOf(
-      Props(classOf[MasterActor], remotePath, engine.numPartitions).
+      Props(classOf[MasterActor], remotePath, engine).
         withDispatcher("akka.actor.default-dispatcher"),
       s"master-actor-${engine.config.getId}-${engine.step}")
   }

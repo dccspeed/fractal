@@ -606,11 +606,21 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
     case None => defaultValue
   }
 
+  override def getObject[T](key: String, defaultValue: T): T = {
+    getValue(key, defaultValue).asInstanceOf[T]
+  }
+
   override def getInteger(key: String, defaultValue: Integer) =
     getValue(key, defaultValue).asInstanceOf[Int]
   
   override def getLong(key: String, defaultValue: java.lang.Long) =
     getValue(key, defaultValue).asInstanceOf[Long]
+  
+  override def getDouble(key: String, defaultValue: java.lang.Double) =
+    getValue(key, defaultValue).asInstanceOf[Double]
+  
+  override def getFloat(key: String, defaultValue: java.lang.Float) =
+    getValue(key, defaultValue).asInstanceOf[Float]
 
   override def getString(key: String, defaultValue: String) =
     getValue(key, defaultValue).asInstanceOf[String]

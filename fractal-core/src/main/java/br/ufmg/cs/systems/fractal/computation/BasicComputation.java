@@ -96,7 +96,7 @@ public abstract class BasicComputation<S extends Subgraph>
            }
         };
 
-        subgraphEnumerator = configuration.createSubgraphEnumerator(shouldBypass());
+        subgraphEnumerator = configuration.createSubgraphEnumerator(this);
     }
 
     @Override

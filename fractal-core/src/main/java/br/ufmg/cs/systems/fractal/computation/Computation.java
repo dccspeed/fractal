@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal.computation;
 
+import br.ufmg.cs.systems.fractal.Primitive;
 import br.ufmg.cs.systems.fractal.aggregation.AggregationStorage;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
@@ -18,6 +19,7 @@ public interface Computation<S extends Subgraph> {
     // }}}
 
     // {{{ runtime
+    Primitive primitive();
     SubgraphEnumerator<S> expandCompute(S Subgraph);
     IntCollection getPossibleExtensions(S Subgraph);
     long processCompute(SubgraphEnumerator<S> expansions);

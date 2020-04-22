@@ -429,6 +429,8 @@ object ActorMessageSystem extends Logging {
       getOrElse(null)
   }
 
+  private var masterPort: Int = -1
+
   private def getDefaultProperties: Properties = {
     val props = new Properties()
     props.setProperty("akka.actor.provider", "remote")
@@ -451,25 +453,32 @@ object ActorMessageSystem extends Logging {
     val as = ActorSystem("fractal-msgsys", config = Some(getAkkaConfig(props)))
     _akkaSysOpt = Option(as)
     _executorAkkaSysOpt = Option(as)
-    logInfo(s"Started akka-sys: ${as} - executor - waiting for messages")
+    logInfo(s"Started akka-sys: ${as} - executor - waiting for messages (masterPort=${masterPort})")
     as
   }
 
   private lazy val _masterAkkaSys: ActorSystem = {
     val props = getDefaultProperties
-    props.setProperty("akka.remote.netty.tcp.port", "2552")
+    //props.setProperty("akka.remote.netty.tcp.port", "2552")
+    props.setProperty("akka.remote.netty.tcp.port", masterPort.toString)
     val as = ActorSystem("fractal-msgsys", config = Some(getAkkaConfig(props)))
     _akkaSysOpt = Option(as)
     _masterAkkaSysOpt = Option(as)
-    logInfo(s"Started akka-sys: ${as} - master - waiting for messages")
+    logInfo(s"Started akka-sys: ${as} - master - waiting for messages (masterPort=${masterPort})")
     as
   }
 
   def akkaSys(engine: SparkMasterEngine[_]): ActorSystem = synchronized {
+    if (!masterAkkaSysOpt.isDefined) {
+      masterPort = engine.config.getInteger("msgsys_master_port", 2552)
+    }
     _masterAkkaSys
   }
 
   def akkaSys(engine: SparkEngine[_]): ActorSystem = synchronized {
+    if (!_executorAkkaSysOpt.isDefined) {
+      masterPort = engine.configuration.getInteger("msgsys_master_port", 2552)
+    }
     _executorAkkaSys
   }
 
@@ -483,21 +492,25 @@ object ActorMessageSystem extends Logging {
   }
 
   def createActor(engine: SparkMasterEngine[_]): ActorRef = {
+    val _akkaSys = akkaSys(engine)
     val remotePath = s"akka.tcp://fractal-msgsys@" +
-      s"${engine.config.getMasterHostname}:2552" +
+      //s"${engine.config.getMasterHostname}:2552" +
+      s"${engine.config.getMasterHostname}:${masterPort}" +
       s"/user/master-actor-${engine.config.getId}-${engine.step}"
-    akkaSys(engine).actorOf(
+    _akkaSys.actorOf(
       Props(classOf[MasterActor], remotePath, engine.numPartitions).
         withDispatcher("akka.actor.default-dispatcher"),
       s"master-actor-${engine.config.getId}-${engine.step}")
   }
 
   def createActor [E <: Subgraph] (engine: SparkEngine[E]): ActorRef = {
+    val _akkaSys = akkaSys(engine)
     val remotePath = s"akka.tcp://fractal-msgsys@" +
-      s"${engine.configuration.getMasterHostname}:2552" +
+      //s"${engine.configuration.getMasterHostname}:2552" +
+      s"${engine.configuration.getMasterHostname}:${masterPort}" +
       s"/user/master-actor-${engine.configuration.getId}" +
       s"-${engine.step}"
-    val slaveActorRef = akkaSys(engine).actorOf(
+    val slaveActorRef = _akkaSys.actorOf(
       Props(classOf[SlaveActor[E]],
         engine.partitionId, engine.computation, remotePath).
         withDispatcher("akka.actor.default-dispatcher"),

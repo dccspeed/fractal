@@ -8,6 +8,8 @@ import br.ufmg.cs.systems.fractal.util.Logging
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.SparkContext
 
+import scala.collection.mutable.Map
+
 /**
   * Starting point for Fractal execution engine (currently Spark)
   * @param sc Spark context
@@ -15,7 +17,9 @@ import org.apache.spark.SparkContext
   * @param tmpDir temporary directory to store fractal data/metadata
   */
 class FractalContext(sc: SparkContext, logLevel: String = "info",
-                     tmpDir: String = Configuration.CONF_TMP_DIR_DEFAULT)
+                     tmpDir: String = Configuration.CONF_TMP_DIR_DEFAULT,
+                     msgSysMasterPort: Int = 2552,
+                     defaultConfs: Map[String,Any] = Map.empty)
     extends Logging {
 
   private val uuid: UUID = UUID.randomUUID
@@ -23,6 +27,10 @@ class FractalContext(sc: SparkContext, logLevel: String = "info",
   def tmpPath: String = s"${tmpDir}-${uuid}" // TODO: base dir as config
 
   def sparkContext: SparkContext = sc
+
+  def confs: Map[String,Any] = {
+    defaultConfs + ("msgsys_master_port" -> msgSysMasterPort)
+  }
 
   /**
     * Read graph from text file
@@ -34,7 +42,7 @@ class FractalContext(sc: SparkContext, logLevel: String = "info",
   def textFile (path: String,
       graphClass: String = Configuration.CONF_MAINGRAPH_CLASS_DEFAULT,
       local: Boolean = false): FractalGraph = {
-    new FractalGraph(path, graphClass, this, logLevel)
+    new FractalGraph(path, graphClass, this, logLevel, defaultConfs = confs)
   }
 
   /**

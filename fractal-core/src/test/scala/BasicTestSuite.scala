@@ -8,7 +8,7 @@ import scala.collection.mutable.Map
 class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
   private val numPartitions: Int = 8
   private val appName: String = "fractal-test"
-  private val logLevel: String = "info"
+  private val logLevel: String = "error"
 
   private var master: String = _
   private var sc: SparkContext = _

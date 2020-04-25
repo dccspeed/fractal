@@ -2,7 +2,7 @@
 
 printf "Description: Script launcher for Fractal built-in applications\n\n"
 
-apps="fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws"
+apps="esubgraphs|vsubgraphs|fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws"
 
 usage="
 Usage:
@@ -52,6 +52,22 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
+	;;
+	esubgraphs)
+	required="inputgraph steps"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
+	;;
+	vsubgraphs)
+	required="inputgraph steps"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 	motifs)
 	required="inputgraph steps"
@@ -132,6 +148,7 @@ comm=${comm:-scratch}
 total_cores=$((num_workers * worker_cores))
 deploy_mode=${deploy_mode:-client}
 log_level=${log_level:-info}
+packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\
@@ -141,6 +158,7 @@ cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --executor-memory $worker_memory \\
    --class br.ufmg.cs.systems.fractal.FractalSparkRunner \\
    --jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-SPARK-2.2.0.jar \\
+   --packages $packages \\
    $FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-SPARK-2.2.0.jar \\
       $input_format $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $configs"
 

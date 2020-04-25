@@ -16,6 +16,6 @@ public abstract class EdgeInducedComputation<E extends EdgeInducedSubgraph> exte
     
     @Override
     public boolean containsWord(int edgeId) {
-       return getMainGraph().getEdge(edgeId) != null;
+       return getMainGraph().containsEdge(edgeId);
     }
 }

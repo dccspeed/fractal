@@ -23,6 +23,7 @@ buildscript {
 apply plugin: 'java-library'
 apply plugin: 'java'
 apply plugin: 'scala'
+apply plugin: 'application'
 apply plugin: "com.github.johnrengelman.shadow"
  
 repositories {
@@ -59,6 +60,10 @@ task assemble(dependsOn: ['shadowJar'], overwrite: true)
 //    jvmArgs "-javaagent:${projectDir}/lib/aspectjweaver-1.8.10.jar"
 //}
 
+application {
+    applicationDefaultJvmArgs = ['-Xmx10g']
+    mainClassName = project.hasProperty("mainClass") ? getProperty("mainClass") : "NULL"
+}
 
 subprojects {
    apply plugin: 'java-library'

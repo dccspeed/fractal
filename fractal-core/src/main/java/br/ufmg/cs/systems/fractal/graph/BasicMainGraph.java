@@ -1,6 +1,8 @@
 package br.ufmg.cs.systems.fractal.graph;
 
+import br.ufmg.cs.systems.fractal.util.EdgePredicates;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.IntCursor;
@@ -26,6 +28,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.StringTokenizer;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 
 public class BasicMainGraph<V,E> implements MainGraph<V,E> {
@@ -371,6 +374,51 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
             //LOG.info(vertexNeighborhoods[i]);
          }
       }
+   }
+
+   @Override
+   public int edgeSrc(int e) {
+      return edgeIndexF[e].getSourceId();
+   }
+
+   @Override
+   public int edgeDst(int e) {
+      return edgeIndexF[e].getDestinationId();
+   }
+
+   @Override
+   public int vertexLabel(int u) {
+      return vertexIndexF[u].getVertexLabel();
+   }
+
+   @Override
+   public int edgeLabel(int e) {
+      return ((LabelledEdge)edgeIndexF[e]).getEdgeLabel();
+   }
+
+   @Override
+   public boolean containsVertex(int u) {
+      return vertexIndexF[u] != null;
+   }
+
+   @Override
+   public boolean containsEdge(int e) {
+      return edgeIndexF[e] != null;
+   }
+
+   @Override
+   public void neighborhoodTraversalVertexRange(int u, int lowerBound, IntIntConsumer consumer) {
+
+   }
+
+   @Override
+   public void neighborhoodTraversalEdgeRange(int u, int lowerBound, IntIntConsumer consumer) {
+
+   }
+
+   @Override
+   public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound, IntConsumer consumer, IntPredicate vertexPredicate, EdgePredicates edgePredicates) {
+
    }
 
    public void initProperties(Object path) throws IOException {

@@ -26,9 +26,9 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
     sc.setLogLevel(logLevel)
     fc = new FractalContext(sc, logLevel)
 
-    fgraph = fc.textFile ("../data/cube.graph")
+    fgraph = fc.textFile ("../data/cube.graph", graphClass = "br.ufmg.cs.systems.fractal.graph.SuccinctMainGraph")
 
-    fgraphEdgeLabel = fc.textFile ("../data/cube-edge-label.graph")
+    fgraphEdgeLabel = fc.textFile ("../data/cube-edge-label.graph", graphClass = "br.ufmg.cs.systems.fractal.graph.SuccinctMainGraph")
   }
 
   /** stop spark context */

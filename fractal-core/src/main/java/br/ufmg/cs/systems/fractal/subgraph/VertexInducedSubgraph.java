@@ -2,14 +2,24 @@ package br.ufmg.cs.systems.fractal.subgraph;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
+import br.ufmg.cs.systems.fractal.graph.MainGraph;
+import br.ufmg.cs.systems.fractal.graph.SuccinctMainGraph;
 import br.ufmg.cs.systems.fractal.graph.VertexNeighbourhood;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
+import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
+import com.koloboke.collect.map.IntObjMap;
+import com.koloboke.collect.map.hash.HashIntObjMap;
+import com.koloboke.collect.map.hash.HashIntObjMaps;
 import com.koloboke.collect.set.hash.HashIntSet;
 import java.util.function.IntConsumer;
 
+import com.koloboke.function.IntIntConsumer;
 import org.apache.log4j.Logger;
+import scala.Int;
+import shapeless.Succ;
 
 import java.io.DataInput;
 import java.io.IOException;
@@ -19,6 +29,7 @@ public class VertexInducedSubgraph extends BasicSubgraph {
    private static final Logger LOG = Logger.getLogger(VertexInducedSubgraph.class);
    // Consumers {{
    private UpdateEdgesConsumer updateEdgesConsumer;
+   private UpdateExtensionsConsumer updateExtensionsConsumer;
    // }}
 
    // Edge tracking for incremental modifications {{
@@ -30,6 +41,7 @@ public class VertexInducedSubgraph extends BasicSubgraph {
    public VertexInducedSubgraph() {
       super();
       updateEdgesConsumer = new UpdateEdgesConsumer();
+      updateExtensionsConsumer = new UpdateExtensionsConsumer();
       numEdgesAddedWithWord = new IntArrayList();
    }
 
@@ -163,13 +175,17 @@ public class VertexInducedSubgraph extends BasicSubgraph {
 
       int addedEdges = 0;
 
+      //updateEdgesConsumer.reset();
+      //configuration.getMainGraph().forEachEdgeId(newVertexId, vertices, positionAdded, updateEdgesConsumer);
+      //addedEdges += updateEdgesConsumer.getNumAdded();
+
       // For each vertex (except the last one added)
       for (int i = 0; i < positionAdded; ++i) {
          int existingVertexId = vertices.getUnchecked(i);
 
          updateEdgesConsumer.reset();
          configuration.getMainGraph().forEachEdgeId(existingVertexId,
-               newVertexId, updateEdgesConsumer);
+                 newVertexId, updateEdgesConsumer);
          addedEdges += updateEdgesConsumer.getNumAdded();
       }
 
@@ -220,41 +236,90 @@ public class VertexInducedSubgraph extends BasicSubgraph {
       IntArrayList orderedVertices = null;
       VertexNeighbourhood neighbourhood = null;
 
+      MainGraph graph = configuration.getMainGraph();
+
       for (int i = numVertices - 1; i >= 0; --i) {
          wordId = vertices.getUnchecked(i);
-         neighbourhood = configuration.getMainGraph().
-            getVertexNeighbourhood(wordId);
+         updateExtensionsConsumer.setLowerBound(lowerBound);
+         graph.neighborhoodTraversalVertexRange(wordId, vertices.getUnchecked(0), updateExtensionsConsumer);
+         //neighbourhood = configuration.getMainGraph().
+         //   getVertexNeighbourhood(wordId);
 
-         if (neighbourhood == null) {
-            continue;
-         }
+         //if (neighbourhood == null) {
+         //   continue;
+         //}
 
-         orderedVertices = neighbourhood.getOrderedVertices();
-         int numOrderedVertices = orderedVertices.size();
-         int fromIdx = neighborhoodCuts.getUnchecked(i);
-         if (fromIdx < 0) {
-            fromIdx = orderedVertices.binarySearch(vertices.getUnchecked(0));
-            fromIdx = (fromIdx < 0) ? (-fromIdx - 1) : fromIdx;
-            neighborhoodCuts.setUnchecked(i, fromIdx);
-         }
+         //orderedVertices = neighbourhood.getOrderedVertices();
+         //int numOrderedVertices = orderedVertices.size();
+         //int fromIdx = neighborhoodCuts.getUnchecked(i);
+         //if (fromIdx < 0) {
+         //   fromIdx = orderedVertices.binarySearch(vertices.getUnchecked(0));
+         //   fromIdx = (fromIdx < 0) ? (-fromIdx - 1) : fromIdx;
+         //   neighborhoodCuts.setUnchecked(i, fromIdx);
+         //}
+         //
+         //for (int j = fromIdx; j < numOrderedVertices; ++j) {
+         //   int w = orderedVertices.getUnchecked(j);
+         //   if (w > lowerBound) {
+         //      extensionWordIds.add(w);
+         //   } else {
+         //      extensionWordIds.removeInt(w);
+         //   }
+         //}
 
-         for (int j = fromIdx; j < numOrderedVertices; ++j) {
-            int w = orderedVertices.getUnchecked(j);
-            if (w > lowerBound) {
-               extensionWordIds.add(w);
-            } else {
-               extensionWordIds.removeInt(w);
-            }
-         }
-
-         neighborhoodLookups += (numOrderedVertices - fromIdx);
+         //neighborhoodLookups += (numOrderedVertices - fromIdx);
 
          lowerBound = Math.max(wordId, lowerBound);
       }
 
+      //setExtensionWordIds(extensionMap().keySet());
+
       computation.getExecutionEngine().aggregate(
             Configuration.NEIGHBORHOOD_LOOKUPS(getNumWords()),
             neighborhoodLookups);
+   }
+
+   private class UpdateExtensionsConsumer implements IntIntConsumer {
+      private int lowerBound;
+      private HashIntSet extensionsWordIds;
+      private HashIntObjMap<IntArrayList> extensionMap;
+      private IntArrayList existingEdges;
+
+      public void setLowerBound(int lowerBound) {
+         this.lowerBound = lowerBound;
+         this.extensionsWordIds = VertexInducedSubgraph.this.extensionWordIds();
+         this.extensionMap = VertexInducedSubgraph.this.extensionMap();
+      }
+
+      @Override
+      public void accept(int u, int e) {
+         if (u > lowerBound) {
+            extensionsWordIds.add(u);
+         } else {
+            extensionsWordIds.removeInt(u);
+         }
+      }
+
+      //@Override
+      //public void accept(int u, int e) {
+      //   existingEdges = extensionMap.get(u);
+      //   if (u > lowerBound) {
+      //      if (existingEdges != null) {
+      //         existingEdges.add(e);
+      //      } else {
+      //        existingEdges = IntArrayListPool.instance().createObject();
+      //        existingEdges.add(e);
+      //        extensionMap.put(u, existingEdges);
+      //      }
+      //   } else {
+      //      if (existingEdges != null) {
+      //         extensionMap.remove(u);
+      //         IntArrayListPool.instance().reclaimObject(existingEdges);
+      //      } else {
+
+      //      }
+      //   }
+      //}
    }
 
    private class UpdateEdgesConsumer implements IntConsumer {

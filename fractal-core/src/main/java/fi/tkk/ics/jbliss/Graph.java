@@ -86,7 +86,8 @@ public class Graph<V extends Comparable> {
 
        IntCursor vertexCursor = vertices.cursor();
        while (vertexCursor.moveNext()) {
-          vertexLabels.add(mainGraph.getVertex(vertexCursor.elem()).getVertexLabel());
+          //vertexLabels.add(mainGraph.getVertex(vertexCursor.elem()).getVertexLabel());
+          vertexLabels.add(mainGraph.vertexLabel(vertexCursor.elem()));
        }
 
        return createBliss(vertexLabels);

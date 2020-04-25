@@ -3,20 +3,25 @@ package br.ufmg.cs.systems.fractal.subgraph;
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.Edge;
+import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.graph.VertexNeighbourhood;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import com.koloboke.collect.set.hash.HashIntSet;
+import com.koloboke.function.IntIntConsumer;
 
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.ObjectInput;
+import java.util.function.IntConsumer;
 
 public class EdgeInducedSubgraph extends BasicSubgraph {
    private IntArrayList numVerticesAddedWithWord;
+   private UpdateExtensionsConsumer updateExtensionsConsumer;
 
    public EdgeInducedSubgraph() {
       super();
+      updateExtensionsConsumer = new UpdateExtensionsConsumer();
       numVerticesAddedWithWord = new IntArrayList();
    }
 
@@ -93,29 +98,30 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
    }
 
    protected void updateVertices(int word) {
-      final Edge edge = configuration.getMainGraph().getEdge(word);
+      final int edgeSrc = configuration.getMainGraph().edgeSrc(word);
+      final int edgeDst = configuration.getMainGraph().edgeDst(word);
 
       int numVerticesAdded = 0;
 
       boolean srcIsNew = false;
       boolean dstIsNew = false;
 
-      if (!vertices.contains(edge.getSourceId())) {
+      if (!vertices.contains(edgeSrc)) {
          srcIsNew = true;
       }
 
-      if (!vertices.contains(edge.getDestinationId())) {
+      if (!vertices.contains(edgeDst)) {
          dstIsNew = true;
       }
 
       if (srcIsNew) { 
-         vertices.add(edge.getSourceId());
+         vertices.add(edgeSrc);
          neighborhoodCuts.add(-1);
          ++numVerticesAdded;
       }
 
       if (dstIsNew) {
-         vertices.add(edge.getDestinationId());
+         vertices.add(edgeDst);
          neighborhoodCuts.add(-1);
          ++numVerticesAdded;
       }
@@ -197,6 +203,7 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
       int lowerBound = edges.getUnchecked(0);
       IntArrayList orderedEdges = null;
       VertexNeighbourhood neighbourhood = null;
+      MainGraph graph = configuration.getMainGraph();
 
       for (int i = numEdges - 1; i >= 0; --i) {
          wordId = edges.getUnchecked(i);
@@ -204,32 +211,34 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
          int numVerticesAdded = numVerticesAddedWithWord.getUnchecked(i);
          for (int j = 0; j < numVerticesAdded; ++j) {
             int vertexId = vertices.getUnchecked(currVertice);
-            neighbourhood = configuration.getMainGraph().
-                 getVertexNeighbourhood(vertexId);
+            updateExtensionsConsumer.setLowerBound(lowerBound);
+            graph.neighborhoodTraversalEdgeRange(vertexId, edges.getUnchecked(0), updateExtensionsConsumer);
+            //neighbourhood = configuration.getMainGraph().
+            //     getVertexNeighbourhood(vertexId);
 
-            if (neighbourhood == null) {
-               continue;
-            }
+            //if (neighbourhood == null) {
+            //   continue;
+            //}
 
-            orderedEdges = neighbourhood.getOrderedEdges();
-            int numOrderedEdges = orderedEdges.size();
-            int fromIdx = neighborhoodCuts.getUnchecked(currVertice);
-            if (fromIdx < 0) {
-               fromIdx = orderedEdges.binarySearch(edges.getUnchecked(0));
-               fromIdx = (fromIdx < 0) ? (-fromIdx - 1) : fromIdx;
-               neighborhoodCuts.setUnchecked(currVertice, fromIdx);
-            }
+            //orderedEdges = neighbourhood.getOrderedEdges();
+            //int numOrderedEdges = orderedEdges.size();
+            //int fromIdx = neighborhoodCuts.getUnchecked(currVertice);
+            //if (fromIdx < 0) {
+            //   fromIdx = orderedEdges.binarySearch(edges.getUnchecked(0));
+            //   fromIdx = (fromIdx < 0) ? (-fromIdx - 1) : fromIdx;
+            //   neighborhoodCuts.setUnchecked(currVertice, fromIdx);
+            //}
 
-            for (int k = fromIdx; k < numOrderedEdges; ++k) {
-               int w = orderedEdges.getUnchecked(k);
-               if (w > lowerBound) {
-                  extensionWordIds.add(w);
-               } else {
-                  extensionWordIds.removeInt(w);
-               }
-            }
+            //for (int k = fromIdx; k < numOrderedEdges; ++k) {
+            //   int w = orderedEdges.getUnchecked(k);
+            //   if (w > lowerBound) {
+            //      extensionWordIds.add(w);
+            //   } else {
+            //      extensionWordIds.removeInt(w);
+            //   }
+            //}
 
-            neighborhoodLookups += (numOrderedEdges - fromIdx);
+            //neighborhoodLookups += (numOrderedEdges - fromIdx);
 
             --currVertice;
          }
@@ -240,6 +249,25 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
       computation.getExecutionEngine().aggregate(
             Configuration.NEIGHBORHOOD_LOOKUPS(getNumWords()),
             neighborhoodLookups);
+   }
+
+   private class UpdateExtensionsConsumer implements IntIntConsumer {
+      private int lowerBound;
+      private HashIntSet extensionWordIds;
+
+      public void setLowerBound(int lowerBound) {
+         this.lowerBound = lowerBound;
+         this.extensionWordIds = EdgeInducedSubgraph.this.extensionWordIds();
+      }
+
+      @Override
+      public void accept(int u, int e) {
+         if (e > lowerBound) {
+            extensionWordIds.add(e);
+         } else {
+            extensionWordIds.removeInt(e);
+         }
+      }
    }
 
    @Override

@@ -9,6 +9,20 @@ trait FractalSparkApp extends Logging {
   def execute: Unit
 }
 
+class ESubgraphsApp(val fractalGraph: FractalGraph,
+                    commStrategy: String,
+                    numPartitions: Int,
+                    explorationSteps: Int) extends FractalSparkApp {
+  def execute: Unit = {
+    val esubgraphsRes = fractalGraph.efractoidAndExpand.
+      set ("comm_strategy", commStrategy).
+      set ("num_partitions", numPartitions).
+      explore (explorationSteps)
+
+    esubgraphsRes.compute()
+  }
+}
+
 class VSubgraphsApp(val fractalGraph: FractalGraph,
                     commStrategy: String,
                     numPartitions: Int,
@@ -75,7 +89,7 @@ class CliquesApp(val fractalGraph: FractalGraph,
     val cliquesRes = fractalGraph.cliques.
       set ("comm_strategy", commStrategy).
       set ("num_partitions", numPartitions).
-      set ("fractal.optimizations", "br.ufmg.cs.systems.fractal.optimization.CliqueOptimization").
+      //set ("fractal.optimizations", "br.ufmg.cs.systems.fractal.optimization.CliqueOptimization").
       explore(explorationSteps)
 
     val (accums, elapsed) = FractalSparkRunner.time {
@@ -212,6 +226,8 @@ object FractalSparkRunner {
     // args
     var i = 0
     val graphClass = args(i) match {
+      case "sc" =>
+        "br.ufmg.cs.systems.fractal.graph.SuccinctMainGraph"
       case "al" =>
         "br.ufmg.cs.systems.fractal.graph.BasicMainGraph"
       case "el" =>
@@ -247,6 +263,9 @@ object FractalSparkRunner {
     val fractalGraph = fc.textFile (graphPath, graphClass = graphClass)
 
     val app = algorithm.toLowerCase match {
+      case "esubgraphs" =>
+        new ESubgraphsApp(fractalGraph, commStrategy,
+          numPartitions, explorationSteps)
       case "vsubgraphs" =>
         new VSubgraphsApp(fractalGraph, commStrategy,
           numPartitions, explorationSteps)

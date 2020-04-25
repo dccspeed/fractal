@@ -198,6 +198,10 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
        return Arrays.binarySearch(backingArray, 0, numElements, value);
     }
 
+    public int binarySearch(int value, int from, int size) {
+        return Arrays.binarySearch(backingArray, from, size, value);
+    }
+
     /**
      * Removes all elements from the collection that are smaller than the provided value.
      * @param value Reference value.
@@ -648,6 +652,8 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
 
         strBuilder.append(", numElements=");
         strBuilder.append(numElements);
+        strBuilder.append(", backingArrayLength=");
+        strBuilder.append(backingArray.length);
         strBuilder.append("}");
 
         return strBuilder.toString();

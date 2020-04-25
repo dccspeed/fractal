@@ -4,11 +4,15 @@ import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.graph.Vertex;
 import br.ufmg.cs.systems.fractal.graph.VertexNeighbourhood;
+import br.ufmg.cs.systems.fractal.util.EdgePredicates;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
 import com.koloboke.collect.IntCollection;
+import com.koloboke.function.IntIntConsumer;
+
 import java.util.function.IntConsumer;
+import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 
 public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMainGraph {
@@ -81,6 +85,51 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
     @Override
     public void buildSortedNeighborhood() {
        underlyingMainGraph.buildSortedNeighborhood();
+    }
+
+    @Override
+    public int edgeSrc(int e) {
+        return 0;
+    }
+
+    @Override
+    public int edgeDst(int e) {
+        return 0;
+    }
+
+    @Override
+    public int vertexLabel(int u) {
+        return 0;
+    }
+
+    @Override
+    public int edgeLabel(int e) {
+        return 0;
+    }
+
+    @Override
+    public boolean containsVertex(int u) {
+        return false;
+    }
+
+    @Override
+    public boolean containsEdge(int e) {
+        return false;
+    }
+
+    @Override
+    public void neighborhoodTraversalVertexRange(int u, int lowerBound, IntIntConsumer consumer) {
+
+    }
+
+    @Override
+    public void neighborhoodTraversalEdgeRange(int u, int lowerBound, IntIntConsumer consumer) {
+
+    }
+
+   @Override
+    public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound, IntConsumer consumer, IntPredicate vertexPredicate, EdgePredicates edgePredicates) {
+
     }
 
     @Override
@@ -172,4 +221,5 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
     public void forEachEdgeId(int existingVertexId, int newVertexId, IntConsumer intConsumer) {
         underlyingMainGraph.forEachEdgeId(existingVertexId, newVertexId, intConsumer);
     }
+
 }

@@ -27,936 +27,940 @@ import java.nio.file.Paths;
 import java.util.StringTokenizer;
 
 public abstract class BasicPattern implements Pattern {
-    private static final Logger LOG = Logger.getLogger(BasicPattern.class);
+   private static final Logger LOG = Logger.getLogger(BasicPattern.class);
 
-    protected int configurationId;
-    protected Configuration configuration;
-    protected boolean isGraphEdgeLabelled;
+   protected int configurationId;
+   protected Configuration configuration;
+   protected boolean isGraphEdgeLabelled;
 
-    protected HashIntIntMapFactory positionMapFactory = 
-       HashIntIntMaps.getDefaultFactory().withDefaultValue(-1);
+   protected HashIntIntMapFactory positionMapFactory =
+           HashIntIntMaps.getDefaultFactory().withDefaultValue(-1);
 
-    // Basic structure {{
-    private IntArrayList vertices;
-    private PatternEdgeArrayList edges;
-    // K = vertex id, V = vertex position
-    private IntIntMap vertexPositions;
-    // }}
+   // Basic structure {{
+   private IntArrayList vertices;
+   private PatternEdgeArrayList edges;
+   // K = vertex id, V = vertex position
+   private IntIntMap vertexPositions;
+   // }}
 
-    // Incremental building {{
-    private IntArrayList previousWords; // TODO: is it previous or current ?
-    private int numVerticesAddedFromPrevious;
-    private int numAddedEdgesFromPrevious;
-    // }}
+   // Incremental building {{
+   private IntArrayList previousWords; // TODO: is it previous or current ?
+   private int numVerticesAddedFromPrevious;
+   private int numAddedEdgesFromPrevious;
+   // }}
 
-    // Isomorphisms {{
-    private VertexPositionEquivalences vertexPositionEquivalences;
-    private EdgePositionEquivalences edgePositionEquivalences;
-    private IntIntMap canonicalLabelling;
-    private ObjArrayList<IntArrayList> vsymmetryBreaker;
-    private ObjArrayList<IntArrayList> esymmetryBreaker;
-    // }}
+   // Isomorphisms {{
+   private VertexPositionEquivalences vertexPositionEquivalences;
+   private EdgePositionEquivalences edgePositionEquivalences;
+   private IntIntMap canonicalLabelling;
+   private ObjArrayList<IntArrayList> vsymmetryBreaker;
+   private ObjArrayList<IntArrayList> esymmetryBreaker;
+   // }}
 
-    // Others {{
-    private PatternEdgePool patternEdgePool;
+   // Others {{
+   private PatternEdgePool patternEdgePool;
 
-    protected volatile boolean dirtyVertexPositionEquivalences;
-    protected volatile boolean dirtyEdgePositionEquivalences;
-    protected volatile boolean dirtyCanonicalLabelling;
+   protected volatile boolean dirtyVertexPositionEquivalences;
+   protected volatile boolean dirtyEdgePositionEquivalences;
+   protected volatile boolean dirtyCanonicalLabelling;
 
-    protected IntCollectionAddConsumer intAddConsumer = new IntCollectionAddConsumer();
-    // }}
+   protected IntCollectionAddConsumer intAddConsumer = new IntCollectionAddConsumer();
+   // }}
 
-    public BasicPattern() {
-        vertices = new IntArrayList();
-        vertexPositions = positionMapFactory.newMutableMap();
-        previousWords = new IntArrayList();
-        reset();
-    }
+   public BasicPattern() {
+      vertices = new IntArrayList();
+      vertexPositions = positionMapFactory.newMutableMap();
+      previousWords = new IntArrayList();
+      reset();
+   }
 
-    public BasicPattern(BasicPattern basicPattern) {
-        this();
+   public BasicPattern(BasicPattern basicPattern) {
+      this();
 
-        intAddConsumer.setCollection(vertices);
-        basicPattern.vertices.forEach(intAddConsumer);
+      intAddConsumer.setCollection(vertices);
+      basicPattern.vertices.forEach(intAddConsumer);
 
-        isGraphEdgeLabelled = basicPattern.getConfig().isGraphEdgeLabelled();
+      isGraphEdgeLabelled = basicPattern.getConfig().isGraphEdgeLabelled();
 
-        edges = createPatternEdgeArrayList(isGraphEdgeLabelled);
+      edges = createPatternEdgeArrayList(isGraphEdgeLabelled);
 
-        patternEdgePool = PatternEdgePool.instance(isGraphEdgeLabelled);
+      patternEdgePool = PatternEdgePool.instance(isGraphEdgeLabelled);
 
-        edges.ensureCapacity(basicPattern.edges.size());
+      edges.ensureCapacity(basicPattern.edges.size());
 
-        for (PatternEdge otherEdge : basicPattern.edges) {
-            edges.add(createPatternEdge(otherEdge));
-        }
+      for (PatternEdge otherEdge : basicPattern.edges) {
+         edges.add(createPatternEdge(otherEdge));
+      }
 
-        vertexPositions.putAll(basicPattern.vertexPositions);
-    }
+      vertexPositions.putAll(basicPattern.vertexPositions);
+   }
 
-    @Override
-    public void init(Configuration config) {
-        configurationId = config.getId();
+   @Override
+   public void init(Configuration config) {
+      configurationId = config.getId();
 
-        configuration = config;
+      configuration = config;
 
-        isGraphEdgeLabelled = config.isGraphEdgeLabelled();
+      isGraphEdgeLabelled = config.isGraphEdgeLabelled();
 
-        if (edges == null) {
-           edges = createPatternEdgeArrayList(isGraphEdgeLabelled);
-        }
+      if (edges == null) {
+         edges = createPatternEdgeArrayList(isGraphEdgeLabelled);
+      }
 
-        if (patternEdgePool == null) {
-           patternEdgePool = PatternEdgePool.instance(isGraphEdgeLabelled);
-        }
-    }
+      if (patternEdgePool == null) {
+         patternEdgePool = PatternEdgePool.instance(isGraphEdgeLabelled);
+      }
+   }
 
-    @Override
-    public void reset() {
-        if (vertices != null) {
-           vertices.clear();
-        }
+   @Override
+   public void reset() {
+      if (vertices != null) {
+         vertices.clear();
+      }
 
-        if (patternEdgePool != null) {
-           patternEdgePool.reclaimObjects(edges);
-        }
+      if (patternEdgePool != null) {
+         patternEdgePool.reclaimObjects(edges);
+      }
 
-        if (edges != null) {
-           edges.clear();
-        }
+      if (edges != null) {
+         edges.clear();
+      }
 
-        if (vertexPositions != null) {
-           vertexPositions.clear();
-        }
+      if (vertexPositions != null) {
+         vertexPositions.clear();
+      }
 
-        setDirty();
+      setDirty();
 
-        resetIncremental();
-    }
+      resetIncremental();
+   }
 
-    @Override
-    public Configuration getConfig() {
-       //return Configuration.get(configurationId);
-       return configuration;
-    }
+   @Override
+   public Configuration getConfig() {
+      //return Configuration.get(configurationId);
+      return configuration;
+   }
 
-    private void resetIncremental() {
-        numVerticesAddedFromPrevious = 0;
-        numAddedEdgesFromPrevious = 0;
-        if (previousWords != null) {
-           previousWords.clear();
-        }
-    }
+   private void resetIncremental() {
+      numVerticesAddedFromPrevious = 0;
+      numAddedEdgesFromPrevious = 0;
+      if (previousWords != null) {
+         previousWords.clear();
+      }
+   }
 
-    @Override
-    public void setSubgraph(Subgraph subgraph) {
-        try {
-            if (canDoIncremental(subgraph)) {
-                setSubgraphIncremental(subgraph);
-            } else {
-                setSubgraphFromScratch(subgraph);
-            }
-        } catch (RuntimeException e) {
-            LOG.error("subgraph: " + subgraph + " " + e);
+   @Override
+   public void setSubgraph(Subgraph subgraph) {
+      try {
+         if (canDoIncremental(subgraph)) {
+            setSubgraphIncremental(subgraph);
+         } else {
+            setSubgraphFromScratch(subgraph);
+         }
+      } catch (RuntimeException e) {
+         LOG.error("subgraph: " + subgraph + " " + e);
+         throw e;
+      }
+   }
+
+   /**
+    * Reset everything and do everything from scratch.
+    *
+    * @param subgraph
+    */
+   private void setSubgraphFromScratch(Subgraph subgraph) {
+      reset();
+
+      int numEdgesInSubgraph = subgraph.getNumEdges();
+      int numVerticesInSubgraph = subgraph.getNumVertices();
+
+      if (numEdgesInSubgraph == 0 && numVerticesInSubgraph == 0) {
+         return;
+      }
+
+      ensureCanStoreNewVertices(numVerticesInSubgraph);
+      ensureCanStoreNewEdges(numEdgesInSubgraph);
+
+      IntArrayList SubgraphVertices = subgraph.getVertices();
+
+      for (int i = 0; i < numVerticesInSubgraph; ++i) {
+         addVertex(SubgraphVertices.getUnchecked(i));
+      }
+
+      numVerticesAddedFromPrevious = subgraph.numVerticesAdded();
+
+      IntArrayList SubgraphEdges = subgraph.getEdges();
+
+      for (int i = 0; i < numEdgesInSubgraph; ++i) {
+         addEdge(SubgraphEdges.getUnchecked(i));
+      }
+
+      numAddedEdgesFromPrevious = subgraph.numEdgesAdded();
+
+      updateUsedSubgraphFromScratch(subgraph);
+   }
+
+   private void updateUsedSubgraphFromScratch(Subgraph subgraph) {
+      previousWords.clear();
+
+      int SubgraphNumWords = subgraph.getNumWords();
+
+      previousWords.ensureCapacity(SubgraphNumWords);
+
+      IntArrayList words = subgraph.getWords();
+
+      for (int i = 0; i < SubgraphNumWords; i++) {
+         previousWords.add(words.getUnchecked(i));
+      }
+   }
+
+   private void resetToPrevious() {
+      removeLastNEdges(numAddedEdgesFromPrevious);
+      removeLastNVertices(numVerticesAddedFromPrevious);
+      setDirty();
+   }
+
+   private void removeLastNEdges(int n) {
+      int targetI = edges.size() - n;
+
+      for (int i = edges.size() - 1; i >= targetI; --i) {
+         patternEdgePool.reclaimObject(edges.remove(i));
+      }
+   }
+
+   private void removeLastNVertices(int n) {
+      int targetI = vertices.size() - n;
+
+      for (int i = vertices.size() - 1; i >= targetI; --i) {
+         try {
+            vertexPositions.remove(vertices.getUnchecked(i));
+         } catch (IllegalArgumentException e) {
+            System.err.println(e.toString());
+            System.err.println("i=" + i);
+            System.err.println("targetI=" + targetI);
             throw e;
-        }
-    }
+         }
+      }
 
-    /**
-     * Reset everything and do everything from scratch.
-     *
-     * @param subgraph
-     */
-    private void setSubgraphFromScratch(Subgraph subgraph) {
-        reset();
+      vertices.removeLast(n);
+   }
 
-        int numEdgesInSubgraph = subgraph.getNumEdges();
-        int numVerticesInSubgraph = subgraph.getNumVertices();
+   /**
+    * Only the last word has changed, so skipped processing for the previous vertices.
+    *
+    * @param subgraph
+    */
+   private void setSubgraphIncremental(Subgraph subgraph) {
+      resetToPrevious();
 
-        if (numEdgesInSubgraph == 0 && numVerticesInSubgraph == 0) {
-            return;
-        }
+      numVerticesAddedFromPrevious = subgraph.numVerticesAdded();
+      numAddedEdgesFromPrevious = subgraph.numEdgesAdded();
 
-        ensureCanStoreNewVertices(numVerticesInSubgraph);
-        ensureCanStoreNewEdges(numEdgesInSubgraph);
+      ensureCanStoreNewVertices(numVerticesAddedFromPrevious);
+      ensureCanStoreNewEdges(numAddedEdgesFromPrevious);
 
-        IntArrayList SubgraphVertices = subgraph.getVertices();
+      IntArrayList SubgraphVertices = subgraph.getVertices();
+      int numVerticesInSubgraph = subgraph.getNumVertices();
+      for (int i = (numVerticesInSubgraph - numVerticesAddedFromPrevious); i < numVerticesInSubgraph; ++i) {
+         addVertex(SubgraphVertices.getUnchecked(i));
+      }
 
-        for (int i = 0; i < numVerticesInSubgraph; ++i) {
-            addVertex(SubgraphVertices.getUnchecked(i));
-        }
+      IntArrayList SubgraphEdges = subgraph.getEdges();
+      int numEdgesInSubgraph = subgraph.getNumEdges();
+      for (int i = (numEdgesInSubgraph - numAddedEdgesFromPrevious); i < numEdgesInSubgraph; ++i) {
+         addEdge(SubgraphEdges.getUnchecked(i));
+      }
 
-        numVerticesAddedFromPrevious = subgraph.numVerticesAdded();
+      updateUsedSubgraphIncremental(subgraph);
+   }
 
-        IntArrayList SubgraphEdges = subgraph.getEdges();
+   /**
+    * By default only the last word changed.
+    *
+    * @param subgraph
+    */
+   private void updateUsedSubgraphIncremental(Subgraph subgraph) {
+      previousWords.setUnchecked(previousWords.size() - 1, subgraph.getWords().getUnchecked(previousWords.size() - 1));
+   }
 
-        for (int i = 0; i < numEdgesInSubgraph; ++i) {
-            addEdge(SubgraphEdges.getUnchecked(i));
-        }
+   private void ensureCanStoreNewEdges(int numAddedEdgesFromPrevious) {
+      int newNumEdges = edges.size() + numAddedEdgesFromPrevious;
 
-        numAddedEdgesFromPrevious = subgraph.numEdgesAdded();
+      edges.ensureCapacity(newNumEdges);
+   }
 
-        updateUsedSubgraphFromScratch(subgraph);
-    }
+   private void ensureCanStoreNewVertices(int numVerticesAddedFromPrevious) {
+      int newNumVertices = vertices.size() + numVerticesAddedFromPrevious;
 
-    private void updateUsedSubgraphFromScratch(Subgraph subgraph) {
-        previousWords.clear();
+      vertices.ensureCapacity(newNumVertices);
+      vertexPositions.ensureCapacity(newNumVertices);
+   }
 
-        int SubgraphNumWords = subgraph.getNumWords();
+   /**
+    * Can do incremental only if the last word is different.
+    *
+    * @param subgraph
+    * @return
+    */
+   private boolean canDoIncremental(Subgraph subgraph) {
+      if (subgraph.getNumWords() == 0 || previousWords.size() != subgraph.getNumWords()) {
+         return false;
+      }
 
-        previousWords.ensureCapacity(SubgraphNumWords);
-
-        IntArrayList words = subgraph.getWords();
-
-        for (int i = 0; i < SubgraphNumWords; i++) {
-            previousWords.add(words.getUnchecked(i));
-        }
-    }
-
-    private void resetToPrevious() {
-        removeLastNEdges(numAddedEdgesFromPrevious);
-        removeLastNVertices(numVerticesAddedFromPrevious);
-        setDirty();
-    }
-
-    private void removeLastNEdges(int n) {
-        int targetI = edges.size() - n;
-
-        for (int i = edges.size() - 1; i >= targetI; --i) {
-            patternEdgePool.reclaimObject(edges.remove(i));
-        }
-    }
-
-    private void removeLastNVertices(int n) {
-        int targetI = vertices.size() - n;
-
-        for (int i = vertices.size() - 1; i >= targetI; --i) {
-            try {
-                vertexPositions.remove(vertices.getUnchecked(i));
-            } catch (IllegalArgumentException e) {
-                System.err.println(e.toString());
-                System.err.println("i=" + i);
-                System.err.println("targetI=" + targetI);
-                throw e;
-            }
-        }
-
-        vertices.removeLast(n);
-    }
-
-    /**
-     * Only the last word has changed, so skipped processing for the previous vertices.
-     *
-     * @param subgraph
-     */
-    private void setSubgraphIncremental(Subgraph subgraph) {
-        resetToPrevious();
-
-        numVerticesAddedFromPrevious = subgraph.numVerticesAdded();
-        numAddedEdgesFromPrevious = subgraph.numEdgesAdded();
-
-        ensureCanStoreNewVertices(numVerticesAddedFromPrevious);
-        ensureCanStoreNewEdges(numAddedEdgesFromPrevious);
-
-        IntArrayList SubgraphVertices = subgraph.getVertices();
-        int numVerticesInSubgraph = subgraph.getNumVertices();
-        for (int i = (numVerticesInSubgraph - numVerticesAddedFromPrevious); i < numVerticesInSubgraph; ++i) {
-            addVertex(SubgraphVertices.getUnchecked(i));
-        }
-
-        IntArrayList SubgraphEdges = subgraph.getEdges();
-        int numEdgesInSubgraph = subgraph.getNumEdges();
-        for (int i = (numEdgesInSubgraph - numAddedEdgesFromPrevious); i < numEdgesInSubgraph; ++i) {
-            addEdge(SubgraphEdges.getUnchecked(i));
-        }
-
-        updateUsedSubgraphIncremental(subgraph);
-    }
-
-    /**
-     * By default only the last word changed.
-     *
-     * @param subgraph
-     */
-    private void updateUsedSubgraphIncremental(Subgraph subgraph) {
-        previousWords.setUnchecked(previousWords.size() - 1, subgraph.getWords().getUnchecked(previousWords.size() - 1));
-    }
-
-    private void ensureCanStoreNewEdges(int numAddedEdgesFromPrevious) {
-        int newNumEdges = edges.size() + numAddedEdgesFromPrevious;
-
-        edges.ensureCapacity(newNumEdges);
-    }
-
-    private void ensureCanStoreNewVertices(int numVerticesAddedFromPrevious) {
-        int newNumVertices = vertices.size() + numVerticesAddedFromPrevious;
-
-        vertices.ensureCapacity(newNumVertices);
-        vertexPositions.ensureCapacity(newNumVertices);
-    }
-
-    /**
-     * Can do incremental only if the last word is different.
-     *
-     * @param subgraph
-     * @return
-     */
-    private boolean canDoIncremental(Subgraph subgraph) {
-        if (subgraph.getNumWords() == 0 || previousWords.size() != subgraph.getNumWords()) {
+      // Maximum we want 1 change (which we know by default that it exists in the last position).
+      // so we check
+      final IntArrayList words = subgraph.getWords();
+      for (int i = previousWords.size() - 2; i >= 0; i--) {
+         if (words.getUnchecked(i) != previousWords.getUnchecked(i)) {
             return false;
-        }
+         }
+      }
 
-        // Maximum we want 1 change (which we know by default that it exists in the last position).
-        // so we check
-        final IntArrayList words = subgraph.getWords();
-        for (int i = previousWords.size() - 2; i >= 0; i--) {
-            if (words.getUnchecked(i) != previousWords.getUnchecked(i)) {
-                return false;
+      return true;
+   }
+
+   @Override
+   public int getNumberOfVertices() {
+      return vertices.getSize();
+   }
+
+   @Override
+   public boolean addEdge(int edgeId) {
+      //Edge edge = getMainGraph().getEdge(edgeId);
+      //return addEdge(edge);
+      int srcId = getMainGraph().edgeSrc(edgeId);
+      int srcPos = addVertex(srcId);
+      int dstPos = addVertex(getMainGraph().edgeDst(edgeId));
+
+      PatternEdge patternEdge = createPatternEdge(edgeId, srcPos, dstPos, srcId);
+
+      return addEdge(patternEdge);
+   }
+
+   public boolean addEdge(PatternEdge edge) {
+      // TODO: Remove when we have directed edges
+      if (edge.getSrcPos() > edge.getDestPos()) {
+         edge.invert();
+      }
+
+      edges.add(edge);
+
+      setDirty();
+
+      return true;
+   }
+
+   public int addVertex(int vertexId) {
+      int pos = vertexPositions.get(vertexId);
+
+      if (pos == -1) {
+         pos = vertices.size();
+         vertices.add(vertexId);
+         vertexPositions.put(vertexId, pos);
+         setDirty();
+      }
+
+      return pos;
+   }
+
+   protected void setDirty() {
+      dirtyCanonicalLabelling = true;
+      dirtyVertexPositionEquivalences = true;
+      dirtyEdgePositionEquivalences = true;
+   }
+
+   @Override
+   public int getNumberOfEdges() {
+      return edges.size();
+   }
+
+   @Override
+   public IntArrayList getVertices() {
+      return vertices;
+   }
+
+   @Override
+   public PatternEdgeArrayList getEdges() {
+      return edges;
+   }
+
+   @Override
+   public VertexPositionEquivalences getVertexPositionEquivalences() {
+      return getVertexPositionEquivalences(null);
+   }
+
+   @Override
+   public VertexPositionEquivalences getVertexPositionEquivalences(IntArrayList vertexLabels) {
+      if (dirtyVertexPositionEquivalences) {
+         synchronized (this) {
+            if (dirtyVertexPositionEquivalences) {
+               if (vertexPositionEquivalences == null) {
+                  vertexPositionEquivalences = new VertexPositionEquivalences();
+               }
+
+               vertexPositionEquivalences.setNumVertices(getNumberOfVertices());
+               vertexPositionEquivalences.clear();
+
+               fillVertexPositionEquivalences(vertexPositionEquivalences, vertexLabels);
+
+               dirtyVertexPositionEquivalences = false;
             }
-        }
+         }
+      }
 
-        return true;
-    }
+      return vertexPositionEquivalences;
+   }
 
-    @Override
-    public int getNumberOfVertices() {
-        return vertices.getSize();
-    }
+   @Override
+   public EdgePositionEquivalences getEdgePositionEquivalences() {
+      return getEdgePositionEquivalences(null);
+   }
 
-    @Override
-    public boolean addEdge(int edgeId) {
-        Edge edge = getMainGraph().getEdge(edgeId);
+   @Override
+   public EdgePositionEquivalences getEdgePositionEquivalences(IntArrayList edgeLabels) {
+      if (dirtyEdgePositionEquivalences) {
+         synchronized (this) {
+            if (dirtyEdgePositionEquivalences) {
+               if (edgePositionEquivalences == null) {
+                  edgePositionEquivalences = new EdgePositionEquivalences();
+               }
 
-        return addEdge(edge);
-    }
+               edgePositionEquivalences.setNumEdges(getNumberOfEdges());
+               edgePositionEquivalences.clear();
 
-    public boolean addEdge(Edge edge) {
-        int srcId = edge.getSourceId();
-        int srcPos = addVertex(srcId);
-        int dstPos = addVertex(edge.getDestinationId());
+               fillEdgePositionEquivalences(edgePositionEquivalences, edgeLabels);
 
-        PatternEdge patternEdge = createPatternEdge(edge, srcPos, dstPos, srcId);
-
-        return addEdge(patternEdge);
-    }
-
-    public boolean addEdge(PatternEdge edge) {
-        // TODO: Remove when we have directed edges
-        if (edge.getSrcPos() > edge.getDestPos()) {
-            edge.invert();
-        }
-
-        edges.add(edge);
-
-        setDirty();
-
-        return true;
-    }
-
-    public int addVertex(int vertexId) {
-        int pos = vertexPositions.get(vertexId);
-
-        if (pos == -1) {
-            pos = vertices.size();
-            vertices.add(vertexId);
-            vertexPositions.put(vertexId, pos);
-            setDirty();
-        }
-
-        return pos;
-    }
-
-    protected void setDirty() {
-        dirtyCanonicalLabelling = true;
-        dirtyVertexPositionEquivalences = true;
-        dirtyEdgePositionEquivalences = true;
-    }
-
-    @Override
-    public int getNumberOfEdges() {
-        return edges.size();
-    }
-
-    @Override
-    public IntArrayList getVertices() {
-        return vertices;
-    }
-
-    @Override
-    public PatternEdgeArrayList getEdges() {
-        return edges;
-    }
-
-    @Override
-    public VertexPositionEquivalences getVertexPositionEquivalences() {
-        return getVertexPositionEquivalences(null);
-    }
-
-    @Override
-    public VertexPositionEquivalences getVertexPositionEquivalences(IntArrayList vertexLabels) {
-        if (dirtyVertexPositionEquivalences) {
-            synchronized (this) {
-                if (dirtyVertexPositionEquivalences) {
-                    if (vertexPositionEquivalences == null) {
-                        vertexPositionEquivalences = new VertexPositionEquivalences();
-                    }
-
-                    vertexPositionEquivalences.setNumVertices(getNumberOfVertices());
-                    vertexPositionEquivalences.clear();
-
-                    fillVertexPositionEquivalences(vertexPositionEquivalences, vertexLabels);
-
-                    dirtyVertexPositionEquivalences = false;
-                }
+               dirtyEdgePositionEquivalences = false;
             }
-        }
+         }
+      }
 
-        return vertexPositionEquivalences;
-    }
+      return edgePositionEquivalences;
+   }
 
-    @Override
-    public EdgePositionEquivalences getEdgePositionEquivalences() {
-        return getEdgePositionEquivalences(null);
-    }
+   private int[][] vsymmetryBreakerMatrix() {
+      int numVertices = getNumberOfVertices();
+      int[][] symmetryBreaker = new int[numVertices][numVertices];
+      IntArrayList vertexLabels = new IntArrayList(numVertices);
 
-    @Override
-    public EdgePositionEquivalences getEdgePositionEquivalences(IntArrayList edgeLabels) {
-       if (dirtyEdgePositionEquivalences) {
-          synchronized (this) {
-             if (dirtyEdgePositionEquivalences) {
-                if (edgePositionEquivalences == null) {
-                   edgePositionEquivalences = new EdgePositionEquivalences();
-                }
+      IntCursor vertexCursor = vertices.cursor();
+      while (vertexCursor.moveNext()) {
+         vertexLabels.add(getConfig().getMainGraph().
+                 getVertex(vertexCursor.elem()).getVertexLabel());
+      }
 
-                edgePositionEquivalences.setNumEdges(getNumberOfEdges());
-                edgePositionEquivalences.clear();
+      vsymmetryBreakerRec(this.copy(), symmetryBreaker, vertexLabels, -1);
 
-                fillEdgePositionEquivalences(edgePositionEquivalences, edgeLabels);
+      StringBuffer sb = new StringBuffer();
+      sb.append("symmetryBreaker {");
+      for (int i = 0; i < numVertices; ++i) {
+         for (int j = 0; j < numVertices; ++j) {
+            sb.append(String.format("%2s ", symmetryBreaker[i][j]));
+         }
+         sb.append("\n");
+      }
+      sb.append("}");
 
-                dirtyEdgePositionEquivalences = false;
-             }
-          }
-       }
+      LOG.info(sb.toString());
 
-       return edgePositionEquivalences;
-    }
+      return symmetryBreaker;
+   }
 
-    private int[][] vsymmetryBreakerMatrix() {
-       int numVertices = getNumberOfVertices();
-       int[][] symmetryBreaker = new int[numVertices][numVertices];
-       IntArrayList vertexLabels = new IntArrayList(numVertices);
+   public ObjArrayList<IntArrayList> vsymmetryBreaker() {
+      if (vsymmetryBreaker == null) {
+         synchronized (this) {
+            if (vsymmetryBreaker == null) {
+               int[][] symmetryBreaker = vsymmetryBreakerMatrix();
 
-       IntCursor vertexCursor = vertices.cursor();
-       while (vertexCursor.moveNext()) {
-          vertexLabels.add(getConfig().getMainGraph().
-                getVertex(vertexCursor.elem()).getVertexLabel());
-       }
+               vsymmetryBreaker = computeVsymmetryBreaker(symmetryBreaker);
+            }
+         }
 
-       vsymmetryBreakerRec(this.copy(), symmetryBreaker, vertexLabels, -1);
+         LOG.info("vsymmetryBreaker " + vsymmetryBreaker);
+      }
 
-       StringBuffer sb = new StringBuffer();
-       sb.append("symmetryBreaker {");
-       for (int i = 0; i < numVertices; ++i) {
-          for (int j = 0; j < numVertices; ++j) {
-             sb.append(String.format("%2s ", symmetryBreaker[i][j]));
-          }
-          sb.append("\n");
-       }
-       sb.append("}");
+      return vsymmetryBreaker;
+   }
 
-       LOG.info(sb.toString());
+   public ObjArrayList<IntArrayList> computeVsymmetryBreaker(int[][] symmetryBreaker) {
+      ObjArrayList<IntArrayList> vsymmetryBreaker = new ObjArrayList<IntArrayList>(
+              symmetryBreaker.length);
 
-       return symmetryBreaker;
-    }
+      for (int i = 0; i < symmetryBreaker.length; ++i) {
+         vsymmetryBreaker.add(new IntArrayList());
+         for (int j = 0; j < i; ++j) {
+            if (symmetryBreaker[i][j] == 1) {
+               vsymmetryBreaker.get(i).add(j);
+            }
+         }
+      }
 
-    public ObjArrayList<IntArrayList> vsymmetryBreaker() {
-       if (vsymmetryBreaker == null) {
-          synchronized (this) {
-             if (vsymmetryBreaker == null) {
-                int[][] symmetryBreaker = vsymmetryBreakerMatrix();
+      return vsymmetryBreaker;
+   }
 
-                vsymmetryBreaker = computeVsymmetryBreaker(symmetryBreaker);
-             }
-          }
+   @Override
+   public boolean testSymmetryBreakerPos(Subgraph subgraph, int i) {
+      ObjArrayList<IntArrayList> symmetryBreaker = vsymmetryBreaker();
+      IntArrayList vertices = subgraph.getVertices();
+      int targetVertex = vertices.get(i);
+      IntCursor sbCur = symmetryBreaker.get(i).cursor();
+      while (sbCur.moveNext()) {
+         if (targetVertex < vertices.get(sbCur.elem())) {
+            return false;
+         }
+      }
+      return true;
+   }
 
-          LOG.info("vsymmetryBreaker " + vsymmetryBreaker);
-       }
+   @Override
+   public boolean testSymmetryBreakerExt(
+           Subgraph subgraph, int targetVertex) {
+      ObjArrayList<IntArrayList> symmetryBreaker = vsymmetryBreaker();
+      IntArrayList vertices = subgraph.getVertices();
+      IntCursor sbCur = symmetryBreaker.get(subgraph.getNumVertices()).cursor();
+      while (sbCur.moveNext()) {
+         if (targetVertex < vertices.get(sbCur.elem())) {
+            return false;
+         }
+      }
+      return true;
+   }
 
-       return vsymmetryBreaker;
-    }
-    
-    public ObjArrayList<IntArrayList> computeVsymmetryBreaker(int[][] symmetryBreaker) {
-       ObjArrayList<IntArrayList> vsymmetryBreaker = new ObjArrayList<IntArrayList>(
-             symmetryBreaker.length);
+   @Override
+   public int sbLowerBound(Subgraph subgraph, int pos) {
+      IntArrayList conditions = vsymmetryBreaker().get(pos);
+      IntArrayList vertices = subgraph.getVertices();
+      int numConditions = conditions.size();
+      int lowerBound = Integer.MIN_VALUE;
+      for (int i = 0; i < numConditions; ++i) {
+         lowerBound = Math.max(lowerBound, vertices.get(conditions.get(i)));
+      }
 
-       for (int i = 0; i < symmetryBreaker.length; ++i) {
-          vsymmetryBreaker.add(new IntArrayList());
-          for (int j = 0; j < i; ++j) {
-             if (symmetryBreaker[i][j] == 1) {
-                vsymmetryBreaker.get(i).add(j);
-             }
-          }
-       }
+      return lowerBound;
+   }
 
-       return vsymmetryBreaker;
-    }
+   private static void vsymmetryBreakerRec(Pattern pattern, int[][] sbreaker,
+                                           IntArrayList vertexLabels, int nextLabel) {
+      int numVertices = sbreaker.length;
+      VertexPositionEquivalences vertexPositionEquivalences =
+              pattern.getVertexPositionEquivalences(vertexLabels);
 
-  @Override
-    public boolean testSymmetryBreakerPos(Subgraph subgraph, int i) {
-       ObjArrayList<IntArrayList> symmetryBreaker = vsymmetryBreaker();
-       IntArrayList vertices = subgraph.getVertices();
-       int targetVertex = vertices.get(i);
-       IntCursor sbCur = symmetryBreaker.get(i).cursor();
-       while (sbCur.moveNext()) {
-          if (targetVertex < vertices.get(sbCur.elem())) {
-             return false;
-          }
-       }
-       return true;
-    }
+      LOG.info(String.format(
+              "symmetryBreakerRec{pattern=%s,vertices=%s,vertexLabels=%s," +
+                      "vertexEquivalences=%s,nextLabel=%s}\n",
+              pattern, pattern.getVertices(), vertexLabels,
+              vertexPositionEquivalences, nextLabel));
 
-    @Override
-    public boolean testSymmetryBreakerExt(
-            Subgraph subgraph, int targetVertex) {
-       ObjArrayList<IntArrayList> symmetryBreaker = vsymmetryBreaker();
-       IntArrayList vertices = subgraph.getVertices();
-       IntCursor sbCur = symmetryBreaker.get(subgraph.getNumVertices()).cursor();
-       while (sbCur.moveNext()) {
-          if (targetVertex < vertices.get(sbCur.elem())) {
-             return false;
-          }
-       }
-       return true;
-    }
+      IntSet equivalenceToBreakSet = null;
+      for (int i = 0; i < numVertices; ++i) {
+         IntSet eq = vertexPositionEquivalences.getEquivalences(i);
+         if (equivalenceToBreakSet == null ||
+                 eq.size() > equivalenceToBreakSet.size()) {
+            equivalenceToBreakSet = eq;
+         }
+      }
 
-    @Override
-    public int sbLowerBound(Subgraph subgraph, int pos) {
-       IntArrayList conditions = vsymmetryBreaker().get(pos);
-       IntArrayList vertices = subgraph.getVertices();
-       int numConditions = conditions.size();
-       int lowerBound = Integer.MIN_VALUE;
-       for (int i = 0; i < numConditions; ++i) {
-          lowerBound = Math.max(lowerBound, vertices.get(conditions.get(i)));
-       }
+      if (equivalenceToBreakSet.size() > 1) {
+         IntArrayList equivalenceToBreak = new IntArrayList(
+                 equivalenceToBreakSet.size());
+         equivalenceToBreak.addAll(equivalenceToBreakSet);
+         equivalenceToBreak.sort();
+         IntCursor cur = equivalenceToBreak.cursor();
+         cur.moveNext();
+         int fixed = cur.elem();
+         while (cur.moveNext()) {
+            int elem = cur.elem();
+            sbreaker[fixed][elem] = -1;
+            sbreaker[elem][fixed] = 1;
+         }
 
-       return lowerBound;
-    }
+         vertexLabels.set(fixed, nextLabel);
 
-    private static void vsymmetryBreakerRec(Pattern pattern, int[][] sbreaker,
-          IntArrayList vertexLabels, int nextLabel) {
-       int numVertices = sbreaker.length;
-       VertexPositionEquivalences vertexPositionEquivalences =
-          pattern.getVertexPositionEquivalences(vertexLabels);
+         // recursive call
+         vsymmetryBreakerRec(pattern.copy(), sbreaker, vertexLabels, --nextLabel);
+      }
+   }
 
-       LOG.info(String.format(
-                "symmetryBreakerRec{pattern=%s,vertices=%s,vertexLabels=%s," +
-                "vertexEquivalences=%s,nextLabel=%s}\n",
-                pattern, pattern.getVertices(), vertexLabels,
-                vertexPositionEquivalences, nextLabel));
+   public int[][] esymmetryBreaker() {
+      int numEdges = getNumberOfEdges();
+      int[][] symmetryBreaker = new int[numEdges][numEdges];
+      IntArrayList edgeLabels = new IntArrayList(numEdges);
 
-       IntSet equivalenceToBreakSet = null;
-       for (int i = 0; i < numVertices; ++i) {
-          IntSet eq = vertexPositionEquivalences.getEquivalences(i);
-          if (equivalenceToBreakSet == null ||
-                eq.size() > equivalenceToBreakSet.size()) {
-             equivalenceToBreakSet = eq;
-          }
-       }
+      ObjCursor<PatternEdge> edgeCursor = edges.cursor();
+      while (edgeCursor.moveNext()) {
+         edgeLabels.add(edgeCursor.elem().getLabel());
+      }
 
-       if (equivalenceToBreakSet.size() > 1) {
-          IntArrayList equivalenceToBreak = new IntArrayList(
-                equivalenceToBreakSet.size());
-          equivalenceToBreak.addAll(equivalenceToBreakSet);
-          equivalenceToBreak.sort();
-          IntCursor cur = equivalenceToBreak.cursor();
-          cur.moveNext();
-          int fixed = cur.elem();
-          while (cur.moveNext()) {
-             int elem = cur.elem();
-             sbreaker[fixed][elem] = -1;
-             sbreaker[elem][fixed] = 1;
-          }
+      esymmetryBreakerRec(this.copy(), symmetryBreaker, edgeLabels, -1);
 
-          vertexLabels.set(fixed, nextLabel);
+      StringBuffer sb = new StringBuffer();
+      sb.append("symmetryBreaker {");
+      for (int i = 0; i < numEdges; ++i) {
+         for (int j = 0; j < numEdges; ++j) {
+            sb.append(String.format("%2s ", symmetryBreaker[i][j]));
+         }
+         sb.append("\n");
+      }
+      sb.append("}");
 
-          // recursive call
-          vsymmetryBreakerRec(pattern.copy(), sbreaker, vertexLabels, --nextLabel);
-       }
-    }
+      LOG.info(sb.toString());
 
-    public int[][] esymmetryBreaker() {
-       int numEdges = getNumberOfEdges();
-       int[][] symmetryBreaker = new int[numEdges][numEdges];
-       IntArrayList edgeLabels = new IntArrayList(numEdges);
+      return symmetryBreaker;
+   }
 
-       ObjCursor<PatternEdge> edgeCursor = edges.cursor();
-       while (edgeCursor.moveNext()) {
-          edgeLabels.add(edgeCursor.elem().getLabel());
-       }
-    
-       esymmetryBreakerRec(this.copy(), symmetryBreaker, edgeLabels, -1);
+   private static void esymmetryBreakerRec(Pattern pattern, int[][] sbreaker,
+                                           IntArrayList edgeLabels, int nextLabel) {
+      int numEdges = sbreaker.length;
+      EdgePositionEquivalences edgePositionEquivalences =
+              pattern.getEdgePositionEquivalences(edgeLabels);
 
-       StringBuffer sb = new StringBuffer();
-       sb.append("symmetryBreaker {");
-       for (int i = 0; i < numEdges; ++i) {
-          for (int j = 0; j < numEdges; ++j) {
-             sb.append(String.format("%2s ", symmetryBreaker[i][j]));
-          }
-          sb.append("\n");
-       }
-       sb.append("}");
+      LOG.info(String.format(
+              "symmetryBreakerRec{pattern=%s,vertices=%s,edgeLabels=%s," +
+                      "edgeEquivalences=%s,nextLabel=%s}\n",
+              pattern, pattern.getVertices(), edgeLabels,
+              edgePositionEquivalences, nextLabel));
 
-       LOG.info(sb.toString());
-
-       return symmetryBreaker;
-    }
-
-    private static void esymmetryBreakerRec(Pattern pattern, int[][] sbreaker,
-          IntArrayList edgeLabels, int nextLabel) {
-       int numEdges = sbreaker.length;
-       EdgePositionEquivalences edgePositionEquivalences =
-          pattern.getEdgePositionEquivalences(edgeLabels);
-
-       LOG.info(String.format(
-                "symmetryBreakerRec{pattern=%s,vertices=%s,edgeLabels=%s," +
-                "edgeEquivalences=%s,nextLabel=%s}\n",
-                pattern, pattern.getVertices(), edgeLabels,
-                edgePositionEquivalences, nextLabel));
-
-       IntSet equivalenceToBreakSet = null;
-       for (int i = 0; i < numEdges; ++i) {
-          IntSet eq = edgePositionEquivalences.getEquivalences(i);
-          if (equivalenceToBreakSet == null || eq.size() > equivalenceToBreakSet.size()) {
-             equivalenceToBreakSet = eq;
-          }
-       }
+      IntSet equivalenceToBreakSet = null;
+      for (int i = 0; i < numEdges; ++i) {
+         IntSet eq = edgePositionEquivalences.getEquivalences(i);
+         if (equivalenceToBreakSet == null || eq.size() > equivalenceToBreakSet.size()) {
+            equivalenceToBreakSet = eq;
+         }
+      }
 
 
-       if (equivalenceToBreakSet.size() > 1) {
-          IntArrayList equivalenceToBreak = new IntArrayList(
-                equivalenceToBreakSet.size());
-          equivalenceToBreak.addAll(equivalenceToBreakSet);
-          equivalenceToBreak.sort();
-          IntCursor cur = equivalenceToBreak.cursor();
-          cur.moveNext();
-          int fixed = cur.elem();
-          while (cur.moveNext()) {
-             int elem = cur.elem();
-             sbreaker[fixed][elem] = -1;
-             sbreaker[elem][fixed] = 1;
-          }
+      if (equivalenceToBreakSet.size() > 1) {
+         IntArrayList equivalenceToBreak = new IntArrayList(
+                 equivalenceToBreakSet.size());
+         equivalenceToBreak.addAll(equivalenceToBreakSet);
+         equivalenceToBreak.sort();
+         IntCursor cur = equivalenceToBreak.cursor();
+         cur.moveNext();
+         int fixed = cur.elem();
+         while (cur.moveNext()) {
+            int elem = cur.elem();
+            sbreaker[fixed][elem] = -1;
+            sbreaker[elem][fixed] = 1;
+         }
 
-          edgeLabels.set(fixed, nextLabel);
+         edgeLabels.set(fixed, nextLabel);
 
-          // recursive call
-          esymmetryBreakerRec(pattern.copy(), sbreaker, edgeLabels, --nextLabel);
-       }
-    }
-    
-    @Override
-    public void readSymmetryBreakingConditions(String path) throws IOException {
-       int[][] symmetryBreaker;
-       try {
-          symmetryBreaker = readFromFile(Paths.get(path));
-       } catch (IOException e) {
-          symmetryBreaker = readFromHdfs(new org.apache.hadoop.fs.Path(path));
-       }
+         // recursive call
+         esymmetryBreakerRec(pattern.copy(), sbreaker, edgeLabels, --nextLabel);
+      }
+   }
 
-       vsymmetryBreaker = computeVsymmetryBreaker(symmetryBreaker);
-    }
+   @Override
+   public void readSymmetryBreakingConditions(String path) throws IOException {
+      int[][] symmetryBreaker;
+      try {
+         symmetryBreaker = readFromFile(Paths.get(path));
+      } catch (IOException e) {
+         symmetryBreaker = readFromHdfs(new org.apache.hadoop.fs.Path(path));
+      }
 
-    private int[][] readFromFile(Path filePath) throws IOException {
-       InputStream is = Files.newInputStream(filePath);
-       int[][] sbreaker = readFromInputStream(is);
-       is.close();
-       return sbreaker;
-    }
+      vsymmetryBreaker = computeVsymmetryBreaker(symmetryBreaker);
+   }
 
-    private int[][] readFromHdfs(org.apache.hadoop.fs.Path hdfsPath) throws IOException {
+   private int[][] readFromFile(Path filePath) throws IOException {
+      InputStream is = Files.newInputStream(filePath);
+      int[][] sbreaker = readFromInputStream(is);
+      is.close();
+      return sbreaker;
+   }
+
+   private int[][] readFromHdfs(org.apache.hadoop.fs.Path hdfsPath) throws IOException {
       org.apache.hadoop.fs.FileSystem fs = org.apache.hadoop.fs.FileSystem.get(
-            new org.apache.hadoop.conf.Configuration());
+              new org.apache.hadoop.conf.Configuration());
       InputStream is = fs.open(hdfsPath);
       int[][] sbreaker = readFromInputStream(is);
       is.close();
       return sbreaker;
-    }
+   }
 
-    private int[][] readFromInputStream(InputStream is) {
-       int[][] sbreaker;
-       try {
-          BufferedReader reader = new BufferedReader(
-                new InputStreamReader(new BOMInputStream(is)));
+   private int[][] readFromInputStream(InputStream is) {
+      int[][] sbreaker;
+      try {
+         BufferedReader reader = new BufferedReader(
+                 new InputStreamReader(new BOMInputStream(is)));
 
-          String line = reader.readLine();         
-          StringTokenizer tokenizer = new StringTokenizer(line);
-          int numVertices = Integer.parseInt(tokenizer.nextToken());
+         String line = reader.readLine();
+         StringTokenizer tokenizer = new StringTokenizer(line);
+         int numVertices = Integer.parseInt(tokenizer.nextToken());
 
-          sbreaker = new int[numVertices][numVertices];
+         sbreaker = new int[numVertices][numVertices];
 
-          line = reader.readLine();
+         line = reader.readLine();
 
-          while (line != null) {
-             tokenizer = new StringTokenizer(line);
+         while (line != null) {
+            tokenizer = new StringTokenizer(line);
 
-             int pos1 = Integer.parseInt(tokenizer.nextToken());
-             int pos2 = Integer.parseInt(tokenizer.nextToken());
+            int pos1 = Integer.parseInt(tokenizer.nextToken());
+            int pos2 = Integer.parseInt(tokenizer.nextToken());
 
-             sbreaker[pos1][pos2] = -1;
-             sbreaker[pos2][pos1] = 1;
+            sbreaker[pos1][pos2] = -1;
+            sbreaker[pos2][pos1] = 1;
 
-             line = reader.readLine();
+            line = reader.readLine();
+         }
+      } catch (IOException e) {
+         throw new RuntimeException(e);
+      }
+
+      return sbreaker;
+   }
+
+   protected abstract void fillVertexPositionEquivalences(
+           VertexPositionEquivalences vertexPositionEquivalences,
+           IntArrayList vertexLabels);
+
+   protected abstract void fillEdgePositionEquivalences(
+           EdgePositionEquivalences edgePositionEquivalences,
+           IntArrayList edgeLabels);
+
+   @Override
+   public IntIntMap getCanonicalLabeling() {
+      if (dirtyCanonicalLabelling) {
+         synchronized (this) {
+            if (dirtyCanonicalLabelling) {
+               if (canonicalLabelling == null) {
+                  canonicalLabelling = HashIntIntMaps.newMutableMap(
+                          getNumberOfVertices());
+               }
+
+               canonicalLabelling.clear();
+
+               fillCanonicalLabelling(canonicalLabelling);
+
+               dirtyCanonicalLabelling = false;
+            }
+         }
+      }
+
+      return canonicalLabelling;
+   }
+
+   protected abstract void fillCanonicalLabelling(IntIntMap canonicalLabelling);
+
+   @Override
+   public boolean turnCanonical() {
+      resetIncremental();
+
+      IntIntMap canonicalLabelling = getCanonicalLabeling();
+
+      IntIntCursor canonicalLabellingCursor = canonicalLabelling.cursor();
+
+      boolean allEqual = true;
+
+      while (canonicalLabellingCursor.moveNext()) {
+          int oldPos = canonicalLabellingCursor.key();
+          int newPos = canonicalLabellingCursor.value();
+
+          if (oldPos != newPos) {
+              allEqual = false;
           }
-       } catch (IOException e) {
-          throw new RuntimeException(e);
-       }
+      }
 
-       return sbreaker;
-    }
+      if (allEqual) {
+          edges.sort();
+          return false;
+      }
 
-    protected abstract void fillVertexPositionEquivalences(
-          VertexPositionEquivalences vertexPositionEquivalences,
-          IntArrayList vertexLabels);
-    
-    protected abstract void fillEdgePositionEquivalences(
-          EdgePositionEquivalences edgePositionEquivalences,
-          IntArrayList edgeLabels);
-    
-    @Override
-    public IntIntMap getCanonicalLabeling() {
-        if (dirtyCanonicalLabelling) {
-            synchronized (this) {
-                if (dirtyCanonicalLabelling) {
-                    if (canonicalLabelling == null) {
-                        canonicalLabelling = HashIntIntMaps.newMutableMap(
-                              getNumberOfVertices());
-                    }
+      IntArrayList oldVertices = new IntArrayList(vertices);
 
-                    canonicalLabelling.clear();
+      for (int i = 0; i < vertices.size(); ++i) {
+          int newPos = canonicalLabelling.get(i);
 
-                    fillCanonicalLabelling(canonicalLabelling);
+          // If position didn't change, do nothing
+          if (newPos == i) {
+              continue;
+          }
 
-                    dirtyCanonicalLabelling = false;
-                }
-            }
-        }
+          int vertexId = oldVertices.getUnchecked(i);
+          vertices.setUnchecked(newPos, vertexId);
 
-        return canonicalLabelling;
-    }
+          vertexPositions.put(vertexId, newPos);
+      }
 
-    protected abstract void fillCanonicalLabelling(IntIntMap canonicalLabelling);
+      for (int i = 0; i < edges.size(); ++i) {
+          PatternEdge edge = edges.get(i);
 
-    @Override
-    public boolean turnCanonical() {
-        resetIncremental();
+          int srcPos = edge.getSrcPos();
+          int dstPos = edge.getDestPos();
 
-        IntIntMap canonicalLabelling = getCanonicalLabeling();
+          int convertedSrcPos = canonicalLabelling.get(srcPos);
+          int convertedDstPos = canonicalLabelling.get(dstPos);
 
-        IntIntCursor canonicalLabellingCursor = canonicalLabelling.cursor();
+          if (convertedSrcPos < convertedDstPos) {
+              edge.setSrcPos(convertedSrcPos);
+              edge.setDestPos(convertedDstPos);
+          } else {
+              // If we changed the position of source and destination due to
+              // relabel, we also have to change the labels to match this
+              // change.
+              int tmp = edge.getSrcLabel();
+              edge.setSrcPos(convertedDstPos);
+              edge.setSrcLabel(edge.getDestLabel());
+              edge.setDestPos(convertedSrcPos);
+              edge.setDestLabel(tmp);
+          }
+      }
 
-        boolean allEqual = true;
+      edges.sort();
 
-        while (canonicalLabellingCursor.moveNext()) {
-            int oldPos = canonicalLabellingCursor.key();
-            int newPos = canonicalLabellingCursor.value();
+      return true;
+   }
 
-            if (oldPos != newPos) {
-                allEqual = false;
-            }
-        }
+   @Override
+   public void write(DataOutput dataOutput) throws IOException {
+      dataOutput.writeBoolean(isGraphEdgeLabelled);
+      dataOutput.writeInt(configurationId);
+      edges.write(dataOutput);
+      vertices.write(dataOutput);
 
-        if (allEqual) {
-            edges.sort();
-            return false;
-        }
+      if (vsymmetryBreaker != null) {
+         dataOutput.writeBoolean(true);
+         dataOutput.writeInt(vsymmetryBreaker.size());
+         for (int i = 0; i < vsymmetryBreaker.size(); ++i) {
+            vsymmetryBreaker.getUnchecked(i).write(dataOutput);
+         }
+      } else {
+         dataOutput.writeBoolean(false);
+      }
+   }
 
-        IntArrayList oldVertices = new IntArrayList(vertices);
+   @Override
+   public void writeExternal(ObjectOutput objOutput) throws IOException {
+      write (objOutput);
+   }
 
-        for (int i = 0; i < vertices.size(); ++i) {
-            int newPos = canonicalLabelling.get(i);
+   @Override
+   public void readFields(DataInput dataInput) throws IOException {
+      reset();
 
-            // If position didn't change, do nothing
-            if (newPos == i) {
-                continue;
-            }
+      isGraphEdgeLabelled = dataInput.readBoolean();
 
-            int vertexId = oldVertices.getUnchecked(i);
-            vertices.setUnchecked(newPos, vertexId);
+      //init(Configuration.get(dataInput.readInt()));
+      configurationId = dataInput.readInt();
+      configuration = Configuration.get(configurationId);
 
-            vertexPositions.put(vertexId, newPos);
-        }
+      if (edges == null) {
+         edges = createPatternEdgeArrayList(isGraphEdgeLabelled);
+      }
 
-        for (int i = 0; i < edges.size(); ++i) {
-            PatternEdge edge = edges.get(i);
+      if (patternEdgePool == null) {
+         patternEdgePool = PatternEdgePool.instance(isGraphEdgeLabelled);
+      }
 
-            int srcPos = edge.getSrcPos();
-            int dstPos = edge.getDestPos();
+      edges.readFields(dataInput);
+      vertices.readFields(dataInput);
 
-            int convertedSrcPos = canonicalLabelling.get(srcPos);
-            int convertedDstPos = canonicalLabelling.get(dstPos);
+      for (int i = 0; i < vertices.size(); ++i) {
+         vertexPositions.put(vertices.getUnchecked(i), i);
+      }
 
-            if (convertedSrcPos < convertedDstPos) {
-                edge.setSrcPos(convertedSrcPos);
-                edge.setDestPos(convertedDstPos);
-            } else {
-                // If we changed the position of source and destination due to
-                // relabel, we also have to change the labels to match this
-                // change.
-                int tmp = edge.getSrcLabel();
-                edge.setSrcPos(convertedDstPos);
-                edge.setSrcLabel(edge.getDestLabel());
-                edge.setDestPos(convertedSrcPos);
-                edge.setDestLabel(tmp);
-            }
-        }
+      boolean hasVsymmetryBreaker = dataInput.readBoolean();
+      if (hasVsymmetryBreaker) {
+         int size = dataInput.readInt();
+         vsymmetryBreaker = new ObjArrayList<IntArrayList>(size);
+         for (int i = 0; i < size; ++i) {
+            IntArrayList conds = new IntArrayList();
+            conds.readFields(dataInput);
+            vsymmetryBreaker.add(conds);
+         }
+      }
+   }
 
-        edges.sort();
+   @Override
+   public void readExternal(ObjectInput objInput) throws IOException, ClassNotFoundException {
+      readFields(objInput);
+   }
 
-        return true;
-    }
+   protected PatternEdgeArrayList createPatternEdgeArrayList(boolean areEdgesLabelled) {
+      return new PatternEdgeArrayList(areEdgesLabelled);
+   }
 
-    @Override
-    public void write(DataOutput dataOutput) throws IOException {
-        dataOutput.writeBoolean(isGraphEdgeLabelled);
-        dataOutput.writeInt(configurationId);
-        edges.write(dataOutput);
-        vertices.write(dataOutput);
+   protected PatternEdge createPatternEdge(int edgeId, int srcPos, int dstPos, int srcId) {
+      PatternEdge patternEdge = patternEdgePool.createObject();
 
-        if (vsymmetryBreaker != null) {
-           dataOutput.writeBoolean(true);
-           dataOutput.writeInt(vsymmetryBreaker.size());
-           for (int i = 0; i < vsymmetryBreaker.size(); ++i) {
-              vsymmetryBreaker.getUnchecked(i).write(dataOutput);
-           }
-        } else {
-           dataOutput.writeBoolean(false);
-        }
-    }
+      patternEdge.setFromEdge(getConfig().getMainGraph(), edgeId, srcPos, dstPos, srcId);
 
-    @Override
-    public void writeExternal(ObjectOutput objOutput) throws IOException {
-       write (objOutput);
-    }
+      return patternEdge;
+   }
 
-    @Override
-    public void readFields(DataInput dataInput) throws IOException {
-        reset();
+   protected PatternEdge createPatternEdge(Edge edge, int srcPos, int dstPos, int srcId) {
+      PatternEdge patternEdge = patternEdgePool.createObject();
 
-        isGraphEdgeLabelled = dataInput.readBoolean();
-
-        //init(Configuration.get(dataInput.readInt()));
-        configurationId = dataInput.readInt();
-        configuration = Configuration.get(configurationId);
-
-        if (edges == null) {
-           edges = createPatternEdgeArrayList(isGraphEdgeLabelled);
-        }
-
-        if (patternEdgePool == null) {
-           patternEdgePool = PatternEdgePool.instance(isGraphEdgeLabelled);
-        }
-
-        edges.readFields(dataInput);
-        vertices.readFields(dataInput);
-
-        for (int i = 0; i < vertices.size(); ++i) {
-            vertexPositions.put(vertices.getUnchecked(i), i);
-        }
-
-        boolean hasVsymmetryBreaker = dataInput.readBoolean();
-        if (hasVsymmetryBreaker) {
-           int size = dataInput.readInt();
-           vsymmetryBreaker = new ObjArrayList<IntArrayList>(size);
-           for (int i = 0; i < size; ++i) {
-              IntArrayList conds = new IntArrayList();
-              conds.readFields(dataInput);
-              vsymmetryBreaker.add(conds);
-           }
-        }
-    }
-
-    @Override
-    public void readExternal(ObjectInput objInput) throws IOException, ClassNotFoundException {
-       readFields(objInput);
-    }
-
-    protected PatternEdgeArrayList createPatternEdgeArrayList(boolean areEdgesLabelled) {
-        return new PatternEdgeArrayList(areEdgesLabelled);
-    }
-
-    protected PatternEdge createPatternEdge(Edge edge, int srcPos, int dstPos, int srcId) {
-        PatternEdge patternEdge = patternEdgePool.createObject();
-
-        patternEdge.setFromEdge(getConfig().getMainGraph(),
+      patternEdge.setFromEdge(getConfig().getMainGraph(),
               edge, srcPos, dstPos, srcId);
 
-        return patternEdge;
-    }
+      return patternEdge;
+   }
 
-    protected PatternEdge createPatternEdge(PatternEdge otherEdge) {
-        PatternEdge patternEdge = patternEdgePool.createObject();
+   protected PatternEdge createPatternEdge(PatternEdge otherEdge) {
+      PatternEdge patternEdge = patternEdgePool.createObject();
 
-        patternEdge.setFromOther(otherEdge);
+      patternEdge.setFromOther(otherEdge);
 
-        return patternEdge;
-    }
+      return patternEdge;
+   }
 
-    @Override
-    public String toString() {
-        return toOutputString();
-    }
+   @Override
+   public String toString() {
+      return toOutputString();
+   }
 
-    @Override
-    public String toOutputString() {
-        if (getNumberOfEdges() > 0) {
-            return StringUtils.join(edges, ",");
-        }
-        else if (getNumberOfVertices() == 1) {
-            Vertex vertex = getMainGraph().getVertex(vertices.getUnchecked(0));
+   @Override
+   public String toOutputString() {
+      if (getNumberOfEdges() > 0) {
+         return StringUtils.join(edges, ",");
+      }
+      else if (getNumberOfVertices() == 1) {
+         Vertex vertex = getMainGraph().getVertex(vertices.getUnchecked(0));
 
-            return "0(" + vertex.getVertexLabel() + ")";
-        }
-        else {
-            return "";
-        }
-    }
+         return "0(" + vertex.getVertexLabel() + ")";
+      }
+      else {
+         return "";
+      }
+   }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+   @Override
+   public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
 
-        BasicPattern that = (BasicPattern) o;
+      BasicPattern that = (BasicPattern) o;
 
-        return edges.equals(that.edges);
+      return edges.equals(that.edges);
 
-    }
+   }
 
-    public boolean equals(Object o, int upTo) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        BasicPattern that = (BasicPattern) o;
+   public boolean equals(Object o, int upTo) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      BasicPattern that = (BasicPattern) o;
 
-        if (this.getNumberOfEdges() < upTo || that.getNumberOfEdges() < upTo)
-           return false;
-        
-        PatternEdgeArrayList otherEdges = that.getEdges();
-        for (int i = 0; i < upTo; i++) {
-           if (!edges.getUnchecked(i).equals (otherEdges.getUnchecked(i)))
-              return false;
-        }
+      if (this.getNumberOfEdges() < upTo || that.getNumberOfEdges() < upTo)
+         return false;
 
-        return true;
-    }
+      PatternEdgeArrayList otherEdges = that.getEdges();
+      for (int i = 0; i < upTo; i++) {
+         if (!edges.getUnchecked(i).equals (otherEdges.getUnchecked(i)))
+            return false;
+      }
 
-    @Override
-    public int hashCode() {
-       // TODO
-        return //edges.isEmpty() ? mainGraph.getVertex(vertices.getUnchecked(0)).getVertexLabel() :
-           edges.hashCode();
-    }
+      return true;
+   }
 
-    public MainGraph getMainGraph() {
-        return getConfig().getMainGraph();
-    }
+   @Override
+   public int hashCode() {
+      // TODO
+      return //edges.isEmpty() ? mainGraph.getVertex(vertices.getUnchecked(0)).getVertexLabel() :
+              edges.hashCode();
+   }
+
+   public MainGraph getMainGraph() {
+      return getConfig().getMainGraph();
+   }
 }

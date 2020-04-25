@@ -2,6 +2,7 @@ package br.ufmg.cs.systems.fractal.subgraph;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
+import br.ufmg.cs.systems.fractal.graph.BasicMainGraph;
 import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.LabelledEdge;
 import br.ufmg.cs.systems.fractal.graph.Vertex;
@@ -9,12 +10,15 @@ import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.HashIntSetPool;
+import br.ufmg.cs.systems.fractal.util.pool.IntIntArrayListMapPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntIntMapPool;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.map.IntIntMap;
+import com.koloboke.collect.map.IntObjMap;
 import com.koloboke.collect.map.hash.HashIntObjMap;
 import com.koloboke.collect.map.hash.HashIntObjMaps;
 import com.koloboke.collect.set.hash.HashIntSet;
+import org.apache.log4j.Logger;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -22,6 +26,7 @@ import java.io.ObjectOutput;
 import java.util.Objects;
 
 public abstract class BasicSubgraph implements Subgraph {
+   private static final Logger LOG = Logger.getLogger(BasicSubgraph.class);
    protected Configuration configuration;
 
    // Basic structure {{
@@ -33,6 +38,7 @@ public abstract class BasicSubgraph implements Subgraph {
 
    // Active extensions
    protected ObjArrayList<HashIntSet> extensionLevels;
+   protected ObjArrayList<HashIntObjMap<IntArrayList>> extensionMaps;
    protected ObjArrayList<IntArrayList> extensionArrays;
    protected IntArrayList neighborhoodCuts;
 
@@ -63,6 +69,7 @@ public abstract class BasicSubgraph implements Subgraph {
       edges = new IntArrayList();
       extensionWordMaps = IntIntMapPool.instance().createObject();
       extensionLevels = new ObjArrayList<HashIntSet>();
+      extensionMaps = new ObjArrayList<HashIntObjMap<IntArrayList>>();
       extensionArrays = new ObjArrayList<IntArrayList>();
       neighborhoodCuts = new IntArrayList();
       cacheStore = HashIntObjMaps.newMutableMap();
@@ -108,20 +115,33 @@ public abstract class BasicSubgraph implements Subgraph {
       return extensionLevels.getLast();
    }
 
+   protected void setExtensionWordIds(HashIntSet wordIds) {
+      extensionLevels.setUnchecked(extensionLevels.size() - 1, wordIds);
+   }
+
+   protected HashIntObjMap<IntArrayList> extensionMap() {
+      return extensionMaps.getLast();
+   }
+
    @Override
    public void nextExtensionLevel() {
       extensionLevels.add(HashIntSetPool.instance().createObject());
+      extensionMaps.add(IntIntArrayListMapPool.instance().createObject());
    }
 
    @Override
    public void previousExtensionLevel() {
       HashIntSetPool.instance().reclaimObject(
             extensionLevels.remove(extensionLevels.size() - 1));
+      IntIntArrayListMapPool.instance().reclaimObject(
+              extensionMaps.remove(extensionMaps.size() - 1)
+      );
    }
    
    @Override
    public void nextExtensionLevel(Subgraph other) {
       extensionLevels.add(HashIntSetPool.instance().createObject());
+      extensionMaps.add(IntIntArrayListMapPool.instance().createObject());
    }
 
    @Override

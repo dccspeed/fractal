@@ -4,6 +4,7 @@ import br.ufmg.cs.systems.fractal.annotation.Experimental
 import br.ufmg.cs.systems.fractal.computation.{Computation, SubgraphEnumerator}
 import br.ufmg.cs.systems.fractal.gmlib.clique.KClistEnumerator
 import br.ufmg.cs.systems.fractal.graph.MainGraph
+import br.ufmg.cs.systems.fractal.pattern.{BasicPattern, Pattern}
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
 import br.ufmg.cs.systems.fractal.util.{Logging, Utils}
@@ -123,6 +124,16 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
   }
 
   /**
+   * subgraph Querying
+   * @param subgraph query graph
+   * @return Fractoid with the initial state for subraph querying
+   */
+  def gquerying(qpattern: Pattern): Fractoid[PatternInducedSubgraph] = {
+    logInfo (s"Querying pattern ${qpattern} in ${this}.")
+    self.pfractoid(qpattern).expand(1)
+  }
+
+  /**
     * subgraph Querying
     * @param subgraph query graph
     * @return Fractoid with the initial state for subraph querying
@@ -172,9 +183,9 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
   }
 
   /**
-    * Experimental algorithms
-    /def gque
-    */
+   *  Experimental algorithms
+   * TODO: implement this using subgraph enumerators and then remove cacheStore from subgraphs
+   */
   @Experimental
   def maximalcliques: Fractoid[VertexInducedSubgraph] = {
     import java.util.Random

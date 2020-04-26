@@ -3,7 +3,6 @@ package br.ufmg.cs.systems.fractal.graph;
 import br.ufmg.cs.systems.fractal.util.*;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
-import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.function.IntIntConsumer;
@@ -13,12 +12,19 @@ import org.apache.log4j.Logger;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntConsumer;
 import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 
 public class SuccinctMainGraph implements MainGraph {
    private static final Logger LOG = Logger.getLogger(SuccinctMainGraph.class);
+
+   /**
+    * Unique graph id (per JVM)
+    */
+   private static AtomicInteger nextGraphId = new AtomicInteger(0);
+   protected int id = nextGraphId.getAndIncrement();
 
    /* Succinct graph representation */
    protected int numEdges;
@@ -68,6 +74,9 @@ public class SuccinctMainGraph implements MainGraph {
 
    public void init(Object path) throws IOException {
       intArrayListPool = IntArrayListPool.instance();
+
+      long start = System.currentTimeMillis();
+
       if (path instanceof Path) {
          Path filePath = (Path) path;
          readFromFile(filePath);
@@ -77,6 +86,20 @@ public class SuccinctMainGraph implements MainGraph {
       } else {
          throw new RuntimeException("Invalid path: " + path);
       }
+
+      LOG.info("vertexNeighborhoodIdx " + vertexNeighborhoodIdx.size());
+      LOG.info("vertexNeighborhoods " + vertexNeighborhoods.size());
+      LOG.info("edgeNeighborhoods " + edgeNeighborhoods.size());
+      LOG.info("edgeSrcs " + edgeSrcs.size());
+      LOG.info("edgeDsts " + edgeDsts.size());
+
+      LOG.info("vertexLabelsIdx " + vertexLabelsIdx.size());
+      LOG.info("vertexLabels " + vertexLabels.size());
+      LOG.info("edgeLabelsIdx " + edgeLabelsIdx.size());
+      LOG.info("edgeLabels " + edgeLabels.size());
+
+      long elapsed = System.currentTimeMillis() - start;
+      LOG.info("GraphReading took " + elapsed + " ms");
    }
 
    protected void readFromHdfs(org.apache.hadoop.fs.Path hdfsPath) throws IOException {
@@ -157,44 +180,20 @@ public class SuccinctMainGraph implements MainGraph {
       } catch (IOException e) {
          throw new RuntimeException(e);
       }
-
-      System.out.println("vertexNeighborhoodIdx " + vertexNeighborhoodIdx.size());
-      System.out.println("vertexNeighborhoods " + vertexNeighborhoods.size());
-      System.out.println("edgeNeighborhoods " + edgeNeighborhoods.size());
-      System.out.println("edgeSrcs " + edgeSrcs.size());
-      System.out.println("edgeDsts " + edgeDsts.size());
-
-      System.out.println("vertexLabelsIdx " + vertexLabelsIdx.size());
-      System.out.println("vertexLabels " + vertexLabels.size());
-      System.out.println("edgeLabelsIdx " + edgeLabelsIdx.size());
-      System.out.println("edgeLabels " + edgeLabels.size());
-
-      long elapsed = System.currentTimeMillis() - start;
-      System.out.println("GraphReading took " + elapsed + " ms");
-
-      //start = System.currentTimeMillis();
-      //for (int e = 0; e < edgeSrcs.size(); ++e) {
-      //   int u = edgeSrc(e);
-      //   int v = edgeDst(e);
-      //   int edgeId1 = edgeId(u, v);
-      //   int edgeId2 = edgeId(v, u);
-      //   if (edgeId1 != edgeId2) {
-      //      throw new RuntimeException("(u,v) != (v,u)");
-      //   }
-      //}
-      //elapsed = System.currentTimeMillis() - start;
-      //System.out.println("NeighborhoodArraysLookup " + elapsed + " ms");
    }
 
+   @Override
    public void addVertex(int u) {
       vertexNeighborhoodIdx.add(vertexNeighborhoods.size());
    }
 
+   @Override
    public void addVertexLabel(int u, int label) {
       vertexLabelsIdx.add(vertexLabels.size());
       vertexLabels.add(label);
    }
 
+   @Override
    public void addEdge(int u, int v, int e) {
       vertexNeighborhoods.add(v);
       edgeNeighborhoods.add(e);
@@ -204,6 +203,7 @@ public class SuccinctMainGraph implements MainGraph {
       }
    }
 
+   @Override
    public void addEdgeLabel(int e, int label) {
       edgeLabelsIdx.add(edgeLabels.size());
       edgeLabels.add(label);
@@ -225,31 +225,16 @@ public class SuccinctMainGraph implements MainGraph {
 
    @Override
    public int getId() {
-      return 0;
+      return id;
    }
 
    @Override
    public void setId(int id) {
-
-   }
-
-   @Override
-   public void reset() {
-
-   }
-
-   @Override
-   public boolean isNeighborVertex(int v1, int v2) {
-      throw new UnsupportedOperationException();
+      this.id = id;
    }
 
    @Override
    public MainGraph addVertex(Vertex vertex) {
-      throw new UnsupportedOperationException();
-   }
-
-   @Override
-   public Vertex[] getVertices() {
       throw new UnsupportedOperationException();
    }
 
@@ -259,13 +244,8 @@ public class SuccinctMainGraph implements MainGraph {
    }
 
    @Override
-   public int getNumberVertices() {
+   public int numVertices() {
       return numVertices;
-   }
-
-   @Override
-   public Edge[] getEdges() {
-      throw new UnsupportedOperationException();
    }
 
    @Override
@@ -274,27 +254,12 @@ public class SuccinctMainGraph implements MainGraph {
    }
 
    @Override
-   public int getNumberEdges() {
+   public int numEdges() {
       return numEdges;
    }
 
    @Override
-   public ReclaimableIntCollection getEdgeIds(int v1, int v2) {
-      throw new UnsupportedOperationException();
-   }
-
-   @Override
    public MainGraph addEdge(Edge edge) {
-      throw new UnsupportedOperationException();
-   }
-
-   @Override
-   public boolean areEdgesNeighbors(int edge1Id, int edge2Id) {
-      throw new UnsupportedOperationException();
-   }
-
-   @Override
-   public boolean isNeighborEdge(int src1, int dest1, int edge2) {
       throw new UnsupportedOperationException();
    }
 
@@ -319,7 +284,7 @@ public class SuccinctMainGraph implements MainGraph {
    }
 
    @Override
-   public void forEachEdgeId(int u, int v, IntConsumer consumer) {
+   public void forEachEdge(int u, int v, IntConsumer consumer) {
       int startIdx = vertexNeighborhoodIdx.getUnchecked(u);
       int endIdx = vertexNeighborhoodIdx.getUnchecked(u+1);
       forEachEdgeId(u, v, startIdx, endIdx, consumer);
@@ -349,16 +314,6 @@ public class SuccinctMainGraph implements MainGraph {
    }
 
    @Override
-   public int filterVertices(AtomicBitSetArray tag) {
-      return 0;
-   }
-
-   @Override
-   public int filterEdges(AtomicBitSetArray tag) {
-      return 0;
-   }
-
-   @Override
    public int undoVertexFilter() {
       return 0;
    }
@@ -370,12 +325,12 @@ public class SuccinctMainGraph implements MainGraph {
 
    @Override
    public int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag) {
-      return 0;
+      throw new UnsupportedOperationException();
    }
 
    @Override
-   public void buildSortedNeighborhood() {
-
+   public void afterGraphUpdate() {
+      throw new UnsupportedOperationException();
    }
 
    @Override
@@ -390,12 +345,12 @@ public class SuccinctMainGraph implements MainGraph {
 
    @Override
    public int filterEdges(Predicate epred) {
-      return 0;
+      throw new UnsupportedOperationException();
    }
 
    @Override
    public int filterVertices(Predicate vpred) {
-      return 0;
+      throw new UnsupportedOperationException();
    }
 
    @Override
@@ -511,7 +466,6 @@ public class SuccinctMainGraph implements MainGraph {
          size = vertexNeighborhoodIdx.getUnchecked(u+1);
          idx = vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
          idx = (idx < 0) ? (-idx - 1) : idx;
-         //Utils.sintersect(validVertices, vertexNeighborhoods, 0, validVertices.size(), idx, size, resultSet);
          Utils.sintersectWithKeyPred(validVertices, vertexNeighborhoods, 0, validVertices.size(), idx, size,
                  resultSet, edgeNeighborhoods, edgePredicates.getUnchecked(i));
          validVertices.clear();
@@ -531,6 +485,13 @@ public class SuccinctMainGraph implements MainGraph {
 
       intArrayListPool.reclaimObject(validVertices);
       intArrayListPool.reclaimObject(resultSet);
+   }
+
+   @Override
+   public void forEachEdge(IntConsumer consumer) {
+      for (int e = 0; e < numEdges; ++e) {
+         consumer.accept(e);
+      }
    }
 
    public void neighborhoodTraversal(int u, IntIntConsumer consumer) {
@@ -557,17 +518,7 @@ public class SuccinctMainGraph implements MainGraph {
       neighborhoodTraversal(startIdx, endIdx, consumer);
    }
 
-   public void neighborhoodTraversalVertexRange(int u, int lowerBound, int upperBound, IntIntConsumer consumer) {
-      int startIdx = vertexNeighborhoodIdx.getUnchecked(u);
-      int endIdx = vertexNeighborhoodIdx.getUnchecked(u+1);
-      startIdx = vertexNeighborhoods.binarySearch(lowerBound, startIdx, endIdx);
-      startIdx = (startIdx < 0) ? (-startIdx - 1) : startIdx;
-      endIdx = vertexNeighborhoods.binarySearch(upperBound, startIdx, endIdx);
-      endIdx = (endIdx < 0) ? (-endIdx - 1) : endIdx;
-      neighborhoodTraversal(startIdx, endIdx, consumer);
-   }
-
-   public void neighborhoodTraversal(int startIdx, int endIdx, IntIntConsumer consumer) {
+   private void neighborhoodTraversal(int startIdx, int endIdx, IntIntConsumer consumer) {
       for (int i = startIdx; i < endIdx; ++i) {
          consumer.accept(vertexNeighborhoods.getUnchecked(i), edgeNeighborhoods.getUnchecked(i));
       }
@@ -585,33 +536,4 @@ public class SuccinctMainGraph implements MainGraph {
    }
 
    /* } */
-
-   public int numVertices() {
-      return numVertices;
-   }
-
-   public int numEdges() {
-      return numEdges;
-   }
-
-   public static void main(String[] args) throws IOException {
-      FileInputStream in = new FileInputStream(args[0]);
-      SuccinctMainGraph graph = new SuccinctMainGraph();
-      graph.readFromInputStream(in);
-      //IntArrayList intersection = new IntArrayList();
-      //intersection.add(1690);
-      //intersection.add(2639);
-      //intersection.add(2869);
-      //intersection.add(2876);
-      //IntArrayList difference = new IntArrayList();
-      //EdgePredicates predicates = new EdgePredicates();
-      //EdgePredicate edgePredicate = new EdgePredicate();
-      //edgePredicate.set(graph, 1, 1);
-      //predicates.add(edgePredicate);
-      //predicates.add(edgePredicate);
-      //predicates.add(edgePredicate);
-      //predicates.add(edgePredicate);
-      //graph.neighborhoodTraversal(intersection, difference, 0, (u,e) -> System.out.println("intersection " + u + " " + e),
-      //        predicates);
-   }
 }

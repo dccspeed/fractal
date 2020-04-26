@@ -131,12 +131,7 @@ public abstract class BasicComputation<S extends Subgraph>
        return subgraph.computeExtensions(this);
     }
 
-    @Override
-    public boolean filter(S existingSubgraph, int newWord) {
-        return existingSubgraph.isCanonicalSubgraphWithWord(newWord);
-    }
-    
-    @Override
+   @Override
     public <K extends Writable, V extends Writable>
     AggregationStorage<K, V> readAggregation(String name) {
         return executionEngine.getAggregatedValue(name);

@@ -23,7 +23,6 @@ public interface Computation<S extends Subgraph> {
     long processCompute(SubgraphEnumerator<S> expansions);
     boolean filter(S Subgraph);
     void process(S Subgraph);
-    boolean filter(S existingSubgraph, int newWord);
     // }}}
 
     // {{{ Output

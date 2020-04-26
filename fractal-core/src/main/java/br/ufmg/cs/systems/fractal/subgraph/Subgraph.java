@@ -51,9 +51,7 @@ public interface Subgraph extends WritableObject, Externalizable {
 
   IntCollection extensions();
 
-    boolean isCanonicalSubgraphWithWord(int wordId);
-
-    String toOutputString();
+   String toOutputString();
     
     void nextExtensionLevel();
     

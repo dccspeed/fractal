@@ -1,9 +1,11 @@
 package br.ufmg.cs.systems.fractal.graph;
 
+import br.ufmg.cs.systems.fractal.util.EdgePredicate;
 import br.ufmg.cs.systems.fractal.util.EdgePredicates;
+import br.ufmg.cs.systems.fractal.util.Utils;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
-import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
+import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.map.IntObjCursor;
@@ -197,40 +199,6 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       return numRemovedEdges;
    }
 
-   @Override
-   public int filterVertices(AtomicBitSetArray tag) {
-      int removedEdges = 0;
-      int removedVertices = 0;
-      for (int i = 0; i < vertexNeighborhoods.length; ++i) {
-         if (vertexNeighborhoods[i] != null) {
-            if (!tag.contains(i)) {
-               vertexNeighborhoods[i] = null;
-               ++removedVertices;
-            } else {
-               removedEdges += vertexNeighborhoods[i].filterVertices(tag);
-            }
-         }
-      }
-
-      LOG.info("GraphTagging removedVertices=" + removedVertices +
-         " removedEdges=" + removedEdges);
-
-      return numVertices - removedVertices;
-   }
-
-   @Override
-   public int filterEdges(AtomicBitSetArray tag) {
-      int numEdges = 0;
-      for (int i = 0; i < vertexNeighborhoods.length; ++i) {
-         if (vertexNeighborhoods[i] != null) {
-            int neighborhoodSize = vertexNeighborhoods[i].filterEdges(tag);
-            numEdges += neighborhoodSize;
-         }
-      }
-
-      return numEdges;
-   }
-
    protected void removeVertex(Vertex vertex) {
       int vertexId = vertex.getVertexId();
       VertexNeighbourhood neighborhood = vertexNeighborhoods[vertexId];
@@ -349,7 +317,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
          throw new RuntimeException("Invalid path: " + path);
       }
 
-      buildSortedNeighborhood();      
+      afterGraphUpdate();
 
       if (LOG.isInfoEnabled()) {
          LOG.info("Done reading graph," +
@@ -366,7 +334,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    }
 
    @Override
-   public void buildSortedNeighborhood() {
+   public void afterGraphUpdate() {
       // build sorted neighborhood for fast subgraph enumeration
       for (int i = 0; i < vertexNeighborhoods.length; ++i) {
          if (vertexNeighborhoods[i] != null) {
@@ -374,6 +342,48 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
             //LOG.info(vertexNeighborhoods[i]);
          }
       }
+   }
+
+   @Override
+   public void addVertex(int u) {
+      ensureCanStoreUpToVertex(u);
+      Vertex vertex = createVertex(u, u, 1);
+      vertexIndexF[u] = vertex;
+      ++numVertices;
+   }
+
+   @Override
+   public void addEdge(int u, int v, int e) {
+      ensureCanStoreUpToVertex(Math.max(u, v));
+      Edge edge = createEdge(u, v);
+      edge.setEdgeId(e);
+      ensureCanStoreNewEdge();
+      edgeIndexF[e] = edge;
+      ++numEdges;
+
+      VertexNeighbourhood neighbourhood = vertexNeighborhoods[u];
+      if (neighbourhood == null) {
+         neighbourhood = createVertexNeighbourhood();
+         vertexNeighborhoods[u] = neighbourhood;
+      }
+      neighbourhood.addEdge(v, e);
+
+      neighbourhood = vertexNeighborhoods[v];
+      if (neighbourhood == null) {
+         neighbourhood = createVertexNeighbourhood();
+         vertexNeighborhoods[v] = neighbourhood;
+      }
+      neighbourhood.addEdge(u, e);
+   }
+
+   @Override
+   public void addVertexLabel(int u, int label) {
+      vertexIndexF[u].setVertexLabel(label);
+   }
+
+   @Override
+   public void addEdgeLabel(int e, int label) {
+      ((LabelledEdge) edgeIndexF[e]).setEdgeLabel(label);
    }
 
    @Override
@@ -393,7 +403,12 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
    @Override
    public int edgeLabel(int e) {
-      return ((LabelledEdge)edgeIndexF[e]).getEdgeLabel();
+      Edge edge = edgeIndexF[e];
+      if (edge instanceof  LabelledEdge) {
+         return ((LabelledEdge) edge).getEdgeLabel();
+      } else {
+         return 1;
+      }
    }
 
    @Override
@@ -408,17 +423,179 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
    @Override
    public void neighborhoodTraversalVertexRange(int u, int lowerBound, IntIntConsumer consumer) {
-
+      vertexNeighborhoods[u].traversalVertexRange(lowerBound, consumer);
    }
 
    @Override
    public void neighborhoodTraversalEdgeRange(int u, int lowerBound, IntIntConsumer consumer) {
-
+      vertexNeighborhoods[u].traversalEdgeRange(lowerBound, consumer);
    }
 
    @Override
-   public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound, IntConsumer consumer, IntPredicate vertexPredicate, EdgePredicates edgePredicates) {
+   public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound,
+                                     IntConsumer consumer, IntPredicate vertexPredicate, EdgePredicates edgePredicates) {
+      if (intersection.size() == 0) return;
 
+      IntArrayListPool intArrayListPool = IntArrayListPool.instance();
+
+      /* Declarations */
+      IntArrayList validVertices = null;
+      IntArrayList resultSet = null;
+      IntArrayList edgeNeighborhoods = null;
+      EdgePredicate edgePredicate = null;
+      VertexNeighbourhood neighbourhood = null;
+      IntArrayList orderedVertices = null;
+      int u, v, e, idx, size;
+      int intersectionSize = intersection.size(), differenceSize = difference.size();
+
+      if (intersectionSize == 1 && differenceSize == 0) {
+         /* Initialize validVertices with the first intersection and considering vertexPredicate */
+         u = intersection.getUnchecked(0);
+         neighbourhood = vertexNeighborhoods[u];
+         orderedVertices = neighbourhood.getOrderedVertices();
+         idx = orderedVertices.binarySearch(vertexLowerBound);
+         idx = (idx < 0) ? (-idx - 1) : idx;
+         size = orderedVertices.size();
+         edgePredicate = edgePredicates.getUnchecked(0);
+         for (int i = idx; i < size; ++i) {
+            v = orderedVertices.getUnchecked(i);
+            if (!vertexPredicate.test(v)) continue;
+            e = neighbourhood.getEdge(v);
+            if (!edgePredicate.test(e)) continue;
+            consumer.accept(v);
+         }
+
+         return;
+      }
+
+      validVertices = intArrayListPool.createObject();
+      resultSet = intArrayListPool.createObject();
+      edgeNeighborhoods = intArrayListPool.createObject();
+
+      if (intersectionSize == 1) {
+         /* Initialize validVertices with the first intersection and considering vertexPredicate */
+         u = intersection.getUnchecked(0);
+         neighbourhood = vertexNeighborhoods[u];
+         orderedVertices = neighbourhood.getOrderedVertices();
+         idx = orderedVertices.binarySearch(vertexLowerBound);
+         idx = (idx < 0) ? (-idx - 1) : idx;
+         size = orderedVertices.size();
+         edgePredicate = edgePredicates.getUnchecked(0);
+         for (int i = idx; i < size; ++i) {
+            v = orderedVertices.getUnchecked(i);
+            if (!vertexPredicate.test(v)) continue;
+            e = neighbourhood.getEdge(v);
+            if (!edgePredicate.test(e)) continue;
+            validVertices.add(v);
+         }
+
+         /* Now that we have valid vertices considering labels, we drop from this set neighborhoods in difference */
+         for (int i = 0; i < differenceSize - 1; ++i) {
+            u = difference.getUnchecked(i);
+            neighbourhood = vertexNeighborhoods[u];
+            orderedVertices = neighbourhood.getOrderedVertices();
+            idx = orderedVertices.binarySearch(vertexLowerBound);
+            idx = (idx < 0) ? (-idx - 1) : idx;
+            size = orderedVertices.size();
+            Utils.sdifference(validVertices, orderedVertices, 0, validVertices.size(), idx, size, resultSet);
+            validVertices.clear();
+            IntArrayList aux = validVertices;
+            validVertices = resultSet;
+            resultSet = aux;
+         }
+
+         u = difference.getLast();
+         neighbourhood = vertexNeighborhoods[u];
+         orderedVertices = neighbourhood.getOrderedVertices();
+         idx = orderedVertices.binarySearch(vertexLowerBound);
+         idx = (idx < 0) ? (-idx - 1) : idx;
+         size = orderedVertices.size();
+         Utils.sdifferenceConsume(validVertices, orderedVertices, 0, validVertices.size(), idx, size, consumer);
+
+         intArrayListPool.reclaimObject(validVertices);
+         intArrayListPool.reclaimObject(resultSet);
+
+         return;
+      }
+
+      /* Initialize validVertices with the first intersection and considering vertexPredicate */
+      u = intersection.getUnchecked(0);
+      neighbourhood = vertexNeighborhoods[u];
+      orderedVertices = neighbourhood.getOrderedVertices();
+      idx = orderedVertices.binarySearch(vertexLowerBound);
+      idx = (idx < 0) ? (-idx - 1) : idx;
+      size = orderedVertices.size();
+      edgePredicate = edgePredicates.getUnchecked(0);
+      for (int i = idx; i < size; ++i) {
+         v = orderedVertices.getUnchecked(i);
+         if (!vertexPredicate.test(v)) continue;
+         e = neighbourhood.getEdge(v);
+         if (!edgePredicate.test(e)) continue;
+         validVertices.add(v);
+      }
+
+      /* Now that we have valid vertices considering labels, we drop from this set neighborhoods in difference */
+      for (int i = 0; i < differenceSize; ++i) {
+         u = difference.getUnchecked(i);
+         neighbourhood = vertexNeighborhoods[u];
+         orderedVertices = neighbourhood.getOrderedVertices();
+         idx = orderedVertices.binarySearch(vertexLowerBound);
+         idx = (idx < 0) ? (-idx - 1) : idx;
+         size = orderedVertices.size();
+         Utils.sdifference(validVertices, orderedVertices, 0, validVertices.size(), idx, size, resultSet);
+         validVertices.clear();
+         IntArrayList aux = validVertices;
+         validVertices = resultSet;
+         resultSet = aux;
+      }
+
+      /* Now that we have excluded all difference neighborhoods, we intersect the current set with other intersections */
+      for (int i = 1; i < intersectionSize - 1; ++i) {
+         u = intersection.getUnchecked(i);
+         neighbourhood = vertexNeighborhoods[u];
+         orderedVertices = neighbourhood.getOrderedVertices();
+         idx = orderedVertices.binarySearch(vertexLowerBound);
+         idx = (idx < 0) ? (-idx - 1) : idx;
+         size = orderedVertices.size();
+
+         edgeNeighborhoods.clear();;
+         for (int j = 0; j < orderedVertices.size(); ++j) {
+            edgeNeighborhoods.add(neighbourhood.getEdge(orderedVertices.getUnchecked(j)));
+         }
+         Utils.sintersectWithKeyPred(validVertices, orderedVertices, 0, validVertices.size(), idx, size,
+                 resultSet, edgeNeighborhoods, edgePredicates.getUnchecked(i));
+
+         validVertices.clear();
+         IntArrayList aux = validVertices;
+         validVertices = resultSet;
+         resultSet = aux;
+      }
+
+      /* Last intersection consumes the result set */
+      u = intersection.getLast();
+      neighbourhood = vertexNeighborhoods[u];
+      orderedVertices = neighbourhood.getOrderedVertices();
+      idx = orderedVertices.binarySearch(vertexLowerBound);
+      idx = (idx < 0) ? (-idx - 1) : idx;
+      size = orderedVertices.size();
+
+      edgeNeighborhoods.clear();;
+      for (int j = 0; j < orderedVertices.size(); ++j) {
+         edgeNeighborhoods.add(neighbourhood.getEdge(orderedVertices.getUnchecked(j)));
+      }
+      Utils.sintersectConsumeWithKeyPred(validVertices, orderedVertices, 0, validVertices.size(), idx, size,
+              consumer, edgeNeighborhoods, edgePredicates.getLast());
+
+      intArrayListPool.reclaimObject(validVertices);
+      intArrayListPool.reclaimObject(resultSet);
+      intArrayListPool.reclaimObject(edgeNeighborhoods);
+   }
+
+   @Override
+   public void forEachEdge(IntConsumer consumer) {
+      for (int e = 0; e < numEdges; ++e) {
+         consumer.accept(e);
+      }
    }
 
    public void initProperties(Object path) throws IOException {
@@ -452,8 +629,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       ensureCanStoreNewEdges(numEdges);
    }
 
-   @Override
-   public void reset() {
+   protected void reset() {
       numVertices = 0;
       numEdges = 0;
       numVertexLabels = 0;
@@ -564,12 +740,6 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       this(hdfsPath.getName(), isEdgeLabelled, isMultiGraph);
    }
 
-   @Override
-   public boolean isNeighborVertex(int v1, int v2) {
-      VertexNeighbourhood v1Neighbourhood = vertexNeighborhoods[v1];
-      return v1Neighbourhood != null && v1Neighbourhood.isNeighbourVertex(v2);
-   }
-
    protected void addNeighborhood(int vertexId, VertexNeighbourhood neighborhood) {
       vertexNeighborhoods[vertexId] = neighborhood;
    }
@@ -585,23 +755,13 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    }
 
    @Override
-   public Vertex<V>[] getVertices() {
-      return vertexIndexF;
-   }
-
-   @Override
    public Vertex<V> getVertex(int vertexId) {
       return vertexIndexF[vertexId];
    }
 
    @Override
-   public int getNumberVertices() {
+   public int numVertices() {
       return numVertices;
-   }
-
-   @Override
-   public Edge<E>[] getEdges() {
-      return edgeIndexF;
    }
 
    @Override
@@ -610,46 +770,27 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    }
 
    @Override
-   public int getNumberEdges() {
+   public int numEdges() {
       return numEdges;
    }
 
    @Override
-   public ReclaimableIntCollection getEdgeIds(int v1, int v2) {
+   public void forEachEdge(int v1, int v, IntConsumer consumer) {
       int minv;
       int maxv;
 
       // TODO: Change this for directed edges
-      if (v1 < v2) {
+      if (v1 < v) {
          minv = v1;
-         maxv = v2;
+         maxv = v;
       } else {
-         minv = v2;
+         minv = v;
          maxv = v1;
       }
 
       VertexNeighbourhood vertexNeighbourhood = this.vertexNeighborhoods[minv];
 
-      return vertexNeighbourhood.getEdgesWithNeighbourVertex(maxv);
-   }
-
-   @Override
-   public void forEachEdgeId(int v1, int v2, IntConsumer intConsumer) {
-      int minv;
-      int maxv;
-
-      // TODO: Change this for directed edges
-      if (v1 < v2) {
-         minv = v1;
-         maxv = v2;
-      } else {
-         minv = v2;
-         maxv = v1;
-      }
-
-      VertexNeighbourhood vertexNeighbourhood = this.vertexNeighborhoods[minv];
-
-      vertexNeighbourhood.forEachEdgeId(maxv, intConsumer);
+      vertexNeighbourhood.forEachEdgeId(maxv, consumer);
    }
 
    @Override
@@ -914,25 +1055,6 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
          str += vertexNeighborhoods[i] + "\n";
       }
       return str;
-   }
-
-   @Override
-   public boolean areEdgesNeighbors(int edge1Id, int edge2Id) {
-      Edge edge1 = edgeIndexF[edge1Id];
-      Edge edge2 = edgeIndexF[edge2Id];
-
-      return edge1.neighborWith(edge2);
-   }
-
-   @Override
-   public boolean isNeighborEdge(int src1, int dest1, int edge2) {
-      int src2 = edgeIndexF[edge2].getSourceId();
-
-      if (src1 == src2) return true;
-
-      int dest2 = edgeIndexF[edge2].getDestinationId();
-
-      return (dest1 == src2 || dest1 == dest2 || src1 == dest2);
    }
 
    protected Vertex createVertex(int id, int originalId, int label) {

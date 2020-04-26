@@ -709,23 +709,6 @@ case class Fractoid [S <: Subgraph : ClassTag](
   }
 
   /**
-   * Updates the word filter function of the underlying computation container.
-   *
-   * @param filter filter function that determines whether an extension must be
-   * further processed or not.
-   *
-   * @return new result
-   */
-  private def withWordFilter (
-      filter: WordFilterFunc[S]): Fractoid[S] = {
-
-    val newConfig = config.withNewComputation (
-      getComputationContainer[S].
-      withNewFunctions (wordFilterOpt = Option(filter)))
-    this.copy (config = newConfig)
-  }
-
-  /**
    * Updates the shouldOutput function of the underlying computation container.
    *
    * @param shouldOutput function that determines whether we should output the

@@ -170,10 +170,8 @@ public class SubgraphEnumerator<S extends Subgraph> implements Iterator<S> {
             // skip extensions that turn the subgraph not canonical
             while (cur.moveNext()) {
                currElem = cur.elem();
-               if (computation.filter(subgraph, currElem)) {
-                  lastHasNext = true;
-                  return true;
-               }
+               lastHasNext = true;
+               return true;
             }
             active.set(false);
          } else {

@@ -1,6 +1,9 @@
 package br.ufmg.cs.systems.fractal
 
+import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternUtils}
 import br.ufmg.cs.systems.fractal.util.Logging
+import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjArrayList}
+import com.koloboke.collect.map.hash.HashObjIntMap
 import org.apache.hadoop.io._
 import org.apache.spark.{SparkConf, SparkContext}
 
@@ -34,6 +37,68 @@ class VSubgraphsApp(val fractalGraph: FractalGraph,
       explore (explorationSteps)
 
     vsubgraphsRes.compute()
+  }
+}
+
+class MotifsAppPatternFirst(val fractalGraph: FractalGraph,
+                commStrategy: String,
+                numPartitions: Int,
+                explorationSteps: Int) extends FractalSparkApp {
+  def execute: Unit = {
+
+    val (patterns, elapsed) = FractalSparkRunner.time {
+      var patterns = PatternUtils.singleVertexPatternSet();
+      logInfo(s"PatternSet ${patterns}")
+      for (i <- 0 until explorationSteps) {
+        patterns = PatternUtils.extendByVertex(patterns)
+        logInfo(s"PatternSetExtension[${i + 1}] ${patterns}")
+      }
+      patterns
+    }
+
+    logInfo(s"CanonicalPatterns numVertices=${explorationSteps + 1}" +
+      s" numPatterns=${patterns.size()}" +
+      s" elapsed=${elapsed}")
+
+    val patternsArray = new Array[Pattern](patterns.size())
+    val countsArray = new Array[Long](patterns.size())
+    val elapsedTimes = new Array[Long](patterns.size())
+    var i = 0
+
+    val cur = patterns.cursor()
+    while (cur.moveNext()) {
+      val pattern = cur.elem()
+
+      /**
+       * Motifs counting consider induced subgraphs
+       */
+      pattern.setInduced(true);
+
+      val gqueryingRes = fractalGraph.gquerying(pattern).
+        set ("comm_strategy", commStrategy).
+        set ("num_partitions", numPartitions).
+        explore(explorationSteps)
+
+      val (accums, elapsed) = FractalSparkRunner.time {
+        gqueryingRes.compute()
+      }
+
+      elapsedTimes(i) = elapsed
+      patternsArray(i) = pattern
+      countsArray(i) = gqueryingRes.numValidSubgraphs()
+      i += 1
+    }
+
+    for (i <- 0 until patternsArray.length) {
+      logInfo (s"MotifsAppPatternFirst comm=${commStrategy}" +
+        s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
+        s" graph=${fractalGraph} " +
+        s" pattern=${patternsArray(i)}" +
+        s" count=${countsArray(i)}" +
+        s" elapsed=${elapsedTimes(i)}"
+      )
+    }
+
   }
 }
 
@@ -268,6 +333,9 @@ object FractalSparkRunner {
           numPartitions, explorationSteps)
       case "vsubgraphs" =>
         new VSubgraphsApp(fractalGraph, commStrategy,
+          numPartitions, explorationSteps)
+      case "motifspf" =>
+        new MotifsAppPatternFirst(fractalGraph, commStrategy,
           numPartitions, explorationSteps)
       case "motifs" =>
         new MotifsApp(fractalGraph, commStrategy,

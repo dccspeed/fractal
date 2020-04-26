@@ -11,6 +11,7 @@ import com.koloboke.function.IntIntConsumer;
 
 public interface VertexNeighbourhood {
     IntCollection getNeighborVertices();
+    int getEdge(int u);
     IntCollection getNeighborEdges();
     ReclaimableIntCollection getEdgesWithNeighbourVertex(int neighbourVertexId);
 
@@ -19,9 +20,11 @@ public interface VertexNeighbourhood {
     void addEdge(int neighbourVertexId, int edgeId);
 
     void forEachEdgeId(int nId, IntConsumer intConsumer);
-    
-    void forEachVertexEdge(IntIntConsumer consumer);
-   
+
+    void traversalVertexRange(int lowerBound, IntIntConsumer consumer);
+
+    void traversalEdgeRange(int lowerBound, IntIntConsumer consumer);
+
     int filterVertices(AtomicBitSetArray tag);
     
     int filterEdges(AtomicBitSetArray tag);

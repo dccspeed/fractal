@@ -32,6 +32,7 @@ public abstract class BasicPattern implements Pattern {
    protected int configurationId;
    protected Configuration configuration;
    protected boolean isGraphEdgeLabelled;
+   protected boolean induced;
 
    protected HashIntIntMapFactory positionMapFactory =
            HashIntIntMaps.getDefaultFactory().withDefaultValue(-1);
@@ -71,6 +72,7 @@ public abstract class BasicPattern implements Pattern {
       vertices = new IntArrayList();
       vertexPositions = positionMapFactory.newMutableMap();
       previousWords = new IntArrayList();
+      induced = false;
       reset();
    }
 
@@ -137,7 +139,6 @@ public abstract class BasicPattern implements Pattern {
 
    @Override
    public Configuration getConfig() {
-      //return Configuration.get(configurationId);
       return configuration;
    }
 
@@ -466,6 +467,7 @@ public abstract class BasicPattern implements Pattern {
       return symmetryBreaker;
    }
 
+   @Override
    public ObjArrayList<IntArrayList> vsymmetryBreaker() {
       if (vsymmetryBreaker == null) {
          synchronized (this) {
@@ -813,6 +815,7 @@ public abstract class BasicPattern implements Pattern {
 
    @Override
    public void write(DataOutput dataOutput) throws IOException {
+      dataOutput.writeBoolean(induced);
       dataOutput.writeBoolean(isGraphEdgeLabelled);
       dataOutput.writeInt(configurationId);
       edges.write(dataOutput);
@@ -838,6 +841,7 @@ public abstract class BasicPattern implements Pattern {
    public void readFields(DataInput dataInput) throws IOException {
       reset();
 
+      induced = dataInput.readBoolean();
       isGraphEdgeLabelled = dataInput.readBoolean();
 
       //init(Configuration.get(dataInput.readInt()));
@@ -869,6 +873,16 @@ public abstract class BasicPattern implements Pattern {
             vsymmetryBreaker.add(conds);
          }
       }
+   }
+
+   @Override
+   public boolean induced() {
+      return induced;
+   }
+
+   @Override
+   public void setInduced(boolean induced) {
+      this.induced = induced;
    }
 
    @Override

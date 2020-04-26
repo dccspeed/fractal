@@ -6,7 +6,7 @@ import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph;
 public abstract class PatternInducedComputation<E extends PatternInducedSubgraph> extends BasicComputation<E> {
     @Override
     public final int getInitialNumWords() {
-        return getMainGraph().getNumberVertices();
+        return getMainGraph().numVertices();
     }
 
     @Override

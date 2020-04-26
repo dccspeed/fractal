@@ -7,7 +7,6 @@ import br.ufmg.cs.systems.fractal.graph.VertexNeighbourhood;
 import br.ufmg.cs.systems.fractal.util.EdgePredicates;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
-import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.function.IntIntConsumer;
 
@@ -23,7 +22,7 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
     public OrderedNeighboursMainGraphDecorator(MainGraph underlyingMainGraph) {
         this.underlyingMainGraph = underlyingMainGraph;
 
-        int numVertices = underlyingMainGraph.getNumberVertices();
+        int numVertices = underlyingMainGraph.numVertices();
 
         orderedNeighbours = new IntArrayList[numVertices];
 
@@ -67,27 +66,37 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
        return underlyingMainGraph.filterVertices(vpred);
     }
 
-    @Override
-    public int filterVertices(AtomicBitSetArray tag) {
-       return underlyingMainGraph.filterVertices(tag);
-    }
-    
-    @Override
-    public int filterEdges(AtomicBitSetArray tag) {
-       return underlyingMainGraph.filterEdges(tag);
-    }
-
-    @Override
+   @Override
     public int filterEdges(Predicate epred) {
        return underlyingMainGraph.filterEdges(epred);
     }
 
     @Override
-    public void buildSortedNeighborhood() {
-       underlyingMainGraph.buildSortedNeighborhood();
+    public void afterGraphUpdate() {
+       underlyingMainGraph.afterGraphUpdate();
     }
 
-    @Override
+   @Override
+   public void addVertex(int u) {
+
+   }
+
+   @Override
+   public void addEdge(int u, int v, int e) {
+
+   }
+
+   @Override
+   public void addVertexLabel(int u, int label) {
+
+   }
+
+   @Override
+   public void addEdgeLabel(int e, int label) {
+
+   }
+
+   @Override
     public int edgeSrc(int e) {
         return 0;
     }
@@ -132,72 +141,42 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
 
     }
 
-    @Override
-    public void reset() {
-        underlyingMainGraph.reset();
-    }
+   @Override
+   public void forEachEdge(IntConsumer consumer) {
+       underlyingMainGraph.forEachEdge(consumer);
+   }
 
-    @Override
-    public boolean isNeighborVertex(int v1, int v2) {
-        return underlyingMainGraph.isNeighborVertex(v1, v2);
-    }
-
-    @Override
+   @Override
     public MainGraph addVertex(Vertex vertex) {
         return underlyingMainGraph.addVertex(vertex);
     }
 
-    @Override
-    public Vertex[] getVertices() {
-        return underlyingMainGraph.getVertices();
-    }
-
-    @Override
+   @Override
     public Vertex getVertex(int vertexId) {
         return underlyingMainGraph.getVertex(vertexId);
     }
 
     @Override
-    public int getNumberVertices() {
-        return underlyingMainGraph.getNumberVertices();
+    public int numVertices() {
+        return underlyingMainGraph.numVertices();
     }
 
-    @Override
-    public Edge[] getEdges() {
-        return underlyingMainGraph.getEdges();
-    }
-
-    @Override
+   @Override
     public Edge getEdge(int edgeId) {
         return underlyingMainGraph.getEdge(edgeId);
     }
 
     @Override
-    public int getNumberEdges() {
-        return underlyingMainGraph.getNumberEdges();
+    public int numEdges() {
+        return underlyingMainGraph.numEdges();
     }
 
-    @Override
-    public ReclaimableIntCollection getEdgeIds(int v1, int v2) {
-        return underlyingMainGraph.getEdgeIds(v1, v2);
-    }
-
-    @Override
+   @Override
     public MainGraph addEdge(Edge edge) {
         return underlyingMainGraph.addEdge(edge);
     }
 
-    @Override
-    public boolean areEdgesNeighbors(int edge1Id, int edge2Id) {
-        return underlyingMainGraph.areEdgesNeighbors(edge1Id, edge2Id);
-    }
-
-    @Override
-    public boolean isNeighborEdge(int src1, int dest1, int edge2) {
-        return underlyingMainGraph.isNeighborEdge(src1, dest1, edge2);
-    }
-
-    @Override
+   @Override
     public VertexNeighbourhood getVertexNeighbourhood(int vertexId) {
         return underlyingMainGraph.getVertexNeighbourhood(vertexId);
     }
@@ -218,8 +197,8 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
     }
 
     @Override
-    public void forEachEdgeId(int existingVertexId, int newVertexId, IntConsumer intConsumer) {
-        underlyingMainGraph.forEachEdgeId(existingVertexId, newVertexId, intConsumer);
+    public void forEachEdge(int existingVertexId, int v, IntConsumer consumer) {
+        underlyingMainGraph.forEachEdge(existingVertexId, v, consumer);
     }
 
 }

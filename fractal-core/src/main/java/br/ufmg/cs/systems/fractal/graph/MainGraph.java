@@ -16,31 +16,13 @@ public interface MainGraph<V,E> {
     
     void setId(int id);
 
-    void reset();
-
-    boolean isNeighborVertex(int v1, int v2);
-
     MainGraph addVertex(Vertex vertex);
-
-    Vertex[] getVertices();
 
     Vertex getVertex(int vertexId);
 
-
-    Edge[] getEdges();
-
     Edge getEdge(int edgeId);
 
-    int getNumberEdges();
-
-    ReclaimableIntCollection getEdgeIds(int v1, int v2);
-
     MainGraph addEdge(Edge edge);
-
-    boolean areEdgesNeighbors(int edge1Id, int edge2Id);
-
-    @Deprecated
-    boolean isNeighborEdge(int src1, int dest1, int edge2);
 
     VertexNeighbourhood getVertexNeighbourhood(int vertexId);
 
@@ -50,12 +32,7 @@ public interface MainGraph<V,E> {
 
     boolean isMultiGraph();
 
-
-    int filterVertices(AtomicBitSetArray tag);
-
     int filterVertices(Predicate<Vertex<V>> vpred);
-
-    int filterEdges(AtomicBitSetArray tag);
 
     int filterEdges(Predicate<Edge<E>> epred);
 
@@ -65,19 +42,30 @@ public interface MainGraph<V,E> {
 
     int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag);
 
-    void buildSortedNeighborhood();
+    void afterGraphUpdate();
 
-    /* need to keep */
-    int getNumberVertices();
+    /* Revised API */
+    /* update graph */
+    void addVertex(int u);
+    void addEdge(int u, int v, int e);
+    void addVertexLabel(int u, int label);
+    void addEdgeLabel(int e, int label);
+
+    /* query graph properties */
+    int numVertices();
+    int numEdges();
     int edgeSrc(int e);
     int edgeDst(int e);
     int vertexLabel(int u);
     int edgeLabel(int e);
     boolean containsVertex(int u);
     boolean containsEdge(int e);
+
+    /* graph traversals */
     void neighborhoodTraversalVertexRange(int u, int lowerBound, IntIntConsumer consumer);
     void neighborhoodTraversalEdgeRange(int u, int lowerBound, IntIntConsumer consumer);
     void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound,
                                IntConsumer consumer, IntPredicate vertexPredicate, EdgePredicates edgePredicates);
-    void forEachEdgeId(int v1, int v2, IntConsumer intConsumer);
+    void forEachEdge(IntConsumer consumer);
+    void forEachEdge(int u, int v, IntConsumer consumer);
 }

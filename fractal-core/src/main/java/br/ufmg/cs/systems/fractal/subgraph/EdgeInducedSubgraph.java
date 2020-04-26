@@ -4,7 +4,6 @@ import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import br.ufmg.cs.systems.fractal.graph.VertexNeighbourhood;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import com.koloboke.collect.set.hash.HashIntSet;
@@ -13,7 +12,6 @@ import com.koloboke.function.IntIntConsumer;
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.ObjectInput;
-import java.util.function.IntConsumer;
 
 public class EdgeInducedSubgraph extends BasicSubgraph {
    private IntArrayList numVerticesAddedWithWord;
@@ -79,12 +77,6 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
       return 1;
    }
 
-  @Override
-   protected boolean areWordsNeighbours(int wordId1, int wordId2) {
-      return configuration.getMainGraph().areEdgesNeighbors(wordId1, wordId2);
-   }
-
-
    /**
     * Add word and update the number of vertices in this subgraph.
     *
@@ -116,13 +108,11 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
 
       if (srcIsNew) { 
          vertices.add(edgeSrc);
-         neighborhoodCuts.add(-1);
          ++numVerticesAdded;
       }
 
       if (dstIsNew) {
          vertices.add(edgeDst);
-         neighborhoodCuts.add(-1);
          ++numVerticesAdded;
       }
 
@@ -137,15 +127,9 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
 
       int numVerticesToRemove = numVerticesAddedWithWord.pop();
       vertices.removeLast(numVerticesToRemove);
-      neighborhoodCuts.removeLast(numVerticesToRemove);
       edges.removeLast();
 
       super.removeLastWord();
-   }
-
-   @Override
-   public boolean isCanonicalSubgraphWithWord(int wordId) {
-      return true;
    }
 
    //@Override
@@ -201,8 +185,6 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
       int currVertice = numVertices - 1;
       int wordId;
       int lowerBound = edges.getUnchecked(0);
-      IntArrayList orderedEdges = null;
-      VertexNeighbourhood neighbourhood = null;
       MainGraph graph = configuration.getMainGraph();
 
       for (int i = numEdges - 1; i >= 0; --i) {
@@ -213,33 +195,6 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
             int vertexId = vertices.getUnchecked(currVertice);
             updateExtensionsConsumer.setLowerBound(lowerBound);
             graph.neighborhoodTraversalEdgeRange(vertexId, edges.getUnchecked(0), updateExtensionsConsumer);
-            //neighbourhood = configuration.getMainGraph().
-            //     getVertexNeighbourhood(vertexId);
-
-            //if (neighbourhood == null) {
-            //   continue;
-            //}
-
-            //orderedEdges = neighbourhood.getOrderedEdges();
-            //int numOrderedEdges = orderedEdges.size();
-            //int fromIdx = neighborhoodCuts.getUnchecked(currVertice);
-            //if (fromIdx < 0) {
-            //   fromIdx = orderedEdges.binarySearch(edges.getUnchecked(0));
-            //   fromIdx = (fromIdx < 0) ? (-fromIdx - 1) : fromIdx;
-            //   neighborhoodCuts.setUnchecked(currVertice, fromIdx);
-            //}
-
-            //for (int k = fromIdx; k < numOrderedEdges; ++k) {
-            //   int w = orderedEdges.getUnchecked(k);
-            //   if (w > lowerBound) {
-            //      extensionWordIds.add(w);
-            //   } else {
-            //      extensionWordIds.removeInt(w);
-            //   }
-            //}
-
-            //neighborhoodLookups += (numOrderedEdges - fromIdx);
-
             --currVertice;
          }
 

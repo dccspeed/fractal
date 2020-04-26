@@ -2,6 +2,7 @@ package br.ufmg.cs.systems.fractal
 
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.function.IntConsumer
 
 import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
@@ -62,13 +63,9 @@ class FractalGraph(
     val subgraph = config.createSubgraph[EdgeInducedSubgraph]
 
     val graph = config.getMainGraph[BasicMainGraph[_,_]]
-    val numEdges = graph.getNumberEdges()
-    val edges = graph.getEdges()
-    var i = 0
-    while (i < numEdges) {
-      subgraph.addWord(edges(i).getEdgeId())
-      i += 1
-    }
+    graph.forEachEdge(new IntConsumer {
+      override def accept(e: Int): Unit = subgraph.addWord(e)
+    })
 
     val pattern = config.createPattern().asInstanceOf[BasicPattern]
     pattern.setSubgraph(subgraph)
@@ -82,7 +79,6 @@ class FractalGraph(
         logWarning (s"Symmetry breaking conditions file ${path}.sb not found")
     }
 
-    logInfo(s"SymmetryBreakingConditions: ${pattern.vsymmetryBreaker()}")
     pattern
   }
 
@@ -238,6 +234,7 @@ class FractalGraph(
                  process: (PatternInducedSubgraph,
                 Computation[PatternInducedSubgraph]) => Unit,
                  pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
+    PatternUtils.increasingPositions(pattern)
     val config = new SparkConfiguration[PatternInducedSubgraph]
     config.set ("pattern", pattern)
     config.set ("input_graph_path", path)
@@ -267,6 +264,7 @@ class FractalGraph(
                  process: (PatternInducedSubgraph,
                 Computation[PatternInducedSubgraph]) => Unit,
                  pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
+    PatternUtils.increasingPositions(pattern)
     val computation: Computation[PatternInducedSubgraph] =
       new VEComputationContainer(processOpt = Option(process),
         patternOpt = Option(pattern), primitiveOpt = Option(Primitive.E))

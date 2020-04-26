@@ -11,7 +11,7 @@ public class BiggerNeighboursMainGraphDecorator extends OrderedNeighboursMainGra
 
         int removed = 0;
 
-        for (int v  = 0; v < underlyingMainGraph.getNumberVertices(); ++v) {
+        for (int v = 0; v < underlyingMainGraph.numVertices(); ++v) {
            VertexNeighbourhood neighborhood = getVertexNeighbourhood(v);
            if (neighborhood == null) continue;
 

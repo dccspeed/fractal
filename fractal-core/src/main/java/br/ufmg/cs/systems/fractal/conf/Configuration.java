@@ -266,8 +266,10 @@ public class Configuration<O extends Subgraph> implements Serializable {
             patternClass = VICPattern.class;
         }
 
-        computationClass = (Class<? extends Computation>)
-           getClass(CONF_COMPUTATION_CLASS, CONF_COMPUTATION_CLASS_DEFAULT);
+        if (computationClass == null) {
+            computationClass = (Class<? extends Computation>)
+                    getClass(CONF_COMPUTATION_CLASS, CONF_COMPUTATION_CLASS_DEFAULT);
+        }
         masterComputationClass = (Class<? extends MasterComputation>)
            getClass(CONF_MASTER_COMPUTATION_CLASS,
                  CONF_MASTER_COMPUTATION_CLASS_DEFAULT);
@@ -308,23 +310,23 @@ public class Configuration<O extends Subgraph> implements Serializable {
     }
 
     public String getString(String key, String defaultValue) {
-        return null;
+        return defaultValue;
     }
 
     public Boolean getBoolean(String key, Boolean defaultValue) {
-        return null;
+        return defaultValue;
     }
 
     public Integer getInteger(String key, Integer defaultValue) {
-        return null;
+        return defaultValue;
     }
 
     public Long getLong(String key, Long defaultValue) {
-        return null;
+        return defaultValue;
     }
 
     public Float getFloat(String key, Float defaultValue) {
-        return null;
+        return defaultValue;
     }
 
     public Class<?> getClass(String key, String defaultValue) {
@@ -336,7 +338,7 @@ public class Configuration<O extends Subgraph> implements Serializable {
     }
 
     public String[] getStrings(String key, String... defaultValues) {
-        return null;
+        return defaultValues;
     }
 
     public Class<?>[] getClasses(String key, Class<?>... defaultValues) {
@@ -441,8 +443,8 @@ public class Configuration<O extends Subgraph> implements Serializable {
     }
 
     protected boolean isMainGraphRead() {
-       return mainGraph != null && (mainGraph.getNumberVertices() > 0 ||
-          mainGraph.getNumberEdges() > 0);
+       return mainGraph != null && (mainGraph.numVertices() > 0 ||
+          mainGraph.numEdges() > 0);
     }
 
     public MainGraph createGraph() {
@@ -647,11 +649,11 @@ public class Configuration<O extends Subgraph> implements Serializable {
     public int getNumWords() {
        Class<? extends Subgraph> SubgraphClass = getSubgraphClass();
        if (SubgraphClass == EdgeInducedSubgraph.class) {
-          return getMainGraph().getNumberEdges();
+          return getMainGraph().numEdges();
        } else if (SubgraphClass == VertexInducedSubgraph.class) {
-          return getMainGraph().getNumberVertices();
+          return getMainGraph().numVertices();
        } else if (SubgraphClass == PatternInducedSubgraph.class) {
-          return getMainGraph().getNumberVertices();
+          return getMainGraph().numVertices();
        } else {
           throw new RuntimeException(
                 "Unknown subgraph type " + SubgraphClass);
@@ -659,11 +661,11 @@ public class Configuration<O extends Subgraph> implements Serializable {
     }
 
     public int getNumVertices() {
-       return getMainGraph().getNumberVertices();
+       return getMainGraph().numVertices();
     }
     
     public int getNumEdges() {
-       return getMainGraph().getNumberEdges();
+       return getMainGraph().numEdges();
     }
 
     

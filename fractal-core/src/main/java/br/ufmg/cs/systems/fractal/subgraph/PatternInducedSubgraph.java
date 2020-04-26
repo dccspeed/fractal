@@ -95,11 +95,6 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       return 0;
    }
 
-   @Override
-   protected boolean areWordsNeighbours(int wordId1, int wordId2) {
-      return configuration.getMainGraph().areEdgesNeighbors(wordId1, wordId2);
-   }
-
    /**
     * Add word and update the number of vertices in this subgraph.
     *
@@ -156,7 +151,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
          int existingVertexId = vertices.getUnchecked(i);
 
          updateEdgesConsumer.reset();
-         configuration.getMainGraph().forEachEdgeId(existingVertexId,
+         configuration.getMainGraph().forEachEdge(existingVertexId,
                  newVertexId, updateEdgesConsumer);
          addedEdges += updateEdgesConsumer.getNumAdded();
       }
@@ -172,11 +167,6 @@ public class PatternInducedSubgraph extends BasicSubgraph {
 
       vertices.removeLast();
       super.removeLastWord();
-   }
-
-   @Override
-   public boolean isCanonicalSubgraphWithWord(int wordId) {
-      return true;
    }
 
    @Override
@@ -199,11 +189,9 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       }
 
       for (int i = startMyWordRange; i < endMyWordRange; ++i) {
-         if (computation.filter(this, i)) {
-            int vertexLabel = configuration.getMainGraph().vertexLabel(i);
-            if (vertexLabel == targetLabel) {
-               extensionWordIds().add(i);
-            }
+         int vertexLabel = configuration.getMainGraph().vertexLabel(i);
+         if (vertexLabel == targetLabel) {
+            extensionWordIds().add(i);
          }
       }
 
@@ -221,9 +209,14 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       int numVertices = getNumVertices();
       int vertexLabel = 1;
 
-      // symmetry breaking condition
+      /**
+       * Find the lower bound on vertex ids concerning symmetry breaking conditions
+       */
       int lowerBound = pattern.sbLowerBound(this, numVertices);
 
+      /**
+       * Find which edges must be added in this step
+       */
       PatternEdgeArrayList patternEdges = pattern.getEdges();
       for (int i = 0; i < patternEdges.size(); ++i) {
          PatternEdge pedge = patternEdges.getUnchecked(i);
@@ -243,11 +236,19 @@ public class PatternInducedSubgraph extends BasicSubgraph {
          }
       }
 
-      for (int i = 0; i < numVertices; ++i) {
-         int u = vertices.getUnchecked(i);
-         if (!intersection.contains(u)) difference.add(u);
+      /**
+       * In case this pattern is induced, we must include not existing edge sources to the difference set
+       */
+      if (pattern.induced()) {
+         for (int i = 0; i < numVertices; ++i) {
+            int u = vertices.getUnchecked(i);
+            if (!intersection.contains(u)) difference.add(u);
+         }
       }
 
+      /**
+       * Neighborhood traversal: intersection and/or difference among neighborhoods
+       */
       HashIntSet extensionWordIds = extensionWordIds();
       extensionWordIds.clear();
       updateExtensionsConsumer.set(extensionWordIds);
@@ -255,7 +256,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       getConfig().getMainGraph().neighborhoodTraversal(
               intersection,
               difference,
-              lowerBound,
+              lowerBound, // symmetry breaking
               updateExtensionsConsumer,
               vertexPredicate,
               edgePredicates);
@@ -280,8 +281,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    }
 
    @Override
-   public void readExternal(ObjectInput objInput)
-           throws IOException, ClassNotFoundException {
+   public void readExternal(ObjectInput objInput) throws IOException {
       readFields(objInput);
    }
 
@@ -304,8 +304,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
             vtag.insert(src);
             vtag.insert(dest);
 
-            configuration.getMainGraph().getEdgeIds(src, dest).
-               forEach(edgeTagger);
+            configuration.getMainGraph().forEachEdge(src, dest, edgeTagger);
          }
       }
    }
@@ -330,8 +329,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
             vtag.insert(src);
             vtag.insert(dest);
 
-            configuration.getMainGraph().getEdgeIds(src, dest).
-               forEach(edgeTagger);
+            configuration.getMainGraph().forEachEdge(src, dest, edgeTagger);
          }
       }
    }

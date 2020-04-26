@@ -2,7 +2,7 @@
 
 printf "Description: Script launcher for Fractal built-in applications\n\n"
 
-apps="esubgraphs|vsubgraphs|fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws"
+apps="motifspf|esubgraphs|vsubgraphs|fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws"
 
 usage="
 Usage:
@@ -70,6 +70,14 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 	motifs)
+	required="inputgraph steps"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
+	;;
+	motifspf)
 	required="inputgraph steps"
         appusage="
 

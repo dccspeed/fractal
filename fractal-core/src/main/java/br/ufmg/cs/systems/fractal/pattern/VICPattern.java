@@ -424,7 +424,7 @@ public class VICPattern extends BasicPattern {
         addCandidatePatternEdgeConsumer.setNewTmpVertexPos(newTmpVertexPos);
         addCandidatePatternEdgeConsumer.setNeighbourVertexId(neighbourVertexId);
 
-        mainGraph.forEachEdgeId(neighbourVertexId, newVertexId, addCandidatePatternEdgeConsumer);
+        mainGraph.forEachEdge(neighbourVertexId, newVertexId, addCandidatePatternEdgeConsumer);
     }
 
     private void copyTmpToMin() {

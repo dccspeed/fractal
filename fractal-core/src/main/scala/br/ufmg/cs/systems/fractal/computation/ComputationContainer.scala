@@ -4,7 +4,8 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import br.ufmg.cs.systems.fractal.Primitive
 import br.ufmg.cs.systems.fractal.conf.Configuration
-import br.ufmg.cs.systems.fractal.pattern.Pattern
+import br.ufmg.cs.systems.fractal.graph.BasicMainGraph
+import br.ufmg.cs.systems.fractal.pattern.{JBlissPattern, Pattern}
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.{Logging, WordFilterFunc}
 import com.koloboke.collect.IntCollection
@@ -239,16 +240,6 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
   @transient private lazy val _filter: (E,Computation[E]) => Boolean =
     filterOpt.getOrElse ((e: E, c: Computation[E]) => super.filter (e))
   
-  @transient private lazy val _wordFilter: WordFilterFunc[E] = {
-    wordFilterOpt.getOrElse (
-      new WordFilterFunc [E] {
-        def apply(e: E, w: Int, c: Computation[E]): Boolean = {
-          e.isCanonicalSubgraphWithWord(w)
-        }
-      }
-    )
-  }
-
   @transient private lazy val _getPossibleExtensions: (E,Computation[E]) => IntCollection =
     getPossibleExtensionsOpt.getOrElse (
       (e: E, c: Computation[E]) => super.getPossibleExtensions (e)
@@ -535,8 +526,6 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
 
   override def filter(e: E): Boolean = _filter (e, this)
   
-  override def filter(e: E, w: Int): Boolean = _wordFilter (e, w, this)
-
   override def getPossibleExtensions(e: E): IntCollection =
     _getPossibleExtensions (e, this)
 
@@ -598,16 +587,6 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
   @transient private lazy val _filter: (E,Computation[E]) => Boolean =
     filterOpt.getOrElse ((e: E, c: Computation[E]) => super.filter (e))
   
-  @transient private lazy val _wordFilter: WordFilterFunc[E] = {
-    wordFilterOpt.getOrElse (
-      new WordFilterFunc [E] {
-        def apply(e: E, w: Int, c: Computation[E]): Boolean = {
-          true
-        }
-      }
-    )
-  }
-
   @transient private lazy val _getPossibleExtensions: (E,Computation[E]) => IntCollection =
     getPossibleExtensionsOpt.getOrElse (
       (e: E, c: Computation[E]) => super.getPossibleExtensions (e))
@@ -888,8 +867,6 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
 
   override def filter(e: E): Boolean = _filter (e, this)
   
-  override def filter(e: E, w: Int): Boolean = _wordFilter (e, w, this)
-
   override def getPossibleExtensions(e: E): IntCollection =
     _getPossibleExtensions (e, this)
 
@@ -951,16 +928,6 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
   @transient private lazy val _filter: (E,Computation[E]) => Boolean =
     filterOpt.getOrElse ((e: E, c: Computation[E]) => super.filter (e))
   
-  @transient private lazy val _wordFilter: WordFilterFunc[E] = {
-    wordFilterOpt.getOrElse (
-      new WordFilterFunc [E] {
-        def apply(e: E, w: Int, c: Computation[E]): Boolean = {
-          e.isCanonicalSubgraphWithWord(w)
-        }
-      }
-    )
-  }
-
   @transient private lazy val _getPossibleExtensions: (E,Computation[E]) => IntCollection =
     getPossibleExtensionsOpt.getOrElse (
       (e: E, c: Computation[E]) => super.getPossibleExtensions (e)
@@ -1247,8 +1214,6 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
 
   override def filter(e: E): Boolean = _filter (e, this)
   
-  override def filter(e: E, w: Int): Boolean = _wordFilter (e, w, this)
-
   override def getPossibleExtensions(e: E): IntCollection =
     _getPossibleExtensions (e, this)
 
@@ -1257,7 +1222,7 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
     if (pattern != null) {
       pconfigOpt match {
         case Some(conf) =>
-          conf.initialize()
+          //conf.initialize()
           pattern.init(conf)
         case None =>
           throw new RuntimeException(

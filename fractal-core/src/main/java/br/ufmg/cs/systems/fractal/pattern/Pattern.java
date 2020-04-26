@@ -3,6 +3,7 @@ package br.ufmg.cs.systems.fractal.pattern;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import com.koloboke.collect.map.IntIntMap;
 import org.apache.hadoop.io.Writable;
 
@@ -42,15 +43,21 @@ public interface Pattern extends Writable, Externalizable {
 
     IntIntMap getCanonicalLabeling();
 
-    public boolean testSymmetryBreakerExt(Subgraph subgraph, int targetVertex);
+    boolean testSymmetryBreakerExt(Subgraph subgraph, int targetVertex);
 
-    public boolean testSymmetryBreakerPos(Subgraph subgraph, int pos);
-    
-    public int sbLowerBound(Subgraph subgraph, int pos);
+    boolean testSymmetryBreakerPos(Subgraph subgraph, int pos);
 
-    public void readSymmetryBreakingConditions(String path) throws IOException;
-    
-    public Configuration getConfig();
+    ObjArrayList<IntArrayList> vsymmetryBreaker();
+
+    int sbLowerBound(Subgraph subgraph, int pos);
+
+    void readSymmetryBreakingConditions(String path) throws IOException;
+
+    boolean induced();
+
+    void setInduced(boolean induced);
+
+    Configuration getConfig();
 
     String toOutputString();
    

@@ -2,7 +2,6 @@ package br.ufmg.cs.systems.fractal.subgraph;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
-import br.ufmg.cs.systems.fractal.graph.BasicMainGraph;
 import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.LabelledEdge;
 import br.ufmg.cs.systems.fractal.graph.Vertex;
@@ -14,7 +13,6 @@ import br.ufmg.cs.systems.fractal.util.pool.IntIntArrayListMapPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntIntMapPool;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.map.IntIntMap;
-import com.koloboke.collect.map.IntObjMap;
 import com.koloboke.collect.map.hash.HashIntObjMap;
 import com.koloboke.collect.map.hash.HashIntObjMaps;
 import com.koloboke.collect.set.hash.HashIntSet;
@@ -33,17 +31,11 @@ public abstract class BasicSubgraph implements Subgraph {
    protected IntArrayList vertices;
    protected IntArrayList edges;
 
-   protected IntIntMap extensionWordMaps;
    protected boolean dirtyExtensionWordIds;
 
    // Active extensions
    protected ObjArrayList<HashIntSet> extensionLevels;
-   protected ObjArrayList<HashIntObjMap<IntArrayList>> extensionMaps;
-   protected ObjArrayList<IntArrayList> extensionArrays;
-   protected IntArrayList neighborhoodCuts;
-
    protected HashIntObjMap cacheStore;
-
    // }}
 
    // Pattern {{
@@ -67,11 +59,7 @@ public abstract class BasicSubgraph implements Subgraph {
    public BasicSubgraph() {
       vertices = new IntArrayList();
       edges = new IntArrayList();
-      extensionWordMaps = IntIntMapPool.instance().createObject();
       extensionLevels = new ObjArrayList<HashIntSet>();
-      extensionMaps = new ObjArrayList<HashIntObjMap<IntArrayList>>();
-      extensionArrays = new ObjArrayList<IntArrayList>();
-      neighborhoodCuts = new IntArrayList();
       cacheStore = HashIntObjMaps.newMutableMap();
       nextExtensionLevel();
    }
@@ -115,33 +103,20 @@ public abstract class BasicSubgraph implements Subgraph {
       return extensionLevels.getLast();
    }
 
-   protected void setExtensionWordIds(HashIntSet wordIds) {
-      extensionLevels.setUnchecked(extensionLevels.size() - 1, wordIds);
-   }
-
-   protected HashIntObjMap<IntArrayList> extensionMap() {
-      return extensionMaps.getLast();
-   }
-
    @Override
    public void nextExtensionLevel() {
       extensionLevels.add(HashIntSetPool.instance().createObject());
-      extensionMaps.add(IntIntArrayListMapPool.instance().createObject());
    }
 
    @Override
    public void previousExtensionLevel() {
       HashIntSetPool.instance().reclaimObject(
             extensionLevels.remove(extensionLevels.size() - 1));
-      IntIntArrayListMapPool.instance().reclaimObject(
-              extensionMaps.remove(extensionMaps.size() - 1)
-      );
    }
    
    @Override
    public void nextExtensionLevel(Subgraph other) {
       extensionLevels.add(HashIntSetPool.instance().createObject());
-      extensionMaps.add(IntIntArrayListMapPool.instance().createObject());
    }
 
    @Override
@@ -226,7 +201,7 @@ public abstract class BasicSubgraph implements Subgraph {
       }
 
       for (int i = startMyWordRange; i < endMyWordRange; ++i) {
-         if (computation.containsWord(i) && computation.filter(this, i)) {
+         if (computation.containsWord(i)) {
             extensionWordIds().add(i);
          }
       }
@@ -237,44 +212,6 @@ public abstract class BasicSubgraph implements Subgraph {
    }
 
    protected abstract void updateExtensions(Computation computation);
-
-  @Override
-   public boolean isCanonicalSubgraphWithWord(int wordId) {
-      IntArrayList words = getWords();
-      int numWords = words.size();
-
-      if (numWords == 0) return true;
-      if (wordId < words.getUnchecked(0)) return false;
-
-      int i;
-
-      // find the first neighbor
-      for (i = 0; i < numWords; ++i) {
-         if (areWordsNeighbours(wordId, words.getUnchecked(i))) {
-            break;
-         }
-      }
-
-      // if we didn't find any neighbor
-      if (i == numWords) {
-         // not canonical because it's disconnected
-         return false;
-      }
-
-      // If we found the first neighbour, all following words should have
-      // lower ids than the one we are trying to add
-      i++;
-      for (; i < numWords; ++i) {
-         // If one of those ids is higher or equal, not canonical
-         if (words.getUnchecked(i) >= wordId) {
-            return false;
-         }
-      }
-
-      return true;
-   }
-
-   protected abstract boolean areWordsNeighbours(int wordId1, int wordId2);
 
    @Override
    public void addWord(int word) {

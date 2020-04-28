@@ -21,6 +21,13 @@ public class SuccinctMainGraph implements MainGraph {
    private static final Logger LOG = Logger.getLogger(SuccinctMainGraph.class);
 
    /**
+    * Default parameters
+    */
+   private final DefaultVertexPredicate defaultVertexPredicate = new DefaultVertexPredicate();
+   private final DefaultEdgePredicate defaultEdgePredicate = new DefaultEdgePredicate();
+   private final DefaultEdgePredicates defaultEdgePredicates = new DefaultEdgePredicates();
+
+   /**
     * Unique graph id (per JVM)
     */
    private static AtomicInteger nextGraphId = new AtomicInteger(0);
@@ -353,6 +360,11 @@ public class SuccinctMainGraph implements MainGraph {
       throw new UnsupportedOperationException();
    }
 
+   public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound,
+                                     IntConsumer consumer) {
+      neighborhoodTraversal(intersection, difference, vertexLowerBound, consumer, defaultVertexPredicate, defaultEdgePredicates);
+   }
+
    @Override
    public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound,
                                      IntConsumer consumer, IntPredicate vertexPredicate, EdgePredicates edgePredicates) {
@@ -363,7 +375,8 @@ public class SuccinctMainGraph implements MainGraph {
       IntArrayList resultSet = null;
       EdgePredicate edgePredicate = null;
       int u, v, e, idx, size;
-      int intersectionSize = intersection.size(), differenceSize = difference.size();
+      int intersectionSize = intersection.size();
+      int differenceSize = difference == null ? 0 : difference.size();
 
       if (intersectionSize == 1 && differenceSize == 0) {
          /* Initialize validVertices with the first intersection and considering vertexPredicate */
@@ -536,4 +549,38 @@ public class SuccinctMainGraph implements MainGraph {
    }
 
    /* } */
+
+   /**
+    * Default parameters
+    */
+   private class DefaultVertexPredicate implements IntPredicate {
+      @Override
+      public boolean test(int u) {
+         return true;
+      }
+   }
+
+   private class DefaultEdgePredicate extends EdgePredicate {
+      @Override
+      public boolean test(int e) {
+         return true;
+      }
+   }
+
+   private class DefaultEdgePredicates extends EdgePredicates {
+      @Override
+      public EdgePredicate get(int i) {
+         return SuccinctMainGraph.this.defaultEdgePredicate;
+      }
+
+      @Override
+      public EdgePredicate getUnchecked(int i) {
+         return SuccinctMainGraph.this.defaultEdgePredicate;
+      }
+
+      @Override
+      public EdgePredicate getLast() {
+         return SuccinctMainGraph.this.defaultEdgePredicate;
+      }
+   }
 }

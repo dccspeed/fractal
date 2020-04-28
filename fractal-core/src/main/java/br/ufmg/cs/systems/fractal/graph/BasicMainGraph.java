@@ -592,6 +592,11 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    }
 
    @Override
+   public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound, IntConsumer consumer) {
+
+   }
+
+   @Override
    public void forEachEdge(IntConsumer consumer) {
       for (int e = 0; e < numEdges; ++e) {
          consumer.accept(e);

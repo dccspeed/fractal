@@ -116,6 +116,11 @@ case class Fractoid [S <: Subgraph : ClassTag](
     masterEngine.aggAccums.map{case (k,v) => (k, v.value.longValue)}
   }
 
+  def compute(callback: (S,Computation[S]) => Unit): Map[String,Long] = {
+    withProcessInc(callback).
+       masterEngine.aggAccums.map{case (k,v) => (k, v.value.longValue)}
+  }
+
   def numValidSubgraphs(): Long = {
     val prefix = SparkFromScratchMasterEngine.VALID_SUBGRAPHS
     compute().

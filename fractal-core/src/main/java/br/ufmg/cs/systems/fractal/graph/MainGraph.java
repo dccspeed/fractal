@@ -66,6 +66,7 @@ public interface MainGraph<V,E> {
     void neighborhoodTraversalEdgeRange(int u, int lowerBound, IntIntConsumer consumer);
     void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound,
                                IntConsumer consumer, IntPredicate vertexPredicate, EdgePredicates edgePredicates);
+    void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound, IntConsumer consumer);
     void forEachEdge(IntConsumer consumer);
     void forEachEdge(int u, int v, IntConsumer consumer);
 }

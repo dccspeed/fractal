@@ -142,6 +142,11 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
     }
 
    @Override
+   public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound, IntConsumer consumer) {
+
+   }
+
+   @Override
    public void forEachEdge(IntConsumer consumer) {
        underlyingMainGraph.forEachEdge(consumer);
    }

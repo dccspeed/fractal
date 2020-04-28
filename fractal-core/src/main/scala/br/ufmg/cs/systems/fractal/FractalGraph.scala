@@ -234,7 +234,9 @@ class FractalGraph(
                  process: (PatternInducedSubgraph,
                 Computation[PatternInducedSubgraph]) => Unit,
                  pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
+    logInfo(s"Pattern before increasing positions ${pattern}")
     PatternUtils.increasingPositions(pattern)
+    logInfo(s"Pattern after increasing positions ${pattern}")
     val config = new SparkConfiguration[PatternInducedSubgraph]
     config.set ("pattern", pattern)
     config.set ("input_graph_path", path)
@@ -264,7 +266,9 @@ class FractalGraph(
                  process: (PatternInducedSubgraph,
                 Computation[PatternInducedSubgraph]) => Unit,
                  pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
+    logInfo(s"Pattern before increasing positions ${pattern}")
     PatternUtils.increasingPositions(pattern)
+    logInfo(s"Pattern after increasing positions ${pattern}")
     val computation: Computation[PatternInducedSubgraph] =
       new VEComputationContainer(processOpt = Option(process),
         patternOpt = Option(pattern), primitiveOpt = Option(Primitive.E))

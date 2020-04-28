@@ -2,7 +2,7 @@
 
 printf "Description: Script launcher for Fractal built-in applications\n\n"
 
-apps="motifspf|esubgraphs|vsubgraphs|fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws"
+apps="motifspf|esubgraphs|vsubgraphswithedges|vsubgraphs|fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws"
 
 usage="
 Usage:
@@ -54,6 +54,14 @@ ALGOPTION for '$app':
    fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
 	;;
 	esubgraphs)
+	required="inputgraph steps"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
+	;;
+	vsubgraphswithedges)
 	required="inputgraph steps"
         appusage="
 

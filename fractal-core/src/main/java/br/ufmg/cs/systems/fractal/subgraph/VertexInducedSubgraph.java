@@ -64,6 +64,12 @@ public class VertexInducedSubgraph extends BasicSubgraph {
    }
 
    @Override
+   public IntArrayList getEdges() {
+      ensureEdges();
+      return edges;
+   }
+
+   @Override
    public String toOutputString() {
       StringBuilder sb = new StringBuilder();
 

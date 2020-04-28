@@ -1,17 +1,27 @@
 package br.ufmg.cs.systems.fractal.pattern;
 
+import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.BasicMainGraph;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
+import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
+import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntIntMapPool;
+import br.ufmg.cs.systems.fractal.util.pool.IntSetPool;
 import com.koloboke.collect.map.IntIntMap;
+import com.koloboke.collect.map.ObjObjMap;
+import com.koloboke.collect.map.hash.HashObjObjMaps;
+import com.koloboke.collect.set.IntSet;
+import com.koloboke.collect.set.hash.HashIntSet;
 import com.koloboke.collect.set.hash.HashObjSet;
 import com.koloboke.collect.set.hash.HashObjSets;
 import org.apache.log4j.Logger;
 
 import java.util.Iterator;
+import java.util.function.IntConsumer;
 
 public class PatternUtils {
    private static final Logger LOG = Logger.getLogger(PatternUtils.class);
@@ -109,6 +119,31 @@ public class PatternUtils {
       graph.addVertex(0);
       VertexInducedSubgraph subgraph = (VertexInducedSubgraph) config.createSubgraph();
       subgraph.addWord(0);
+      return subgraph.getPattern();
+   }
+
+   /**
+    * Add a vertex and its edges to *pattern*, returning the new pattern
+    * @param pattern the existing pattern
+    * @param sources the edge sources representing edges with the new vertex
+    * @return new pattern
+    */
+   public static Pattern addVertex(Pattern pattern, int ... sources) {
+      Configuration config = pattern.getConfig();
+      MainGraph graph = config.getMainGraph();
+      int numVertices = pattern.getNumberOfVertices();
+
+      graph.addVertex(numVertices);
+      for (int src : sources) {
+         if (src >= numVertices) {
+            throw new RuntimeException("Vertex source does not exists in pattern with " + numVertices + " vertices");
+         }
+         graph.addEdge(src, numVertices, graph.numEdges());
+      }
+
+      VertexInducedSubgraph subgraph = (VertexInducedSubgraph) config.createSubgraph();
+      for (int u = 0; u < graph.numVertices(); ++u) subgraph.addWord(u);
+
       return subgraph.getPattern();
    }
 
@@ -219,5 +254,121 @@ public class PatternUtils {
       LOG.info("AfterReordering pattern=" + pattern + " labeling=" + labeling);
 
       IntIntMapPool.instance().reclaimObject(labeling);
+   }
+
+   public static long completeMatch(Computation computation, Subgraph partialMatch, Pattern pattern) {
+
+      /**
+       * Declarations
+       */
+      MainGraph graph = computation.getConfig().getMainGraph();
+      IntArrayListPool pool = IntArrayListPool.instance();
+      PatternEdgeArrayList patternEdges = pattern.getEdges();
+      IntArrayList intersection = pool.createObject();
+      IntArrayList difference = pool.createObject();
+      ObjObjMap<IntArrayList,IntArrayList> validExtensionsMap = HashObjObjMaps.newMutableMap(); // TODO: pool this?
+      int nextVertexPos = partialMatch.getNumVertices();
+      ObjArrayList<IntArrayList> validExtensionsArray = new ObjArrayList<>(pattern.getNumberOfVertices() - nextVertexPos); // TODO: pool this?
+
+      for (int i = 0; i < patternEdges.size(); ++i) {
+         PatternEdge pedge = patternEdges.getUnchecked(i);
+         if (pedge.getDestPos() < nextVertexPos) continue;
+
+         // compute valid extensions for *nextVertexPos*
+         if (pedge.getDestPos() > nextVertexPos) {
+            IntArrayList validExtensions = validExtensionsMap.get(intersection);
+
+            if (validExtensions == null) {
+               // compute difference set if induced
+               if (pattern.induced()) {
+                  for (int src = 0; src < nextVertexPos; ++src) {
+                     if (!intersection.contains(src)) difference.add(partialMatch.getVertices().getUnchecked(src));
+                  }
+               }
+
+               // key now is *intersection*
+               validExtensions = pool.createObject();
+               IntArrayList finalValidExtensions = validExtensions;
+               graph.neighborhoodTraversal(intersection, difference, Integer.MIN_VALUE, finalValidExtensions::add);
+
+               validExtensionsMap.put(intersection, validExtensions);
+            }
+
+            validExtensionsArray.add(validExtensions);
+
+            // prepare for next *nextVertexPos*
+            intersection = pool.createObject();
+            intersection.add(partialMatch.getVertices().getUnchecked(pedge.getSrcPos()));
+            difference.clear();
+            ++nextVertexPos;
+
+         } else { // add into intersection
+            intersection.add(partialMatch.getVertices().getUnchecked(pedge.getSrcPos()));
+         }
+      }
+
+      IntArrayList validExtensions = validExtensionsMap.get(intersection);
+
+      if (validExtensions == null) {
+         // compute difference set if induced
+         if (pattern.induced()) {
+            for (int src = 0; src < nextVertexPos; ++src) {
+               if (!intersection.contains(src)) difference.add(partialMatch.getVertices().getUnchecked(src));
+            }
+         }
+
+         // key now is *intersection*
+         validExtensions = pool.createObject();
+         IntArrayList finalValidExtensions = validExtensions;
+         graph.neighborhoodTraversal(intersection, difference, Integer.MIN_VALUE, finalValidExtensions::add);
+
+         validExtensionsMap.put(intersection, validExtensions);
+      }
+
+      validExtensionsArray.add(validExtensions);
+
+      /**
+       * Process new subgraphs
+       */
+      IntSet vertices = IntSetPool.instance().createObject();
+      long numSubgraphs = completeMatch(partialMatch, pattern, validExtensionsArray, 0, vertices);
+      IntSetPool.instance().reclaimObject(vertices);
+
+      pool.reclaimObject(intersection);
+      pool.reclaimObject(difference);
+      validExtensionsMap.forEach((k,v) -> { pool.reclaimObject(k); pool.reclaimObject(v); });
+
+      return numSubgraphs;
+   }
+
+   private static long completeMatch(Subgraph partialMatch, Pattern pattern, ObjArrayList<IntArrayList> validExtensionsArray, int depth, IntSet vertices) {
+      if (partialMatch.getNumVertices() == pattern.getNumberOfVertices()) {
+         // callback because the match is complete
+         return 1;
+      }
+
+      long validSubgraphs = 0;
+      IntArrayList validExtensions = validExtensionsArray.getUnchecked(depth);
+      int lowerBound = pattern.sbLowerBound(partialMatch, partialMatch.getNumVertices());
+      int startIdx = validExtensions.binarySearch(lowerBound);
+      startIdx = (startIdx < 0) ? (-startIdx - 1) : startIdx + 1;
+      for (; startIdx < validExtensions.size(); ++startIdx) {
+         int u = validExtensions.getUnchecked(startIdx);
+         //if (vertices.contains(u)) continue;
+         partialMatch.addWord(u);
+         //vertices.add(u);
+         validSubgraphs += completeMatch(partialMatch, pattern, validExtensionsArray, depth + 1, vertices);
+         //vertices.removeInt(u);
+         partialMatch.removeLastWord();
+      }
+
+      return validSubgraphs;
+   }
+
+   public static void main(String[] args) {
+      Pattern pattern = singleVertexPattern();
+      pattern = addVertex(pattern, 0);
+      pattern = addVertex(pattern, 0, 1);
+      pattern = addVertex(pattern, 0, 1);
    }
 }

@@ -3,6 +3,7 @@ package br.ufmg.cs.systems.fractal.graph;
 import br.ufmg.cs.systems.fractal.util.*;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.function.IntIntConsumer;
@@ -37,8 +38,9 @@ public class SuccinctMainGraph implements MainGraph {
    protected int numEdges;
    protected int numVertices;
    protected IntArrayList vertexNeighborhoodIdx;
+   protected IntArrayList vertexNeighborhoodIdxDag;
    protected IntArrayList vertexNeighborhoods; // by default, sorted
-   protected IntArrayList edgeNeighborhoods; // by default, not sorted
+   protected IntArrayList edgeNeighborhoods; // by default, sorted
    protected IntArrayList edgeSrcs;
    protected IntArrayList edgeDsts;
 
@@ -133,6 +135,7 @@ public class SuccinctMainGraph implements MainGraph {
          numEdges = stream.nextInt();
 
          vertexNeighborhoodIdx = new IntArrayList(numVertices + 1);
+         vertexNeighborhoodIdxDag = new IntArrayList(numVertices + 1);
          vertexNeighborhoods = new IntArrayList(numEdges * 2);
          edgeNeighborhoods = new IntArrayList(numEdges * 2);
          edgeSrcs = new IntArrayList(numEdges);
@@ -181,6 +184,7 @@ public class SuccinctMainGraph implements MainGraph {
 
          // for convenience
          vertexNeighborhoodIdx.add(vertexNeighborhoods.size());
+         vertexNeighborhoodIdxDag.add(vertexNeighborhoods.size());
          vertexLabelsIdx.add(vertexLabels.size());
          edgeLabelsIdx.add(edgeLabels.size());
 
@@ -192,6 +196,7 @@ public class SuccinctMainGraph implements MainGraph {
    @Override
    public void addVertex(int u) {
       vertexNeighborhoodIdx.add(vertexNeighborhoods.size());
+      vertexNeighborhoodIdxDag.add(vertexNeighborhoods.size());
    }
 
    @Override
@@ -207,8 +212,8 @@ public class SuccinctMainGraph implements MainGraph {
       if (u < v) {
          edgeSrcs.add(u);
          edgeDsts.add(v);
-      }
-   }
+      } else vertexNeighborhoodIdxDag.setUnchecked(u, vertexNeighborhoodIdxDag.getUnchecked(u) + 1);
+}
 
    @Override
    public void addEdgeLabel(int e, int label) {
@@ -360,15 +365,15 @@ public class SuccinctMainGraph implements MainGraph {
       throw new UnsupportedOperationException();
    }
 
-   public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound,
-                                     IntConsumer consumer) {
-      neighborhoodTraversal(intersection, difference, vertexLowerBound, consumer, defaultVertexPredicate, defaultEdgePredicates);
-   }
-
-   @Override
-   public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound,
+   public void neighborhoodTraversal(IntArrayList vertexNeighborhoodIdx, IntArrayList intersection, IntArrayList difference,
+                                     int vertexLowerBound, int vertexUpperBound,
                                      IntConsumer consumer, IntPredicate vertexPredicate, EdgePredicates edgePredicates) {
-      if (intersection.size() == 0) return;
+      if (intersection.size() == 0) {
+         for (int u = vertexLowerBound + 1; u < numVertices; ++u) {
+            consumer.accept(u);
+         }
+         return;
+      }
 
       /* Declarations */
       IntArrayList validVertices = null;
@@ -383,8 +388,10 @@ public class SuccinctMainGraph implements MainGraph {
          u = intersection.getUnchecked(0);
          idx = vertexNeighborhoodIdx.getUnchecked(u);
          size = vertexNeighborhoodIdx.getUnchecked(u+1);
-         idx = vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
+         idx = vertexLowerBound == Integer.MIN_VALUE ? idx : vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
          idx = (idx < 0) ? (-idx - 1) : idx;
+         size = vertexUpperBound == Integer.MAX_VALUE ? size : vertexNeighborhoods.binarySearch(vertexUpperBound, idx, size);
+         size = (size < 0) ? (-size - 1) : size;
          edgePredicate = edgePredicates.getUnchecked(0);
          for (int i = idx; i < size; ++i) {
             v = vertexNeighborhoods.getUnchecked(i);
@@ -405,8 +412,10 @@ public class SuccinctMainGraph implements MainGraph {
          u = intersection.getUnchecked(0);
          idx = vertexNeighborhoodIdx.getUnchecked(u);
          size = vertexNeighborhoodIdx.getUnchecked(u+1);
-         idx = vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
+         idx = vertexLowerBound == Integer.MIN_VALUE ? idx : vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
          idx = (idx < 0) ? (-idx - 1) : idx;
+         size = vertexUpperBound == Integer.MAX_VALUE ? size : vertexNeighborhoods.binarySearch(vertexUpperBound, idx, size);
+         size = (size < 0) ? (-size - 1) : size;
          edgePredicate = edgePredicates.getUnchecked(0);
          for (int i = idx; i < size; ++i) {
             v = vertexNeighborhoods.getUnchecked(i);
@@ -421,8 +430,10 @@ public class SuccinctMainGraph implements MainGraph {
             u = difference.getUnchecked(i);
             idx = vertexNeighborhoodIdx.getUnchecked(u);
             size = vertexNeighborhoodIdx.getUnchecked(u+1);
-            idx = vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
+            idx = vertexLowerBound == Integer.MIN_VALUE ? idx : vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
             idx = (idx < 0) ? (-idx - 1) : idx;
+            size = vertexUpperBound == Integer.MAX_VALUE ? size : vertexNeighborhoods.binarySearch(vertexUpperBound, idx, size);
+            size = (size < 0) ? (-size - 1) : size;
             Utils.sdifference(validVertices, vertexNeighborhoods, 0, validVertices.size(), idx, size, resultSet);
             validVertices.clear();
             IntArrayList aux = validVertices;
@@ -433,8 +444,10 @@ public class SuccinctMainGraph implements MainGraph {
          u = difference.getLast();
          idx = vertexNeighborhoodIdx.getUnchecked(u);
          size = vertexNeighborhoodIdx.getUnchecked(u+1);
-         idx = vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
+         idx = vertexLowerBound == Integer.MIN_VALUE ? idx : vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
          idx = (idx < 0) ? (-idx - 1) : idx;
+         size = vertexUpperBound == Integer.MAX_VALUE ? size : vertexNeighborhoods.binarySearch(vertexUpperBound, idx, size);
+         size = (size < 0) ? (-size - 1) : size;
          Utils.sdifferenceConsume(validVertices, vertexNeighborhoods, 0, validVertices.size(), idx, size, consumer);
 
          intArrayListPool.reclaimObject(validVertices);
@@ -447,8 +460,10 @@ public class SuccinctMainGraph implements MainGraph {
       u = intersection.getUnchecked(0);
       idx = vertexNeighborhoodIdx.getUnchecked(u);
       size = vertexNeighborhoodIdx.getUnchecked(u+1);
-      idx = vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
+      idx = vertexLowerBound == Integer.MIN_VALUE ? idx : vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
       idx = (idx < 0) ? (-idx - 1) : idx;
+      size = vertexUpperBound == Integer.MAX_VALUE ? size : vertexNeighborhoods.binarySearch(vertexUpperBound, idx, size);
+      size = (size < 0) ? (-size - 1) : size;
       edgePredicate = edgePredicates.getUnchecked(0);
       for (int i = idx; i < size; ++i) {
          v = vertexNeighborhoods.getUnchecked(i);
@@ -463,8 +478,10 @@ public class SuccinctMainGraph implements MainGraph {
          u = difference.getUnchecked(i);
          idx = vertexNeighborhoodIdx.getUnchecked(u);
          size = vertexNeighborhoodIdx.getUnchecked(u+1);
-         idx = vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
+         idx = vertexLowerBound == Integer.MIN_VALUE ? idx : vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
          idx = (idx < 0) ? (-idx - 1) : idx;
+         size = vertexUpperBound == Integer.MAX_VALUE ? size : vertexNeighborhoods.binarySearch(vertexUpperBound, idx, size);
+         size = (size < 0) ? (-size - 1) : size;
          Utils.sdifference(validVertices, vertexNeighborhoods, 0, validVertices.size(), idx, size, resultSet);
          validVertices.clear();
          IntArrayList aux = validVertices;
@@ -477,8 +494,10 @@ public class SuccinctMainGraph implements MainGraph {
          u = intersection.getUnchecked(i);
          idx = vertexNeighborhoodIdx.getUnchecked(u);
          size = vertexNeighborhoodIdx.getUnchecked(u+1);
-         idx = vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
+         idx = vertexLowerBound == Integer.MIN_VALUE ? idx : vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
          idx = (idx < 0) ? (-idx - 1) : idx;
+         size = vertexUpperBound == Integer.MAX_VALUE ? size : vertexNeighborhoods.binarySearch(vertexUpperBound, idx, size);
+         size = (size < 0) ? (-size - 1) : size;
          Utils.sintersectWithKeyPred(validVertices, vertexNeighborhoods, 0, validVertices.size(), idx, size,
                  resultSet, edgeNeighborhoods, edgePredicates.getUnchecked(i));
          validVertices.clear();
@@ -491,8 +510,10 @@ public class SuccinctMainGraph implements MainGraph {
       u = intersection.getLast();
       idx = vertexNeighborhoodIdx.getUnchecked(u);
       size = vertexNeighborhoodIdx.getUnchecked(u+1);
-      idx = vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
+      idx = vertexLowerBound == Integer.MIN_VALUE ? idx : vertexNeighborhoods.binarySearch(vertexLowerBound, idx, size);
       idx = (idx < 0) ? (-idx - 1) : idx;
+      size = vertexUpperBound == Integer.MAX_VALUE ? size : vertexNeighborhoods.binarySearch(vertexUpperBound, idx, size);
+      size = (size < 0) ? (-size - 1) : size;
       Utils.sintersectConsumeWithKeyPred(validVertices, vertexNeighborhoods, 0, validVertices.size(), idx, size,
               consumer, edgeNeighborhoods, edgePredicates.getLast());
 
@@ -507,10 +528,11 @@ public class SuccinctMainGraph implements MainGraph {
       }
    }
 
-   public void neighborhoodTraversal(int u, IntIntConsumer consumer) {
-      int startIdx = vertexNeighborhoodIdx.getUnchecked(u);
-      int endIdx = vertexNeighborhoodIdx.getUnchecked(u+1);
-      neighborhoodTraversal(startIdx, endIdx, consumer);
+   @Override
+   public IntArrayListView neighborhoodVertices(int u) {
+      int from = vertexNeighborhoodIdx.getUnchecked(u);
+      int to = vertexNeighborhoodIdx.getUnchecked(u+1);
+      return vertexNeighborhoods.view(from, to);
    }
 
    @Override
@@ -520,6 +542,11 @@ public class SuccinctMainGraph implements MainGraph {
       startIdx = edgeNeighborhoods.binarySearch(lowerBound, startIdx, endIdx);
       startIdx = (startIdx < 0) ? (-startIdx - 1) : startIdx;
       neighborhoodTraversal(startIdx, endIdx, consumer);
+   }
+
+   @Override
+   public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound, int vertexUpperBound, IntConsumer consumer, IntPredicate vertexPredicate, EdgePredicates edgePredicates) {
+      neighborhoodTraversal(vertexNeighborhoodIdx, intersection, difference, vertexLowerBound, vertexUpperBound, consumer, vertexPredicate, edgePredicates);
    }
 
    @Override

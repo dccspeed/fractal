@@ -1223,7 +1223,7 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
       pconfigOpt match {
         case Some(conf) =>
           //conf.initialize()
-          pattern.init(conf)
+          pattern.init(config)
         case None =>
           throw new RuntimeException(
             s"Invalid state, pattern configuration is missing.")

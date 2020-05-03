@@ -14,7 +14,17 @@ public interface Pattern extends Writable, Externalizable {
     Pattern copy();
 
     void init(Configuration config);
-    
+
+   void removeLastNEdges(int n);
+
+   PatternExplorationPlan explorationPlan();
+
+   void setExplorationPlan(PatternExplorationPlan explorationPlan);
+
+   int updateWithMCVCExplorationPlan();
+
+    void updateWithNaiveExplorationPlan();
+
     void reset();
 
     void setSubgraph(Subgraph subgraph);
@@ -26,6 +36,8 @@ public interface Pattern extends Writable, Externalizable {
     boolean addEdge(PatternEdge patternEdge);
 
     int getNumberOfEdges();
+
+    boolean relabel(IntIntMap labeling);
 
     boolean turnCanonical();
 
@@ -43,17 +55,23 @@ public interface Pattern extends Writable, Externalizable {
 
     IntIntMap getCanonicalLabeling();
 
-    boolean testSymmetryBreakerExt(Subgraph subgraph, int targetVertex);
+   ObjArrayList<IntArrayList> vsymmetryBreakerUpperBound();
 
-    boolean testSymmetryBreakerPos(Subgraph subgraph, int pos);
+   ObjArrayList<IntArrayList> vsymmetryBreakerLowerBound();
 
-    ObjArrayList<IntArrayList> vsymmetryBreaker();
+   void updateSymmetryBreaker();
 
-    int sbLowerBound(Subgraph subgraph, int pos);
+   int sbUpperBound(Subgraph subgraph, int pos);
 
-    void readSymmetryBreakingConditions(String path) throws IOException;
+   int sbLowerBound(Subgraph subgraph, int pos);
 
-    boolean induced();
+   boolean sbValidOrdering(IntArrayList ordering);
+
+   boolean connectedValidOrdering(IntArrayList ordering);
+
+   void updateSymmetryBreaker(IntArrayList ordering);
+
+   boolean induced();
 
     void setInduced(boolean induced);
 

@@ -70,15 +70,6 @@ class FractalGraph(
     val pattern = config.createPattern().asInstanceOf[BasicPattern]
     pattern.setSubgraph(subgraph)
 
-    // try reading symmetry breaking conditions from file. Fallback is internal
-    // computation of conditions
-    try {
-      pattern.readSymmetryBreakingConditions(s"${path}.sb")
-    } catch {
-      case e: java.io.IOException =>
-        logWarning (s"Symmetry breaking conditions file ${path}.sb not found")
-    }
-
     pattern
   }
 
@@ -234,9 +225,11 @@ class FractalGraph(
                  process: (PatternInducedSubgraph,
                 Computation[PatternInducedSubgraph]) => Unit,
                  pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
-    logInfo(s"Pattern before increasing positions ${pattern}")
-    PatternUtils.increasingPositions(pattern)
-    logInfo(s"Pattern after increasing positions ${pattern}")
+    logInfo(s"Pattern before increasing positions ${pattern} symmetryBreaker=${pattern.vsymmetryBreakerLowerBound()}")
+    if (pattern.explorationPlan().isEmpty) {
+      pattern.updateWithNaiveExplorationPlan()
+    }
+    logInfo(s"Pattern after increasing positions ${pattern} symmetryBreaker=${pattern.vsymmetryBreakerLowerBound()}")
     val config = new SparkConfiguration[PatternInducedSubgraph]
     config.set ("pattern", pattern)
     config.set ("input_graph_path", path)
@@ -266,9 +259,11 @@ class FractalGraph(
                  process: (PatternInducedSubgraph,
                 Computation[PatternInducedSubgraph]) => Unit,
                  pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
-    logInfo(s"Pattern before increasing positions ${pattern}")
-    PatternUtils.increasingPositions(pattern)
-    logInfo(s"Pattern after increasing positions ${pattern}")
+    logInfo(s"Pattern before increasing positions ${pattern} symmetryBreaker=${pattern.vsymmetryBreakerLowerBound()}")
+    if (pattern.explorationPlan().isEmpty) {
+      pattern.updateWithNaiveExplorationPlan()
+    }
+    logInfo(s"Pattern after increasing positions ${pattern} symmetryBreaker=${pattern.vsymmetryBreakerLowerBound()}")
     val computation: Computation[PatternInducedSubgraph] =
       new VEComputationContainer(processOpt = Option(process),
         patternOpt = Option(pattern), primitiveOpt = Option(Primitive.E))

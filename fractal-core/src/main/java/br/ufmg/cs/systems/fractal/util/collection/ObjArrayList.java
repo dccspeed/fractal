@@ -22,6 +22,11 @@ public class ObjArrayList<O> implements ReclaimableObjCollection<O>, List<O> {
         this(16);
     }
 
+    public ObjArrayList(O[] backingArray) {
+        this.backingArray = backingArray;
+        this.numElements = backingArray.length;
+    }
+
     public ObjArrayList(int capacity) {
         ensureCapacity(capacity);
         this.numElements = 0;
@@ -152,7 +157,6 @@ public class ObjArrayList<O> implements ReclaimableObjCollection<O>, List<O> {
 
     @Override
     public void reclaim() {
-
     }
 
     private class ObjArrayListCursor implements ObjCursor<O> {
@@ -278,7 +282,7 @@ public class ObjArrayList<O> implements ReclaimableObjCollection<O>, List<O> {
     }
 
     @Override
-    public boolean add(@Nonnull O obj) {
+    public boolean add(O obj) {
         ensureCanAddNewElement();
         backingArray[numElements++] = obj;
         return true;
@@ -433,9 +437,8 @@ public class ObjArrayList<O> implements ReclaimableObjCollection<O>, List<O> {
     }
 
     public O get(int index) {
-        /*checkIndex(index);
-        return getUnchecked(index);*/
-        return backingArray[index];
+        checkIndex(index);
+        return getUnchecked(index);
     }
 
     public O getUnchecked(int index) {
@@ -478,8 +481,7 @@ public class ObjArrayList<O> implements ReclaimableObjCollection<O>, List<O> {
     public String toString() {
         StringBuilder strBuilder = new StringBuilder();
 
-        strBuilder.append("ObjArrayList{");
-        strBuilder.append("backingArray=");
+        strBuilder.append("[");
 
         boolean first = true;
 
@@ -493,9 +495,7 @@ public class ObjArrayList<O> implements ReclaimableObjCollection<O>, List<O> {
             first = false;
         }
 
-        strBuilder.append(", numElements=");
-        strBuilder.append(numElements);
-        strBuilder.append("}");
+        strBuilder.append("]");
 
         return strBuilder.toString();
     }

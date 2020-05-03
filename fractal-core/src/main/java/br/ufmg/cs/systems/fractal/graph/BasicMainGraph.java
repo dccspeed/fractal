@@ -5,6 +5,7 @@ import br.ufmg.cs.systems.fractal.util.EdgePredicates;
 import br.ufmg.cs.systems.fractal.util.Utils;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.IntCursor;
@@ -427,12 +428,17 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    }
 
    @Override
+   public IntArrayListView neighborhoodVertices(int u) {
+      return null;
+   }
+
+   @Override
    public void neighborhoodTraversalEdgeRange(int u, int lowerBound, IntIntConsumer consumer) {
       vertexNeighborhoods[u].traversalEdgeRange(lowerBound, consumer);
    }
 
    @Override
-   public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound,
+   public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound, int vertexUpperBound,
                                      IntConsumer consumer, IntPredicate vertexPredicate, EdgePredicates edgePredicates) {
       if (intersection.size() == 0) return;
 
@@ -453,9 +459,11 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
          u = intersection.getUnchecked(0);
          neighbourhood = vertexNeighborhoods[u];
          orderedVertices = neighbourhood.getOrderedVertices();
-         idx = orderedVertices.binarySearch(vertexLowerBound);
+         idx = vertexLowerBound == Integer.MIN_VALUE ? 0 : orderedVertices.binarySearch(vertexLowerBound);
          idx = (idx < 0) ? (-idx - 1) : idx;
          size = orderedVertices.size();
+         size = vertexUpperBound == Integer.MAX_VALUE ? size : orderedVertices.binarySearch(vertexUpperBound);
+         size = (size < 0) ? (-size - 1) : size;
          edgePredicate = edgePredicates.getUnchecked(0);
          for (int i = idx; i < size; ++i) {
             v = orderedVertices.getUnchecked(i);
@@ -477,9 +485,11 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
          u = intersection.getUnchecked(0);
          neighbourhood = vertexNeighborhoods[u];
          orderedVertices = neighbourhood.getOrderedVertices();
-         idx = orderedVertices.binarySearch(vertexLowerBound);
+         idx = vertexLowerBound == Integer.MIN_VALUE ? 0 : orderedVertices.binarySearch(vertexLowerBound);
          idx = (idx < 0) ? (-idx - 1) : idx;
          size = orderedVertices.size();
+         size = vertexUpperBound == Integer.MAX_VALUE ? size : orderedVertices.binarySearch(vertexUpperBound);
+         size = (size < 0) ? (-size - 1) : size;
          edgePredicate = edgePredicates.getUnchecked(0);
          for (int i = idx; i < size; ++i) {
             v = orderedVertices.getUnchecked(i);
@@ -494,9 +504,11 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
             u = difference.getUnchecked(i);
             neighbourhood = vertexNeighborhoods[u];
             orderedVertices = neighbourhood.getOrderedVertices();
-            idx = orderedVertices.binarySearch(vertexLowerBound);
+            idx = vertexLowerBound == Integer.MIN_VALUE ? 0 : orderedVertices.binarySearch(vertexLowerBound);
             idx = (idx < 0) ? (-idx - 1) : idx;
             size = orderedVertices.size();
+            size = vertexUpperBound == Integer.MAX_VALUE ? size : orderedVertices.binarySearch(vertexUpperBound);
+            size = (size < 0) ? (-size - 1) : size;
             Utils.sdifference(validVertices, orderedVertices, 0, validVertices.size(), idx, size, resultSet);
             validVertices.clear();
             IntArrayList aux = validVertices;
@@ -507,9 +519,11 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
          u = difference.getLast();
          neighbourhood = vertexNeighborhoods[u];
          orderedVertices = neighbourhood.getOrderedVertices();
-         idx = orderedVertices.binarySearch(vertexLowerBound);
+         idx = vertexLowerBound == Integer.MIN_VALUE ? 0 : orderedVertices.binarySearch(vertexLowerBound);
          idx = (idx < 0) ? (-idx - 1) : idx;
          size = orderedVertices.size();
+         size = vertexUpperBound == Integer.MAX_VALUE ? size : orderedVertices.binarySearch(vertexUpperBound);
+         size = (size < 0) ? (-size - 1) : size;
          Utils.sdifferenceConsume(validVertices, orderedVertices, 0, validVertices.size(), idx, size, consumer);
 
          intArrayListPool.reclaimObject(validVertices);
@@ -522,9 +536,11 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       u = intersection.getUnchecked(0);
       neighbourhood = vertexNeighborhoods[u];
       orderedVertices = neighbourhood.getOrderedVertices();
-      idx = orderedVertices.binarySearch(vertexLowerBound);
+      idx = vertexLowerBound == Integer.MIN_VALUE ? 0 : orderedVertices.binarySearch(vertexLowerBound);
       idx = (idx < 0) ? (-idx - 1) : idx;
       size = orderedVertices.size();
+      size = vertexUpperBound == Integer.MAX_VALUE ? size : orderedVertices.binarySearch(vertexUpperBound);
+      size = (size < 0) ? (-size - 1) : size;
       edgePredicate = edgePredicates.getUnchecked(0);
       for (int i = idx; i < size; ++i) {
          v = orderedVertices.getUnchecked(i);
@@ -539,9 +555,11 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
          u = difference.getUnchecked(i);
          neighbourhood = vertexNeighborhoods[u];
          orderedVertices = neighbourhood.getOrderedVertices();
-         idx = orderedVertices.binarySearch(vertexLowerBound);
+         idx = vertexLowerBound == Integer.MIN_VALUE ? 0 : orderedVertices.binarySearch(vertexLowerBound);
          idx = (idx < 0) ? (-idx - 1) : idx;
          size = orderedVertices.size();
+         size = vertexUpperBound == Integer.MAX_VALUE ? size : orderedVertices.binarySearch(vertexUpperBound);
+         size = (size < 0) ? (-size - 1) : size;
          Utils.sdifference(validVertices, orderedVertices, 0, validVertices.size(), idx, size, resultSet);
          validVertices.clear();
          IntArrayList aux = validVertices;
@@ -554,11 +572,13 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
          u = intersection.getUnchecked(i);
          neighbourhood = vertexNeighborhoods[u];
          orderedVertices = neighbourhood.getOrderedVertices();
-         idx = orderedVertices.binarySearch(vertexLowerBound);
+         idx = vertexLowerBound == Integer.MIN_VALUE ? 0 : orderedVertices.binarySearch(vertexLowerBound);
          idx = (idx < 0) ? (-idx - 1) : idx;
          size = orderedVertices.size();
+         size = vertexUpperBound == Integer.MAX_VALUE ? size : orderedVertices.binarySearch(vertexUpperBound);
+         size = (size < 0) ? (-size - 1) : size;
 
-         edgeNeighborhoods.clear();;
+         edgeNeighborhoods.clear();
          for (int j = 0; j < orderedVertices.size(); ++j) {
             edgeNeighborhoods.add(neighbourhood.getEdge(orderedVertices.getUnchecked(j)));
          }
@@ -575,11 +595,13 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       u = intersection.getLast();
       neighbourhood = vertexNeighborhoods[u];
       orderedVertices = neighbourhood.getOrderedVertices();
-      idx = orderedVertices.binarySearch(vertexLowerBound);
+      idx = vertexLowerBound == Integer.MIN_VALUE ? 0 : orderedVertices.binarySearch(vertexLowerBound);
       idx = (idx < 0) ? (-idx - 1) : idx;
       size = orderedVertices.size();
+      size = vertexUpperBound == Integer.MAX_VALUE ? size : orderedVertices.binarySearch(vertexUpperBound);
+      size = (size < 0) ? (-size - 1) : size;
 
-      edgeNeighborhoods.clear();;
+      edgeNeighborhoods.clear();
       for (int j = 0; j < orderedVertices.size(); ++j) {
          edgeNeighborhoods.add(neighbourhood.getEdge(orderedVertices.getUnchecked(j)));
       }
@@ -589,11 +611,6 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       intArrayListPool.reclaimObject(validVertices);
       intArrayListPool.reclaimObject(resultSet);
       intArrayListPool.reclaimObject(edgeNeighborhoods);
-   }
-
-   @Override
-   public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound, IntConsumer consumer) {
-
    }
 
    @Override

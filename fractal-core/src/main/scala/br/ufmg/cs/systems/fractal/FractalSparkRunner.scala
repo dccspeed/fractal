@@ -2,13 +2,16 @@ package br.ufmg.cs.systems.fractal
 
 import java.util.function.{IntConsumer, IntPredicate}
 
+import br.ufmg.cs.systems.fractal.computation.Computation
 import br.ufmg.cs.systems.fractal.graph.MainGraph
-import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternUtils}
+import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlanMCVC, PatternUtils}
+import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph
 import br.ufmg.cs.systems.fractal.util.{EdgePredicate, EdgePredicates, Logging}
 import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjArrayList}
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool
 import com.koloboke.collect.map.hash.HashObjIntMap
 import org.apache.hadoop.io._
+import org.apache.spark.util.LongAccumulator
 import org.apache.spark.{SparkConf, SparkContext}
 
 trait FractalSparkApp extends Logging {
@@ -270,87 +273,77 @@ class KeywordSearchApp(val fractalGraph: FractalGraph,
    }
 }
 
+class GQueryingMCVCApp(val fractalGraph: FractalGraph,
+                   commStrategy: String,
+                   numPartitions: Int,
+                   explorationSteps: Int,
+                   subgraphPath: String) extends FractalSparkApp {
+   def execute: Unit = {
+      val subgraph = new FractalGraph(
+         subgraphPath, fractalGraph.fractalContext, "warn")
+
+      val pattern = subgraph.asPattern
+      val newPatterns = PatternExplorationPlanMCVC.bestExecutions(pattern)
+      val newPatternsIter = newPatterns.iterator()
+
+      logInfo(s"OriginalPattern ${pattern}")
+
+      while (newPatternsIter.hasNext) {
+         val nextPattern = newPatternsIter.next()
+         val explorationPlanMCVC = nextPattern.explorationPlan().asInstanceOf[PatternExplorationPlanMCVC]
+         val mcvcSize = explorationPlanMCVC.mcvcSize()
+
+         logInfo(s"Submission pattern=${nextPattern} sbLower=${nextPattern.vsymmetryBreakerLowerBound()}" +
+         s" sbUpper=${nextPattern.vsymmetryBreakerUpperBound()} plan=${explorationPlanMCVC}")
+
+         val gquerying = fractalGraph.gquerying(nextPattern).
+            set ("comm_strategy", commStrategy).
+            set ("num_partitions", numPartitions).
+            explore(mcvcSize - 1)
+
+         val validSubgraphsAccum = fractalGraph.fractalContext.sparkContext.longAccumulator
+
+         val callback = (s: PatternInducedSubgraph, c: Computation[PatternInducedSubgraph]) => {
+            val validSubgraphs = s.completeMatch(c.getPattern)
+            validSubgraphsAccum.add(validSubgraphs)
+         }
+
+         val (accums, elapsed) = FractalSparkRunner.time {
+            gquerying.compute(callback)
+         }
+
+         logInfo(s"GQueryingMCVCApp comm=${commStrategy}" +
+            s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
+            s" graph=${fractalGraph} pattern=${nextPattern}" +
+            s" counting=${validSubgraphsAccum.value} elapsed=${elapsed}"
+         )
+      }
+   }
+}
+
 class GQueryingApp(val fractalGraph: FractalGraph,
                    commStrategy: String,
                    numPartitions: Int,
                    explorationSteps: Int,
                    subgraphPath: String) extends FractalSparkApp {
    def execute: Unit = {
+      val subgraph = new FractalGraph(
+         subgraphPath, fractalGraph.fractalContext, "warn")
 
-
-      var pattern = PatternUtils.singleVertexPattern()
-      pattern = PatternUtils.addVertex(pattern, 0)
-      pattern = PatternUtils.addVertex(pattern, 0, 1)
-      pattern = PatternUtils.addVertex(pattern, 0, 1)
-
-      val gquerying = fractalGraph.gquerying(pattern).
+      val gquerying = fractalGraph.gquerying(subgraph).
          set ("comm_strategy", commStrategy).
          set ("num_partitions", numPartitions).
-         explore(explorationSteps - 2)
+         explore(explorationSteps)
 
-      gquerying.compute { (s,c) =>
-         val numSubgraphs = PatternUtils.completeMatch(c, s, c.getPattern())
-         if (numSubgraphs > 0)
-            Logging.getLogger("ValidSubgraphs").info(s"${numSubgraphs}")
+      val (accums, elapsed) = FractalSparkRunner.time {
+         gquerying.compute()
       }
 
-      //gquerying.compute { (s,c) =>
-      //   val vertices = s.getVertices()
-      //   val graph = c.getConfig.getMainGraph[MainGraph[_,_]]
-      //   val intersection = IntArrayListPool.instance().createObject()
-      //   intersection.add(vertices.getUnchecked(0))
-      //   intersection.add(vertices.getUnchecked(1))
-      //   val orderedExtensions = IntArrayListPool.instance().createObject()
-      //   val edgePredicates = new EdgePredicates
-      //   val edgePredicate = new EdgePredicate
-      //   edgePredicate.set(graph, 1)
-      //   edgePredicates.add(edgePredicate)
-      //   edgePredicates.add(edgePredicate)
-      //   c.getConfig.getMainGraph[MainGraph[_,_]].neighborhoodTraversal(intersection, null, Int.MinValue,
-      //      new IntConsumer {
-      //         override def accept(i: Int): Unit = orderedExtensions.add(i)
-      //      },
-      //      new IntPredicate {
-      //         override def test(i: Int): Boolean = true
-      //      },
-      //      edgePredicates)
-      //   val orderedExtensionsSize = orderedExtensions.size()
-      //   if (orderedExtensionsSize > 1) {
-      //      var i = 0
-      //      while (i < orderedExtensionsSize) {
-      //         s.addWord(orderedExtensions.getUnchecked(i))
-      //         var j = 0
-      //         while (j < orderedExtensionsSize) {
-      //            s.addWord(orderedExtensions.getUnchecked(j))
-      //            s.removeLastWord()
-      //            j += 1
-      //         }
-      //         s.removeLastWord()
-      //         i += 1
-      //      }
-      //      Logging.getLogger("ValidSubgraphs").info(s"${orderedExtensionsSize * (orderedExtensionsSize - 1) / 2}")
-      //   }
-      //   IntArrayListPool.instance().reclaimObject(intersection)
-      //   IntArrayListPool.instance().reclaimObject(orderedExtensions)
-      //}
-
-      //val subgraph = new FractalGraph(
-      //   subgraphPath, fractalGraph.fractalContext, "warn")
-
-      //val gquerying = fractalGraph.gquerying(subgraph).
-      //   set ("comm_strategy", commStrategy).
-      //   set ("num_partitions", numPartitions).
-      //   explore(explorationSteps)
-
-      //val (accums, elapsed) = FractalSparkRunner.time {
-      //   gquerying.compute()
-      //}
-
-      //println (s"GQueryingApp comm=${commStrategy}" +
-      //   s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
-      //   s" graph=${fractalGraph} subgraph=${subgraph}" +
-      //   s" counting=${gquerying.numValidSubgraphs()} elapsed=${elapsed}"
-      //)
+      logInfo(s"GQueryingApp comm=${commStrategy}" +
+         s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
+         s" graph=${fractalGraph} subgraph=${subgraph}" +
+         s" counting=${gquerying.numValidSubgraphs()} elapsed=${elapsed}"
+      )
    }
 }
 
@@ -442,6 +435,11 @@ object FractalSparkRunner {
             val queryWords = args.slice(i, args.length)
             new KeywordSearchApp(fractalGraph, commStrategy,
                numPartitions, explorationSteps, queryWords)
+         case "gqueryingmcvc" =>
+            i += 1
+            val subgraphPath = args(i)
+            new GQueryingMCVCApp(fractalGraph, commStrategy,
+               numPartitions, explorationSteps, subgraphPath)
          case "gquerying" =>
             i += 1
             val subgraphPath = args(i)

@@ -4,29 +4,35 @@ import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import br.ufmg.cs.systems.fractal.pattern.Pattern;
-import br.ufmg.cs.systems.fractal.pattern.PatternEdge;
-import br.ufmg.cs.systems.fractal.pattern.PatternEdgeArrayList;
+import br.ufmg.cs.systems.fractal.pattern.*;
 import br.ufmg.cs.systems.fractal.util.EdgePredicate;
 import br.ufmg.cs.systems.fractal.util.EdgePredicates;
+import br.ufmg.cs.systems.fractal.util.Utils;
+import br.ufmg.cs.systems.fractal.util.VertexPredicate;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import com.koloboke.collect.set.hash.HashIntSet;
+import org.apache.log4j.Logger;
 
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.ObjectInput;
 import java.util.function.IntConsumer;
-import java.util.function.IntPredicate;
 
 public class PatternInducedSubgraph extends BasicSubgraph {
+   private static final Logger LOG = Logger.getLogger(PatternInducedSubgraph.class);
+
    // Consumers and Predicates {{
    private UpdateEdgesConsumer updateEdgesConsumer;
    private EdgeTaggerConsumer edgeTagger;
    private UpdateExtensionsConsumer updateExtensionsConsumer;
    private EdgePredicates edgePredicates;
    private VertexPredicate vertexPredicate;
+   private IntArrayList intersection;
+   private IntArrayList difference;
+   private ObjArrayList<IntArrayList> neighborhoods;
    // }}
 
    // Edge tracking for incremental modifications {{
@@ -43,6 +49,9 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       updateExtensionsConsumer = new UpdateExtensionsConsumer();
       vertexPredicate = new VertexPredicate();
       edgePredicates = new EdgePredicates();
+      intersection = new IntArrayList();
+      difference = new IntArrayList();
+      neighborhoods = new ObjArrayList<>();
    }
 
    @Override
@@ -161,10 +170,6 @@ public class PatternInducedSubgraph extends BasicSubgraph {
 
    @Override
    public void removeLastWord() {
-      if (getNumWords() == 0) {
-         return;
-      }
-
       vertices.removeLast();
       super.removeLastWord();
    }
@@ -202,6 +207,166 @@ public class PatternInducedSubgraph extends BasicSubgraph {
 
    @Override
    protected void updateExtensions(Computation computation) {
+      int numVertices = getNumVertices();
+      Pattern pattern = computation.getPattern();
+      PatternExplorationPlan explorationPlan = pattern.explorationPlan();
+      vertexPredicate = explorationPlan.vertexPredicate(numVertices);
+      edgePredicates = explorationPlan.edgePredicates(numVertices);
+      IntArrayList intersectionIdx = explorationPlan.intersection(numVertices);
+      IntArrayList differenceIdx = explorationPlan.difference(numVertices);
+
+      intersection.clear();
+      for (int i = 0; i < intersectionIdx.size(); ++i) {
+         intersection.add(vertices.getUnchecked(intersectionIdx.getUnchecked(i)));
+      }
+
+      difference.clear();
+      for (int i = 0; i < differenceIdx.size(); ++i) {
+         difference.add(vertices.getUnchecked(differenceIdx.getUnchecked(i)));
+      }
+
+      /**
+       * Find the lower bound on vertex ids concerning symmetry breaking conditions
+       */
+      int lowerBound = pattern.sbLowerBound(this, numVertices);
+      int upperBound = pattern.sbUpperBound(this, numVertices);
+
+      /**
+       * Neighborhood traversal: intersection and/or difference among neighborhoods
+       */
+      HashIntSet extensionWordIds = extensionWordIds();
+      extensionWordIds.clear();
+      updateExtensionsConsumer.set(extensionWordIds);
+      getConfig().getMainGraph().neighborhoodTraversal(
+              intersection,
+              difference,
+              lowerBound, // symmetry breaking
+              upperBound,
+              updateExtensionsConsumer,
+              vertexPredicate,
+              edgePredicates);
+   }
+
+   private void ensureNeighborhoods(MainGraph graph, Pattern pattern, int mcvcSize, int pos) {
+      if (neighborhoods.getUnchecked(pos) != null) return;
+      /**
+       * Single vertices: neighborhood view
+       */
+      if (pos < mcvcSize) {
+         neighborhoods.setUnchecked(pos, graph.neighborhoodVertices(vertices.getUnchecked(pos)));
+         return;
+      }
+
+      /**
+       * Ensure dependencies are satisfied
+       */
+      PatternExplorationPlan explorationPlan = pattern.explorationPlan();
+      IntArrayList intersections = explorationPlan.intersection(pos);
+      for (int i = 0; i < intersections.size(); ++i) {
+         ensureNeighborhoods(graph, pattern, mcvcSize, intersections.getUnchecked(i));
+      }
+
+      /**
+       * In case intersections is single element, just get reference
+       */
+      if (intersections.size() == 1) {
+         int dep = intersections.getUnchecked(0);
+         neighborhoods.setUnchecked(pos, neighborhoods.getUnchecked(dep));
+         return;
+      }
+
+      /**
+       * In case intersections have two elements
+       */
+      if (intersections.size() == 2) {
+         IntArrayList neighborhood1 = neighborhoods.getUnchecked(intersections.getUnchecked(0));
+         IntArrayList neighborhood2 = neighborhoods.getUnchecked(intersections.getUnchecked(1));
+         IntArrayList result = IntArrayListPool.instance().createObject();
+         Utils.sintersect(neighborhood1, neighborhood2, 0, neighborhood1.size(), 0, neighborhood2.size(), result);
+         neighborhoods.setUnchecked(pos, result);
+         return;
+      }
+
+      /**
+       * In case intersections have more than two elements
+       */
+      IntArrayList result = IntArrayListPool.instance().createObject();
+      IntArrayList previous = IntArrayListPool.instance().createObject();
+      IntArrayList neighborhood1 = neighborhoods.getUnchecked(intersections.getUnchecked(0));
+      IntArrayList neighborhood2 = neighborhoods.getUnchecked(intersections.getUnchecked(1));
+      Utils.sintersect(neighborhood1, neighborhood2, 0, neighborhood1.size(), 0, neighborhood2.size(), result);
+
+      for (int i = 2; i < intersections.size(); ++i) {
+         IntArrayList aux = result;
+         result = previous;
+         previous = aux;
+         neighborhood1 = neighborhoods.getUnchecked(intersections.getUnchecked(i));
+         Utils.sintersect(previous, neighborhood1, 0, previous.size(), 0, neighborhood1.size(), result);
+      }
+
+      neighborhoods.setUnchecked(pos, result);
+      IntArrayListPool.instance().reclaimObject(previous);
+   }
+
+   public long completeMatch(Pattern pattern) {
+      /**
+       * Declarations
+       */
+      int numVertices = pattern.getNumberOfVertices();
+      int nextVertexPos = getNumVertices();
+      MainGraph graph = pattern.getConfig().getMainGraph();
+
+      /**
+       * Here we guarantee that the neighborhoods has proper size and all elements equal to null.
+       * Also, we return existing arrays to pool
+       */
+      neighborhoods.clear();
+      for (int i = 0; i < numVertices; ++i) {
+         IntArrayList existing = neighborhoods.getUnchecked(i);
+         if (existing != null) existing.reclaim();
+         neighborhoods.add(null);
+      }
+
+      /**
+       * Make sure the neighborhoods that will be queried exists
+       */
+      for (int pos = nextVertexPos; pos < numVertices; ++pos) {
+         ensureNeighborhoods(graph, pattern, nextVertexPos, pos);
+      }
+
+      return completeMatchRec(pattern);
+   }
+
+   private long completeMatchRec(Pattern pattern) {
+      long validSubgraphs = 0;
+      int numVertices = getNumVertices();
+      IntArrayList validExtensions = neighborhoods.getUnchecked(numVertices);
+      int lowerBound = pattern.sbLowerBound(this, getNumVertices());
+      int startIdx = validExtensions.binarySearch(lowerBound);
+      startIdx = (startIdx < 0) ? (-startIdx - 1) : startIdx + 1;
+      if (getNumVertices() < pattern.getNumberOfVertices() - 1) {
+         for (; startIdx < validExtensions.size(); ++startIdx) {
+            int u = validExtensions.getUnchecked(startIdx);
+            if (vertices.contains(u)) continue;
+            addWord(u);
+            validSubgraphs += completeMatchRec(pattern);
+            removeLastWord();
+         }
+      } else {
+         for (; startIdx < validExtensions.size(); ++startIdx) {
+            int u = validExtensions.getUnchecked(startIdx);
+            if (vertices.contains(u)) continue;
+            addWord(u);
+            validSubgraphs += 1;
+            // callback
+            removeLastWord();
+         }
+      }
+
+      return validSubgraphs;
+   }
+
+   protected void updateExtensions2(Computation computation) {
       MainGraph graph = getConfig().getMainGraph();
       Pattern pattern = computation.getPattern();
       IntArrayList intersection = IntArrayListPool.instance().createObject();
@@ -213,6 +378,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
        * Find the lower bound on vertex ids concerning symmetry breaking conditions
        */
       int lowerBound = pattern.sbLowerBound(this, numVertices);
+      int upperBound = pattern.sbUpperBound(this, numVertices);
 
       /**
        * Find which edges must be added in this step
@@ -231,7 +397,8 @@ public class PatternInducedSubgraph extends BasicSubgraph {
             } else {
                edgePredicate = edgePredicates.get(intersection.size() - 1);
             }
-            edgePredicate.set(graph, pedge.getLabel());
+            edgePredicate.setGraph(graph);
+            edgePredicate.setLabel(pedge.getLabel());
             vertexLabel = pedge.getDestLabel();
          }
       }
@@ -252,11 +419,13 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       HashIntSet extensionWordIds = extensionWordIds();
       extensionWordIds.clear();
       updateExtensionsConsumer.set(extensionWordIds);
-      vertexPredicate.set(graph, vertexLabel);
+      vertexPredicate.setGraph(graph);
+      vertexPredicate.setLabel(vertexLabel);
       getConfig().getMainGraph().neighborhoodTraversal(
               intersection,
               difference,
               lowerBound, // symmetry breaking
+              upperBound,
               updateExtensionsConsumer,
               vertexPredicate,
               edgePredicates);
@@ -362,21 +531,6 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       public void accept(int i) {
          edges.add(i);
          ++numAdded;
-      }
-   }
-
-   private static class VertexPredicate implements IntPredicate {
-      private MainGraph graph;
-      private int vertexLabel;
-
-      public void set(MainGraph graph, int vertexLabel) {
-         this.graph = graph;
-         this.vertexLabel = vertexLabel;
-      }
-
-      @Override
-      public boolean test(int u) {
-         return graph.vertexLabel(u) == vertexLabel;
       }
    }
 

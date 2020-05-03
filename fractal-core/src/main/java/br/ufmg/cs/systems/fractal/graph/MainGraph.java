@@ -3,6 +3,7 @@ package br.ufmg.cs.systems.fractal.graph;
 import br.ufmg.cs.systems.fractal.util.EdgePredicates;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.function.IntIntConsumer;
@@ -12,61 +13,64 @@ import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 
 public interface MainGraph<V,E> {
-    int getId();
-    
-    void setId(int id);
+   int getId();
 
-    MainGraph addVertex(Vertex vertex);
+   void setId(int id);
 
-    Vertex getVertex(int vertexId);
+   MainGraph addVertex(Vertex vertex);
 
-    Edge getEdge(int edgeId);
+   Vertex getVertex(int vertexId);
 
-    MainGraph addEdge(Edge edge);
+   Edge getEdge(int edgeId);
 
-    VertexNeighbourhood getVertexNeighbourhood(int vertexId);
+   MainGraph addEdge(Edge edge);
 
-    IntCollection getVertexNeighbours(int vertexId);
+   VertexNeighbourhood getVertexNeighbourhood(int vertexId);
 
-    boolean isEdgeLabelled();
+   IntCollection getVertexNeighbours(int vertexId);
 
-    boolean isMultiGraph();
+   boolean isEdgeLabelled();
 
-    int filterVertices(Predicate<Vertex<V>> vpred);
+   boolean isMultiGraph();
 
-    int filterEdges(Predicate<Edge<E>> epred);
+   int filterVertices(Predicate<Vertex<V>> vpred);
 
-    int undoVertexFilter();
-    
-    int undoEdgeFilter();
+   int filterEdges(Predicate<Edge<E>> epred);
 
-    int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag);
+   int undoVertexFilter();
 
-    void afterGraphUpdate();
+   int undoEdgeFilter();
 
-    /* Revised API */
-    /* update graph */
-    void addVertex(int u);
-    void addEdge(int u, int v, int e);
-    void addVertexLabel(int u, int label);
-    void addEdgeLabel(int e, int label);
+   int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag);
 
-    /* query graph properties */
-    int numVertices();
-    int numEdges();
-    int edgeSrc(int e);
-    int edgeDst(int e);
-    int vertexLabel(int u);
-    int edgeLabel(int e);
-    boolean containsVertex(int u);
-    boolean containsEdge(int e);
+   void afterGraphUpdate();
 
-    /* graph traversals */
-    void neighborhoodTraversalVertexRange(int u, int lowerBound, IntIntConsumer consumer);
-    void neighborhoodTraversalEdgeRange(int u, int lowerBound, IntIntConsumer consumer);
-    void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound,
-                               IntConsumer consumer, IntPredicate vertexPredicate, EdgePredicates edgePredicates);
-    void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound, IntConsumer consumer);
-    void forEachEdge(IntConsumer consumer);
-    void forEachEdge(int u, int v, IntConsumer consumer);
+   /* Revised API */
+   /* update graph */
+   void addVertex(int u);
+   void addEdge(int u, int v, int e);
+   void addVertexLabel(int u, int label);
+   void addEdgeLabel(int e, int label);
+
+   /* query graph properties */
+   int numVertices();
+   int numEdges();
+   int edgeSrc(int e);
+   int edgeDst(int e);
+   int vertexLabel(int u);
+   int edgeLabel(int e);
+   boolean containsVertex(int u);
+   boolean containsEdge(int e);
+
+   /* graph traversals */
+   void neighborhoodTraversalVertexRange(int u, int lowerBound, IntIntConsumer consumer);
+
+   IntArrayListView neighborhoodVertices(int u);
+
+   void neighborhoodTraversalEdgeRange(int u, int lowerBound, IntIntConsumer consumer);
+   void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound, int vertexUpperBound,
+                              IntConsumer consumer, IntPredicate vertexPredicate, EdgePredicates edgePredicates);
+
+   void forEachEdge(IntConsumer consumer);
+   void forEachEdge(int u, int v, IntConsumer consumer);
 }

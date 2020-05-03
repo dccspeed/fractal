@@ -2,7 +2,7 @@
 
 printf "Description: Script launcher for Fractal built-in applications\n\n"
 
-apps="motifspf|esubgraphs|vsubgraphswithedges|vsubgraphs|fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws"
+apps="motifspf|esubgraphs|vsubgraphswithedges|vsubgraphs|fsm|motifs|cliques|cliquesopt|gqueryingmcvc|gquerying|gqueryingnaive|kws"
 
 usage="
 Usage:
@@ -108,6 +108,15 @@ ALGOPTION for '$app':
 ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
+	;;
+	gqueryingmcvc)
+	required="inputgraph steps query"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 	gquerying)
 	required="inputgraph steps query"

@@ -113,7 +113,6 @@ public class JBlissPattern extends BasicPattern {
 
     @Override
     public String toString() {
-       return "JBlissPattern{jblissGraph=" + jblissGraph + " " +
-          super.toString() + "}";
+       return "bliss{" + super.toString() + "}";
     }
 }

@@ -4,21 +4,11 @@ import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgeArrayListPool;
 import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgePool;
 import br.ufmg.cs.systems.fractal.util.WritableObjArrayList;
 
-import java.util.Collection;
-
 public class PatternEdgeArrayList extends WritableObjArrayList<PatternEdge> implements Comparable<PatternEdgeArrayList> {
     private boolean areEdgesLabelled;
 
     public PatternEdgeArrayList(boolean areEdgesLabelled) {
         this.areEdgesLabelled = areEdgesLabelled;
-    }
-
-    public PatternEdgeArrayList(int capacity) {
-        super(capacity);
-    }
-
-    public PatternEdgeArrayList(Collection<PatternEdge> elements) {
-        super(elements);
     }
 
     @Override

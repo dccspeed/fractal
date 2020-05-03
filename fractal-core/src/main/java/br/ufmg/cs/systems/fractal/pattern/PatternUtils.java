@@ -1,95 +1,26 @@
 package br.ufmg.cs.systems.fractal.pattern;
 
-import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.BasicMainGraph;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntIntMapPool;
-import br.ufmg.cs.systems.fractal.util.pool.IntSetPool;
 import com.koloboke.collect.map.IntIntMap;
-import com.koloboke.collect.map.ObjObjMap;
-import com.koloboke.collect.map.hash.HashObjObjMaps;
-import com.koloboke.collect.set.IntSet;
-import com.koloboke.collect.set.hash.HashIntSet;
 import com.koloboke.collect.set.hash.HashObjSet;
 import com.koloboke.collect.set.hash.HashObjSets;
 import org.apache.log4j.Logger;
 
 import java.util.Iterator;
-import java.util.function.IntConsumer;
 
 public class PatternUtils {
    private static final Logger LOG = Logger.getLogger(PatternUtils.class);
 
    /**
-    * Creates minimal configurations for isolated pattern handling
-    * @return new configuration
-    */
-   public static Configuration createConfig() {
-      Configuration config = new Configuration();
-      //config.setComputationClass(VertexInducedComputation.class);
-      config.setSubgraphClass(VertexInducedSubgraph.class);
-      config.setMainGraphClass(BasicMainGraph.class);
-      config.setPatternClass(JBlissPattern.class);
-      //config.initialize();
-      return config;
-   }
-
-   /**
-    * Creates an empty graph
-    * @param config existing configuration
-    * @return new graph
-    */
-   private static MainGraph createGraph(Configuration config) {
-      MainGraph graph = config.createGraph();
-      config.setMainGraph(graph);
-      return graph;
-   }
-
-   /**
-    * Creates an empty graph containing exactly the same vertices and edges from *pattern*
-    * @param config existing configuration
-    * @param pattern pattern to use as template
-    * @return new graph
-    */
-   private static MainGraph createGraph(Configuration config, Pattern pattern) {
-      MainGraph graph = createGraph(config);
-      IntArrayList vertexLabels = new IntArrayList(pattern.getNumberOfVertices() + 1);
-
-      // add pattern vertices
-      for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
-         graph.addVertex(u);
-         vertexLabels.add(1);
-      }
-
-      // add new vertex
-      graph.addVertex(pattern.getNumberOfVertices());
-      vertexLabels.add(1);
-
-      // add pattern edges and edge labels
-      for (int e = 0; e < pattern.getNumberOfEdges(); ++e) {
-         PatternEdge pedge = pattern.getEdges().getUnchecked(e);
-         graph.addEdge(pedge.getSrcPos(), pedge.getDestPos(), e);
-         //graph.addEdgeLabel(e, pedge.getLabel()); // TODO: handle edge label
-         vertexLabels.set(pedge.getSrcPos(), pedge.getSrcLabel());
-         vertexLabels.set(pedge.getDestPos(), pedge.getDestLabel());
-      }
-
-      // add vertex labels
-      for (int u = 0; u < vertexLabels.size(); ++u) {
-         graph.addVertexLabel(u, vertexLabels.get(u));
-      }
-
-      return graph;
-   }
-
-   /**
     * Generates all canonical patterns from extending each existing pattern by one vertex
+    *
     * @param patterns set of existing patterns
     * @return set of new patterns
     */
@@ -100,55 +31,8 @@ public class PatternUtils {
    }
 
    /**
-    * Generates a set with one single vertex unlabeled pattern
-    * @return set containing the new pattern
-    */
-   public static HashObjSet<Pattern> singleVertexPatternSet() {
-      HashObjSet<Pattern> patterns = HashObjSets.newMutableSet();
-      patterns.add(singleVertexPattern());
-      return patterns;
-   }
-
-   /**
-    * Generates a single vertex unlabeled pattern
-    * @return new pattern
-    */
-   public static Pattern singleVertexPattern() {
-      Configuration config = createConfig();
-      MainGraph graph = createGraph(config);
-      graph.addVertex(0);
-      VertexInducedSubgraph subgraph = (VertexInducedSubgraph) config.createSubgraph();
-      subgraph.addWord(0);
-      return subgraph.getPattern();
-   }
-
-   /**
-    * Add a vertex and its edges to *pattern*, returning the new pattern
-    * @param pattern the existing pattern
-    * @param sources the edge sources representing edges with the new vertex
-    * @return new pattern
-    */
-   public static Pattern addVertex(Pattern pattern, int ... sources) {
-      Configuration config = pattern.getConfig();
-      MainGraph graph = config.getMainGraph();
-      int numVertices = pattern.getNumberOfVertices();
-
-      graph.addVertex(numVertices);
-      for (int src : sources) {
-         if (src >= numVertices) {
-            throw new RuntimeException("Vertex source does not exists in pattern with " + numVertices + " vertices");
-         }
-         graph.addEdge(src, numVertices, graph.numEdges());
-      }
-
-      VertexInducedSubgraph subgraph = (VertexInducedSubgraph) config.createSubgraph();
-      for (int u = 0; u < graph.numVertices(); ++u) subgraph.addWord(u);
-
-      return subgraph.getPattern();
-   }
-
-   /**
     * Generates all canonical patterns obtained from *pattern* by extending one vertex from it
+    *
     * @param pattern
     * @return set of new canonical patterns
     */
@@ -193,7 +77,98 @@ public class PatternUtils {
    }
 
    /**
+    * Creates minimal configurations for isolated pattern handling
+    *
+    * @return new configuration
+    */
+   public static Configuration createConfig() {
+      Configuration config = new Configuration();
+      //config.setComputationClass(VertexInducedComputation.class);
+      config.setSubgraphClass(VertexInducedSubgraph.class);
+      config.setMainGraphClass(BasicMainGraph.class);
+      config.setPatternClass(JBlissPattern.class);
+      //config.initialize();
+      return config;
+   }
+
+   /**
+    * Creates an empty graph containing exactly the same vertices and edges from *pattern*
+    *
+    * @param config  existing configuration
+    * @param pattern pattern to use as template
+    * @return new graph
+    */
+   private static MainGraph createGraph(Configuration config, Pattern pattern) {
+      MainGraph graph = createGraph(config);
+      IntArrayList vertexLabels = new IntArrayList(pattern.getNumberOfVertices() + 1);
+
+      // add pattern vertices
+      for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
+         graph.addVertex(u);
+         vertexLabels.add(1);
+      }
+
+      // add new vertex
+      graph.addVertex(pattern.getNumberOfVertices());
+      vertexLabels.add(1);
+
+      // add pattern edges and edge labels
+      for (int e = 0; e < pattern.getNumberOfEdges(); ++e) {
+         PatternEdge pedge = pattern.getEdges().getUnchecked(e);
+         graph.addEdge(pedge.getSrcPos(), pedge.getDestPos(), e);
+         //graph.addEdgeLabel(e, pedge.getLabel()); // TODO: handle edge label
+         vertexLabels.set(pedge.getSrcPos(), pedge.getSrcLabel());
+         vertexLabels.set(pedge.getDestPos(), pedge.getDestLabel());
+      }
+
+      // add vertex labels
+      for (int u = 0; u < vertexLabels.size(); ++u) {
+         graph.addVertexLabel(u, vertexLabels.get(u));
+      }
+
+      return graph;
+   }
+
+   /**
+    * Creates an empty graph
+    *
+    * @param config existing configuration
+    * @return new graph
+    */
+   private static MainGraph createGraph(Configuration config) {
+      MainGraph graph = config.createGraph();
+      config.setMainGraph(graph);
+      return graph;
+   }
+
+   /**
+    * Generates a set with one single vertex unlabeled pattern
+    *
+    * @return set containing the new pattern
+    */
+   public static HashObjSet<Pattern> singleVertexPatternSet() {
+      HashObjSet<Pattern> patterns = HashObjSets.newMutableSet();
+      patterns.add(singleVertexPattern());
+      return patterns;
+   }
+
+   /**
+    * Generates a single vertex unlabeled pattern
+    *
+    * @return new pattern
+    */
+   public static Pattern singleVertexPattern() {
+      Configuration config = createConfig();
+      MainGraph graph = createGraph(config);
+      graph.addVertex(0);
+      VertexInducedSubgraph subgraph = (VertexInducedSubgraph) config.createSubgraph();
+      subgraph.addWord(0);
+      return subgraph.getPattern();
+   }
+
+   /**
     * Maps a pattern to one of its automorphisms such that edges stay in increasing order of vertex positions
+    *
     * @param pattern pattern to be modified in-place
     */
    public static void increasingPositions(Pattern pattern) {
@@ -250,125 +225,183 @@ public class PatternUtils {
       /**
        * Pre-compute the symmetry breaking of this pattern
        */
-      pattern.vsymmetryBreaker();
       LOG.info("AfterReordering pattern=" + pattern + " labeling=" + labeling);
 
       IntIntMapPool.instance().reclaimObject(labeling);
    }
 
-   public static long completeMatch(Computation computation, Subgraph partialMatch, Pattern pattern) {
+   /**
+    * Generates a minimum connected vertex cover for the pattern given. Note that this is a brute-force algorithm,
+    * but ok for using with small patterns
+    * @param pattern existing pattern
+    * @return an array with a minimum connected vertex cover
+    */
+   public static ObjArrayList<IntArrayList> minimumConnectedVertexCover(Pattern pattern) {
+      ObjArrayList<IntArrayList> minCovers = new ObjArrayList<>();
+      IntArrayList cover = IntArrayListPool.instance().createObject();
+      for (int numCoverVertices = 1; numCoverVertices < pattern.getNumberOfVertices(); numCoverVertices++) {
+         Iterator<IntArrayList> covers = pattern.getVertices().combinations(numCoverVertices);
+         while (covers.hasNext()) {
+            IntArrayList coverCandidate = covers.next();
 
-      /**
-       * Declarations
-       */
-      MainGraph graph = computation.getConfig().getMainGraph();
-      IntArrayListPool pool = IntArrayListPool.instance();
-      PatternEdgeArrayList patternEdges = pattern.getEdges();
-      IntArrayList intersection = pool.createObject();
-      IntArrayList difference = pool.createObject();
-      ObjObjMap<IntArrayList,IntArrayList> validExtensionsMap = HashObjObjMaps.newMutableMap(); // TODO: pool this?
-      int nextVertexPos = partialMatch.getNumVertices();
-      ObjArrayList<IntArrayList> validExtensionsArray = new ObjArrayList<>(pattern.getNumberOfVertices() - nextVertexPos); // TODO: pool this?
-
-      for (int i = 0; i < patternEdges.size(); ++i) {
-         PatternEdge pedge = patternEdges.getUnchecked(i);
-         if (pedge.getDestPos() < nextVertexPos) continue;
-
-         // compute valid extensions for *nextVertexPos*
-         if (pedge.getDestPos() > nextVertexPos) {
-            IntArrayList validExtensions = validExtensionsMap.get(intersection);
-
-            if (validExtensions == null) {
-               // compute difference set if induced
-               if (pattern.induced()) {
-                  for (int src = 0; src < nextVertexPos; ++src) {
-                     if (!intersection.contains(src)) difference.add(partialMatch.getVertices().getUnchecked(src));
-                  }
+            // check if this is a valid connected cover
+            boolean validCover = true;
+            for (PatternEdge pedge : pattern.getEdges()) {
+               if (!coverCandidate.contains(pedge.getSrcPos()) && !coverCandidate.contains(pedge.getDestPos())) {
+                  validCover = false;
+                  break;
                }
-
-               // key now is *intersection*
-               validExtensions = pool.createObject();
-               IntArrayList finalValidExtensions = validExtensions;
-               graph.neighborhoodTraversal(intersection, difference, Integer.MIN_VALUE, finalValidExtensions::add);
-
-               validExtensionsMap.put(intersection, validExtensions);
             }
 
-            validExtensionsArray.add(validExtensions);
-
-            // prepare for next *nextVertexPos*
-            intersection = pool.createObject();
-            intersection.add(partialMatch.getVertices().getUnchecked(pedge.getSrcPos()));
-            difference.clear();
-            ++nextVertexPos;
-
-         } else { // add into intersection
-            intersection.add(partialMatch.getVertices().getUnchecked(pedge.getSrcPos()));
-         }
-      }
-
-      IntArrayList validExtensions = validExtensionsMap.get(intersection);
-
-      if (validExtensions == null) {
-         // compute difference set if induced
-         if (pattern.induced()) {
-            for (int src = 0; src < nextVertexPos; ++src) {
-               if (!intersection.contains(src)) difference.add(partialMatch.getVertices().getUnchecked(src));
+            if (validCover && pattern.connectedValidOrdering(coverCandidate)) {
+               minCovers.add(coverCandidate);
             }
          }
-
-         // key now is *intersection*
-         validExtensions = pool.createObject();
-         IntArrayList finalValidExtensions = validExtensions;
-         graph.neighborhoodTraversal(intersection, difference, Integer.MIN_VALUE, finalValidExtensions::add);
-
-         validExtensionsMap.put(intersection, validExtensions);
+         if (minCovers.size() > 0) break;
       }
-
-      validExtensionsArray.add(validExtensions);
-
-      /**
-       * Process new subgraphs
-       */
-      IntSet vertices = IntSetPool.instance().createObject();
-      long numSubgraphs = completeMatch(partialMatch, pattern, validExtensionsArray, 0, vertices);
-      IntSetPool.instance().reclaimObject(vertices);
-
-      pool.reclaimObject(intersection);
-      pool.reclaimObject(difference);
-      validExtensionsMap.forEach((k,v) -> { pool.reclaimObject(k); pool.reclaimObject(v); });
-
-      return numSubgraphs;
-   }
-
-   private static long completeMatch(Subgraph partialMatch, Pattern pattern, ObjArrayList<IntArrayList> validExtensionsArray, int depth, IntSet vertices) {
-      if (partialMatch.getNumVertices() == pattern.getNumberOfVertices()) {
-         // callback because the match is complete
-         return 1;
-      }
-
-      long validSubgraphs = 0;
-      IntArrayList validExtensions = validExtensionsArray.getUnchecked(depth);
-      int lowerBound = pattern.sbLowerBound(partialMatch, partialMatch.getNumVertices());
-      int startIdx = validExtensions.binarySearch(lowerBound);
-      startIdx = (startIdx < 0) ? (-startIdx - 1) : startIdx + 1;
-      for (; startIdx < validExtensions.size(); ++startIdx) {
-         int u = validExtensions.getUnchecked(startIdx);
-         //if (vertices.contains(u)) continue;
-         partialMatch.addWord(u);
-         //vertices.add(u);
-         validSubgraphs += completeMatch(partialMatch, pattern, validExtensionsArray, depth + 1, vertices);
-         //vertices.removeInt(u);
-         partialMatch.removeLastWord();
-      }
-
-      return validSubgraphs;
+      return minCovers;
    }
 
    public static void main(String[] args) {
       Pattern pattern = singleVertexPattern();
+      pattern.getConfig().setExplorationPlanClass(PatternExplorationPlanMCVC.class);
+
+      // dual-sim example
       pattern = addVertex(pattern, 0);
+      pattern = addVertex(pattern, 1);
+      pattern = addVertex(pattern, 0, 2);
       pattern = addVertex(pattern, 0, 1);
-      pattern = addVertex(pattern, 0, 1);
+
+      // square
+      //pattern = addVertex(pattern, 0);
+      //pattern = addVertex(pattern, 1);
+      //pattern = addVertex(pattern, 0, 2);
+
+      // chordal square
+      //pattern = addVertex(pattern, 0);
+      //pattern = addVertex(pattern, 0, 1);
+      //pattern = addVertex(pattern, 0, 1);
+
+      // house with missing wall
+      //pattern = addVertex(pattern, 0);
+      //pattern = addVertex(pattern, 0, 1);
+      //pattern = addVertex(pattern, 1);
+      //pattern = addVertex(pattern, 3);
+
+      // 2-path
+      //pattern = addVertex(pattern, 0);
+      //pattern = addVertex(pattern, 1);
+
+      //pattern.setInduced(true);
+
+      ObjArrayList<ObjArrayList<Pattern>> allPlans = PatternExplorationPlanMCVC.allExecutions(pattern);
+      for (ObjArrayList<Pattern> plan : allPlans) {
+         System.out.println("plan size " + plan.size());
+      }
+
+      ObjArrayList<Pattern> patterns = PatternExplorationPlanMCVC.bestExecutions(pattern);
+
+      for (int i = 0; i < patterns.size(); ++i) {
+         Pattern newPattern = patterns.get(i);
+         System.out.println(newPattern
+                 + "\n\tsbLower=" + newPattern.vsymmetryBreakerLowerBound()
+                 + "\n\tsbUpper=" + newPattern.vsymmetryBreakerUpperBound()
+                 + "\n\texplorationPlan=" + newPattern.explorationPlan()
+         );
+      }
+
+      //System.out.println("OriginalPattern " + pattern);
+      //System.out.println("OriginalPatternSymmetryBreakerLower " + pattern.vsymmetryBreakerLowerBound());
+      //System.out.println("OriginalPatternSymmetryBreakerUpper " + pattern.vsymmetryBreakerUpperBound());
+      //IntArrayList mcvc = minimumConnectedVertexCover(pattern);
+      //int numCoverEdges = pattern.updateWithMCVCExplorationPlan(mcvc);
+      //System.out.println("MCVCAndGlobalOrdering " + mcvc);
+      //System.out.println("PatternMCVC " + pattern);
+      //System.out.println("PatternMCVCSymmetryBreakerLower " + pattern.vsymmetryBreakerLowerBound());
+      //System.out.println("PatternMCVCSymmetryBreakerUpper " + pattern.vsymmetryBreakerUpperBound());
+      //System.out.println("PatternMCVCNumCoverEdges " + numCoverEdges);
+      //System.out.println("\n");
+
+      //ObjObjMap<Pattern, ObjArrayList<IntArrayList>> vgroupSequences = HashObjObjMaps.newMutableMap();
+
+      //Iterator<IntArrayList> vertexOrderings = mcvc.permutations();
+      //while (vertexOrderings.hasNext()) {
+      //   IntArrayList ordering = vertexOrderings.next();
+      //   if (pattern.sbValidOrdering(ordering)) {
+      //      Pattern newPattern = pattern.copy();
+      //      newPattern.updateWithMCVCExplorationPlan(ordering);
+      //      newPattern.removeLastNEdges(newPattern.getNumberOfEdges() - numCoverEdges);
+
+      //      ObjArrayList<IntArrayList> orderings = vgroupSequences.getOrDefault(newPattern, new ObjArrayList<>());
+      //      orderings.add(new IntArrayList(ordering));
+      //      vgroupSequences.putIfAbsent(newPattern, orderings);
+      //   }
+      //}
+
+      //System.out.println("vgroupSequences ");
+      //vgroupSequences.forEach((p,os) -> System.out.println(p + " " + os + "\n"));
+
+      //ObjArrayList<Pattern> vgroupPatterns = new ObjArrayList<>();
+      //ObjArrayList<ObjArrayList<IntIntMap>> vgroupMappings = new ObjArrayList<>();
+      //ObjArrayList<IntArrayList> vgroupRepr = new ObjArrayList<>();
+
+      //for (ObjArrayList<IntArrayList> vgroup : vgroupSequences.values()) {
+      //   IntArrayList repr = vgroup.get(0);
+      //   vgroupRepr.add(repr);
+      //   Pattern newPattern = pattern.copy();
+      //   newPattern.updateExplorationPlan();
+      //   newPattern.updateSymmetryBreaker(repr);
+
+      //   ObjArrayList<IntIntMap> mapping = new ObjArrayList<>(vgroup.size());
+      //   IntIntMap ordMap = IntIntMapPool.instance().createObject();
+      //   for (int i = 0; i < repr.size(); ++i) ordMap.put(repr.get(i), repr.get(i));
+      //   mapping.add(ordMap);
+
+      //   for (int i = 1; i < vgroup.size(); ++i) {
+      //      IntArrayList last = vgroup.get(i - 1);
+      //      IntArrayList curr = vgroup.get(i);
+      //      ordMap = IntIntMapPool.instance().createObject();
+      //      for (int j = 0; j < last.size(); ++j) ordMap.put(last.get(j), curr.get(j));
+      //      mapping.add(ordMap);
+      //   }
+
+      //   vgroupPatterns.add(newPattern);
+      //   vgroupMappings.add(mapping);
+      //}
+
+      //for (int i = 0; i < vgroupPatterns.size(); ++i) {
+      //   Pattern p = vgroupPatterns.get(i);
+      //   System.out.println(vgroupRepr.get(i) + " @@ " + p + " @@ " +
+      //           p.explorationPlan() + "\n\t" +
+      //           p.vsymmetryBreakerLowerBound() + " @@ " + p.vsymmetryBreakerUpperBound() +
+      //           " -> " + vgroupMappings.get(i));
+      //}
+
+   }
+
+   /**
+    * Add a vertex and its edges to *pattern*, returning the new pattern
+    *
+    * @param pattern the existing pattern
+    * @param sources the edge sources representing edges with the new vertex
+    * @return new pattern
+    */
+   public static Pattern addVertex(Pattern pattern, int... sources) {
+      Configuration config = pattern.getConfig();
+      MainGraph graph = config.getMainGraph();
+      int numVertices = pattern.getNumberOfVertices();
+
+      graph.addVertex(numVertices);
+      for (int src : sources) {
+         if (src >= numVertices) {
+            throw new RuntimeException("Vertex source does not exists in pattern with " + numVertices + " vertices");
+         }
+         graph.addEdge(src, numVertices, graph.numEdges());
+      }
+
+      VertexInducedSubgraph subgraph = (VertexInducedSubgraph) config.createSubgraph();
+      for (int u = 0; u < graph.numVertices(); ++u) subgraph.addWord(u);
+
+      return subgraph.getPattern();
    }
 }

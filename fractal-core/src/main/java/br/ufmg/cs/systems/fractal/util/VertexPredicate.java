@@ -1,19 +1,17 @@
 package br.ufmg.cs.systems.fractal.util;
 
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import com.koloboke.function.IntIntPredicate;
 import org.apache.hadoop.io.Writable;
-import sun.applet.Main;
 
 import java.io.*;
 import java.util.function.IntPredicate;
 
-public class EdgePredicate implements IntPredicate, Writable, Externalizable {
-   private int edgeLabel;
+public class VertexPredicate implements IntPredicate, Writable, Externalizable {
    private MainGraph graph;
+   private int vertexLabel = 1;
 
-   public void setLabel(int edgeLabel) {
-      this.edgeLabel = edgeLabel;
+   public void setLabel(int vertexLabel) {
+      this.vertexLabel = vertexLabel;
    }
 
    public void setGraph(MainGraph graph) {
@@ -21,18 +19,18 @@ public class EdgePredicate implements IntPredicate, Writable, Externalizable {
    }
 
    @Override
-   public boolean test(int e) {
-      return graph.edgeLabel(e) == edgeLabel;
+   public boolean test(int u) {
+      return graph.vertexLabel(u) == vertexLabel;
    }
 
    @Override
    public void write(DataOutput out) throws IOException {
-      out.writeInt(edgeLabel);
+      out.writeInt(vertexLabel);
    }
 
    @Override
    public void readFields(DataInput in) throws IOException {
-      edgeLabel = in.readInt();
+      vertexLabel = in.readInt();
    }
 
    @Override
@@ -47,7 +45,6 @@ public class EdgePredicate implements IntPredicate, Writable, Externalizable {
 
    @Override
    public String toString() {
-      return "epred{" + edgeLabel + "}";
+      return "vpred{" + vertexLabel + "}";
    }
 }
-

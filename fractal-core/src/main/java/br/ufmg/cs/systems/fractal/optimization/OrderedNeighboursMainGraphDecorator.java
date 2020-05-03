@@ -7,6 +7,7 @@ import br.ufmg.cs.systems.fractal.graph.VertexNeighbourhood;
 import br.ufmg.cs.systems.fractal.util.EdgePredicates;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.function.IntIntConsumer;
 
@@ -131,18 +132,18 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
 
     }
 
-    @Override
+   @Override
+   public IntArrayListView neighborhoodVertices(int u) {
+      return null;
+   }
+
+   @Override
     public void neighborhoodTraversalEdgeRange(int u, int lowerBound, IntIntConsumer consumer) {
 
     }
 
    @Override
-    public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound, IntConsumer consumer, IntPredicate vertexPredicate, EdgePredicates edgePredicates) {
-
-    }
-
-   @Override
-   public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound, IntConsumer consumer) {
+   public void neighborhoodTraversal(IntArrayList intersection, IntArrayList difference, int vertexLowerBound, int vertexUpperBound, IntConsumer consumer, IntPredicate vertexPredicate, EdgePredicates edgePredicates) {
 
    }
 

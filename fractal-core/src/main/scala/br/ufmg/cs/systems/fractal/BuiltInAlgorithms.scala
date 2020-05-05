@@ -29,6 +29,24 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
         (e,c,v) => { v.set(1); v },
         (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
   }
+  
+  /**
+    * Approximate motifs counting
+    * @return Fractoid with the initial state for motifs
+    */
+  def motifs(fraction: Double): Fractoid[VertexInducedSubgraph] = {
+    import br.ufmg.cs.systems.fractal.pattern.Pattern
+    import org.apache.hadoop.io.LongWritable
+
+    val AGG_MOTIFS = "motifs"
+    self.svfractoid(fraction).
+      expand(1).
+      aggregate [Pattern,LongWritable] (
+        AGG_MOTIFS,
+        (e,c,k) => { e.getPattern },
+        (e,c,v) => { v.set(1); v },
+        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
+  }
 
   /**
     * All-cliques listing.

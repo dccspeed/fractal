@@ -6,6 +6,7 @@ import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.graph.Vertex;
 import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgePool;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
+import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.IntCollectionAddConsumer;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
@@ -1018,6 +1019,7 @@ public abstract class BasicPattern implements Pattern {
 
       if (explorationPlan != null) {
          dataOutput.writeBoolean(true);
+         dataOutput.writeUTF(explorationPlan.getClass().getTypeName());
          explorationPlan.write(dataOutput);
       } else {
          dataOutput.writeBoolean(false);
@@ -1075,7 +1077,15 @@ public abstract class BasicPattern implements Pattern {
 
       boolean hasExplorationPlan = dataInput.readBoolean();
       if (hasExplorationPlan) {
-         explorationPlan = configuration.createExplorationPlan();
+         //explorationPlan = configuration.createExplorationPlan();
+         //explorationPlan = new PatternExplorationPlanMCVC();
+         try {
+            explorationPlan = ReflectionUtils.newInstance(
+                    (Class<? extends PatternExplorationPlan>) Class.forName(dataInput.readUTF())
+            );
+         } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+         }
          explorationPlan.readFields(dataInput);
       }
    }
@@ -1083,20 +1093,6 @@ public abstract class BasicPattern implements Pattern {
    @Override
    public PatternExplorationPlan explorationPlan() {
       return explorationPlan;
-   }
-
-   @Override
-   public void updateWithNaiveExplorationPlan() {
-      explorationPlan = new PatternExplorationPlan();
-      PatternUtils.increasingPositions(this);
-      explorationPlan.updateWithNaivePlan(this);
-   }
-
-   @Override
-   public int updateWithMCVCExplorationPlan() {
-      explorationPlan = new PatternExplorationPlanMCVC();
-      explorationPlan.update(this);
-      return 0;
    }
 
    @Override

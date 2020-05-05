@@ -182,12 +182,14 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
     val enumerationStart = System.currentTimeMillis
 
     val _aggAccums = aggAccums
+    validSubgraphsAccum = sc.longAccumulator
 
     val execEngines = getExecutionEngines (
       superstepRDD = stepRDD,
       superstep = step,
       configBc = configBc,
       aggAccums = _aggAccums,
+      validSubgraphsAccum,
       previousAggregationsBc = previousAggregationsBc)
 
     execEngines.persist(MEMORY_ONLY_SER)
@@ -234,6 +236,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
     aggAccums.foreach { case (name, accum) =>
       logInfo (s"Accumulator[${step}][${name}]: ${accum.value}")
     }
+    logInfo (s"Accumulator[valid_subgraphs]: ${validSubgraphsAccum.value}")
 
     // master will send poison pills to all executor actors of this step
     masterActorRef ! Reset
@@ -258,6 +261,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
       superstep: Int,
       configBc: Broadcast[SparkConfiguration[E]],
       aggAccums: Map[String,LongAccumulator],
+      validSubgraphsAccum: LongAccumulator,
       previousAggregationsBc: Broadcast[_]): RDD[SparkEngine[E]] = {
 
     val execEngines = superstepRDD.mapPartitionsWithIndex { (idx, cacheIter) =>
@@ -268,6 +272,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
         partitionId = idx,
         step = superstep,
         accums = aggAccums,
+        validSubgraphsAccum = validSubgraphsAccum,
         previousAggregationsBc = previousAggregationsBc,
         configurationId = configBc.value.getId
       )

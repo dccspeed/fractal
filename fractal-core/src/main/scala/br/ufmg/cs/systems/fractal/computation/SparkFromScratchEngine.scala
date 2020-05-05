@@ -17,6 +17,7 @@ case class SparkFromScratchEngine[E <: Subgraph](
                                                   partitionId: Int,
                                                   step: Int,
                                                   accums: Map[String,LongAccumulator],
+                                                  validSubgraphsAccum: LongAccumulator,
                                                   previousAggregationsBc: Broadcast[_],
                                                   configurationId: Int) extends SparkEngine[E] {
 

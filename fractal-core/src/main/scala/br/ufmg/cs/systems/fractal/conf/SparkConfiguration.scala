@@ -309,9 +309,6 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
       // enumerator class
       updateIfExists ("subgraph_enumerator", CONF_ENUMERATOR_CLASS)
 
-      // exploration plan class
-      updateIfExists ("exploration_plan_class", CONF_EXPLORATION_PLAN_CLASS)
-
       // input
       updateIfExists ("input_graph_class", CONF_MAINGRAPH_CLASS)
       updateIfExists ("input_graph_path", CONF_MAINGRAPH_PATH)
@@ -477,11 +474,6 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
       setPatternClass (
          getClass (CONF_PATTERN_CLASS, CONF_PATTERN_CLASS_DEFAULT).
             asInstanceOf[Class[_ <: Pattern]]
-      )
-
-      setExplorationPlanClass(
-         getClass (CONF_EXPLORATION_PLAN_CLASS, CONF_EXPLRORATION_PLAN_CLASS_DEFAULT).
-            asInstanceOf[Class[_ <: PatternExplorationPlan]]
       )
 
       setSubgraphEnumClass(

@@ -88,9 +88,6 @@ public class Configuration<O extends Subgraph> implements Serializable {
     public static final String CONF_PATTERN_CLASS = "fractal.pattern.class";
     public static final String CONF_PATTERN_CLASS_DEFAULT = "br.ufmg.cs.systems.fractal.pattern.JBlissPattern";
 
-    public static final String CONF_EXPLORATION_PLAN_CLASS = "fractal.exploration.plan.class";
-    public static final String CONF_EXPLRORATION_PLAN_CLASS_DEFAULT = "br.ufmg.cs.systems.fractal.pattern.PatternExplorationPlan";
-
     public static final String CONF_ENUMERATOR_CLASS = "fractal.enumerator.class";
     public static final String CONF_ENUMERATOR_CLASS_DEFAULT = "br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator";
 
@@ -263,9 +260,6 @@ public class Configuration<O extends Subgraph> implements Serializable {
         patternClass = (Class<? extends Pattern>) getClass(CONF_PATTERN_CLASS,
               CONF_PATTERN_CLASS_DEFAULT);
 
-        explorationPlanClass = (Class<? extends PatternExplorationPlan>) getClass(CONF_EXPLORATION_PLAN_CLASS,
-                CONF_EXPLORATION_PLAN_CLASS);
-
         // create (empty) graph
         setMainGraph(createGraph());
 
@@ -375,27 +369,14 @@ public class Configuration<O extends Subgraph> implements Serializable {
         return patternClass;
     }
 
-    public Class<? extends PatternExplorationPlan> getExplorationPlanClass() {
-        return explorationPlanClass;
-    }
-
     public void setPatternClass(Class<? extends Pattern> patternClass) {
        this.patternClass = patternClass;
-    }
-
-    public void setExplorationPlanClass(Class<? extends PatternExplorationPlan> explorationPlanClass) {
-        this.explorationPlanClass = explorationPlanClass;
     }
 
     public Pattern createPattern() {
        Pattern pattern = ReflectionUtils.newInstance(getPatternClass());
        pattern.init(this);
        return pattern;
-    }
-
-    public PatternExplorationPlan createExplorationPlan() {
-        PatternExplorationPlan explorationPlan = ReflectionUtils.newInstance(getExplorationPlanClass());
-        return explorationPlan;
     }
 
     public void setMainGraphClass(Class<? extends MainGraph> graphClass) {

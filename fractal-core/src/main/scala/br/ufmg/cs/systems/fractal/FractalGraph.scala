@@ -225,13 +225,14 @@ class FractalGraph(
                  process: (PatternInducedSubgraph,
                 Computation[PatternInducedSubgraph]) => Unit,
                  pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
-    logInfo(s"Pattern before increasing positions ${pattern} symmetryBreaker=${pattern.vsymmetryBreakerLowerBound()}")
-    if (pattern.explorationPlan().isEmpty) {
-      pattern.updateWithNaiveExplorationPlan()
+    val patternWithPlan = if (pattern.explorationPlan() == null) {
+      PatternExplorationPlan.apply(pattern).get(0)
+    } else {
+      pattern
     }
-    logInfo(s"Pattern after increasing positions ${pattern} symmetryBreaker=${pattern.vsymmetryBreakerLowerBound()}")
+    logInfo(s"PatternWithPlan ${patternWithPlan} plan=${patternWithPlan.explorationPlan()}")
     val config = new SparkConfiguration[PatternInducedSubgraph]
-    config.set ("pattern", pattern)
+    config.set ("pattern", patternWithPlan)
     config.set ("input_graph_path", path)
     config.set ("input_graph_local", local)
     config.set ("input_graph_class", graphClass)
@@ -259,14 +260,15 @@ class FractalGraph(
                  process: (PatternInducedSubgraph,
                 Computation[PatternInducedSubgraph]) => Unit,
                  pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
-    logInfo(s"Pattern before increasing positions ${pattern} symmetryBreaker=${pattern.vsymmetryBreakerLowerBound()}")
-    if (pattern.explorationPlan().isEmpty) {
-      pattern.updateWithNaiveExplorationPlan()
+    val patternWithPlan = if (pattern.explorationPlan() == null) {
+      PatternExplorationPlan.apply(pattern).get(0)
+    } else {
+      pattern
     }
-    logInfo(s"Pattern after increasing positions ${pattern} symmetryBreaker=${pattern.vsymmetryBreakerLowerBound()}")
+    logInfo(s"PatternWithPlan ${patternWithPlan} plan=${patternWithPlan.explorationPlan()}")
     val computation: Computation[PatternInducedSubgraph] =
       new VEComputationContainer(processOpt = Option(process),
-        patternOpt = Option(pattern), primitiveOpt = Option(Primitive.E))
+        patternOpt = Option(patternWithPlan), primitiveOpt = Option(Primitive.E))
     val config = new SparkConfiguration[PatternInducedSubgraph].
       withNewComputation (computation)
     config.set ("input_graph_path", path)

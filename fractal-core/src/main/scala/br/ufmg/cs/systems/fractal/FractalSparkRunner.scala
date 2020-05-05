@@ -283,41 +283,30 @@ class GQueryingMCVCApp(val fractalGraph: FractalGraph,
          subgraphPath, fractalGraph.fractalContext, "warn")
 
       val pattern = subgraph.asPattern
-      val newPatterns = PatternExplorationPlanMCVC.bestExecutions(pattern)
-      val newPatternsIter = newPatterns.iterator()
+      val partialResults = fractalGraph.gqueryinmcvc(pattern)
+      var numValidSubgraphs = 0L
+      var totalElapsed = 0L
 
-      logInfo(s"OriginalPattern ${pattern}")
+      partialResults.foreach { gquerying =>
 
-      while (newPatternsIter.hasNext) {
-         val nextPattern = newPatternsIter.next()
-         val explorationPlanMCVC = nextPattern.explorationPlan().asInstanceOf[PatternExplorationPlanMCVC]
-         val mcvcSize = explorationPlanMCVC.mcvcSize()
-
-         logInfo(s"Submission pattern=${nextPattern} sbLower=${nextPattern.vsymmetryBreakerLowerBound()}" +
-         s" sbUpper=${nextPattern.vsymmetryBreakerUpperBound()} plan=${explorationPlanMCVC}")
-
-         val gquerying = fractalGraph.gquerying(nextPattern).
-            set ("comm_strategy", commStrategy).
-            set ("num_partitions", numPartitions).
-            explore(mcvcSize - 1)
-
-         val validSubgraphsAccum = fractalGraph.fractalContext.sparkContext.longAccumulator
-
-         val callback = (s: PatternInducedSubgraph, c: Computation[PatternInducedSubgraph]) => {
-            val validSubgraphs = s.completeMatch(c.getPattern)
-            validSubgraphsAccum.add(validSubgraphs)
+         val (numValidSubgraphs, elapsed) = FractalSparkRunner.time {
+            gquerying.
+               set("comm_strategy", commStrategy).
+               set("num_partitions", numPartitions).
+               compute()
          }
 
-         val (accums, elapsed) = FractalSparkRunner.time {
-            gquerying.compute(callback)
-         }
-
-         logInfo(s"GQueryingMCVCApp comm=${commStrategy}" +
+         totalElapsed += elapsed
+         logInfo(s"GQueryingMCVCAppPartial comm=${commStrategy}" +
             s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
-            s" graph=${fractalGraph} pattern=${nextPattern}" +
-            s" counting=${validSubgraphsAccum.value} elapsed=${elapsed}"
-         )
+            s" graph=${fractalGraph} pattern=${pattern}" +
+            s" counting=${numValidSubgraphs} elapsed=${elapsed}")
       }
+
+      logInfo(s"GQueryingMCVCApp comm=${commStrategy}" +
+         s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
+         s" graph=${fractalGraph} pattern=${pattern}" +
+         s" counting=${numValidSubgraphs} elapsed=${totalElapsed}")
    }
 }
 

@@ -6,7 +6,6 @@ import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
-import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntIntMapPool;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.set.hash.HashObjSet;
@@ -230,47 +229,14 @@ public class PatternUtils {
       IntIntMapPool.instance().reclaimObject(labeling);
    }
 
-   /**
-    * Generates a minimum connected vertex cover for the pattern given. Note that this is a brute-force algorithm,
-    * but ok for using with small patterns
-    * @param pattern existing pattern
-    * @return an array with a minimum connected vertex cover
-    */
-   public static ObjArrayList<IntArrayList> minimumConnectedVertexCover(Pattern pattern) {
-      ObjArrayList<IntArrayList> minCovers = new ObjArrayList<>();
-      IntArrayList cover = IntArrayListPool.instance().createObject();
-      for (int numCoverVertices = 1; numCoverVertices < pattern.getNumberOfVertices(); numCoverVertices++) {
-         Iterator<IntArrayList> covers = pattern.getVertices().combinations(numCoverVertices);
-         while (covers.hasNext()) {
-            IntArrayList coverCandidate = covers.next();
-
-            // check if this is a valid connected cover
-            boolean validCover = true;
-            for (PatternEdge pedge : pattern.getEdges()) {
-               if (!coverCandidate.contains(pedge.getSrcPos()) && !coverCandidate.contains(pedge.getDestPos())) {
-                  validCover = false;
-                  break;
-               }
-            }
-
-            if (validCover && pattern.connectedValidOrdering(coverCandidate)) {
-               minCovers.add(coverCandidate);
-            }
-         }
-         if (minCovers.size() > 0) break;
-      }
-      return minCovers;
-   }
-
    public static void main(String[] args) {
       Pattern pattern = singleVertexPattern();
-      pattern.getConfig().setExplorationPlanClass(PatternExplorationPlanMCVC.class);
 
       // dual-sim example
-      pattern = addVertex(pattern, 0);
-      pattern = addVertex(pattern, 1);
-      pattern = addVertex(pattern, 0, 2);
-      pattern = addVertex(pattern, 0, 1);
+      //pattern = addVertex(pattern, 0);
+      //pattern = addVertex(pattern, 1);
+      //pattern = addVertex(pattern, 0, 2);
+      //pattern = addVertex(pattern, 0, 1);
 
       // square
       //pattern = addVertex(pattern, 0);
@@ -281,6 +247,9 @@ public class PatternUtils {
       //pattern = addVertex(pattern, 0);
       //pattern = addVertex(pattern, 0, 1);
       //pattern = addVertex(pattern, 0, 1);
+      pattern = addVertex(pattern, 0);
+      pattern = addVertex(pattern, 0, 1);
+      pattern = addVertex(pattern, 0, 2);
 
       // house with missing wall
       //pattern = addVertex(pattern, 0);
@@ -294,12 +263,16 @@ public class PatternUtils {
 
       //pattern.setInduced(true);
 
+      System.out.println(pattern +
+              " lower=" + pattern.vsymmetryBreakerLowerBound() +
+              " upper=" + pattern.vsymmetryBreakerUpperBound());
+
       ObjArrayList<ObjArrayList<Pattern>> allPlans = PatternExplorationPlanMCVC.allExecutions(pattern);
       for (ObjArrayList<Pattern> plan : allPlans) {
          System.out.println("plan size " + plan.size());
       }
 
-      ObjArrayList<Pattern> patterns = PatternExplorationPlanMCVC.bestExecutions(pattern);
+      ObjArrayList<Pattern> patterns = PatternExplorationPlanMCVC.apply(pattern);
 
       for (int i = 0; i < patterns.size(); ++i) {
          Pattern newPattern = patterns.get(i);

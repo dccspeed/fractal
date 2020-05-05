@@ -8,7 +8,6 @@ import br.ufmg.cs.systems.fractal.util.pool.IntIntMapPool;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.ObjObjMap;
 import com.koloboke.collect.map.hash.HashObjObjMaps;
-import org.apache.hadoop.yarn.webapp.hamlet.Hamlet;
 import org.apache.log4j.Logger;
 
 import java.io.*;
@@ -27,7 +26,7 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
    @Override
    public void init(Pattern pattern) {
       super.init(pattern);
-      pattern.updateSymmetryBreaker(vgroupOrderings.get(0));
+      //pattern.updateSymmetryBreaker(vgroupOrderings.get(0));
    }
 
    @Override
@@ -36,8 +35,19 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
       vgroupOrderings.clear();
    }
 
+   @Override
    public int mcvcSize() {
       return vgroupOrderings.get(0).size();
+   }
+
+   @Override
+   public int numOrderings() {
+      return vgroupOrderings.size();
+   }
+
+   @Override
+   public IntArrayList ordering(int i) {
+      return vgroupOrderings.getUnchecked(i);
    }
 
    private static void relabelMCVC(Pattern pattern, IntArrayList mcvc) {
@@ -125,6 +135,39 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
       return numCoverEdges;
    }
 
+   /**
+    * Generates a minimum connected vertex cover for the pattern given. Note that this is a brute-force algorithm,
+    * but ok for using with small patterns
+    * @param pattern existing pattern
+    * @return an array with a minimum connected vertex cover
+    */
+   public static ObjArrayList<IntArrayList> minimumConnectedVertexCover(Pattern pattern) {
+      ObjArrayList<IntArrayList> minCovers = new ObjArrayList<>();
+      for (int numCoverVertices = 1; numCoverVertices < pattern.getNumberOfVertices(); numCoverVertices++) {
+         Iterator<IntArrayList> covers = pattern.getVertices().combinations(numCoverVertices);
+         while (covers.hasNext()) {
+            IntArrayList coverCandidate = covers.next();
+
+            // check if this is a valid connected cover
+            boolean validCover = true;
+            for (PatternEdge pedge : pattern.getEdges()) {
+               if (!coverCandidate.contains(pedge.getSrcPos()) && !coverCandidate.contains(pedge.getDestPos())) {
+                  validCover = false;
+                  break;
+               }
+            }
+
+            if (validCover && pattern.connectedValidOrdering(coverCandidate)) {
+               minCovers.add(new IntArrayList(coverCandidate));
+            }
+         }
+         if (minCovers.size() > 0) {
+            break;
+         }
+      }
+      return minCovers;
+   }
+
    public static ObjArrayList<Pattern> worstExecutions(Pattern pattern) {
       ObjArrayList<Pattern> worstPlan = null;
       for (ObjArrayList<Pattern> plan : allExecutions(pattern)) {
@@ -136,7 +179,7 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
       return worstPlan;
    }
 
-   public static ObjArrayList<Pattern> bestExecutions(Pattern pattern) {
+   public static ObjArrayList<Pattern> apply(Pattern pattern) {
       ObjArrayList<Pattern> bestPlan = null;
       for (ObjArrayList<Pattern> plan : allExecutions(pattern)) {
          if (bestPlan == null || bestPlan.size() > plan.size()) {
@@ -149,7 +192,7 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
 
    public static ObjArrayList<ObjArrayList<Pattern>> allExecutions(Pattern pattern) {
       ObjArrayList<ObjArrayList<Pattern>> executions = new ObjArrayList<>();
-      ObjArrayList<IntArrayList> mcvcs = PatternUtils.minimumConnectedVertexCover(pattern);
+      ObjArrayList<IntArrayList> mcvcs = minimumConnectedVertexCover(pattern);
       for (int i = 0; i < mcvcs.size(); ++i) {
          executions.addAll(allExecutionsWithCover(pattern, mcvcs.get(i)));
       }
@@ -157,7 +200,7 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
       return executions;
    }
 
-   public static ObjArrayList<ObjArrayList<Pattern>> allExecutionsWithCover(Pattern pattern, IntArrayList mcvc) {
+   private static ObjArrayList<ObjArrayList<Pattern>> allExecutionsWithCover(Pattern pattern, IntArrayList mcvc) {
       ObjArrayList<ObjArrayList<Pattern>> executions = new ObjArrayList<>();
       Iterator<IntArrayList> mcvcIterator = mcvc.permutations();
 
@@ -170,7 +213,7 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
       return executions;
    }
 
-   public static ObjArrayList<Pattern> executions(Pattern pattern, IntArrayList mcvc) {
+   private static ObjArrayList<Pattern> executions(Pattern pattern, IntArrayList mcvc) {
       pattern.setExplorationPlan(new PatternExplorationPlanMCVC());
       int numCoverEdges = updateInitalPlan(pattern, mcvc);
 
@@ -200,7 +243,7 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
          updateInitalPlan(newPattern, mcvc);
          explorationPlanMCVC.vgroupOrderings.clear();
          explorationPlanMCVC.vgroupOrderings.addAll(vgroupOrderings);
-         explorationPlanMCVC.init(newPattern);
+         newPattern.updateSymmetryBreaker(explorationPlanMCVC.vgroupOrderings.get(0));
          newPatterns.add(newPattern);
       }
 

@@ -24,6 +24,7 @@ trait SparkEngine [E <: Subgraph]
   val partitionId: Int
   val step: Int
   val accums: Map[String,LongAccumulator]
+  val validSubgraphsAccum: LongAccumulator
   val previousAggregationsBc: Broadcast[_]
   def configurationId: Int
 
@@ -275,6 +276,10 @@ trait SparkEngine [E <: Subgraph]
     if (accums.contains(name)) {
       accums(name).add(value)
     }
+  }
+
+  override def addValidSubgraphs(n: Long) = {
+    validSubgraphsAccum.add(n)
   }
 
   // output

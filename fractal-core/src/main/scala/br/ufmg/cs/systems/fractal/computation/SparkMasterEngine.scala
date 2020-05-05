@@ -63,6 +63,8 @@ trait SparkMasterEngine [E <: Subgraph]
 
   var aggAccums: Map[String,LongAccumulator] = _
 
+  var validSubgraphsAccum: LongAccumulator = _
+
   var previousAggregationsBc: Broadcast[_] = _
 
   var aggregations

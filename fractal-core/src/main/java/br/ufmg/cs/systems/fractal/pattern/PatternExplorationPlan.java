@@ -100,6 +100,29 @@ public class PatternExplorationPlan implements Externalizable, Writable {
       updateWithNaivePlan(pattern);
    }
 
+   public int mcvcSize() {
+      return -1;
+   }
+
+   public int numOrderings() {
+      return -1;
+   }
+
+   public IntArrayList ordering(int i) {
+      return null;
+   }
+
+   public static ObjArrayList<Pattern> apply(Pattern pattern) {
+      PatternExplorationPlan explorationPlan = new PatternExplorationPlan();
+      Pattern newPattern = pattern.copy();
+      PatternUtils.increasingPositions(newPattern);
+      explorationPlan.updateWithNaivePlan(newPattern);
+      newPattern.setExplorationPlan(explorationPlan);
+      ObjArrayList<Pattern> patterns = new ObjArrayList<>();
+      patterns.add(newPattern);
+      return patterns;
+   }
+
    @Override
    public String toString() {
       return "ExplorationPlan{intersections=" + intersectionIdxs +

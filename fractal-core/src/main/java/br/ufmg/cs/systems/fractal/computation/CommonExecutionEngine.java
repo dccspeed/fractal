@@ -22,7 +22,9 @@ public interface CommonExecutionEngine<O extends Subgraph> {
     void aggregate(String name, LongWritable value);
     
     void aggregate(String name, long value);
-    
+
+    void addValidSubgraphs(long n);
+
     void output(Subgraph subgraph);
 
 }

@@ -123,11 +123,16 @@ case class Fractoid [S <: Subgraph : ClassTag](
 
   def numValidSubgraphs(): Long = {
     val prefix = SparkFromScratchMasterEngine.VALID_SUBGRAPHS
-    compute().
-      filter {case (k,v) => k.contains(prefix)}.
-      map {case (k,v) => (k.stripPrefix(s"${prefix}_").toInt, v)}.
-      toArray.
-      sortBy {case (k,v) => k}.last._2
+    val accumsMap = compute()
+    if (masterEngine.validSubgraphsAccum.value > 0) {
+      masterEngine.validSubgraphsAccum.value
+    } else  {
+      accumsMap.
+         filter {case (k,v) => k.contains(prefix)}.
+         map {case (k,v) => (k.stripPrefix(s"${prefix}_").toInt, v)}.
+         toArray.
+         sortBy {case (k,v) => k}.last._2
+    }
   }
 
   /**
@@ -453,6 +458,15 @@ case class Fractoid [S <: Subgraph : ClassTag](
   }
 
   /****** Fractal Scala API: High Level API ******/
+
+  /**
+   * Adds a callback to this workflow
+   * @param callback function to be applied to each valid subgraph
+   * @return the new fractoid
+   */
+  def process(callback: (S,Computation[S]) => Unit): Fractoid[S] = {
+    withProcessInc(callback)
+  }
 
   /**
    * Perform *n* expansion iterations

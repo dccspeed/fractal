@@ -4,7 +4,7 @@ import br.ufmg.cs.systems.fractal.annotation.Experimental
 import br.ufmg.cs.systems.fractal.computation.{Computation, SubgraphEnumerator}
 import br.ufmg.cs.systems.fractal.gmlib.clique.KClistEnumerator
 import br.ufmg.cs.systems.fractal.graph.MainGraph
-import br.ufmg.cs.systems.fractal.pattern.{BasicPattern, Pattern}
+import br.ufmg.cs.systems.fractal.pattern.{BasicPattern, Pattern, PatternExplorationPlanMCVC}
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
 import br.ufmg.cs.systems.fractal.util.{Logging, Utils}
@@ -124,9 +124,41 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
   }
 
   /**
-   * subgraph Querying
-   * @param subgraph query graph
-   * @return Fractoid with the initial state for subraph querying
+   * Match pattern using Minimum Connected Vertex Cover (MCVC) strategy
+   * TODO: these fractoids returned use a simple callback as last process steps and thus, it is not safe to grow this workflow
+   * @param pattern representing a query
+   * @return an array of fractoids with partial query results
+   */
+  def gqueryinmcvc(pattern: Pattern): Array[Fractoid[PatternInducedSubgraph]] = {
+    val newPatterns = PatternExplorationPlanMCVC.apply(pattern)
+    val partialResults = new Array[Fractoid[PatternInducedSubgraph]](newPatterns.size())
+
+    logInfo(s"OriginalPattern ${pattern}")
+
+    var i = 0
+    while (i < newPatterns.size()) {
+      val nextPattern = newPatterns.getUnchecked(i)
+      val explorationPlanMCVC = nextPattern.explorationPlan()
+      val mcvcSize = explorationPlanMCVC.mcvcSize()
+
+      logInfo(s"Submission pattern=${nextPattern} sbLower=${nextPattern.vsymmetryBreakerLowerBound()}" +
+         s" sbUpper=${nextPattern.vsymmetryBreakerUpperBound()} plan=${explorationPlanMCVC}")
+
+      val gquerying = this.gquerying(nextPattern).
+         explore(mcvcSize - 1).
+         process((s,c) => s.completeMatch(c, c.getPattern))
+
+      partialResults(i) = gquerying
+      i += 1
+    }
+
+    partialResults
+  }
+
+  /**
+   *
+   * @param qpattern
+   * @return
    */
   def gquerying(qpattern: Pattern): Fractoid[PatternInducedSubgraph] = {
     logInfo (s"Querying pattern ${qpattern} in ${this}.")

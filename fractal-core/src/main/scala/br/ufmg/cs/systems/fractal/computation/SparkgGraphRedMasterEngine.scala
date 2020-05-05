@@ -217,12 +217,14 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
     logInfo (s"Initialization took ${initElapsed} ms")
 
     val _aggAccums = aggAccums
+    validSubgraphsAccum = sc.longAccumulator
 
     val execEngines = getExecutionEngines (
       superstepRDD = stepRDD,
       superstep = step,
       configBc = configBc,
       aggAccums = _aggAccums,
+      validSugraphsAccum = validSubgraphsAccum,
       previousAggregationsBc = previousAggregationsBc)
 
     execEngines.persist(MEMORY_ONLY_SER)
@@ -314,6 +316,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
       superstep: Int,
       configBc: Broadcast[SparkConfiguration[E]],
       aggAccums: Map[String,LongAccumulator],
+      validSugraphsAccum: LongAccumulator,
       previousAggregationsBc: Broadcast[_]): RDD[SparkEngine[E]] = {
 
     val execEngines = superstepRDD.mapPartitionsWithIndex { (idx, cacheIter) =>
@@ -343,6 +346,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
         partitionId = idx,
         step = superstep,
         accums = aggAccums,
+        validSugraphsAccum,
         previousAggregationsBc = previousAggregationsBc,
         configurationId = configBc.value.getId
       )

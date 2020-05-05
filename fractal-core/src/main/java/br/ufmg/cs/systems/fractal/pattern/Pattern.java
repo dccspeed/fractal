@@ -21,11 +21,7 @@ public interface Pattern extends Writable, Externalizable {
 
    void setExplorationPlan(PatternExplorationPlan explorationPlan);
 
-   int updateWithMCVCExplorationPlan();
-
-    void updateWithNaiveExplorationPlan();
-
-    void reset();
+   void reset();
 
     void setSubgraph(Subgraph subgraph);
 

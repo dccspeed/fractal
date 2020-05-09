@@ -4,7 +4,7 @@ import java.util.function.{IntConsumer, IntPredicate}
 
 import br.ufmg.cs.systems.fractal.computation.Computation
 import br.ufmg.cs.systems.fractal.graph.MainGraph
-import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlanMCVC, PatternUtils}
+import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlanMCVCVgroups, PatternUtils}
 import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph
 import br.ufmg.cs.systems.fractal.util.{EdgePredicate, EdgePredicates, Logging}
 import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjArrayList}
@@ -53,6 +53,22 @@ class VSubgraphsApp(val fractalGraph: FractalGraph,
                     explorationSteps: Int) extends FractalSparkApp {
    def execute: Unit = {
       val vsubgraphsRes = fractalGraph.vfractoidAndExpand.
+         set ("comm_strategy", commStrategy).
+         set ("num_partitions", numPartitions).
+         explore (explorationSteps)
+
+      vsubgraphsRes.compute()
+   }
+}
+
+class VSubgraphsAppSampling(val fractalGraph: FractalGraph,
+                            commStrategy: String,
+                            numPartitions: Int,
+                            explorationSteps: Int,
+                            fraction: Double) extends FractalSparkApp {
+   def execute: Unit = {
+      val vsubgraphsRes = fractalGraph.svfractoid(fraction).
+         expand(1).
          set ("comm_strategy", commStrategy).
          set ("num_partitions", numPartitions).
          explore (explorationSteps)
@@ -120,6 +136,87 @@ class MotifsAppPatternFirst(val fractalGraph: FractalGraph,
          )
       }
 
+   }
+}
+
+class MotifsAppPatternFirstLabeled(val fractalGraph: FractalGraph,
+                            commStrategy: String,
+                            numPartitions: Int,
+                            explorationSteps: Int) extends FractalSparkApp {
+   def execute: Unit = {
+
+      val (patterns, elapsed) = FractalSparkRunner.time {
+         var patterns = PatternUtils.singleVertexPatternSet();
+         logInfo(s"PatternSet ${patterns}")
+         for (i <- 0 until explorationSteps) {
+            patterns = PatternUtils.extendByVertex(patterns)
+            logInfo(s"PatternSetExtension[${i + 1}] ${patterns}")
+         }
+         patterns
+      }
+
+      logInfo(s"CanonicalPatterns numVertices=${explorationSteps + 1}" +
+         s" numPatterns=${patterns.size()}" +
+         s" elapsed=${elapsed}")
+
+      var patternsCounts = scala.collection.mutable.Map.empty[Pattern,LongWritable]
+      var i = 0
+
+      val cur = patterns.cursor()
+      while (cur.moveNext()) {
+         val pattern = cur.elem()
+
+         /**
+          * Motifs counting consider induced subgraphs, unlabeled at first
+          */
+         pattern.setInduced(true)
+         pattern.setVertexLabeled(false)
+
+         val gqueryingRes = fractalGraph.gquerying(pattern).
+            aggregate[Pattern,LongWritable](
+               "motifs",
+               (s,c,k) => {s.labeledPattern(c.getPattern)},
+               (s,c,v) => {v.set(1); v},
+               (v1,v2) => {v1.set(v1.get() + v2.get()); v1}
+            ).
+            set ("comm_strategy", commStrategy).
+            set ("num_partitions", numPartitions).
+            explore(explorationSteps)
+
+         val (motifsCounts, elapsed) = FractalSparkRunner.time {
+            gqueryingRes.aggregationMap[Pattern,LongWritable]("motifs")
+         }
+
+         patternsCounts = patternsCounts ++ motifsCounts
+         i += 1
+      }
+
+      for ((p,c) <- patternsCounts) {
+         logInfo(s"${p}: ${c}")
+      }
+   }
+}
+
+class MotifsAppSampling(val fractalGraph: FractalGraph,
+                        commStrategy: String,
+                        numPartitions: Int,
+                        explorationSteps: Int,
+                        fraction: Double) extends FractalSparkApp {
+   def execute: Unit = {
+      val motifsRes = fractalGraph.motifs(fraction).
+         set ("comm_strategy", commStrategy).
+         set ("num_partitions", numPartitions).
+         explore(explorationSteps)
+
+      val (accums, elapsed) = FractalSparkRunner.time {
+         motifsRes.compute()
+      }
+
+      logInfo (s"MotifsAppSampling comm=${commStrategy}" +
+         s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
+         s" graph=${fractalGraph} " +
+         s" numValidSubgraphs=${motifsRes.numValidSubgraphs()} elapsed=${elapsed}"
+      )
    }
 }
 
@@ -283,7 +380,7 @@ class GQueryingMCVCApp(val fractalGraph: FractalGraph,
          subgraphPath, fractalGraph.fractalContext, "warn")
 
       val pattern = subgraph.asPattern
-      val partialResults = fractalGraph.gqueryinmcvc(pattern)
+      val partialResults = fractalGraph.gqueryingmcvc(pattern)
       var numValidSubgraphs = 0L
       var totalElapsed = 0L
 
@@ -310,6 +407,33 @@ class GQueryingMCVCApp(val fractalGraph: FractalGraph,
    }
 }
 
+class GQueryingAppSampling(val fractalGraph: FractalGraph,
+                           commStrategy: String,
+                           numPartitions: Int,
+                           explorationSteps: Int,
+                           subgraphPath: String,
+                           fraction: Double) extends FractalSparkApp {
+   def execute: Unit = {
+      val subgraph = new FractalGraph(
+         subgraphPath, fractalGraph.fractalContext, "warn")
+
+      val gquerying = fractalGraph.gquerying(subgraph.asPattern, fraction).
+         set ("comm_strategy", commStrategy).
+         set ("num_partitions", numPartitions).
+         explore(explorationSteps)
+
+      val (accums, elapsed) = FractalSparkRunner.time {
+         gquerying.compute()
+      }
+
+      logInfo(s"GQueryingAppSampling comm=${commStrategy}" +
+         s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
+         s" graph=${fractalGraph} subgraph=${subgraph}" +
+         s" counting=${gquerying.numValidSubgraphs()} elapsed=${elapsed}"
+      )
+   }
+}
+
 class GQueryingApp(val fractalGraph: FractalGraph,
                    commStrategy: String,
                    numPartitions: Int,
@@ -319,7 +443,7 @@ class GQueryingApp(val fractalGraph: FractalGraph,
       val subgraph = new FractalGraph(
          subgraphPath, fractalGraph.fractalContext, "warn")
 
-      val gquerying = fractalGraph.gquerying(subgraph).
+      val gquerying = fractalGraph.gquerying(subgraph.asPattern).
          set ("comm_strategy", commStrategy).
          set ("num_partitions", numPartitions).
          explore(explorationSteps)
@@ -394,12 +518,25 @@ object FractalSparkRunner {
          case "vsubgraphs" =>
             new VSubgraphsApp(fractalGraph, commStrategy,
                numPartitions, explorationSteps)
+         case "vsubgraphssampling" =>
+            i += 1
+            val fraction = args(i).toDouble
+            new VSubgraphsAppSampling(fractalGraph, commStrategy,
+               numPartitions, explorationSteps, fraction)
          case "motifspf" =>
             new MotifsAppPatternFirst(fractalGraph, commStrategy,
+               numPartitions, explorationSteps)
+         case "motifspflabeled" =>
+            new MotifsAppPatternFirstLabeled(fractalGraph, commStrategy,
                numPartitions, explorationSteps)
          case "motifs" =>
             new MotifsApp(fractalGraph, commStrategy,
                numPartitions, explorationSteps)
+         case "motifssampling" =>
+            i += 1
+            val fraction = args(i).toDouble
+            new MotifsAppSampling(fractalGraph, commStrategy,
+               numPartitions, explorationSteps, fraction)
          case "cliques" =>
             new CliquesApp(fractalGraph, commStrategy,
                numPartitions, explorationSteps)
@@ -434,6 +571,13 @@ object FractalSparkRunner {
             val subgraphPath = args(i)
             new GQueryingApp(fractalGraph, commStrategy,
                numPartitions, explorationSteps, subgraphPath)
+         case "gqueryingsampling" =>
+            i += 1
+            val subgraphPath = args(i)
+            i += 1
+            val fraction = args(i).toDouble
+            new GQueryingAppSampling(fractalGraph, commStrategy,
+               numPartitions, explorationSteps, subgraphPath, fraction)
          case appName =>
             throw new RuntimeException(s"Unknown app: ${appName}")
       }

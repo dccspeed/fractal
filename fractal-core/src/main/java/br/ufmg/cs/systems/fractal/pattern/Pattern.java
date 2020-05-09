@@ -71,7 +71,11 @@ public interface Pattern extends Writable, Externalizable {
 
     void setInduced(boolean induced);
 
-    Configuration getConfig();
+   boolean vertexLabeled();
+
+   void setVertexLabeled(boolean vertexLabeled);
+
+   Configuration getConfig();
 
     String toOutputString();
    

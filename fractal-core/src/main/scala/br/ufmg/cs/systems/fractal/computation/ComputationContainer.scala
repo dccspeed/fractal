@@ -175,7 +175,9 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
   def clear(): ComputationContainer[E] = withNewFunctions (
     primitiveOpt = None,
     computationLabelOpt = None,
-    patternOpt = None,
+    // When creating an empty computation for pattern-induced fractoids, new
+    // containers lose this pattern.
+    //patternOpt = None,
     processOpt = Some((e,c) => {}),
     filterOpt = Some((e,c) => true),
     getPossibleExtensionsOpt = None,
@@ -194,10 +196,20 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
       processOpt.map(_ => "p").getOrElse("_"))
   }
 
+  def primitives(): Array[Primitive] = nextComputationOpt match {
+    case Some(c: ComputationContainer[E]) =>
+      Array(primitiveOpt.getOrElse(Primitive.None)) ++ c.primitives()
+    case Some(c) =>
+      throw new RuntimeException(s"Computation ${c} is not a container.")
+    case None =>
+      Array(primitiveOpt.getOrElse(Primitive.None))
+  }
+
   override def toString: String = {
     //s"${primitiveOpt.getOrElse(Primitive.None).name()}" +
     //s"${nextComputationOpt.map(c => c.toString).getOrElse("")}"
-    s" CC[${containerId}]" +
+    s"CC[${primitiveOpt.getOrElse(Primitive.None).name()}]" +
+    s"[${containerId}]" +
     s"[${computationLabel()}]" +
     s"(${computationRepr.mkString(",")})" +
     s"${nextComputationOpt.map(c => "::" + c.toString).getOrElse("")}"
@@ -547,6 +559,8 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
   override def nextComputation(): Computation[E] = _nextComputation
   
   override def getPattern(): Pattern = _pattern
+
+  override def primitive(): Primitive = primitiveOpt.getOrElse(Primitive.None)
   
   //override def toString: String = s"E${super.toString}"
 }
@@ -888,6 +902,8 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
   override def nextComputation(): Computation[E] = _nextComputation
   
   override def getPattern(): Pattern = _pattern
+  
+  override def primitive(): Primitive = primitiveOpt.getOrElse(Primitive.None)
   
   //override def toString: String = s"V${super.toString}"
 }
@@ -1248,6 +1264,8 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
   override def nextComputation(): Computation[E] = _nextComputation
 
   override def getPattern(): Pattern = _pattern
+  
+  override def primitive(): Primitive = primitiveOpt.getOrElse(Primitive.None)
   
   //override def toString: String = s"E${super.toString}"
 }

@@ -7,6 +7,9 @@ import java.io.*;
 import java.util.function.IntPredicate;
 
 public class VertexPredicate implements IntPredicate, Writable, Externalizable {
+
+   public static final DefaultVertexPredicate trueVertexPredicate = new DefaultVertexPredicate();
+
    private MainGraph graph;
    private int vertexLabel = 1;
 
@@ -47,4 +50,17 @@ public class VertexPredicate implements IntPredicate, Writable, Externalizable {
    public String toString() {
       return "vpred{" + vertexLabel + "}";
    }
+
+   private static class DefaultVertexPredicate extends VertexPredicate {
+      @Override
+      public boolean test(int u) {
+         return true;
+      }
+
+      @Override
+      public String toString() {
+         return "vpred{true}" + getClass().getTypeName();
+      }
+   }
+
 }

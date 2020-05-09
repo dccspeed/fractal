@@ -162,6 +162,22 @@ class FractalGraph(
     */
   def efractoidAndExpand: Fractoid[EdgeInducedSubgraph] =
     efractoidAndExpand (null)
+  
+  /**
+    * Edge-induced fractoid without a process function and with sampling
+    * @return Fractoid with the initial state of edge-induced computation
+    */
+  def sefractoid(fraction: Double): Fractoid[EdgeInducedSubgraph] = {
+    val FRACTION_KEY = "sampling_fraction"
+
+    logInfo(s"Sampling fractoid uniformly at random: fraction=${fraction}" +
+      s" fractoid=${this}")
+
+    efractoid.
+      set("subgraph_enumerator",
+        "br.ufmg.cs.systems.fractal.computation.SamplingEnumerator").
+      set(FRACTION_KEY, fraction)
+  }
 
   /**
     * Creates a vertex-induced Fractoid with a process function
@@ -214,6 +230,22 @@ class FractalGraph(
     */
   def vfractoidAndExpand: Fractoid[VertexInducedSubgraph] =
     vfractoidAndExpand (null)
+  
+  /**
+    * Vertex-induced fractoid without a process function and with sampling
+    * @return Fractoid with the initial state of vertex-induced computation
+    */
+  def svfractoid(fraction: Double): Fractoid[VertexInducedSubgraph] = {
+    val FRACTION_KEY = "sampling_fraction"
+
+    logInfo(s"Sampling fractoid uniformly at random: fraction=${fraction}" +
+      s" fractoid=${this}")
+
+    vfractoid.
+      set("subgraph_enumerator",
+        "br.ufmg.cs.systems.fractal.computation.SamplingEnumerator").
+      set(FRACTION_KEY, fraction)
+  }
 
   /**
     * Creates a pattern-induced Fractoid with a process function from a pattern
@@ -287,6 +319,23 @@ class FractalGraph(
   def pfractoidAndExpand(
       pattern: Pattern): Fractoid[PatternInducedSubgraph] =
     pfractoidAndExpand (null, pattern)
+  
+    /**
+    * Pattern-induced fractoid without a process function and with sampling
+    * @return Fractoid with the initial state of pattern-induced computation
+    */
+  def spfractoid(pattern: Pattern,
+      fraction: Double): Fractoid[PatternInducedSubgraph] = {
+    val FRACTION_KEY = "sampling_fraction"
+
+    logInfo(s"Sampling fractoid uniformly at random: fraction=${fraction}" +
+      s" fractoid=${this}")
+
+    pfractoid(pattern).
+      set("subgraph_enumerator",
+        "br.ufmg.cs.systems.fractal.computation.SamplingEnumerator").
+      set(FRACTION_KEY, fraction)
+  }
 
   def customComputation [S <: Subgraph: ClassTag] (
       config: SparkConfiguration[S]): Fractoid[S] = {

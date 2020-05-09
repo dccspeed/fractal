@@ -4,34 +4,34 @@ import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 
 public class AggregationStorageFactory {
-    
-    private Configuration configuration;
 
-    public AggregationStorageFactory(Configuration config) {
-       this.configuration = config;
-    }
+   private Configuration configuration;
 
-    public AggregationStorage createAggregationStorage(String name) {
-        AggregationStorageMetadata metadata = configuration.getAggregationMetadata(name);
+   public AggregationStorageFactory(Configuration config) {
+      this.configuration = config;
+   }
 
-        return createAggregationStorage(name, metadata);
-    }
+   public AggregationStorage createAggregationStorage(String name) {
+      AggregationStorageMetadata metadata = configuration.getAggregationMetadata(name);
 
-    public AggregationStorage createAggregationStorage(String name, AggregationStorageMetadata metadata) {
-        if (metadata == null) {
-            throw new RuntimeException(
-                  "Attempted to create unregistered aggregation storage: " +
-                  name);
-        }
+      return createAggregationStorage(name, metadata);
+   }
 
-        Class<?> keyClass = metadata.getKeyClass();
+   public AggregationStorage createAggregationStorage(String name, AggregationStorageMetadata metadata) {
+      if (metadata == null) {
+         throw new RuntimeException(
+                 "Attempted to create unregistered aggregation storage: " +
+                         name);
+      }
 
-        if (Pattern.class.isAssignableFrom(keyClass)) {
-            return new PatternAggregationStorage(name, metadata);
-        } else {
-            AggregationStorage aggStorage = configuration.createAggregationStorage(name);
-            aggStorage.init(name, metadata);
-            return aggStorage;
-        }
-    }
+      Class<?> keyClass = metadata.getKeyClass();
+
+      if (Pattern.class.isAssignableFrom(keyClass)) {
+         return new PatternAggregationStorage(name, metadata);
+      } else {
+         AggregationStorage aggStorage = configuration.createAggregationStorage(name);
+         aggStorage.init(name, metadata);
+         return aggStorage;
+      }
+   }
 }

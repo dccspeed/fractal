@@ -267,12 +267,12 @@ public class PatternUtils {
               " lower=" + pattern.vsymmetryBreakerLowerBound() +
               " upper=" + pattern.vsymmetryBreakerUpperBound());
 
-      ObjArrayList<ObjArrayList<Pattern>> allPlans = PatternExplorationPlanMCVC.allExecutions(pattern);
+      ObjArrayList<ObjArrayList<Pattern>> allPlans = PatternExplorationPlanMCVCVgroups.allExecutions(pattern);
       for (ObjArrayList<Pattern> plan : allPlans) {
          System.out.println("plan size " + plan.size());
       }
 
-      ObjArrayList<Pattern> patterns = PatternExplorationPlanMCVC.apply(pattern);
+      ObjArrayList<Pattern> patterns = PatternExplorationPlanMCVCVgroups.apply(pattern);
 
       for (int i = 0; i < patterns.size(); ++i) {
          Pattern newPattern = patterns.get(i);

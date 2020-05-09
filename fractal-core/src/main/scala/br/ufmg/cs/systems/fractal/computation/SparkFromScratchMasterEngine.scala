@@ -76,7 +76,6 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
    */
   lazy val next: Boolean = {
 
-
     logInfo (s"${this} Computation starting from ${stepRDD}," +
       s", StorageLevel=${stepRDD.getStorageLevel}")
 
@@ -95,7 +94,6 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
       }
       cc.setDepth(0)
     }
-
 
     // adding accumulators to each computation
     val egAccums = new Array[LongAccumulator](numComputations)
@@ -199,6 +197,8 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
 
     logInfo(s"Enumeration step=${step} took ${enumerationElapsed} ms")
 
+    val globalAggStart = System.currentTimeMillis()
+
     /** [1] We extract and aggregate the *aggregations* globally.
      */
     val aggregationsFuture = getAggregations (execEngines, numPartitions)
@@ -232,14 +232,8 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
     // superstep
     masterComputation.compute()
 
-    // print stats
-    aggAccums.foreach { case (name, accum) =>
-      logInfo (s"Accumulator[${step}][${name}]: ${accum.value}")
-    }
-    logInfo (s"Accumulator[valid_subgraphs]: ${validSubgraphsAccum.value}")
+    val globalAggElapsed = System.currentTimeMillis() - globalAggStart
 
-    // master will send poison pills to all executor actors of this step
-    masterActorRef ! Reset
 
     val superstepFinish = System.currentTimeMillis
     logInfo (
@@ -248,6 +242,24 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
 
     // make sure we maintain the engine's original state
     this.config.set(SparkConfiguration.COMPUTATION_CONTAINER, originalContainer)
+
+    /**
+     * Print statistics of this step
+     */
+    aggAccums.toArray.sortBy(_._1).foreach { case (name, accum) =>
+      logInfo (s"FractalStep[${step}][${name}]: ${accum.value}")
+    }
+    if (validSubgraphsAccum.value == 0) {
+      validSubgraphsAccum.add(aggAccums(s"${VALID_SUBGRAPHS}_${numComputations - 1}").value)
+    }
+    logInfo(s"FractalStep[${step}][valid_subgraphs]: ${validSubgraphsAccum.value}")
+    logInfo(s"FractalStep[${step}][initialization_time]: ${initElapsed}")
+    logInfo(s"FractalStep[${step}][enumeration_time]: ${enumerationElapsed}")
+    logInfo(s"FractalStep[${step}][global_aggregation_time]: ${globalAggElapsed}")
+    logInfo(s"FractalStep[${step}][total_time]: ${initElapsed + enumerationElapsed + globalAggElapsed}")
+
+    // master will send poison pills to all executor actors of this step
+    masterActorRef ! Reset
 
     !sc.isStopped && !isComputationHalted
   }

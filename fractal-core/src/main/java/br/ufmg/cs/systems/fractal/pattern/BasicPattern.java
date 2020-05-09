@@ -32,6 +32,7 @@ public abstract class BasicPattern implements Pattern {
    protected Configuration configuration;
    protected boolean isGraphEdgeLabelled;
    protected boolean induced;
+   protected boolean vertexLabeled;
 
    protected HashIntIntMapFactory positionMapFactory =
            HashIntIntMaps.getDefaultFactory().withDefaultValue(-1);
@@ -69,6 +70,8 @@ public abstract class BasicPattern implements Pattern {
       basicPattern.vertices.forEach(intAddConsumer);
 
       isGraphEdgeLabelled = basicPattern.getConfig().isGraphEdgeLabelled();
+      induced = basicPattern.induced;
+      vertexLabeled = basicPattern.vertexLabeled;
 
       edges = createPatternEdgeArrayList(isGraphEdgeLabelled);
 
@@ -89,6 +92,7 @@ public abstract class BasicPattern implements Pattern {
       vertexPositions = positionMapFactory.newMutableMap();
       previousWords = new IntArrayList();
       induced = false;
+      vertexLabeled = true;
       reset();
    }
 
@@ -673,13 +677,25 @@ public abstract class BasicPattern implements Pattern {
       visited.add(ord1);
       visited.add(ord2);
       for (int i = 2; i < ordering.size(); ++i) {
+         ord1 = ordering.getUnchecked(i);
          // ensure new vertex connects to visited vertices
          valid = false;
          for (PatternEdge pedge : edges) {
-            if (visited.contains(pedge.getSrcPos()) || visited.contains(pedge.getDestPos())) {
-               valid = true;
-               break;
+            if (ord1 == pedge.getSrcPos()) {
+               if (visited.contains(pedge.getDestPos())) {
+                  valid = true;
+                  break;
+               }
+            } else if (ord1 == pedge.getDestPos()) {
+               if (visited.contains(pedge.getSrcPos())) {
+                  valid = true;
+                  break;
+               }
             }
+            //if (visited.contains(pedge.getSrcPos()) || visited.contains(pedge.getDestPos())) {
+            //   valid = true;
+            //   break;
+            //}
          }
 
          if (!valid) return false;
@@ -719,6 +735,16 @@ public abstract class BasicPattern implements Pattern {
    @Override
    public void setInduced(boolean induced) {
       this.induced = induced;
+   }
+
+   @Override
+   public boolean vertexLabeled() {
+      return vertexLabeled;
+   }
+
+   @Override
+   public void setVertexLabeled(boolean vertexLabeled) {
+      this.vertexLabeled = vertexLabeled;
    }
 
    @Override
@@ -992,6 +1018,7 @@ public abstract class BasicPattern implements Pattern {
    @Override
    public void write(DataOutput dataOutput) throws IOException {
       dataOutput.writeBoolean(induced);
+      dataOutput.writeBoolean(vertexLabeled);
       dataOutput.writeBoolean(isGraphEdgeLabelled);
       dataOutput.writeInt(configurationId);
       edges.write(dataOutput);
@@ -1032,6 +1059,7 @@ public abstract class BasicPattern implements Pattern {
       reset();
 
       induced = dataInput.readBoolean();
+      vertexLabeled = dataInput.readBoolean();
       isGraphEdgeLabelled = dataInput.readBoolean();
 
       //init(Configuration.get(dataInput.readInt()));

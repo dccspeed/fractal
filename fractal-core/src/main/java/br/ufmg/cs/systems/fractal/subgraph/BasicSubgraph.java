@@ -45,12 +45,12 @@ public abstract class BasicSubgraph implements Subgraph {
     * Whether the current value actually represents the current subgraph
     * depends on the value of the {@link #dirtyPattern} variable.
     */
-   private Pattern pattern;
+   protected Pattern pattern;
    /**
     * Whether the variable referred to in {@link #pattern} is up to date
     * with the structure of the subgraph.
     */
-   private boolean dirtyPattern;
+   protected boolean dirtyPattern;
    // }}
 
    // Incremental Stuff {{

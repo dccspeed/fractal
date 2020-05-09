@@ -2,22 +2,22 @@
 
 printf "Description: Script launcher for Fractal built-in applications\n\n"
 
-apps="motifspf|esubgraphs|vsubgraphswithedges|vsubgraphs|fsm|motifs|cliques|cliquesopt|gqueryingmcvc|gquerying|gqueryingnaive|kws"
+apps="motifssampling|motifspf|motifspflabeled|esubgraphs|vsubgraphswithedges|vsubgraphs|vsubgraphssampling|fsm|motifs|cliques|cliquesopt|gqueryingmcvc|gquerying|gqueryingsampling|gqueryingnaive|kws"
 
 usage="
 Usage:
 app=$apps [OPTION]... [ALGOPTION]... $(basename "$0")
 
 OPTION:
-   master_memory=512m|1g|2g|...            'Master memory'                      Default: 2g
-   num_workers=1|2|3|...                   'Number of workers'                  Default: 1
-   worker_cores=1|2|3|...                  'Number of cores per worker'         Default: 1
-   worker_memory=512m|1g|2g|...            'Workers memory'                     Default: 2g
-   input_format=al|el                      'al: adjacency list; el: edge list'  Default: al
-   comm=scratch|graphred                   'Execution strategy'                 Default: scratch
-   spark_master=local[1]|local[2]|yarn|... 'Spark master URL'                   Default: local[worker_cores]
-   deploy_mode=server|client               'Spark deploy mode'                  Default: client
-   log_level=info|warn|error               'Log vebosity'                       Default: info"
+   master_memory=512m|1g|2g|...            'Master memory'                                         Default: 2g
+   num_workers=1|2|3|...                   'Number of workers'                                     Default: 1
+   worker_cores=1|2|3|...                  'Number of cores per worker'                            Default: 1
+   worker_memory=512m|1g|2g|...            'Workers memory'                                        Default: 2g
+   input_format=al|el|sc                   'al: adjacency list; el: edge list; sc: fast reading'   Default: al
+   comm=scratch|graphred                   'Execution strategy'                                    Default: scratch
+   spark_master=local[1]|local[2]|yarn|... 'Spark master URL'                                      Default: local[worker_cores]
+   deploy_mode=server|client               'Spark deploy mode'                                     Default: client
+   log_level=info|warn|error               'Log vebosity'                                          Default: info"
 
 
 if [ -z $FRACTAL_HOME ]; then
@@ -77,6 +77,24 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
+	vsubgraphssampling)
+	required="inputgraph steps fraction"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   fraction=<fraction between 0 and 1>     'Fraction of subgraphs to be sampled uniformly at random'"
+	;;
+	motifssampling)
+	required="inputgraph steps fraction"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   fraction=<fraction between 0 and 1>     'Fraction of subgraphs to be sampled uniformly at random'"
+	;;
 	motifs)
 	required="inputgraph steps"
         appusage="
@@ -86,6 +104,14 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 	motifspf)
+	required="inputgraph steps"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
+	;;
+	motifspflabeled)
 	required="inputgraph steps"
         appusage="
 
@@ -127,6 +153,16 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
+	gqueryingsampling)
+	required="inputgraph steps query fraction"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'
+   fraction=<fraction between 0 and 1>     'Fraction of subgraphs to be sampled uniformly at random'"
+	;;
 	gqueryingnaive)
 	required="inputgraph steps query"
         appusage="
@@ -156,7 +192,7 @@ wholeusage="$usage $appusage"
 for argname in $required; do
 	if [ -z ${!argname+x} ]; then
 		printf "error: $argname is unset\n"
-                printf "$wholeusage\n"
+    printf "$wholeusage\n"
 		exit 1
 	else
 		echo "info: $argname is set to '${!argname}'"
@@ -185,7 +221,7 @@ cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-SPARK-2.2.0.jar \\
    --packages $packages \\
    $FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-SPARK-2.2.0.jar \\
-      $input_format $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $configs"
+      $input_format $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $fraction $configs"
 
 printf "info: Submitting command:\n$cmd\n\n"
 bash -c "$cmd"

@@ -35,6 +35,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    private IntArrayList originalVertices;
    private IntArrayList verticesBackup;
    private ObjArrayList<IntArrayList> neighborhoods;
+   private ObjArrayList<IntArrayList> neighborhoodsToReclaim;
    // }}
 
    // Edge tracking for incremental modifications {{
@@ -54,6 +55,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       intersection = new IntArrayList();
       difference = new IntArrayList();
       neighborhoods = new ObjArrayList<>();
+      neighborhoodsToReclaim = new ObjArrayList<>();
       originalVertices = new IntArrayList();
       verticesBackup = new IntArrayList();
    }
@@ -67,6 +69,34 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    public void reset() {
       super.reset();
       numVerticesAddedWithWord.clear();
+   }
+
+   public Pattern labeledPattern(Pattern unlabeledPattern) {
+      if (dirtyPattern) {
+         if (pattern == null) {
+            pattern = unlabeledPattern.copy();
+            pattern.init(configuration);
+         }
+
+         // fix vertex ids
+         IntArrayList patternVertices = pattern.getVertices();
+         for (int i = 0; i < vertices.size(); ++i) {
+            patternVertices.set(i, vertices.getUnchecked(i));
+         }
+
+         // fix pattern edges, TODO: consider edge labels
+         PatternEdgeArrayList patternEdges = pattern.getEdges();
+         MainGraph graph = getConfig().getMainGraph();
+         for (int i = 0; i < patternEdges.size(); ++i) {
+            PatternEdge pedge = patternEdges.getUnchecked(i);
+            pedge.setSrcLabel(graph.vertexLabel(patternVertices.getUnchecked(pedge.getSrcPos())));
+            pedge.setDestLabel(graph.vertexLabel(patternVertices.getUnchecked(pedge.getDestPos())));
+         }
+
+         dirtyPattern = false;
+      }
+
+      return pattern;
    }
 
    @Override
@@ -189,6 +219,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       int endMyWordRange = startMyWordRange + numWordsPerPartition;
 
       int targetLabel = pattern.getEdges().getUnchecked(0).getSrcLabel();
+      boolean vertexLabeled = pattern.vertexLabeled();
 
       // If we are the last partition or our range end goes over the total
       // number of vertices, set the range end to the total number of vertices
@@ -199,7 +230,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
 
       for (int i = startMyWordRange; i < endMyWordRange; ++i) {
          int vertexLabel = configuration.getMainGraph().vertexLabel(i);
-         if (vertexLabel == targetLabel) {
+         if (!vertexLabeled || vertexLabel == targetLabel) {
             extensionWordIds().add(i);
          }
       }
@@ -257,7 +288,9 @@ public class PatternInducedSubgraph extends BasicSubgraph {
        * Single vertices: neighborhood view
        */
       if (pos < mcvcSize) {
-         neighborhoods.setUnchecked(pos, graph.neighborhoodVertices(vertices.getUnchecked(pos)));
+         IntArrayList view = graph.neighborhoodVertices(vertices.getUnchecked(pos));
+         neighborhoods.setUnchecked(pos, view);
+         neighborhoodsToReclaim.add(view);
          return;
       }
 
@@ -288,6 +321,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
          IntArrayList result = IntArrayListPool.instance().createObject();
          Utils.sintersect(neighborhood1, neighborhood2, 0, neighborhood1.size(), 0, neighborhood2.size(), result);
          neighborhoods.setUnchecked(pos, result);
+         neighborhoodsToReclaim.add(result);
          return;
       }
 
@@ -305,10 +339,12 @@ public class PatternInducedSubgraph extends BasicSubgraph {
          result = previous;
          previous = aux;
          neighborhood1 = neighborhoods.getUnchecked(intersections.getUnchecked(i));
+         result.clear();
          Utils.sintersect(previous, neighborhood1, 0, previous.size(), 0, neighborhood1.size(), result);
       }
 
       neighborhoods.setUnchecked(pos, result);
+      neighborhoodsToReclaim.add(result);
       IntArrayListPool.instance().reclaimObject(previous);
    }
 
@@ -357,10 +393,16 @@ public class PatternInducedSubgraph extends BasicSubgraph {
        */
       neighborhoods.clear();
       for (int i = 0; i < numVertices; ++i) {
-         IntArrayList existing = neighborhoods.getUnchecked(i);
-         if (existing != null) existing.reclaim();
          neighborhoods.add(null);
       }
+
+      /**
+       * Clear and maybe reclaim temporary neighborhoods
+       */
+      for (int i = 0; i < neighborhoodsToReclaim.size(); ++i) {
+         neighborhoodsToReclaim.getUnchecked(i).reclaim();
+      }
+      neighborhoodsToReclaim.clear();
 
       /**
        * Make sure the neighborhoods that will be queried exists
@@ -374,7 +416,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
        */
       long validSubgraphs = completeMatchRec(pattern);
 
-      if (nextOrdering == numOrderings - 1) { // reached last ordering
+      if (nextOrdering >= numOrderings - 1) { // reached last ordering
          return validSubgraphs;
       } else { // accumulate with other orderings
          return validSubgraphs + completeMatch(pattern, explorationPlan, numOrderings, nextOrdering + 1);

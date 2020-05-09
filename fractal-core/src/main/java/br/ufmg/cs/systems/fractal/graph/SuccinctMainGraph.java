@@ -24,7 +24,6 @@ public class SuccinctMainGraph implements MainGraph {
    /**
     * Default parameters
     */
-   private final DefaultVertexPredicate defaultVertexPredicate = new DefaultVertexPredicate();
    private final DefaultEdgePredicate defaultEdgePredicate = new DefaultEdgePredicate();
    private final DefaultEdgePredicates defaultEdgePredicates = new DefaultEdgePredicates();
 
@@ -576,16 +575,6 @@ public class SuccinctMainGraph implements MainGraph {
    }
 
    /* } */
-
-   /**
-    * Default parameters
-    */
-   private class DefaultVertexPredicate implements IntPredicate {
-      @Override
-      public boolean test(int u) {
-         return true;
-      }
-   }
 
    private class DefaultEdgePredicate extends EdgePredicate {
       @Override

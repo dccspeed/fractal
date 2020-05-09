@@ -5,19 +5,47 @@ import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntIntMapPool;
 import com.koloboke.collect.map.IntIntMap;
+import com.koloboke.collect.map.ObjObjMap;
+import com.koloboke.collect.map.hash.HashObjObjMaps;
 import org.apache.log4j.Logger;
 
 import java.io.*;
 import java.util.Iterator;
 
-public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
-   private static final Logger LOG = Logger.getLogger(PatternExplorationPlanMCVC.class);
+public class PatternExplorationPlanMCVCVgroups extends PatternExplorationPlan {
+   private static final Logger LOG = Logger.getLogger(PatternExplorationPlanMCVCVgroups.class);
 
-   protected int mcvcSize;
+   protected ObjArrayList<IntArrayList> vgroupOrderings;
+
+   public PatternExplorationPlanMCVCVgroups() {
+      super();
+      vgroupOrderings = new ObjArrayList<>();
+   }
+
+   @Override
+   public void init(Pattern pattern) {
+      super.init(pattern);
+   }
+
+   @Override
+   protected void reset(Pattern pattern) {
+      super.reset(pattern);
+      vgroupOrderings.clear();
+   }
 
    @Override
    public int mcvcSize() {
-      return mcvcSize;
+      return vgroupOrderings.get(0).size();
+   }
+
+   @Override
+   public int numOrderings() {
+      return vgroupOrderings.size();
+   }
+
+   @Override
+   public IntArrayList ordering(int i) {
+      return vgroupOrderings.getUnchecked(i);
    }
 
    private static void relabelMCVC(Pattern pattern, IntArrayList mcvc) {
@@ -151,9 +179,7 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
 
    public static ObjArrayList<Pattern> apply(Pattern pattern) {
       ObjArrayList<Pattern> bestPlan = null;
-      Pattern reorderedPattern = pattern.copy();
-      PatternUtils.increasingPositions(reorderedPattern);
-      for (ObjArrayList<Pattern> plan : allExecutions(reorderedPattern)) {
+      for (ObjArrayList<Pattern> plan : allExecutions(pattern)) {
          if (bestPlan == null || bestPlan.size() > plan.size()) {
             bestPlan = plan;
          }
@@ -174,44 +200,77 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
 
    private static ObjArrayList<ObjArrayList<Pattern>> allExecutionsWithCover(Pattern pattern, IntArrayList mcvc) {
       ObjArrayList<ObjArrayList<Pattern>> executions = new ObjArrayList<>();
-      ObjArrayList<Pattern> newPatterns = new ObjArrayList<>(1);
-      Pattern newPattern = pattern.copy();
-      PatternExplorationPlanMCVC explorationPlanMCVC = new PatternExplorationPlanMCVC();
-      explorationPlanMCVC.mcvcSize = mcvc.size();
-      newPattern.setExplorationPlan(explorationPlanMCVC);
-      updateInitalPlan(newPattern, mcvc);
-      newPattern.updateSymmetryBreaker();
-      newPatterns.add(newPattern);
-      executions.add(newPatterns);
+      Iterator<IntArrayList> mcvcIterator = mcvc.permutations();
+
+      while (mcvcIterator.hasNext()) {
+         Pattern newPattern = pattern.copy();
+         IntArrayList nextMcvc = mcvcIterator.next();
+         executions.add(executions(newPattern, nextMcvc));
+      }
 
       return executions;
+   }
+
+   private static ObjArrayList<Pattern> executions(Pattern pattern, IntArrayList mcvc) {
+      pattern.setExplorationPlan(new PatternExplorationPlanMCVCVgroups());
+      int numCoverEdges = updateInitalPlan(pattern, mcvc);
+
+      ObjObjMap<Pattern, ObjArrayList<IntArrayList>> vgroupSequences = HashObjObjMaps.newMutableMap();
+
+      for (int i = 0; i < mcvc.size(); ++i) mcvc.set(i, i);
+      Iterator<IntArrayList> vertexOrderings = mcvc.permutations();
+      while (vertexOrderings.hasNext()) {
+         IntArrayList ordering = vertexOrderings.next();
+         if (pattern.sbValidOrdering(ordering)) {
+            Pattern newPattern = pattern.copy();
+            relabelMCVC(newPattern, ordering);
+            newPattern.removeLastNEdges(newPattern.getNumberOfEdges() - numCoverEdges);
+
+            ObjArrayList<IntArrayList> orderings = vgroupSequences.getOrDefault(newPattern, new ObjArrayList<>());
+            orderings.add(new IntArrayList(ordering));
+            vgroupSequences.putIfAbsent(newPattern, orderings);
+         }
+      }
+
+      ObjArrayList<Pattern> newPatterns = new ObjArrayList<>(vgroupSequences.size());
+
+      for (ObjArrayList<IntArrayList> vgroupOrderings : vgroupSequences.values()) {
+         Pattern newPattern = pattern.copy();
+         PatternExplorationPlanMCVCVgroups explorationPlanMCVC = new PatternExplorationPlanMCVCVgroups();
+         newPattern.setExplorationPlan(explorationPlanMCVC);
+         updateInitalPlan(newPattern, mcvc);
+         explorationPlanMCVC.vgroupOrderings.clear();
+         explorationPlanMCVC.vgroupOrderings.addAll(vgroupOrderings);
+         newPattern.updateSymmetryBreaker(explorationPlanMCVC.vgroupOrderings.get(0));
+         newPatterns.add(newPattern);
+      }
+
+      return newPatterns;
+   }
+
+   @Override
+   public String toString() {
+      return "mcvc-vgroups{" + super.toString() + " orderings=" + vgroupOrderings + "}";
    }
 
    @Override
    public void write(DataOutput out) throws IOException {
       super.write(out);
-      out.writeInt(mcvcSize);
+      out.writeInt(vgroupOrderings.size());
+      for (int i = 0; i < vgroupOrderings.size(); ++i) {
+         IntArrayList ordering = vgroupOrderings.getUnchecked(i);
+         ordering.write(out);
+      }
    }
 
    @Override
    public void readFields(DataInput in) throws IOException {
       super.readFields(in);
-      mcvcSize = in.readInt();
+      int size = in.readInt();
+      for (int i = 0; i < size; ++i) {
+         IntArrayList ordering = new IntArrayList();
+         ordering.readFields(in);
+         vgroupOrderings.add(ordering);
+      }
    }
-
-   @Override
-   public void writeExternal(ObjectOutput objectOutput) throws IOException {
-      write(objectOutput);
-   }
-
-   @Override
-   public void readExternal(ObjectInput objectInput) throws IOException {
-      readFields(objectInput);
-   }
-
-   @Override
-   public String toString() {
-      return "mcvc{" + super.toString() + ", mcvcSize=" + mcvcSize + "}";
-   }
-
 }

@@ -1,6 +1,7 @@
 package br.ufmg.cs.systems.fractal.pattern;
 
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
+import br.ufmg.cs.systems.fractal.graph.Vertex;
 import br.ufmg.cs.systems.fractal.util.EdgePredicate;
 import br.ufmg.cs.systems.fractal.util.EdgePredicates;
 import br.ufmg.cs.systems.fractal.util.VertexPredicate;
@@ -13,6 +14,7 @@ import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
 
 import java.io.*;
+import java.util.Arrays;
 
 public class PatternExplorationPlan implements Externalizable, Writable {
    private static final Logger LOG = Logger.getLogger(PatternExplorationPlan.class);
@@ -43,13 +45,15 @@ public class PatternExplorationPlan implements Externalizable, Writable {
       return intersectionIdxs.isEmpty();
    }
 
-   protected void reset(int numVertices) {
+   protected void reset(Pattern pattern) {
+      int numVertices = pattern.getNumberOfVertices();
+      boolean vertexLabeled = pattern.vertexLabeled();
       intersectionIdxs.clear();
       differenceIdxs.clear();
       for (int i = 0; i < numVertices; ++i) {
          intersectionIdxs.add(IntArrayListPool.instance().createObject());
          differenceIdxs.add(IntArrayListPool.instance().createObject());
-         vertexPredicates.add(new VertexPredicate());
+         vertexPredicates.add(vertexLabeled ? new VertexPredicate() : VertexPredicate.trueVertexPredicate);
          edgePredicates.add(new EdgePredicates());
       }
    }
@@ -73,7 +77,7 @@ public class PatternExplorationPlan implements Externalizable, Writable {
    public void updateWithNaivePlan(Pattern pattern) {
       int numVertices = pattern.getNumberOfVertices();
 
-      reset(numVertices);
+      reset(pattern);
 
       for (PatternEdge pedge : pattern.getEdges()) {
          intersectionIdxs.get(pedge.getDestPos()).add(pedge.getSrcPos());
@@ -96,10 +100,6 @@ public class PatternExplorationPlan implements Externalizable, Writable {
       pattern.updateSymmetryBreaker();
    }
 
-   public void update(Pattern pattern) {
-      updateWithNaivePlan(pattern);
-   }
-
    public int mcvcSize() {
       return -1;
    }
@@ -115,6 +115,8 @@ public class PatternExplorationPlan implements Externalizable, Writable {
    public static ObjArrayList<Pattern> apply(Pattern pattern) {
       PatternExplorationPlan explorationPlan = new PatternExplorationPlan();
       Pattern newPattern = pattern.copy();
+      newPattern.setInduced(pattern.induced());
+      newPattern.setVertexLabeled(pattern.vertexLabeled());
       PatternUtils.increasingPositions(newPattern);
       explorationPlan.updateWithNaivePlan(newPattern);
       newPattern.setExplorationPlan(explorationPlan);
@@ -125,11 +127,10 @@ public class PatternExplorationPlan implements Externalizable, Writable {
 
    @Override
    public String toString() {
-      return "ExplorationPlan{intersections=" + intersectionIdxs +
+      return "intersections=" + intersectionIdxs +
               ", differences=" + differenceIdxs +
               ", vertexPredicates=" + vertexPredicates +
-              ", edgePredicates=" + edgePredicates +
-              "}";
+              ", edgePredicates=" + edgePredicates;
    }
 
    @Override
@@ -138,7 +139,12 @@ public class PatternExplorationPlan implements Externalizable, Writable {
       for (int i = 0; i < intersectionIdxs.size(); ++i) {
          intersectionIdxs.get(i).write(out);
          differenceIdxs.get(i).write(out);
-         vertexPredicates.get(i).write(out);
+         if (vertexPredicates.get(i) == VertexPredicate.trueVertexPredicate) {
+            out.writeBoolean(true);
+         } else {
+            out.writeBoolean(false);
+            vertexPredicates.get(i).write(out);
+         }
          edgePredicates.get(i).write(out);
       }
    }
@@ -147,15 +153,21 @@ public class PatternExplorationPlan implements Externalizable, Writable {
    public void readFields(DataInput in) throws IOException {
       int numVertices = in.readInt();
       for (int i = 0; i < numVertices; ++i) {
-         IntArrayList intersection = IntArrayListPool.instance().createObject();
+         IntArrayList intersection = new IntArrayList();
          intersection.readFields(in);
          intersectionIdxs.add(intersection);
-         IntArrayList difference = IntArrayListPool.instance().createObject();
+         IntArrayList difference = new IntArrayList();
          difference.readFields(in);
          differenceIdxs.add(difference);
 
-         VertexPredicate vertexPredicate = new VertexPredicate();
-         vertexPredicate.readFields(in);
+         boolean trueVertexPredicate = in.readBoolean();
+         VertexPredicate vertexPredicate;
+         if (trueVertexPredicate) {
+            vertexPredicate = VertexPredicate.trueVertexPredicate;
+         } else {
+            vertexPredicate = new VertexPredicate();
+            vertexPredicate.readFields(in);
+         }
          vertexPredicates.add(vertexPredicate);
 
          EdgePredicates vertexEdgePredicates = new EdgePredicates();
@@ -163,6 +175,7 @@ public class PatternExplorationPlan implements Externalizable, Writable {
          edgePredicates.add(vertexEdgePredicates);
 
       }
+
    }
 
    @Override

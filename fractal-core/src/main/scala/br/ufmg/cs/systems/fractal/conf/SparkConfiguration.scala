@@ -32,7 +32,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
       set("incremental_aggregation", true)
    }
 
-   logInfo (s"Created config (id=${id}) ${this}")
+   logDebug(s"Created config (id=${id}) ${this}")
 
    // master hostname
    if (!confs.contains(CONF_MASTER_HOSTNAME)) try {
@@ -194,7 +194,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
          case Some(cc: ComputationContainer[_]) =>
             // cc.shallowCopy().asInstanceOf[Computation[E]]
             val bytes = SparkConfiguration.serialize(cc)
-            SparkConfiguration.deserialize[Computation[E]](bytes)
+            SparkConfiguration.deserialize[ComputationContainer[E]](bytes)
 
          case Some(c) =>
             throw new RuntimeException (s"Invalid computation type: ${c}")
@@ -415,7 +415,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
     * TODO: generalize the initialization in the superclass Configuration
     */
    override def initialize(isMaster: Boolean = false): Unit = synchronized {
-      logInfo(s"Initializing config, id=${id} config=${this}" +
+      logDebug(s"Initializing config, id=${id} config=${this}" +
          s" mainGraph=${getMainGraph()} isMainGraphRead=${isMainGraphRead()}" +
          s" isMaster=${isMaster} activeConfigs=${Configuration.activeConfigs}")
       if (Configuration.isUnset(id)) {
@@ -568,32 +568,42 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
       }
    }
 
-   /** */
+  /** */
 
-   def getValue(key: String, defaultValue: Any): Any = confs.get(key) match {
-      case Some(value) => value
-      case None => defaultValue
-   }
+  def getValue(key: String, defaultValue: Any): Any = confs.get(key) match {
+    case Some(value) => value
+    case None => defaultValue
+  }
 
-   override def getInteger(key: String, defaultValue: Integer) =
-      getValue(key, defaultValue).asInstanceOf[Int]
+  override def getObject[T](key: String, defaultValue: T): T = {
+    getValue(key, defaultValue).asInstanceOf[T]
+  }
 
-   override def getLong(key: String, defaultValue: java.lang.Long) =
-      getValue(key, defaultValue).asInstanceOf[Long]
+  override def getInteger(key: String, defaultValue: Integer) =
+    getValue(key, defaultValue).asInstanceOf[Int]
+  
+  override def getLong(key: String, defaultValue: java.lang.Long) =
+    getValue(key, defaultValue).asInstanceOf[Long]
+  
+  override def getDouble(key: String, defaultValue: java.lang.Double) =
+    getValue(key, defaultValue).asInstanceOf[Double]
+  
+  override def getFloat(key: String, defaultValue: java.lang.Float) =
+    getValue(key, defaultValue).asInstanceOf[Float]
 
-   override def getString(key: String, defaultValue: String) =
-      getValue(key, defaultValue).asInstanceOf[String]
-
-   override def getBoolean(key: String, defaultValue: java.lang.Boolean) = {
-      val value = getValue(key, defaultValue)
-      if (value.isInstanceOf[java.lang.Boolean]) {
-         value.asInstanceOf[java.lang.Boolean]
-      } else if (value.isInstanceOf[String]) {
-         new java.lang.Boolean(value.asInstanceOf[String])
-      } else {
-         throw new RuntimeException(s"Invalid boolean for (${key}, ${value})")
-      }
-   }
+  override def getString(key: String, defaultValue: String) =
+    getValue(key, defaultValue).asInstanceOf[String]
+  
+  override def getBoolean(key: String, defaultValue: java.lang.Boolean) = {
+    val value = getValue(key, defaultValue)
+    if (value.isInstanceOf[java.lang.Boolean]) {
+      value.asInstanceOf[java.lang.Boolean]
+    } else if (value.isInstanceOf[String]) {
+      new java.lang.Boolean(value.asInstanceOf[String])
+    } else {
+      throw new RuntimeException(s"Invalid boolean for (${key}, ${value})")
+    }
+  }
 }
 
 object SparkConfiguration extends Logging {

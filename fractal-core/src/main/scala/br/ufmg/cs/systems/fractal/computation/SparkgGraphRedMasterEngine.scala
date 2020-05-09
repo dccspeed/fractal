@@ -234,6 +234,8 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
 
     logInfo(s"Enumeration step=${step} took ${enumerationElapsed} ms")
 
+    val globalAggStart = System.currentTimeMillis()
+
     /** [1] We extract and aggregate the *aggregations* globally.
      */
     val aggregationsFuture = getAggregations (execEngines, numPartitions)
@@ -266,14 +268,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
     // superstep
     masterComputation.compute()
 
-    // print stats
-    aggAccums.foreach { case (name, accum) =>
-      logInfo (s"Accumulator[${step}][${name}]: ${accum.value}")
-      accum.reset()
-    }
-
-    // master will send poison pills to all executor actors of this step
-    masterActorRef ! Reset
+    val globalAggElapsed = System.currentTimeMillis() - globalAggStart
 
     val superstepFinish = System.currentTimeMillis
     logInfo (
@@ -282,6 +277,24 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
 
     // make sure we maintain the engine's original state
     this.config.set(SparkConfiguration.COMPUTATION_CONTAINER, originalContainer)
+
+    /**
+     * Print statistics of this step
+     */
+    aggAccums.toArray.sortBy(_._1).foreach { case (name, accum) =>
+      logInfo (s"FractalStep[${step}][${name}]: ${accum.value}")
+    }
+    if (validSubgraphsAccum.value == 0) {
+      validSubgraphsAccum.add(aggAccums(s"${VALID_SUBGRAPHS}_${numComputations - 1}").value)
+    }
+    logInfo(s"FractalStep[${step}][valid_subgraphs]: ${validSubgraphsAccum.value}")
+    logInfo(s"FractalStep[${step}][initialization_time]: ${initElapsed}")
+    logInfo(s"FractalStep[${step}][enumeration_time]: ${enumerationElapsed}")
+    logInfo(s"FractalStep[${step}][global_aggregation_time]: ${globalAggElapsed}")
+    logInfo(s"FractalStep[${step}][total_time]: ${initElapsed + enumerationElapsed + globalAggElapsed}")
+
+    // master will send poison pills to all executor actors of this step
+    masterActorRef ! Reset
 
     !sc.isStopped && !isComputationHalted
   }

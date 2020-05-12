@@ -218,7 +218,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       int startMyWordRange = myPartitionId * numWordsPerPartition;
       int endMyWordRange = startMyWordRange + numWordsPerPartition;
 
-      int targetLabel = pattern.getEdges().getUnchecked(0).getSrcLabel();
+      VertexPredicate vertexPredicate = pattern.explorationPlan().vertexPredicate(0);
       boolean vertexLabeled = pattern.vertexLabeled();
 
       // If we are the last partition or our range end goes over the total
@@ -229,8 +229,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       }
 
       for (int i = startMyWordRange; i < endMyWordRange; ++i) {
-         int vertexLabel = configuration.getMainGraph().vertexLabel(i);
-         if (!vertexLabeled || vertexLabel == targetLabel) {
+         if (!vertexLabeled || vertexPredicate.test(i)) {
             extensionWordIds().add(i);
          }
       }

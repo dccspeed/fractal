@@ -20,7 +20,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
    private val patternMatchingGt: Map[(String,String,Int),Long] = {
       var patternMatchingGt = Map.empty[(String,String,Int),Long]
-      val in = Source.fromFile("../data/pattern-matching.gt")
+      val in = Source.fromFile("../data/pattern-matching-citeseer.gt")
       for (line <- in.getLines) {
          val toks = line.trim.split(" ")
          val (graph, query, numVertices, numSubgraphs) = (toks(0), toks(1), toks(2), toks(3))

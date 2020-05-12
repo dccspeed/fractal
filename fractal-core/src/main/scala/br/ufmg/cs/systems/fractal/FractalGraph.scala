@@ -262,7 +262,8 @@ class FractalGraph(
     } else {
       pattern
     }
-    logInfo(s"PatternWithPlan ${patternWithPlan} plan=${patternWithPlan.explorationPlan()}")
+    logInfo(s"PatternWithPlan ${patternWithPlan} plan=${patternWithPlan.explorationPlan()}" +
+       s" lowerBound=${patternWithPlan.vsymmetryBreakerLowerBound()} upperBound=${patternWithPlan.vsymmetryBreakerUpperBound()}")
     val config = new SparkConfiguration[PatternInducedSubgraph]
     config.set ("pattern", patternWithPlan)
     config.set ("input_graph_path", path)
@@ -297,7 +298,8 @@ class FractalGraph(
     } else {
       pattern
     }
-    logInfo(s"PatternWithPlan ${patternWithPlan} plan=${patternWithPlan.explorationPlan()}")
+    logInfo(s"PatternWithPlan ${patternWithPlan} plan=${patternWithPlan.explorationPlan()}" +
+       s" lowerBound=${patternWithPlan.vsymmetryBreakerLowerBound()} upperBound=${patternWithPlan.vsymmetryBreakerUpperBound()}")
     val computation: Computation[PatternInducedSubgraph] =
       new VEComputationContainer(processOpt = Option(process),
         patternOpt = Option(patternWithPlan), primitiveOpt = Option(Primitive.E))

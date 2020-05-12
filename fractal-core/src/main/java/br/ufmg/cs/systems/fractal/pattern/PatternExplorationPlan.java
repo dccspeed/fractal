@@ -70,6 +70,10 @@ public class PatternExplorationPlan implements Externalizable, Writable {
       return vertexPredicates.get(i);
    }
 
+   public void setVertexPredicate(VertexPredicate vertexPredicate, int i) {
+      this.vertexPredicates.set(i, vertexPredicate);
+   }
+
    public EdgePredicates edgePredicates(int i) {
       return edgePredicates.get(i);
    }

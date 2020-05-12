@@ -59,7 +59,7 @@ public class VertexPredicate implements IntPredicate, Writable, Externalizable {
 
       @Override
       public String toString() {
-         return "vpred{true}" + getClass().getTypeName();
+         return "vpred{true}";
       }
    }
 

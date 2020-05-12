@@ -243,7 +243,8 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
 
    @Override
    public String toString() {
-      return "mis{supp=" + currentSupport + "}";
+      return "mis{enoughSupport=" + enoughSupport + ", numSubgraphs=" + currentSupport + "}";
+      //return toStringDetailed();
    }
 
    public String toStringDetailed() {

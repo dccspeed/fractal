@@ -3,11 +3,14 @@ package br.ufmg.cs.systems.fractal.pattern;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.BasicMainGraph;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
+import br.ufmg.cs.systems.fractal.subgraph.EdgeInducedSubgraph;
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntIntMapPool;
 import com.koloboke.collect.map.IntIntMap;
+import com.koloboke.collect.map.hash.HashObjObjMap;
+import com.koloboke.collect.map.hash.HashObjObjMaps;
 import com.koloboke.collect.set.hash.HashObjSet;
 import com.koloboke.collect.set.hash.HashObjSets;
 import org.apache.log4j.Logger;
@@ -24,6 +27,7 @@ public class PatternUtils {
     * @return set of new patterns
     */
    public static HashObjSet<Pattern> extendByVertex(HashObjSet<Pattern> patterns) {
+      if (patterns.isEmpty()) return singleVertexPatternSet();
       HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
       patterns.forEach(p -> newPatterns.addAll(extendByVertex(p)));
       return newPatterns;
@@ -76,6 +80,92 @@ public class PatternUtils {
    }
 
    /**
+    * Generates all canonical patterns from extending each existing pattern by one edge
+    *
+    * @param patterns set of existing patterns
+    * @return set of new patterns
+    */
+   public static HashObjSet<Pattern> extendByEdge(HashObjSet<Pattern> patterns) {
+      if (patterns.isEmpty()) return singleEdgePatternSet();
+      HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
+      patterns.forEach(p -> newPatterns.addAll(extendByEdge(p)));
+      return newPatterns;
+   }
+
+   /**
+    * Generates all canonical patterns obtained from *pattern* by extending one edge from it
+    *
+    * @param pattern
+    * @return set of new canonical patterns
+    */
+   public static HashObjSet<Pattern> extendByEdge(Pattern pattern) {
+      Configuration config = createConfig();
+      config.setSubgraphClass(EdgeInducedSubgraph.class);
+      HashObjObjMap<Pattern,Pattern> quickMap = HashObjObjMaps.newMutableMap();
+      HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
+
+      // patterns with internal edges
+      for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
+         for (int v = u + 1; v < pattern.getNumberOfVertices(); ++v) {
+            // check if this edge already exists
+            boolean edgeExists = false;
+            for (PatternEdge pedge : pattern.getEdges()) {
+               if ((pedge.getSrcPos() == u && pedge.getDestPos() == v)
+                       || (pedge.getSrcPos() == v && pedge.getDestPos() == u)) {
+                  edgeExists = true;
+                  break;
+               }
+            }
+
+            if (edgeExists) continue;
+
+            MainGraph graph = createGraph(config, pattern);
+            graph.addEdge(u, v, graph.numEdges());
+
+            // create vertex induced subgraph representing the temp graph (with all of its vertices and edges)
+            EdgeInducedSubgraph subgraph = (EdgeInducedSubgraph) config.createSubgraph();
+            for (int w = 0; w < graph.numEdges(); ++w) subgraph.addWord(w);
+
+            // get new quick pattern from subgraph, turn canonical (canonical labeling) and add to the resulting set to
+            // remove duplicates
+            Pattern newPattern = subgraph.getPattern();
+            Pattern canonicalPattern = newPattern.copy();
+            canonicalPattern.turnCanonical();
+            if (!quickMap.containsKey(canonicalPattern)) {
+               quickMap.put(canonicalPattern, newPattern);
+               //newPatterns.add(newPattern);
+               newPatterns.add(canonicalPattern);
+            }
+         }
+      }
+
+      // patterns with external edges
+      int v = pattern.getNumberOfVertices();
+      for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
+         MainGraph graph = createGraph(config, pattern);
+         graph.addEdge(u, v, graph.numEdges());
+
+         // create vertex induced subgraph representing the temp graph (with all of its vertices and edges)
+         EdgeInducedSubgraph subgraph = (EdgeInducedSubgraph) config.createSubgraph();
+         for (int w = 0; w < graph.numEdges(); ++w) subgraph.addWord(w);
+
+         // get new quick pattern from subgraph, turn canonical (canonical labeling) and add to the resulting set to
+         // remove duplicates
+         Pattern newPattern = subgraph.getPattern();
+         Pattern canonicalPattern = newPattern.copy();
+         canonicalPattern.turnCanonical();
+         if (!quickMap.containsKey(canonicalPattern)) {
+            quickMap.put(canonicalPattern, newPattern);
+            //newPatterns.add(newPattern);
+            newPatterns.add(canonicalPattern);
+         }
+      }
+
+      return newPatterns;
+   }
+
+
+   /**
     * Creates minimal configurations for isolated pattern handling
     *
     * @return new configuration
@@ -109,7 +199,7 @@ public class PatternUtils {
 
       // add new vertex
       graph.addVertex(pattern.getNumberOfVertices());
-      vertexLabels.add(1);
+      vertexLabels.add(Integer.MIN_VALUE);
 
       // add pattern edges and edge labels
       for (int e = 0; e < pattern.getNumberOfEdges(); ++e) {
@@ -166,11 +256,40 @@ public class PatternUtils {
    }
 
    /**
+    * Generates a single edge unlabeled pattern
+    *
+    * @return new pattern
+    */
+   public static Pattern singleEdgePattern() {
+      Configuration config = createConfig();
+      config.setSubgraphClass(EdgeInducedSubgraph.class);
+      MainGraph graph = createGraph(config);
+      graph.addVertex(0);
+      graph.addVertex(1);
+      graph.addEdge(0, 1, graph.numEdges());
+      EdgeInducedSubgraph subgraph = (EdgeInducedSubgraph) config.createSubgraph();
+      subgraph.addWord(0);
+      return subgraph.getPattern();
+   }
+
+   /**
+    * Generates a set with one single edge unlabeled pattern
+    *
+    * @return set containing the new pattern
+    */
+   public static HashObjSet<Pattern> singleEdgePatternSet() {
+      HashObjSet<Pattern> patterns = HashObjSets.newMutableSet();
+      patterns.add(singleEdgePattern());
+      return patterns;
+   }
+
+   /**
     * Maps a pattern to one of its automorphisms such that edges stay in increasing order of vertex positions
     *
     * @param pattern pattern to be modified in-place
     */
    public static void increasingPositions(Pattern pattern) {
+      if (pattern.getNumberOfVertices() == 1) return;
       IntIntMap labeling = IntIntMapPool.instance().createObject();
       int i, j, src, dst;
       PatternEdge pedge = null;

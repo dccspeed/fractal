@@ -2,7 +2,13 @@
 
 printf "Description: Script launcher for Fractal built-in applications\n\n"
 
-apps="motifssampling|motifspf|motifspflabeled|esubgraphs|vsubgraphswithedges|vsubgraphs|vsubgraphssampling|fsm|motifs|cliques|cliquesopt|gqueryingmcvc|gquerying|gqueryingsampling|gqueryingnaive|kws"
+gqueryings="gqueryingmcvc|gquerying|gqueryinginduced|gqueryingsampling|gqueryinginducedsampling|gqueryingnaive"
+motifss="motifssampling|motifspf|motifspflabeled|motifs"
+cliquess="cliques|cliquesopt"
+fsms="fsm|fsmpf|fsmpflabeled"
+enumerations="esubgraphs|vsubgraphswithedges|vsubgraphs|vsubgraphssampling"
+extras="kws"
+apps="${gqueryings}|${motifss}|${cliquess}|${fsms}|${enumerations}|${extras}"
 
 usage="
 Usage:
@@ -45,6 +51,24 @@ fi
 
 case "$app" in
 	fsm)
+	required="inputgraph steps fsmsupp"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
+	;;
+	fsmpf)
+	required="inputgraph steps fsmsupp"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
+	;;
+	fsmpflabeled)
 	required="inputgraph steps fsmsupp"
         appusage="
 
@@ -153,7 +177,26 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
+	gqueryinginduced)
+	required="inputgraph steps query"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
+	;;
 	gqueryingsampling)
+	required="inputgraph steps query fraction"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'
+   fraction=<fraction between 0 and 1>     'Fraction of subgraphs to be sampled uniformly at random'"
+	;;
+	gqueryinginducedsampling)
 	required="inputgraph steps query fraction"
         appusage="
 

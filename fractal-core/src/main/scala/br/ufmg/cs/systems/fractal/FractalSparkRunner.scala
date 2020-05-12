@@ -1,17 +1,12 @@
 package br.ufmg.cs.systems.fractal
 
-import java.util.function.{IntConsumer, IntPredicate}
-
-import br.ufmg.cs.systems.fractal.computation.Computation
+import br.ufmg.cs.systems.fractal.gmlib.fsm.{DomainSupport, MNISupport}
 import br.ufmg.cs.systems.fractal.graph.MainGraph
-import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlanMCVCVgroups, PatternUtils}
-import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph
-import br.ufmg.cs.systems.fractal.util.{EdgePredicate, EdgePredicates, Logging}
-import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjArrayList}
-import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool
-import com.koloboke.collect.map.hash.HashObjIntMap
+import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternUtils}
+import br.ufmg.cs.systems.fractal.util.{Logging, VertexPredicate}
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
+import com.koloboke.collect.set.hash.{HashObjSet, HashObjSets}
 import org.apache.hadoop.io._
-import org.apache.spark.util.LongAccumulator
 import org.apache.spark.{SparkConf, SparkContext}
 
 trait FractalSparkApp extends Logging {
@@ -164,13 +159,14 @@ class MotifsAppPatternFirstLabeled(val fractalGraph: FractalGraph,
 
       val cur = patterns.cursor()
       while (cur.moveNext()) {
-         val pattern = cur.elem()
-
+         val patternWithoutPlan = cur.elem()
          /**
           * Motifs counting consider induced subgraphs, unlabeled at first
           */
-         pattern.setInduced(true)
-         pattern.setVertexLabeled(false)
+         patternWithoutPlan.setInduced(true)
+         patternWithoutPlan.setVertexLabeled(false)
+
+         val pattern = PatternExplorationPlan.apply(patternWithoutPlan).get(0)
 
          val gqueryingRes = fractalGraph.gquerying(pattern).
             aggregate[Pattern,LongWritable](
@@ -352,6 +348,144 @@ class FSMApp(val fractalGraph: FractalGraph,
    }
 }
 
+class FSMAppPatternFirst(val fractalGraph: FractalGraph,
+                         commStrategy: String,
+                         numPartitions: Int,
+                         explorationSteps: Int,
+                         supportThreshold: Int) extends FractalSparkApp {
+   def execute: Unit = {
+
+      var patterns = HashObjSets.newMutableSet[Pattern]()
+      var infrequentPatterns = HashObjSets.newMutableSet[Pattern]()
+
+      do {
+         patterns = PatternUtils.extendByEdge(patterns)
+
+         logInfo(s"PatternSetBeforeRemovingInfrequent size=${patterns.size()} ${patterns}")
+
+         if (!infrequentPatterns.isEmpty) {
+            logInfo(s"InfrequentPatternsBeforeExtension size=${infrequentPatterns.size()} ${infrequentPatterns}")
+            infrequentPatterns = PatternUtils.extendByEdge(infrequentPatterns)
+            logInfo(s"InfrequentPatternsAfterExtension size=${infrequentPatterns.size()} ${infrequentPatterns}")
+            patterns.removeAll(infrequentPatterns)
+            infrequentPatterns.clear()
+         }
+
+         logInfo(s"PatternSetAfterRemovingInfrequent size=${patterns.size()} ${patterns}")
+
+         val patternsCur = patterns.cursor()
+         while (patternsCur.moveNext()) {
+            val patternWithoutPlan = patternsCur.elem()
+            patternWithoutPlan.setVertexLabeled(false)
+            val pattern = PatternExplorationPlan.apply(patternWithoutPlan).get(0)
+            val minSupport = supportThreshold
+            val gqueryingRes = fractalGraph.gquerying(pattern).
+               set("comm_strategy", commStrategy).
+               set("num_partitions", numPartitions).
+               explore(pattern.getNumberOfVertices - 1).
+               aggregate [NullWritable, DomainSupport] (
+                  "support",
+                  (s,c,k) => {k},
+                  (s,c,v) => {v.setSupport(minSupport); v.setFromSubgraph(s); v},
+                  (v1,v2) => {v1.aggregate(v2); v1}
+               )
+
+            /**
+             * Observation: right now we are being conservative and ignoring the time to fix the domain
+             * sets w.r.t. the automorphisms of this pattern (vertex equivalence)
+             */
+            val support = gqueryingRes.aggregationMap [NullWritable,DomainSupport] ("support")(NullWritable.get())
+            val (_, finalAggregateElapsed) = FractalSparkRunner.time {
+               support.handleConversionFromQuickToCanonical(pattern, pattern)
+            }
+
+            logInfo(s"FinalAggregateAutomorphisms elapsed=${finalAggregateElapsed}")
+
+            if (!support.hasEnoughSupport) {
+               infrequentPatterns.add(pattern)
+               patternsCur.remove()
+               logInfo(s"InfrequentPattern ${pattern} support=${support} minSupport=${minSupport}")
+            } else {
+               logInfo(s"FrequentPattern ${pattern} support=${support} minSupport=${minSupport}")
+            }
+         }
+
+      } while (!patterns.isEmpty)
+   }
+}
+
+class FSMAppPatternFirstLabeled(val fractalGraph: FractalGraph,
+                         commStrategy: String,
+                         numPartitions: Int,
+                         explorationSteps: Int,
+                         supportThreshold: Int) extends FractalSparkApp {
+   def execute: Unit = {
+
+      var unlabeledPatterns: HashObjSet[Pattern] = null
+      var infrequentPatterns = HashObjSets.newMutableSet[Pattern]()
+      var frequentPatterns = HashObjSets.newMutableSet[Pattern]()
+
+      do {
+         unlabeledPatterns = PatternUtils.extendByEdge(frequentPatterns)
+         frequentPatterns.clear()
+
+         logInfo(s"PatternSetBeforeRemovingInfrequent size=${unlabeledPatterns.size()} ${unlabeledPatterns}")
+
+         if (!infrequentPatterns.isEmpty) {
+            logInfo(s"InfrequentPatternsBeforeExtension size=${infrequentPatterns.size()} ${infrequentPatterns}")
+            infrequentPatterns = PatternUtils.extendByEdge(infrequentPatterns)
+            logInfo(s"InfrequentPatternsAfterExtension size=${infrequentPatterns.size()} ${infrequentPatterns}")
+            unlabeledPatterns.removeAll(infrequentPatterns)
+            infrequentPatterns.clear()
+         }
+
+         logInfo(s"PatternSetAfterRemovingInfrequent size=${unlabeledPatterns.size()} ${unlabeledPatterns}")
+
+         val patternsCur = unlabeledPatterns.cursor()
+         while (patternsCur.moveNext()) {
+            val patternWithoutPlan = patternsCur.elem()
+            if (patternWithoutPlan.getNumberOfEdges == 1) {
+               patternWithoutPlan.setVertexLabeled(false)
+            } else {
+               patternWithoutPlan.setVertexLabeled(true)
+            }
+            val pattern = PatternExplorationPlan.apply(patternWithoutPlan).get(0)
+            if (pattern.getNumberOfEdges > 1 && pattern.getConfig.getMainGraph[MainGraph[_,_]].vertexLabel(pattern.getVertices.getLast) == Int.MinValue) {
+               pattern.explorationPlan().setVertexPredicate(
+                  VertexPredicate.trueVertexPredicate,
+                  pattern.getNumberOfVertices - 1)
+            }
+            val minSupport = supportThreshold
+            val gqueryingRes = fractalGraph.gquerying(pattern).
+               set("comm_strategy", commStrategy).
+               set("num_partitions", numPartitions).
+               explore(pattern.getNumberOfVertices - 1).
+               aggregate [Pattern, DomainSupport] (
+                  "support",
+                  (s,c,k) => {s.labeledPattern(c.getPattern)},
+                  (s,c,v) => {v.setSupport(minSupport); v.setFromSubgraph(s); v},
+                  (v1,v2) => {v1.aggregate(v2); v1}
+               )
+
+            val patternSupport = gqueryingRes.aggregationMap[Pattern, DomainSupport]("support")
+            for ((labeledPattern, support) <- patternSupport) {
+               //support.handleConversionFromQuickToCanonical(labeledPattern, labeledPattern)
+               if (!support.hasEnoughSupport) {
+                  infrequentPatterns.add(labeledPattern)
+                  logInfo(s"InfrequentPattern unlabeledPattern=${pattern} ${labeledPattern} support=${support} minSupport=${minSupport}")
+               } else {
+                  frequentPatterns.add(labeledPattern)
+                  logInfo(s"FrequentPattern unlabaledPattern=${pattern} ${labeledPattern} support=${support} minSupport=${minSupport}")
+               }
+            }
+         }
+
+      } while (!frequentPatterns.isEmpty)
+   }
+}
+
+
+
 class KeywordSearchApp(val fractalGraph: FractalGraph,
                        commStrategy: String,
                        numPartitions: Int,
@@ -408,11 +542,11 @@ class GQueryingMCVCApp(val fractalGraph: FractalGraph,
 }
 
 class GQueryingAppSampling(val fractalGraph: FractalGraph,
-                           commStrategy: String,
-                           numPartitions: Int,
-                           explorationSteps: Int,
-                           subgraphPath: String,
-                           fraction: Double) extends FractalSparkApp {
+                            commStrategy: String,
+                            numPartitions: Int,
+                            explorationSteps: Int,
+                            subgraphPath: String,
+                            fraction: Double) extends FractalSparkApp {
    def execute: Unit = {
       val subgraph = new FractalGraph(
          subgraphPath, fractalGraph.fractalContext, "warn")
@@ -427,6 +561,36 @@ class GQueryingAppSampling(val fractalGraph: FractalGraph,
       }
 
       logInfo(s"GQueryingAppSampling comm=${commStrategy}" +
+         s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
+         s" graph=${fractalGraph} subgraph=${subgraph}" +
+         s" counting=${gquerying.numValidSubgraphs()} elapsed=${elapsed}"
+      )
+   }
+}
+
+class GQueryingInducedAppSampling(val fractalGraph: FractalGraph,
+                           commStrategy: String,
+                           numPartitions: Int,
+                           explorationSteps: Int,
+                           subgraphPath: String,
+                           fraction: Double) extends FractalSparkApp {
+   def execute: Unit = {
+      val subgraph = new FractalGraph(
+         subgraphPath, fractalGraph.fractalContext, "warn")
+
+      val pattern = subgraph.asPattern
+      pattern.setInduced(true)
+
+      val gquerying = fractalGraph.gquerying(pattern, fraction).
+         set ("comm_strategy", commStrategy).
+         set ("num_partitions", numPartitions).
+         explore(explorationSteps)
+
+      val (accums, elapsed) = FractalSparkRunner.time {
+         gquerying.compute()
+      }
+
+      logInfo(s"GQueryingInducedAppSampling comm=${commStrategy}" +
          s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
          s" graph=${fractalGraph} subgraph=${subgraph}" +
          s" counting=${gquerying.numValidSubgraphs()} elapsed=${elapsed}"
@@ -460,7 +624,36 @@ class GQueryingApp(val fractalGraph: FractalGraph,
    }
 }
 
-object FractalSparkRunner {
+class GQueryingInducedApp(val fractalGraph: FractalGraph,
+                   commStrategy: String,
+                   numPartitions: Int,
+                   explorationSteps: Int,
+                   subgraphPath: String) extends FractalSparkApp {
+   def execute: Unit = {
+      val subgraph = new FractalGraph(
+         subgraphPath, fractalGraph.fractalContext, "warn")
+
+      val pattern = subgraph.asPattern
+      pattern.setInduced(true)
+
+      val gquerying = fractalGraph.gquerying(pattern).
+         set ("comm_strategy", commStrategy).
+         set ("num_partitions", numPartitions).
+         explore(explorationSteps)
+
+      val (accums, elapsed) = FractalSparkRunner.time {
+         gquerying.compute()
+      }
+
+      logInfo(s"GQueryingInducedApp comm=${commStrategy}" +
+         s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
+         s" graph=${fractalGraph} subgraph=${subgraph}" +
+         s" counting=${gquerying.numValidSubgraphs()} elapsed=${elapsed}"
+      )
+   }
+}
+
+object FractalSparkRunner extends Logging {
    def time[R](block: => R): (R, Long) = {
       val t0 = System.currentTimeMillis()
       val result = block    // call-by-name
@@ -556,6 +749,16 @@ object FractalSparkRunner {
             val support = args(i).toInt
             new FSMApp(fractalGraph, commStrategy, numPartitions,
                explorationSteps, support)
+         case "fsmpf" =>
+            i += 1
+            val support = args(i).toInt
+            new FSMAppPatternFirst(fractalGraph, commStrategy, numPartitions,
+               explorationSteps, support)
+         case "fsmpflabeled" =>
+            i += 1
+            val support = args(i).toInt
+            new FSMAppPatternFirstLabeled(fractalGraph, commStrategy, numPartitions,
+               explorationSteps, support)
          case "kws" =>
             i += 1
             val queryWords = args.slice(i, args.length)
@@ -571,6 +774,11 @@ object FractalSparkRunner {
             val subgraphPath = args(i)
             new GQueryingApp(fractalGraph, commStrategy,
                numPartitions, explorationSteps, subgraphPath)
+         case "gqueryinginduced" =>
+            i += 1
+            val subgraphPath = args(i)
+            new GQueryingInducedApp(fractalGraph, commStrategy,
+               numPartitions, explorationSteps, subgraphPath)
          case "gqueryingsampling" =>
             i += 1
             val subgraphPath = args(i)
@@ -578,13 +786,20 @@ object FractalSparkRunner {
             val fraction = args(i).toDouble
             new GQueryingAppSampling(fractalGraph, commStrategy,
                numPartitions, explorationSteps, subgraphPath, fraction)
+         case "gqueryinginducedsampling" =>
+            i += 1
+            val subgraphPath = args(i)
+            i += 1
+            val fraction = args(i).toDouble
+            new GQueryingInducedAppSampling(fractalGraph, commStrategy,
+               numPartitions, explorationSteps, subgraphPath, fraction)
          case appName =>
             throw new RuntimeException(s"Unknown app: ${appName}")
       }
 
       i += 1
       while (i < args.length) {
-         println (s"Found config=${args(i)}")
+         logInfo(s"Found config=${args(i)}")
          val kv = args(i).split(":")
          if (kv.length == 2) {
             fractalGraph.set (kv(0), kv(1))

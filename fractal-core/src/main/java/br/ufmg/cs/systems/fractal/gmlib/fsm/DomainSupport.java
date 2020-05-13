@@ -52,7 +52,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
       this.support = support;
    }
 
-   public void setFromSubgraph(Subgraph subgraph) {
+   public void setSubgraph(Subgraph subgraph) {
       setFromSubgraph = true;
       this.subgraph = subgraph;
    }

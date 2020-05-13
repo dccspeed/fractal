@@ -1,5 +1,7 @@
 package br.ufmg.cs.systems.fractal
 
+import br.ufmg.cs.systems.fractal.gmlib.fsm.DomainSupport
+import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.util.Logging
 import org.apache.spark.{SparkConf, SparkContext}
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
@@ -16,18 +18,39 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
    private var fc: FractalContext = _
    private var fgraph: FractalGraph = _
    private var fgraphEdgeLabel: FractalGraph = _
+   private var citeseerSingleLabelGraph: FractalGraph = _
    private var citeseerGraph: FractalGraph = _
 
+   /**
+    * Ground truth for testing pattern matching application
+    */
    private val patternMatchingGt: Map[(String,String,Int),Long] = {
       var patternMatchingGt = Map.empty[(String,String,Int),Long]
-      val in = Source.fromFile("../data/pattern-matching-citeseer.gt")
+      val in = Source.fromFile("../data/pattern-matching-test.gt")
       for (line <- in.getLines) {
          val toks = line.trim.split(" ")
-         val (graph, query, numVertices, numSubgraphs) = (toks(0), toks(1), toks(2), toks(3))
-         patternMatchingGt = patternMatchingGt + ((graph,query,numVertices.toInt) -> numSubgraphs.toLong)
+         val (graph, query, numVertices, numSubgraphs) = (toks(0), toks(1),
+            toks(2), toks(3))
+         patternMatchingGt = patternMatchingGt +
+            ((graph,query,numVertices.toInt) -> numSubgraphs.toLong)
       }
       in.close()
       patternMatchingGt
+   }
+
+   /**
+    * Ground-truth for testing the FSM application
+    */
+   private val fsmGt: Map[(String,Int),Long] = {
+      var fsmGt = Map.empty[(String,Int),Long]
+      val in = Source.fromFile("../data/fsm-test.gt")
+      for (line <- in.getLines) {
+         val toks = line.trim.split(" ")
+         val (graph, minSupport, numPatterns) = (toks(0), toks(1), toks(2))
+         fsmGt = fsmGt + ((graph,minSupport.toInt) -> numPatterns.toLong)
+      }
+      in.close()
+      fsmGt
    }
 
    /** set up spark context */
@@ -46,7 +69,12 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
       fgraphEdgeLabel = fc.textFile ("../data/cube-edge-label.graph")
 
-      citeseerGraph = fc.textFile("../data/citeseer-single-label.sc",
+      citeseerSingleLabelGraph = fc.textFile(
+         "../data/citeseer-single-label.sc",
+         graphClass = "br.ufmg.cs.systems.fractal.graph.SuccinctMainGraph")
+
+      citeseerGraph = fc.textFile(
+         "../data/citeseer.sc",
          graphClass = "br.ufmg.cs.systems.fractal.graph.SuccinctMainGraph")
    }
 
@@ -113,11 +141,8 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       val numFreqPatterns = List(3, 3+4, 3+4+7)
 
       for (k <- 0 to (numFreqPatterns.size - 1)) {
-         val fsmRes = fgraph.fsm(support, k).
-            set ("num_partitions", numPartitions)
-
-         val freqPatterns = fsmRes.
-            aggregationMap [Pattern,DomainSupport] ("frequent_patterns")
+         fgraph.set("num_partitions", numPartitions)
+         val freqPatterns = fgraph.fsm(support, k)
 
          assert(freqPatterns.size == numFreqPatterns(k))
       }
@@ -179,12 +204,12 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       import org.apache.hadoop.io.LongWritable
 
       // 3-motifs
-      val motifs3 = citeseerGraph.motifs.explore(2)
+      val motifs3 = citeseerSingleLabelGraph.motifs.explore(2)
       val motifsCounts3 = motifs3.aggregationMap [Pattern,LongWritable] ("motifs")
 
       // 3-motifs estimate
       val fraction = 0.5
-      val motifs3est = citeseerGraph.svfractoid(fraction).
+      val motifs3est = citeseerSingleLabelGraph.svfractoid(fraction).
          set("num_partitions", numPartitions).
          expand(3).
          aggregate [Pattern,LongWritable] (
@@ -202,7 +227,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
             s"; error(%)=${error}")
 
          // TODO: find a better way to assert correctness for sampling
-         assert (error <= 10)
+         assert (error <= 15)
       }
    }
 
@@ -211,12 +236,12 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       import org.apache.hadoop.io.LongWritable
 
       // 4-motifs
-      val motifs4 = citeseerGraph.motifs.explore(3)
+      val motifs4 = citeseerSingleLabelGraph.motifs.explore(3)
       val motifsCounts4 = motifs4.aggregationMap [Pattern,LongWritable] ("motifs")
 
       // 4-motifs estimate
       val fraction = 0.5
-      val motifs4est = citeseerGraph.svfractoid(fraction).
+      val motifs4est = citeseerSingleLabelGraph.svfractoid(fraction).
          set("num_partitions", numPartitions).
          expand(4).
          aggregate [Pattern,LongWritable] (
@@ -240,11 +265,11 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
    test ("[sampling.gquerying.triangle]", Tag("sampling.gquerying.triangle")) {
       // ground-truth 1: 3-cliques
-      val gt1 = citeseerGraph.cliques.explore(2).numValidSubgraphs()
+      val gt1 = citeseerSingleLabelGraph.cliques.explore(2).numValidSubgraphs()
 
       // ground-truth 2: triangle querying
       val triangle = new FractalGraph("../data/triangle-test.graph", fc)
-      val triangles = citeseerGraph.gquerying(triangle.asPattern).
+      val triangles = citeseerSingleLabelGraph.gquerying(triangle.asPattern).
          set("num_partitions", numPartitions).
          explore(2)
       val gt2 = triangles.numValidSubgraphs()
@@ -254,7 +279,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
       // 50% estimate
       val fraction = 0.5
-      val sample = citeseerGraph.spfractoid(triangle.asPattern, fraction).
+      val sample = citeseerSingleLabelGraph.spfractoid(triangle.asPattern, fraction).
          expand(3).
          set("num_partitions", numPartitions)
       val estimate = sample.numValidSubgraphs() / fraction
@@ -271,14 +296,14 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
    test ("[sampling.gquerying.square]", Tag("sampling.gquerying.square")) {
       // ground-truth: square querying
       val square = new FractalGraph("../data/q2-square.graph", fc)
-      val squares = citeseerGraph.gquerying(square.asPattern).
+      val squares = citeseerSingleLabelGraph.gquerying(square.asPattern).
          set("num_partitions", numPartitions).
          explore(3)
       val gt = squares.numValidSubgraphs()
 
       // 10% estimate
       val fraction = 0.1
-      val sample = citeseerGraph.spfractoid(square.asPattern, fraction).
+      val sample = citeseerSingleLabelGraph.spfractoid(square.asPattern, fraction).
          expand(4).
          set("num_partitions", numPartitions)
       val estimate = sample.numValidSubgraphs() / fraction
@@ -292,73 +317,17 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       assert (error <= 20)
    }
 
-   test ("[citeseer.gqueryingmcvc]", Tag("citeseer.gqueryingmcvc")) {
-      // Expected output
-      val numSubgraph = Map("triangles" -> 1166, "squares" -> 6059, "chordalsquares" -> 3730)
-
-      // triangles
-      val triangle = new FractalGraph("../data/q1-triangle.graph", citeseerGraph.fractalContext)
-      val triangles = citeseerGraph.gquerying(triangle.asPattern).
-         set ("num_partitions", numPartitions).
-         explore(2)
-      assert(triangles.numValidSubgraphs() == numSubgraph("triangles"))
-
-      // triangles using MCVC
-      val trianglesPartialResults = citeseerGraph.gqueryingmcvc(triangle.asPattern)
-      var totalTriangles = 0L
-      for (trianglesPartialResult <- trianglesPartialResults) {
-         totalTriangles += trianglesPartialResult.
-            set("num_partitions", numPartitions).
-            numValidSubgraphs()
-      }
-      assert(totalTriangles == numSubgraph("triangles"))
-
-      // squares
-      val square = new FractalGraph("../data/q2-square.graph", citeseerGraph.fractalContext)
-      val squares = citeseerGraph.gquerying(square.asPattern).
-         set ("num_partitions", numPartitions).
-         explore(3)
-      assert(squares.numValidSubgraphs() == numSubgraph("squares"))
-
-      // squares using MCVC
-      val squaresPartialResults = citeseerGraph.gqueryingmcvc(square.asPattern)
-      var totalSquares = 0L
-      for (squaresPartialResult <- squaresPartialResults) {
-         totalSquares += squaresPartialResult.
-            set("num_partitions", numPartitions).
-            numValidSubgraphs()
-      }
-      assert(totalSquares == numSubgraph("squares"))
-
-      // chordalsquares
-      val chordalsquare = new FractalGraph("../data/q3-chordal-square.graph", citeseerGraph.fractalContext)
-      val chordalsquares = citeseerGraph.gquerying(chordalsquare.asPattern).
-         set ("num_partitions", numPartitions).
-         explore(3)
-      assert(chordalsquares.numValidSubgraphs() == numSubgraph("chordalsquares"))
-
-      // chordalsquares using MCVC
-      val chordalsquaresPartialResults = citeseerGraph.gqueryingmcvc(chordalsquare.asPattern)
-      var totalChordalsquares = 0L
-      for (chordalsquaresPartialResult <- chordalsquaresPartialResults) {
-         totalChordalsquares += chordalsquaresPartialResult.
-            set("num_partitions", numPartitions).
-            numValidSubgraphs()
-      }
-      assert(totalChordalsquares == numSubgraph("chordalsquares"))
-   }
-
-   test ("[citeseer.gquerying.groundtruth]", Tag("citeseer.gquerying.groundtruth")) {
+   test ("[citeseer.gquerying.gt]", Tag("citeseer.gquerying.gt")) {
       for (((_,query,numVertices),numSubgraphs) <- patternMatchingGt.filter(_._1._1 == "citeseer")) {
 
-         val queryGraph = new FractalGraph(s"../data/${query}.graph", citeseerGraph.fractalContext)
-         val res = citeseerGraph.gquerying(queryGraph.asPattern).
+         val queryGraph = new FractalGraph(s"../data/${query}.graph", citeseerSingleLabelGraph.fractalContext)
+         val res = citeseerSingleLabelGraph.gquerying(queryGraph.asPattern).
             set ("num_partitions", numPartitions).
             explore(numVertices - 1)
 
          assert(res.numValidSubgraphs() == numSubgraphs, s"query=${query} numVertices=${numVertices}")
 
-         val queryPartialResults = citeseerGraph.gqueryingmcvc(queryGraph.asPattern)
+         val queryPartialResults = citeseerSingleLabelGraph.gqueryingmcvc(queryGraph.asPattern)
          var totalNumSubgraphs = 0L
          for (queryPartialResult <- queryPartialResults) {
             totalNumSubgraphs += queryPartialResult.
@@ -366,6 +335,37 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
                numValidSubgraphs()
          }
          assert(totalNumSubgraphs == numSubgraphs, s"MCVC query=${query} numVertices=${numVertices}")
+      }
+   }
+
+   test ("[citeseer.fsm.gt]", Tag("citeseer.fsm.gt")) {
+      for (((graph,minSupport), numPatterns) <- fsmGt) {
+         val chosenGraph = if (graph == "citeseer-single-label") {
+            citeseerSingleLabelGraph
+         } else if (graph == "citeseer") {
+            citeseerGraph
+         } else {
+            throw new RuntimeException(s"Invalid graph string ${graph}")
+         }
+
+         chosenGraph.set("num_partitions", numPartitions)
+
+         // subgraph-first approach: edge by edge
+         val frequentPatterns = chosenGraph
+            .fsm(minSupport, Int.MaxValue)
+            .keys
+
+         assert(frequentPatterns.size == numPatterns)
+
+         // pattern-first approach: pattern-matching on every possible pattern
+         val frequentPatternsPf = chosenGraph
+            .fsmpf(minSupport, Int.MaxValue)
+            .keys
+
+         assert(frequentPatternsPf.size == numPatterns)
+
+         // assert patterns found are the same
+         assert(frequentPatterns.equals(frequentPatternsPf))
       }
    }
 }

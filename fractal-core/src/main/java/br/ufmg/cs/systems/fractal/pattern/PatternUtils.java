@@ -21,25 +21,29 @@ public class PatternUtils {
    private static final Logger LOG = Logger.getLogger(PatternUtils.class);
 
    /**
-    * Generates all canonical patterns from extending each existing pattern by one vertex
+    * Generates all canonical patterns from extending each existing pattern
+    * by one vertex
     *
     * @param patterns set of existing patterns
     * @return set of new patterns
     */
-   public static HashObjSet<Pattern> extendByVertex(HashObjSet<Pattern> patterns) {
+   public static HashObjSet<Pattern> extendByVertex(
+           HashObjSet<Pattern> patterns, int vertexLabel) {
       if (patterns.isEmpty()) return singleVertexPatternSet();
       HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
-      patterns.forEach(p -> newPatterns.addAll(extendByVertex(p)));
+      patterns.forEach(p -> newPatterns.addAll(extendByVertex(p, vertexLabel)));
       return newPatterns;
    }
 
    /**
-    * Generates all canonical patterns obtained from *pattern* by extending one vertex from it
+    * Generates all canonical patterns obtained from *pattern* by extending
+    * one vertex from it
     *
     * @param pattern
     * @return set of new canonical patterns
     */
-   public static HashObjSet<Pattern> extendByVertex(Pattern pattern) {
+   public static HashObjSet<Pattern> extendByVertex(Pattern pattern,
+                                                    int vertexLabel) {
       Configuration config = createConfig();
       HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
       IntArrayList vertexPositions = new IntArrayList(pattern.getNumberOfVertices());
@@ -56,6 +60,8 @@ public class PatternUtils {
          while (connectionPatternsIter.hasNext()) {
             IntArrayList connectionPattern = connectionPatternsIter.next();
             MainGraph graph = createGraph(config, pattern);
+            graph.addVertex(newPosition);
+            graph.addVertexLabel(newPosition, vertexLabel);
 
             // add connection pattern edges to temp graph
             for (int i = 0; i < connectionPattern.size(); ++i) {
@@ -85,10 +91,11 @@ public class PatternUtils {
     * @param patterns set of existing patterns
     * @return set of new patterns
     */
-   public static HashObjSet<Pattern> extendByEdge(HashObjSet<Pattern> patterns) {
+   public static HashObjSet<Pattern> extendByEdge(
+           HashObjSet<Pattern> patterns, int vertexLabel) {
       if (patterns.isEmpty()) return singleEdgePatternSet();
       HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
-      patterns.forEach(p -> newPatterns.addAll(extendByEdge(p)));
+      patterns.forEach(p -> newPatterns.addAll(extendByEdge(p, vertexLabel)));
       return newPatterns;
    }
 
@@ -98,7 +105,8 @@ public class PatternUtils {
     * @param pattern
     * @return set of new canonical patterns
     */
-   public static HashObjSet<Pattern> extendByEdge(Pattern pattern) {
+   public static HashObjSet<Pattern> extendByEdge(Pattern pattern,
+                                                  int vertexLabel) {
       Configuration config = createConfig();
       config.setSubgraphClass(EdgeInducedSubgraph.class);
       HashObjObjMap<Pattern,Pattern> quickMap = HashObjObjMaps.newMutableMap();
@@ -143,6 +151,8 @@ public class PatternUtils {
       int v = pattern.getNumberOfVertices();
       for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
          MainGraph graph = createGraph(config, pattern);
+         graph.addVertex(pattern.getNumberOfVertices());
+         graph.addVertexLabel(pattern.getNumberOfVertices(), vertexLabel);
          graph.addEdge(u, v, graph.numEdges());
 
          // create vertex induced subgraph representing the temp graph (with all of its vertices and edges)
@@ -189,17 +199,13 @@ public class PatternUtils {
     */
    private static MainGraph createGraph(Configuration config, Pattern pattern) {
       MainGraph graph = createGraph(config);
-      IntArrayList vertexLabels = new IntArrayList(pattern.getNumberOfVertices() + 1);
+      IntArrayList vertexLabels = new IntArrayList(pattern.getNumberOfVertices());
 
       // add pattern vertices
       for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
          graph.addVertex(u);
          vertexLabels.add(1);
       }
-
-      // add new vertex
-      graph.addVertex(pattern.getNumberOfVertices());
-      vertexLabels.add(Integer.MIN_VALUE);
 
       // add pattern edges and edge labels
       for (int e = 0; e < pattern.getNumberOfEdges(); ++e) {

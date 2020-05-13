@@ -57,6 +57,8 @@ public interface Pattern extends Writable, Externalizable {
 
    void updateSymmetryBreaker();
 
+   void updateSymmetryBreakerVertexUnlabeled();
+
    int sbUpperBound(Subgraph subgraph, int pos);
 
    int sbLowerBound(Subgraph subgraph, int pos);

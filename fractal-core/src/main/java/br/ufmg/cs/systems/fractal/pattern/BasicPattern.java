@@ -616,6 +616,13 @@ public abstract class BasicPattern implements Pattern {
    }
 
    @Override
+   public void updateSymmetryBreakerVertexUnlabeled() {
+      int[][] symmetryBreaker = vsymmetryBreakerMatrix(false);
+      vsymmetryBreakerLowerBound = computeVsymmetryBreakerLowerBound(symmetryBreaker);
+      vsymmetryBreakerUpperBound = computeVsymmetryBreakerUpperBound(symmetryBreaker);
+   }
+
+   @Override
    public int sbUpperBound(Subgraph subgraph, int pos) {
       IntArrayList conditions = vsymmetryBreakerUpperBound().getUnchecked(pos);
       IntArrayList vertices = subgraph.getVertices();
@@ -978,14 +985,24 @@ public abstract class BasicPattern implements Pattern {
    }
 
    private int[][] vsymmetryBreakerMatrix() {
+      return vsymmetryBreakerMatrix(true);
+   }
+
+   private int[][] vsymmetryBreakerMatrix(boolean shouldConsiderVertexLabels) {
       int numVertices = getNumberOfVertices();
       int[][] symmetryBreaker = new int[numVertices][numVertices];
       IntArrayList vertexLabels = new IntArrayList(numVertices);
 
       IntCursor vertexCursor = vertices.cursor();
-      while (vertexCursor.moveNext()) {
-         vertexLabels.add(getConfig().getMainGraph().
-                 getVertex(vertexCursor.elem()).getVertexLabel());
+      if (shouldConsiderVertexLabels) {
+         while (vertexCursor.moveNext()) {
+            vertexLabels.add(getConfig().getMainGraph().
+                    getVertex(vertexCursor.elem()).getVertexLabel());
+         }
+      } else {
+         while (vertexCursor.moveNext()) {
+            vertexLabels.add(1);
+         }
       }
 
       vsymmetryBreakerRec(this.copy(), symmetryBreaker, vertexLabels, -1);

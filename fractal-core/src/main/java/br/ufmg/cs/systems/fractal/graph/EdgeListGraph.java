@@ -65,9 +65,9 @@ public class EdgeListGraph<V,E> extends BasicMainGraph<V,E> {
 
    @Override
    protected Vertex parseVertex(StringTokenizer tokenizer) {
-      int vertexId = Integer.parseInt(tokenizer.nextToken());
+      String vertexId = tokenizer.nextToken().trim();
 
-      int vertexIdx = vertexIdMap.get(vertexId);
+      int vertexIdx = vertexIdMap.getInt(vertexId);
       if (vertexIdx == -1) {
          vertexIdx = vertexIdMap.size();
          vertexIdMap.put(vertexId, vertexIdx);

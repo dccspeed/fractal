@@ -7,10 +7,12 @@ import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.map.IntObjCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.IntObjMap;
+import com.koloboke.collect.map.ObjIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
 import java.util.function.IntConsumer;
 
 import com.koloboke.collect.map.hash.HashIntObjMaps;
+import com.koloboke.collect.map.hash.HashObjIntMaps;
 import com.koloboke.function.IntIntConsumer;
 import com.koloboke.function.IntObjConsumer;
 import org.apache.commons.io.input.BOMInputStream;
@@ -38,8 +40,8 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
    private static final int INITIAL_ARRAY_SIZE = 4096;
    
-   protected IntIntMap vertexIdMap = 
-      HashIntIntMaps.getDefaultFactory().withDefaultValue(-1).newMutableMap();
+   protected ObjIntMap<String> vertexIdMap =
+      HashObjIntMaps.getDefaultFactory().withDefaultValue(-1).newMutableMap();
 
    protected Vertex<V>[] vertexIndexF;
    protected Edge<E>[] edgeIndexF;
@@ -809,19 +811,18 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    }
 
    protected Vertex parseVertex(StringTokenizer tokenizer) {
-      int vertexId = Integer.parseInt(tokenizer.nextToken());
+      String vertexId = tokenizer.nextToken().trim();
       int vertexLabel = parseVertexLabel(tokenizer);
 
-      int vertexIdx = vertexIdMap.get(vertexId);
+      int vertexIdx = vertexIdMap.getInt(vertexId);
+      Vertex vertex;
+
       if (vertexIdx == -1) {
-         //vertexIdx = vertexIdMap.size();
-         vertexIdx = vertexId;
-         //vertexIdMap.put(vertexId, vertexIdx);
-         Vertex vertex = createVertex(vertexIdx, vertexId, vertexLabel);
+         vertexIdx = Integer.parseInt(vertexId);
+         vertex = createVertex(vertexIdx, vertexId, vertexLabel);
          addVertex(vertex);
-         return vertex;
       } else {
-         Vertex vertex = vertexIndexF[vertexIdx];
+         vertex = vertexIndexF[vertexIdx];
          int currVertexLabel = vertex.getVertexLabel();
          if (currVertexLabel == -1) {
             vertex.setVertexLabel(vertexLabel);
@@ -832,8 +833,8 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
                   " numVertices=" + numVertices +
                   " vertexIdMapSize=" + vertexIdMap.size());
          }
-         return vertex;
       }
+      return vertex;
    }
 
    protected int parseVertexLabel(StringTokenizer tokenizer) {
@@ -887,7 +888,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       return (dest1 == src2 || dest1 == dest2 || src1 == dest2);
    }
 
-   protected Vertex createVertex(int id, int originalId, int label) {
+   protected Vertex createVertex(int id, String originalId, int label) {
       Vertex vertex = new Vertex(id, originalId, label);
       if (vertexProperties != null) {
          vertex.setProperty(vertexProperties[label]);

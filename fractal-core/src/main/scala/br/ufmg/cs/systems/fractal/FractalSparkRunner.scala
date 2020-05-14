@@ -82,6 +82,8 @@ class CliquesApp(val fractalGraph: FractalGraph,
       cliquesRes.compute()
     }
 
+    val subgraphs = cliquesRes.mappedSubgraphs.collect
+
     logInfo (s"CliquesApp comm=${commStrategy}" +
       s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
       s" graph=${fractalGraph} " +

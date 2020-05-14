@@ -3,18 +3,37 @@ package br.ufmg.cs.systems.fractal.subgraph
 import java.io.{DataInput, DataOutput}
 
 import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
-import br.ufmg.cs.systems.fractal.graph.BasicMainGraph
+import br.ufmg.cs.systems.fractal.graph.{BasicMainGraph, MainGraph}
+
+import scala.collection.mutable.ArrayBuffer
 
 /** An edge induced subgraph
   *
   * @param words integer array indicating the subgraph edges
   */
-case class ESubgraph(var words: Array[(Int,Int)])
+case class ESubgraph(var words: Array[(Int,Int)],
+                     var mappedWords: ArrayBuffer[String] = null)
     extends ResultSubgraph[(Int,Int)] {
 
   // must have because we are messing around with Writables
   def this() = {
     this(null.asInstanceOf[Array[(Int,Int)]])
+  }
+
+  def toMappedSubgraph(config: SparkConfiguration[_]): ResultSubgraph[_] = {
+    val mainGraph = config.getMainGraph[MainGraph[_,_]]
+    mappedWords = ArrayBuffer.empty
+    var i = 0
+    while (i < words.length) {
+      val (src, dest) = words(i)
+      val edgeIdsCur = mainGraph.getVertexNeighbourhood(src).
+        getEdgesWithNeighbourVertex(dest).cursor()
+      while (edgeIdsCur.moveNext()) {
+        mappedWords += mainGraph.getVertex(edgeIdsCur.elem()).getVertexOriginalId
+      }
+      i += 1
+    }
+    this
   }
 
   def toInternalSubgraph[E <: Subgraph](config: SparkConfiguration[E]): E = {
@@ -49,7 +68,7 @@ case class ESubgraph(var words: Array[(Int,Int)])
   }
 
   override def toString = {
-    s"ESubgraph(${words.mkString (", ")})"
+    s"VSubgraph(${vertices.mkString (", ")})"
   }
 }
 

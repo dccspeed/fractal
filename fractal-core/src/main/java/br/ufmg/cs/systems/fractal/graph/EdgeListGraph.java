@@ -64,39 +64,14 @@ public class EdgeListGraph<V,E> extends BasicMainGraph<V,E> {
    }
 
    @Override
-   protected Vertex parseVertex(StringTokenizer tokenizer) {
-      String vertexId = tokenizer.nextToken().trim();
-
-      int vertexIdx = vertexIdMap.getInt(vertexId);
-      if (vertexIdx == -1) {
-         vertexIdx = vertexIdMap.size();
-         vertexIdMap.put(vertexId, vertexIdx);
-         Vertex vertex = createVertex(vertexIdx, vertexId, 1);
-         addVertex(vertex);
-         return vertex;
-      } else {
-         return vertexIndexF[vertexIdx];
-      }
-   }
+   protected void parseVertexLabel(StringTokenizer tokenizer, int vertexIdx) {   }
 
    @Override
    protected Edge parseEdge(StringTokenizer tokenizer, int vertexId) {
-      Vertex neighborVertex = parseVertex(tokenizer);
-      int neighborId = neighborVertex.getVertexId();
-
-      if (!isEdgeLabelled) {
-         int from, to;
-         if (vertexId < neighborId) {
-            from = vertexId;
-            to = neighborId;
-         } else {
-            from = neighborId;
-            to = vertexId;
-         }
-         return createEdge(from, to);
+      if (isEdgeLabelled) {
+         throw new RuntimeException("Edge label is not allowed in edge list format");
       } else {
-         throw new RuntimeException(
-               "Edge label is not allowed in edge list format");
+         return super.parseEdge(tokenizer, vertexId);
       }
    }
 }

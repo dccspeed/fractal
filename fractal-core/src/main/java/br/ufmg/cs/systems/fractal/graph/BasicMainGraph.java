@@ -766,10 +766,11 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
             Vertex vertex = parseVertex(tokenizer);
 
-            int vertexId = vertex.getVertexId();
+            int vertexIdx = vertex.getVertexId();
+            parseVertexLabel(tokenizer, vertexIdx);
 
             while (tokenizer.hasMoreTokens()) {
-               parseEdge(tokenizer, vertexId);
+               parseEdge(tokenizer, vertexIdx);
                if (numEdges % 1e7 == 0) {
                   LOG.info("Stats numVertices=" + numVertices +
                         " numEdges=" + numEdges);
@@ -785,24 +786,26 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       }
    }
 
-   protected Edge parseEdge(StringTokenizer tokenizer, int vertexId) {
-      int neighborId = Integer.parseInt(tokenizer.nextToken());
-      int neighborIdx = neighborId;
+   protected Edge parseEdge(StringTokenizer tokenizer, int vertexIdx) {
+      Vertex neighborVertex = parseVertex(tokenizer);
+      int neighborIdx = neighborVertex.getVertexId();
 
-      //int neighborIdx = vertexIdMap.get(neighborId);
-      //if (neighborIdx == -1) {
-      //   neighborIdx = vertexIdMap.size();
-      //   vertexIdMap.put(neighborId, neighborIdx);
-      //   addVertex(createVertex(neighborIdx, neighborId, -1));
-      //}
+      // TODO: Handle this when directed graphs
+      int from, to;
+      if (vertexIdx < neighborIdx) {
+         from = vertexIdx;
+         to = neighborIdx;
+      } else {
+         from = neighborIdx;
+         to = vertexIdx;
+      }
 
       Edge edge;
-
       if (isEdgeLabelled) {
          int edgeLabel = Integer.parseInt(tokenizer.nextToken());
-         edge = createEdge(vertexId, neighborIdx, edgeLabel);
+         edge = createEdge(from, to, edgeLabel);
       } else {
-         edge = createEdge(vertexId, neighborIdx);
+         edge = createEdge(from, to);
       }
 
       addEdge(edge);
@@ -811,30 +814,39 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    }
 
    protected Vertex parseVertex(StringTokenizer tokenizer) {
-      String vertexId = tokenizer.nextToken().trim();
-      int vertexLabel = parseVertexLabel(tokenizer);
-
-      int vertexIdx = vertexIdMap.getInt(vertexId);
       Vertex vertex;
 
+      String vertexId = tokenizer.nextToken().trim();
+      int vertexIdx = vertexIdMap.getInt(vertexId);
       if (vertexIdx == -1) {
-         vertexIdx = Integer.parseInt(vertexId);
-         vertex = createVertex(vertexIdx, vertexId, vertexLabel);
+         vertexIdx = vertexIdMap.size();
+         vertexIdMap.put(vertexId, vertexIdx);
+         vertex = createVertex(vertexIdx, vertexId, -1);
          addVertex(vertex);
       } else {
          vertex = vertexIndexF[vertexIdx];
-         int currVertexLabel = vertex.getVertexLabel();
-         if (currVertexLabel == -1) {
-            vertex.setVertexLabel(vertexLabel);
-         } else if (currVertexLabel != vertexLabel) {
-            throw new RuntimeException("Invalid state vertexLabel=" +
-                  vertexLabel + " vertexId=" + vertexId +
-                  " vertexIdx=" + vertexIdx + " vertex=" + vertex +
-                  " numVertices=" + numVertices +
-                  " vertexIdMapSize=" + vertexIdMap.size());
-         }
       }
       return vertex;
+   }
+
+   protected void parseVertexLabel(StringTokenizer tokenizer, int vertexIdx) {
+      int vertexLabel = parseVertexLabel(tokenizer);
+      Vertex vertex = vertexIndexF[vertexIdx];
+
+      int currVertexLabel = vertex.getVertexLabel();
+      if (currVertexLabel == -1) {
+         vertex.setVertexLabel(vertexLabel);
+
+         if (vertexProperties != null) {
+            vertex.setProperty(vertexProperties[vertexLabel]);
+         }
+      } else if (currVertexLabel != vertexLabel) {
+         throw new RuntimeException("Invalid state vertexLabel=" +
+                 vertexLabel + " vertexId=" + vertex.getVertexOriginalId() +
+                 " vertexIdx=" + vertexIdx + " vertex=" + vertex +
+                 " numVertices=" + numVertices +
+                 " vertexIdMapSize=" + vertexIdMap.size());
+      }
    }
 
    protected int parseVertexLabel(StringTokenizer tokenizer) {
@@ -889,11 +901,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    }
 
    protected Vertex createVertex(int id, String originalId, int label) {
-      Vertex vertex = new Vertex(id, originalId, label);
-      if (vertexProperties != null) {
-         vertex.setProperty(vertexProperties[label]);
-      }
-      return vertex;
+      return new Vertex(id, originalId, label);
    }
 
    protected Edge createEdge(int srcId, int destId) {

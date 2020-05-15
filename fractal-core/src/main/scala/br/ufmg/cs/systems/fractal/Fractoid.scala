@@ -165,7 +165,6 @@ case class Fractoid [S <: Subgraph : ClassTag](
     }
   }
 
-
   def mappedSubgraphs: RDD[ResultSubgraph[_]] = mappedSubgraphs((_,_) => true)
 
   def mappedSubgraphs(shouldOutput: (S,Computation[S]) => Boolean): RDD[ResultSubgraph[_]] = {

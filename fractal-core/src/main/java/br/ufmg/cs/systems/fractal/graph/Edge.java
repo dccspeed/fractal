@@ -95,7 +95,7 @@ public class Edge<E> implements Writable, java.io.Serializable {
     public String toString() {
         return "Edge{" +
                 "edgeId=" + edgeId +
-                "sourceVertexId=" + sourceVertexId +
+                ", sourceVertexId=" + sourceVertexId +
                 ", destinationVertexId=" + destinationVertexId +
                 '}';
     }

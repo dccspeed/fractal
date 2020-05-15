@@ -22,7 +22,7 @@ public class Vertex<V> implements Writable, java.io.Serializable {
         this.vertexId = vertexId;
         this.vertexLabel = vertexLabel;
     }
-    
+
     public Vertex(int vertexId, String vertexOriginalId, int vertexLabel) {
         this.vertexId = vertexId;
         this.vertexOriginalId = vertexOriginalId;
@@ -87,8 +87,9 @@ public class Vertex<V> implements Writable, java.io.Serializable {
     @Override
     public String toString() {
         return "Vertex{" +
-                "vertexId=" + vertexId +
-                ",vertexLabel=" + vertexLabel +
+                "vertexId=" + vertexOriginalId +
+                ", vertexIdx=" + vertexId +
+                ", vertexLabel=" + vertexLabel +
                 '}';
     }
 }

@@ -138,6 +138,11 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
    }
 
    @Override
+   public void neighborhoodVertices(int u, IntArrayListView view) {
+
+   }
+
+   @Override
     public void neighborhoodTraversalEdgeRange(int u, int lowerBound, IntIntConsumer consumer) {
 
     }

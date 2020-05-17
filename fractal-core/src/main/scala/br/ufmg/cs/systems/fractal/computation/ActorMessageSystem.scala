@@ -709,7 +709,7 @@ object ActorMessageSystem extends Logging {
          val currIterator = curr.getSubgraphEnumerator()
 
 
-         currIterator.set(curr, subgraph)
+         currIterator.set(curr, subgraph, null)
          currIterator.set(wordIds)
          currIterator.rebuildState()
 

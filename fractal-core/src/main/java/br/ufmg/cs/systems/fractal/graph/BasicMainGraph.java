@@ -433,6 +433,11 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    }
 
    @Override
+   public void neighborhoodVertices(int u, IntArrayListView view) {
+
+   }
+
+   @Override
    public void neighborhoodTraversalEdgeRange(int u, int lowerBound, IntIntConsumer consumer) {
       vertexNeighborhoods[u].traversalEdgeRange(lowerBound, consumer);
    }

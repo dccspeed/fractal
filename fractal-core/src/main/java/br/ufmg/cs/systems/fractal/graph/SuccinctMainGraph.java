@@ -535,6 +535,13 @@ public class SuccinctMainGraph implements MainGraph {
    }
 
    @Override
+   public void neighborhoodVertices(int u, IntArrayListView view) {
+      int from = vertexNeighborhoodIdx.getUnchecked(u);
+      int to = vertexNeighborhoodIdx.getUnchecked(u+1);
+      view.set(vertexNeighborhoods, from, to);
+   }
+
+   @Override
    public void neighborhoodTraversalEdgeRange(int u, int lowerBound, IntIntConsumer consumer) {
       int startIdx = vertexNeighborhoodIdx.getUnchecked(u);
       int endIdx = vertexNeighborhoodIdx.getUnchecked(u+1);

@@ -1,16 +1,20 @@
 package br.ufmg.cs.systems.fractal.util.pool;
 
 import br.ufmg.cs.systems.fractal.util.Factory;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ReclaimableObjCollection;
+import org.apache.log4j.Logger;
+
 import java.util.function.Consumer;
 
 public class Pool<O> {
+    private static final Logger LOG = Logger.getLogger(Pool.class);
     private final static int MAX_SIZE_DEFAULT = 1000;
 
     private int maxSize;
     private Factory<O> objectFactory;
-    private PoolStorage poolStorage;
+    protected PoolStorage poolStorage;
     private final ObjReclaimerStorage reclaimerStorage;
 
     public Pool(Factory<O> objectFactory) {
@@ -39,6 +43,8 @@ public class Pool<O> {
             return pool.pop();
         }
         else {
+            //LOG.info("CreateObject " + this.getClass().getSimpleName() + " " +
+            //        this.getClass().getTypeName());
             return objectFactory.createObject();
         }
     }
@@ -70,7 +76,7 @@ public class Pool<O> {
         }
     }
 
-    private class PoolStorage extends ThreadLocal<ObjArrayList<O>> {
+    protected class PoolStorage extends ThreadLocal<ObjArrayList<O>> {
         @Override
         protected ObjArrayList<O> initialValue() {
             return new ObjArrayList<>(maxSize);

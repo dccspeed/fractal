@@ -117,7 +117,7 @@ public class VertexInducedSubgraph extends BasicSubgraph {
    @Override
    public void addWord(int word) {
       super.addWord(word);
-      vertices.addUnchecked(word);
+      vertices.add(word);
    }
 
    @Override

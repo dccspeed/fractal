@@ -564,7 +564,6 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
    }
 
    public int getUnchecked(int index) {
-      checkIndex(index);
       return backingArray[index];
    }
 

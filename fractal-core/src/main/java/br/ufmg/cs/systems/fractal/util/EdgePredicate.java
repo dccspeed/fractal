@@ -1,9 +1,7 @@
 package br.ufmg.cs.systems.fractal.util;
 
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import com.koloboke.function.IntIntPredicate;
 import org.apache.hadoop.io.Writable;
-import sun.applet.Main;
 
 import java.io.*;
 import java.util.function.IntPredicate;

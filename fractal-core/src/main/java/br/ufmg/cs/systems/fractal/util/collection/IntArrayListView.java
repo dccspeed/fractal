@@ -1,16 +1,11 @@
 package br.ufmg.cs.systems.fractal.util.collection;
 
-import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListViewPool;
 
 public final class IntArrayListView extends IntArrayList{
    private int offset;
 
    public IntArrayListView() {
-   }
-
-   public IntArrayListView(IntArrayList underlying, int from, int to) {
-      set(underlying, from, to);
    }
 
    public void set(IntArrayList underlying, int from, int to) {

@@ -4,7 +4,7 @@ printf "Description: Script launcher for Fractal built-in applications\n\n"
 
 gqueryings="gqueryingmcvc|gquerying|gqueryinginduced|gqueryingsampling|gqueryinginducedsampling|gqueryingnaive"
 motifss="motifssampling|motifspf|motifspflabeled|motifs"
-cliquess="cliques|cliquesopt"
+cliquess="cliques|cliquesopt|maximalcliques"
 fsms="fsm|fsmpf|fsmpflabeled"
 enumerations="esubgraphs|vsubgraphswithedges|vsubgraphs|vsubgraphssampling"
 extras="kws"
@@ -152,6 +152,14 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 	cliquesopt)
+	required="inputgraph steps"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
+	;;
+	maximalcliques)
 	required="inputgraph steps"
         appusage="
 

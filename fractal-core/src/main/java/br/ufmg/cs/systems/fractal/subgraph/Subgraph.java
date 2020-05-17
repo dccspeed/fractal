@@ -65,5 +65,4 @@ public interface Subgraph extends WritableObject, Externalizable {
     void applyTagTo(Computation computation,
           AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos);
 
-    HashIntObjMap cacheStore();
 }

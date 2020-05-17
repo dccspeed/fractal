@@ -65,6 +65,7 @@ case class SparkFromScratchEngine[E <: Subgraph](
    def compute(): Unit = {
       val start = System.currentTimeMillis
       val subgraph: E = configuration.createSubgraph()
+      computation.getSubgraphEnumerator.set(computation, subgraph, null)
       val ret = computation.compute (subgraph)
       aggregationStorages.foreach {
          case (name, agg) =>

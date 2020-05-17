@@ -1,11 +1,9 @@
 package br.ufmg.cs.systems.fractal
 
-import br.ufmg.cs.systems.fractal.gmlib.fsm.{DomainSupport, MNISupport}
-import br.ufmg.cs.systems.fractal.graph.MainGraph
+import br.ufmg.cs.systems.fractal.gmlib.fsm.DomainSupport
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternUtils}
-import br.ufmg.cs.systems.fractal.util.{Logging, VertexPredicate}
-import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
-import com.koloboke.collect.set.hash.{HashObjSet, HashObjSets}
+import br.ufmg.cs.systems.fractal.util.Logging
+import com.koloboke.collect.set.hash.HashObjSets
 import org.apache.hadoop.io._
 import org.apache.spark.{SparkConf, SparkContext}
 
@@ -289,7 +287,8 @@ class CliquesApp(val fractalGraph: FractalGraph,
          explore(explorationSteps)
 
       val (accums, elapsed) = FractalSparkRunner.time {
-         cliquesRes.compute()
+         cliquesRes.compute((s,c) => Logging.getLogger("ValidSubgraphs").info
+         (s.toString))
       }
 
       logInfo (s"CliquesApp comm=${commStrategy}" +
@@ -305,7 +304,11 @@ class MaximalCliquesApp(val fractalGraph: FractalGraph,
                         numPartitions: Int,
                         explorationSteps: Int) extends FractalSparkApp {
    def execute: Unit = {
-      val maximalcliquesRes = fractalGraph.maximalcliques.
+      //val maximalcliquesRes = fractalGraph.maximalcliques.
+      //   set ("comm_strategy", commStrategy).
+      //   set ("num_partitions", numPartitions).
+      //   explore(explorationSteps)
+      val maximalcliquesRes = fractalGraph.maximalCliques.
          set ("comm_strategy", commStrategy).
          set ("num_partitions", numPartitions).
          explore(explorationSteps)

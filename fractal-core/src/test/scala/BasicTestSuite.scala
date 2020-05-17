@@ -275,7 +275,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       val gt2 = triangles.numValidSubgraphs()
 
       // sanity check
-      assert (gt1 == gt2)
+      assert(gt1 == gt2)
 
       // 50% estimate
       val fraction = 0.5
@@ -290,7 +290,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
          s"; error(%)=${error}")
 
       // TODO: find a better way to assert correctness for sampling
-      assert (error.round <= 15)
+      assert(error.round <= 15)
    }
 
    test ("[sampling.gquerying.square]", Tag("sampling.gquerying.square")) {

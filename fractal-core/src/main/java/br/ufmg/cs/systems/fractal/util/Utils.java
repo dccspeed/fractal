@@ -21,9 +21,28 @@ public class Utils {
       }
    }
 
-   public static int sintersect(IntArrayList arr1, IntArrayList arr2,
+   public static int sintersectSize(IntArrayList arr1, IntArrayList arr2,
+                                 int i1, int size1, int i2, int size2) {
+      int size = 0;
+      while (i1 < size1 && i2 < size2) {
+         int v1 = arr1.getUnchecked(i1);
+         int v2 = arr2.getUnchecked(i2);
+         if (v1 == v2) {
+            ++size;
+            ++i1;
+            ++i2;
+         } else if (v1 < v2) {
+            ++i1;
+         } else {
+            ++i2;
+         }
+      }
+
+      return size;
+   }
+
+   public static void sintersect(IntArrayList arr1, IntArrayList arr2,
                                 int i1, int size1, int i2, int size2, IntCollection target) {
-      int cost = 0;
       while (i1 < size1 && i2 < size2) {
          int v1 = arr1.getUnchecked(i1);
          int v2 = arr2.getUnchecked(i2);
@@ -36,10 +55,7 @@ public class Utils {
          } else {
             ++i2;
          }
-         ++cost;
       }
-
-      return cost;
    }
 
    public static void sintersectWithKeyPred(IntArrayList arr1, IntArrayList arr2,

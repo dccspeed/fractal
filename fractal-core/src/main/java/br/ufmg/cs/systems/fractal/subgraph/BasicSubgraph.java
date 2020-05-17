@@ -35,7 +35,6 @@ public abstract class BasicSubgraph implements Subgraph {
 
    // Active extensions
    protected ObjArrayList<HashIntSet> extensionLevels;
-   protected HashIntObjMap cacheStore;
    // }}
 
    // Pattern {{
@@ -60,7 +59,6 @@ public abstract class BasicSubgraph implements Subgraph {
       vertices = new IntArrayList();
       edges = new IntArrayList();
       extensionLevels = new ObjArrayList<HashIntSet>();
-      cacheStore = HashIntObjMaps.newMutableMap();
       nextExtensionLevel();
    }
 
@@ -87,11 +85,6 @@ public abstract class BasicSubgraph implements Subgraph {
    protected void setDirty() {
       dirtyPattern = true;
       dirtyExtensionWordIds = true;
-   }
-
-   @Override
-   public HashIntObjMap cacheStore() {
-      return cacheStore;
    }
 
    @Override

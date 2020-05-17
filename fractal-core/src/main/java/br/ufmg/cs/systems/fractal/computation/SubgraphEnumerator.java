@@ -73,6 +73,14 @@ public class SubgraphEnumerator<S extends Subgraph> implements Iterator<S> {
     * Called after a internal/external work-stealing to reconstruct this
     * enumerator state for an alternative execution thread.
     */
+   public void rebuildState(SubgraphEnumerator<S> that) {
+      // empty by default
+   }
+
+   /**
+    * Called after a internal/external work-stealing to reconstruct this
+    * enumerator state for an alternative execution thread.
+    */
    public void rebuildState() {
       // empty by default
    }
@@ -94,12 +102,17 @@ public class SubgraphEnumerator<S extends Subgraph> implements Iterator<S> {
     * @return the updated extended subgraph enumerator
     */
    public SubgraphEnumerator<S> extend() {
-      next();
-      return this;
+      S subgraph = next();
+      Computation<S> nextComp = computation.nextComputation();
+      SubgraphEnumerator<S> nextEnum = nextComp.getSubgraphEnumerator();
+      nextEnum.set(nextComp, subgraph, this);
+      return nextEnum;
+      //return this;
    }
 
    public synchronized SubgraphEnumerator<S> set(
-           Computation<S> computation, S subgraph) {
+           Computation<S> computation, S subgraph,
+           SubgraphEnumerator<S> previous) {
       this.computation = computation;
       this.subgraph = subgraph;
       return this;
@@ -146,14 +159,11 @@ public class SubgraphEnumerator<S extends Subgraph> implements Iterator<S> {
             iter.subgraph.addWord(prefix.getUnchecked(i));
          }
 
+         //iter.rebuildState(this);
          iter.rebuildState();
       }
 
       return iter;
-   }
-
-   public synchronized void joinConsumer() {
-      //IntArrayListPool.instance().reclaimObject(prefix);
    }
 
    private void maybeRemoveLastWord() {

@@ -192,7 +192,8 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
       getPossibleExtensionsOpt.map(_ => "ex").getOrElse("_"),
       wordFilterOpt.map(_ => "wf").getOrElse("_"),
       filterOpt.map(_ => "f").getOrElse("_"),
-      processComputeOpt.map(_ => "pc").getOrElse("_"),
+      //processComputeOpt.map(_ => "pc").getOrElse("_"),
+      processComputeOpt.map(_.toString()).getOrElse("_"),
       processOpt.map(_ => "p").getOrElse("_"))
   }
 
@@ -386,7 +387,7 @@ case class EComputationContainer [E <: EdgeInducedSubgraph] (
 
   def withNewFunctions(
       primitiveOpt: Option[Primitive] = 
-        primitiveOpt,
+        lastComputation.primitiveOpt,
       computationLabelOpt: Option[String] =
         lastComputation.computationLabelOpt,
       patternOpt: Option[Pattern] =
@@ -729,7 +730,7 @@ case class VComputationContainer [E <: VertexInducedSubgraph] (
 
   def withNewFunctions(
       primitiveOpt: Option[Primitive] =
-        primitiveOpt,
+        lastComputation.primitiveOpt,
       computationLabelOpt: Option[String] =
         lastComputation.computationLabelOpt,
       patternOpt: Option[Pattern] =
@@ -1078,7 +1079,7 @@ case class VEComputationContainer [E <: PatternInducedSubgraph](
 
   def withNewFunctions(
       primitiveOpt: Option[Primitive] =
-        primitiveOpt,
+        lastComputation.primitiveOpt,
       computationLabelOpt: Option[String] =
         lastComputation.computationLabelOpt,
         patternOpt: Option[Pattern] =

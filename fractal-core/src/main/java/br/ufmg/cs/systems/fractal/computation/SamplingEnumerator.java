@@ -16,7 +16,7 @@ public class SamplingEnumerator<S extends Subgraph> extends SubgraphEnumerator<S
    protected double depthProb;
 
    @Override
-   public void init(Configuration<S> config) {
+   public void init(Configuration<S> config, Computation<S> computation) {
       fraction = config.getDouble("sampling_fraction", -1.0); 
       if (fraction <= 0) {
          throw new RuntimeException("Invalid/missing sampling fraction (" +

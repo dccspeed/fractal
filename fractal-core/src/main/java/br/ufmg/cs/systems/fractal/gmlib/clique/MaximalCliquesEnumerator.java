@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal.gmlib.clique;
 
+import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
@@ -13,6 +14,7 @@ import com.koloboke.collect.map.IntObjMap;
 import com.koloboke.collect.map.hash.HashIntObjMaps;
 import com.koloboke.function.IntObjConsumer;
 import org.apache.log4j.Logger;
+import org.apache.spark.util.LongAccumulator;
 
 public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> {
    private static final Logger LOG = Logger.getLogger(MaximalCliquesEnumerator.class);
@@ -27,7 +29,7 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
    private IntArrayList aux;
 
    @Override
-   public void init(Configuration<S> config) {
+   public void init(Configuration<S> config, Computation<S> computation) {
       this.cand = new IntArrayList();
       this.fini = new IntArrayList();
       this.exts = new IntArrayList();
@@ -96,7 +98,7 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
       if (cand.isEmpty() && fini.isEmpty()) {
          exts.clear();
          set(exts);
-         //LOG.info(subgraph.getVertices());
+         computation.lastComputation().process(subgraph);
          return;
       }
 

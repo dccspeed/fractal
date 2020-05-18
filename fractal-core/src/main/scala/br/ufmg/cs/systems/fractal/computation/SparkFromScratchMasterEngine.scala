@@ -254,6 +254,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
       val enumerationStart = System.currentTimeMillis
 
       val _aggAccums = aggAccums
+      aggAccums.update("maximal_cliques", sc.longAccumulator)
       validSubgraphsAccum = sc.longAccumulator
 
       val execEngines = getExecutionEngines (
@@ -410,13 +411,17 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
             override def apply(enum: SubgraphEnumerator[S],
                                c: Computation[S]): Long = {
             var ret = 0L
+            var subgraphsGenerated = 0L
+            var addWords = 0L
             val nextEnum = enum.extend()
             val subgraph = nextEnum.getSubgraph
-            awAccum.add(1)
+            addWords += 1
             if (c.filter(subgraph)) {
-               egAccum.add(1)
+               subgraphsGenerated += 1
                ret += c.nextComputation().compute(subgraph)
             }
+            egAccum.add(subgraphsGenerated)
+            awAccum.add(addWords)
             ret
          }
 
@@ -478,9 +483,9 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
                // setup work-stealing system
                start = System.currentTimeMillis
                if (config.wsEnabled()) {
-                  val gtagExecutorActor = execEngine.slaveActorRef
+                  val slaveActorRef = execEngine.slaveActorRef
                   workStealingSys = new WorkStealingSystem[S](
-                     processCompute, gtagExecutorActor, new ConcurrentLinkedQueue())
+                     processCompute, slaveActorRef, new ConcurrentLinkedQueue())
 
                   workStealingSys.workStealingCompute(c)
                }
@@ -497,7 +502,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
 
          private def hasNextComputation(iter: SubgraphEnumerator[S],
                                         c: Computation[S], nextComp: Computation[S]): Long = {
-            var currentSubgraph: S = null.asInstanceOf[S]
+            var currentSubgraph: S = iter.getSubgraph
             var addWords = 0L
             var subgraphsGenerated = 0L
             var ret = 0L
@@ -569,7 +574,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
          override def toString = "EM"
 
          def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
-            var currentSubgraph: S = null.asInstanceOf[S]
+            var currentSubgraph: S = iter.getSubgraph
             var addWords = 0L
             var subgraphsGenerated = 0L
             var ret = 0L
@@ -647,7 +652,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
 
          private def processCompute(iter: SubgraphEnumerator[S],
                                     c: Computation[S]): Long = {
-            var currentSubgraph: S = null.asInstanceOf[S]
+            var currentSubgraph: S = iter.getSubgraph
             var addWords = 0L
             var subgraphsGenerated = 0L
             var ret = 0L
@@ -687,21 +692,12 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
             val execEngine = c.getExecutionEngine().
                asInstanceOf[SparkFromScratchEngine[S]]
 
-            //egAccums(c.getDepth) = execEngine.
-            //   accums(s"${VALID_SUBGRAPHS}_${c.getDepth}")
-            //awAccums(c.getDepth) = execEngine.
-            //   accums(s"${CANONICAL_SUBGRAPHS}_${c.getDepth}")
-
             var currComp = c.nextComputation()
             while (currComp != null) {
                val depth = currComp.getDepth()
                currComp.setExecutionEngine(execEngine)
                currComp.init(config)
                currComp.initAggregations(config)
-               //egAccums(depth) = execEngine.accums(
-               //   s"${VALID_SUBGRAPHS}_${depth}")
-               //awAccums(depth) = execEngine.accums(
-               //   s"${CANONICAL_SUBGRAPHS}_${depth}")
                currComp = currComp.nextComputation
             }
 

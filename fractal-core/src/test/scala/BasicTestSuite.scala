@@ -53,6 +53,22 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       fsmGt
    }
 
+   /**
+    * Ground-truth for testing the maximal cliques application
+    */
+   private val maximalCliqueGt: Map[(String,Int),Long] = {
+      var maximalCliqueGt = Map.empty[(String,Int),Long]
+      val in = Source.fromFile("../data/maximal-clique-test.gt")
+      for (line <- in.getLines) {
+         val toks = line.trim.split(" ")
+         val (graph, maxSize, numSubgraphs) = (toks(0), toks(1), toks(2))
+         maximalCliqueGt = maximalCliqueGt + ((graph,maxSize.toInt) ->
+            numSubgraphs.toLong)
+      }
+      in.close()
+      maximalCliqueGt
+   }
+
    /** set up spark context */
    override def beforeAll: Unit = {
       master = s"local[${numPartitions}]"
@@ -126,6 +142,23 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
          val subgraphs = cliqueRes.subgraphs
          assert(subgraphs.count == numSubgraph(k))
+      }
+   }
+
+   test ("[maximalcliques,gt]", Tag("maximalcliques.gt")) {
+      for (((graph,maxSize),numSubgraphs) <- maximalCliqueGt) {
+         val chosenGraph = if (graph == "citeseer-single-label") {
+            citeseerSingleLabelGraph
+         } else {
+            throw new RuntimeException("Unknown graph")
+         }
+
+         val numMaximalCliquesAccum = sc.longAccumulator
+         val maximalCliques = chosenGraph.maximalCliques
+            .explore(maxSize - 1)
+         maximalCliques.compute((_,_) => numMaximalCliquesAccum.add(1))
+
+         assert (numMaximalCliquesAccum.value == numSubgraphs)
       }
    }
 

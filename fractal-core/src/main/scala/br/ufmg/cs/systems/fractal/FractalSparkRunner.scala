@@ -1,7 +1,9 @@
 package br.ufmg.cs.systems.fractal
 
+import br.ufmg.cs.systems.fractal.computation.Computation
 import br.ufmg.cs.systems.fractal.gmlib.fsm.DomainSupport
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternUtils}
+import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.Logging
 import com.koloboke.collect.set.hash.HashObjSets
 import org.apache.hadoop.io._
@@ -287,8 +289,7 @@ class CliquesApp(val fractalGraph: FractalGraph,
          explore(explorationSteps)
 
       val (accums, elapsed) = FractalSparkRunner.time {
-         cliquesRes.compute((s,c) => Logging.getLogger("ValidSubgraphs").info
-         (s.toString))
+         cliquesRes.compute()
       }
 
       logInfo (s"CliquesApp comm=${commStrategy}" +
@@ -304,24 +305,23 @@ class MaximalCliquesApp(val fractalGraph: FractalGraph,
                         numPartitions: Int,
                         explorationSteps: Int) extends FractalSparkApp {
    def execute: Unit = {
-      //val maximalcliquesRes = fractalGraph.maximalcliques.
-      //   set ("comm_strategy", commStrategy).
-      //   set ("num_partitions", numPartitions).
-      //   explore(explorationSteps)
       val maximalcliquesRes = fractalGraph.maximalCliques.
          set ("comm_strategy", commStrategy).
          set ("num_partitions", numPartitions).
          explore(explorationSteps)
 
-      val (counting, elapsed) = FractalSparkRunner.time {
-         maximalcliquesRes.compute()
+      val numMaximalCliquesAccum = fractalGraph.fractalContext
+         .sparkContext.longAccumulator
+
+      val callback = (s: VertexInducedSubgraph,
+                      c: Computation[VertexInducedSubgraph]) => {
+         numMaximalCliquesAccum.add(1)
       }
 
-      logInfo (s"MaximalCliquesApp comm=${commStrategy}" +
-         s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
-         s" graph=${fractalGraph} " +
-         s" numValidSubgraphs=${maximalcliquesRes.numValidSubgraphs()} elapsed=${elapsed}"
-      )
+      maximalcliquesRes.compute(callback)
+
+      logInfo(s"MaximalCliquesApp" +
+         s" numMaximalCliques=${numMaximalCliquesAccum.value}")
    }
 }
 

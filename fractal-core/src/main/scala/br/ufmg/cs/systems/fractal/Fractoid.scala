@@ -518,29 +518,6 @@ case class Fractoid [S <: Subgraph : ClassTag](
    }
 
    /**
-    * Perform a expansion step in a particular way, defined by
-    * *getPossibleExtensions*
-    *
-    * @param getPossibleExtensions function that receives an subgraph and
-    * returns zero or more Subgraphs (collection)
-    * @return new result
-    */
-   def extend(getPossibleExtensions: (S,Computation[S]) => IntCollection)
-   : Fractoid[S] = {
-
-      val curr = if (getComputationContainer[S] == null) {
-         this.withFirstComputation
-      } else {
-         this
-      }
-
-      val newConfig = curr.config.withNewComputation (
-         curr.getComputationContainer[S].
-            withNewFunctions (getPossibleExtensionsOpt = Option(getPossibleExtensions)))
-      curr.copy (config = newConfig)
-   }
-
-   /**
     * Filter the existing subgraphs based on a function
     *
     * @param filter function that decides whether an subgraph should be kept or
@@ -825,22 +802,6 @@ case class Fractoid [S <: Subgraph : ClassTag](
             //}
          }
       )
-   }
-
-   /**
-    * Updates the getPossibleExtensions function of the underlying computation
-    * container.
-    *
-    * @param func that returns the possible extensions.
-    *
-    * @return new result
-    */
-   private def withGetPossibleExtensions (func: (S,Computation[S]) => IntCollection)
-   : Fractoid[S] = {
-      val newConfig = config.withNewComputation (
-         getComputationContainer[S].withNewFunctions (
-            getPossibleExtensionsOpt = Option(func)))
-      this.copy (config = newConfig)
    }
 
    /**

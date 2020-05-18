@@ -8,7 +8,7 @@ import br.ufmg.cs.systems.fractal.aggregation.reductions._
 import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray
-import br.ufmg.cs.systems.fractal.util.{Logging, ProcessComputeFunc, WordFilterFunc}
+import br.ufmg.cs.systems.fractal.util.{Logging, ProcessComputeFunc}
 import org.apache.hadoop.io.NullWritable
 import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
@@ -27,6 +27,7 @@ import scala.util.{Failure, Success}
  * It interacts directly with the RDD interface in Spark by handling the
  * SparkContext.
  */
+@Deprecated
 class SparkGraphRedMasterEngine[S <: Subgraph](
     _config: SparkConfiguration[S],
     _parentOpt: Option[SparkMasterEngine[S]]) extends SparkMasterEngine [S] {
@@ -142,9 +143,6 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
       cc = curr.config.computationContainer[S].withComputationAppended(cc)
     }
 
-    // configure custom WordFilterFunc, except for computations of the last step
-    val wordFilterFuncs = new Array[WordFilterFunc[S]](numComputations)
-
     // configure custom ProcessComputeFunc and aggregations
     val processComputeFunc = getProcessComputeFunc(veAccums, ceAccums)
     cc = {
@@ -156,16 +154,16 @@ class SparkGraphRedMasterEngine[S <: Subgraph](
           val _cc = cc.shallowCopy(
             processComputeOpt = Option(processComputeFunc),
             initAggregationsOpt = Option(aggregationRegister(cc, depth)),
-            nextComputationOpt = Option(ncc),
-            wordFilterOpt = Option(wordFilterFuncs(depth)))
+            nextComputationOpt = Option(ncc)
+          )
           _cc.initAggregations(this.config)
           _cc
 
         case None =>
           val _cc = cc.shallowCopy(
             processComputeOpt = Option(processComputeFunc),
-            initAggregationsOpt = Option(aggregationRegister(cc, depth)),
-            wordFilterOpt = Option(wordFilterFuncs(depth)))
+            initAggregationsOpt = Option(aggregationRegister(cc, depth))
+          )
           _cc.initAggregations(this.config)
           _cc
       }

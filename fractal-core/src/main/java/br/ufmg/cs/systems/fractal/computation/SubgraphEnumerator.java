@@ -65,7 +65,7 @@ public class SubgraphEnumerator<S extends Subgraph> implements Iterator<S> {
     * structures the custom implementation may need.
     * @param config current configuration
     */
-   public void init(Configuration<S> config) {
+   public void init(Configuration<S> config, Computation<S> computation) {
       // empty by default
    }
 

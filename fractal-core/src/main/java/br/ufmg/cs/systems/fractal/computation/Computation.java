@@ -21,8 +21,8 @@ public interface Computation<S extends Subgraph> {
     // {{{ runtime
     Primitive primitive();
     SubgraphEnumerator<S> expandCompute(S Subgraph);
-    IntCollection getPossibleExtensions(S Subgraph);
-    long processCompute(SubgraphEnumerator<S> expansions);
+
+   long processCompute(SubgraphEnumerator<S> expansions);
     boolean filter(S Subgraph);
     void process(S Subgraph);
     // }}}
@@ -54,7 +54,9 @@ public interface Computation<S extends Subgraph> {
     boolean shouldBypass();
     // }}}
 
-    // {{{ Internal
+   Computation<S> lastComputation();
+
+   // {{{ Internal
     void setExecutionEngine(CommonExecutionEngine<S> executionEngine);
     CommonExecutionEngine<S> getExecutionEngine();
     

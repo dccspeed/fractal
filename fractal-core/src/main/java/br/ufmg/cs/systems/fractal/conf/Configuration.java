@@ -435,7 +435,7 @@ public class Configuration<O extends Subgraph> implements Serializable {
           senum = (SubgraphEnumerator<O>) ReflectionUtils.newInstance(
                 br.ufmg.cs.systems.fractal.computation.BypassSubgraphEnumerator.class);
        }
-       senum.init(computation.getConfig());
+       senum.init(computation.getConfig(), computation);
        return senum;
     }
 

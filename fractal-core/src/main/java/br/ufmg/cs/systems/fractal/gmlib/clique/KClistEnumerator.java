@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal.gmlib.clique;
 
+import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
@@ -22,7 +23,7 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
    private DagCleaner dagCleaner;
 
    @Override
-   public void init(Configuration<S> config) {
+   public void init(Configuration<S> config, Computation<S> computation) {
       dag = HashIntObjMaps.newMutableMap();
       dagCleaner = new DagCleaner();
    }

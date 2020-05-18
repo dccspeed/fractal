@@ -68,7 +68,7 @@ case class ESubgraph(var words: Array[(Int,Int)],
   }
 
   override def toString = {
-    s"VSubgraph(${vertices.mkString (", ")})"
+    s"ESubgraph(${vertices.mkString (", ")})"
   }
 }
 

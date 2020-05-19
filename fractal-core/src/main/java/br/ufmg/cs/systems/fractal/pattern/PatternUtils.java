@@ -44,7 +44,6 @@ public class PatternUtils {
     */
    public static HashObjSet<Pattern> extendByVertex(Pattern pattern,
                                                     int vertexLabel) {
-      Configuration config = createConfig();
       HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
       IntArrayList vertexPositions = new IntArrayList(pattern.getNumberOfVertices());
       int newPosition = pattern.getNumberOfVertices();
@@ -59,6 +58,7 @@ public class PatternUtils {
          Iterator<IntArrayList> connectionPatternsIter = vertexPositions.combinations(n);
          while (connectionPatternsIter.hasNext()) {
             IntArrayList connectionPattern = connectionPatternsIter.next();
+            Configuration config = createConfig();
             MainGraph graph = createGraph(config, pattern);
             graph.addVertex(newPosition);
             graph.addVertexLabel(newPosition, vertexLabel);
@@ -107,10 +107,10 @@ public class PatternUtils {
     */
    public static HashObjSet<Pattern> extendByEdge(Pattern pattern,
                                                   int vertexLabel) {
-      Configuration config = createConfig();
-      config.setSubgraphClass(EdgeInducedSubgraph.class);
       HashObjObjMap<Pattern,Pattern> quickMap = HashObjObjMaps.newMutableMap();
       HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
+
+      LOG.info("ExtendingByEdge " + pattern + " numVertices=" + pattern.getNumberOfVertices());
 
       // patterns with internal edges
       for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
@@ -127,6 +127,8 @@ public class PatternUtils {
 
             if (edgeExists) continue;
 
+            Configuration config = createConfig();
+            config.setSubgraphClass(EdgeInducedSubgraph.class);
             MainGraph graph = createGraph(config, pattern);
             graph.addEdge(u, v, graph.numEdges());
 
@@ -150,6 +152,8 @@ public class PatternUtils {
       // patterns with external edges
       int v = pattern.getNumberOfVertices();
       for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
+         Configuration config = createConfig();
+         config.setSubgraphClass(EdgeInducedSubgraph.class);
          MainGraph graph = createGraph(config, pattern);
          graph.addVertex(pattern.getNumberOfVertices());
          graph.addVertexLabel(pattern.getNumberOfVertices(), vertexLabel);
@@ -170,6 +174,8 @@ public class PatternUtils {
             newPatterns.add(canonicalPattern);
          }
       }
+
+      LOG.info("ExtendingByEdge newPatterns=" + newPatterns);
 
       return newPatterns;
    }
@@ -209,7 +215,7 @@ public class PatternUtils {
 
       // add pattern edges and edge labels
       for (int e = 0; e < pattern.getNumberOfEdges(); ++e) {
-         PatternEdge pedge = pattern.getEdges().getUnchecked(e);
+         PatternEdge pedge = pattern.getEdges().getu(e);
          graph.addEdge(pedge.getSrcPos(), pedge.getDestPos(), e);
          //graph.addEdgeLabel(e, pedge.getLabel()); // TODO: handle edge label
          vertexLabels.set(pedge.getSrcPos(), pedge.getSrcLabel());

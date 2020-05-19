@@ -21,7 +21,7 @@ public final class IntArrayListView extends IntArrayList{
    }
 
    @Override
-   public int getUnchecked(int i) {
+   public int getu(int i) {
       return backingArray[offset + i];
    }
 

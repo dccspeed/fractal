@@ -133,7 +133,7 @@ class MotifsAppPatternFirst(val fractalGraph: FractalGraph,
 
    }
 }
-class MotifsAppPatternFirstLabeled2(val fractalGraph: FractalGraph,
+class MotifsAppPatternFirstLabeled(val fractalGraph: FractalGraph,
                                    commStrategy: String,
                                    numPartitions: Int,
                                    explorationSteps: Int) extends FractalSparkApp {
@@ -151,65 +151,6 @@ class MotifsAppPatternFirstLabeled2(val fractalGraph: FractalGraph,
    }
 }
 
-class MotifsAppPatternFirstLabeled(val fractalGraph: FractalGraph,
-                                   commStrategy: String,
-                                   numPartitions: Int,
-                                   explorationSteps: Int) extends FractalSparkApp {
-   def execute: Unit = {
-
-      val (patterns, elapsed) = FractalSparkRunner.time {
-         var patterns = PatternUtils.singleVertexPatternSet();
-         logInfo(s"PatternSet ${patterns}")
-         for (i <- 0 until explorationSteps) {
-            patterns = PatternUtils.extendByVertex(patterns, 1)
-            logInfo(s"PatternSetExtension[${i + 1}] ${patterns}")
-         }
-         patterns
-      }
-
-      logInfo(s"CanonicalPatterns numVertices=${explorationSteps + 1}" +
-         s" numPatterns=${patterns.size()}" +
-         s" elapsed=${elapsed}")
-
-      var patternsCounts = scala.collection.mutable.Map.empty[Pattern,LongWritable]
-      var i = 0
-
-      val cur = patterns.cursor()
-      while (cur.moveNext()) {
-         val patternWithoutPlan = cur.elem()
-         /**
-          * Motifs counting consider induced subgraphs, unlabeled at first
-          */
-         patternWithoutPlan.setInduced(true)
-         patternWithoutPlan.setVertexLabeled(false)
-
-         val pattern = PatternExplorationPlan.apply(patternWithoutPlan).get(0)
-
-         val gqueryingRes = fractalGraph.gquerying(pattern).
-            aggregate[Pattern,LongWritable](
-               "motifs",
-               (s,c,k) => {s.labeledPattern(c.getPattern)},
-               (s,c,v) => {v.set(1); v},
-               (v1,v2) => {v1.set(v1.get() + v2.get()); v1}
-            ).
-            set ("comm_strategy", commStrategy).
-            set ("num_partitions", numPartitions).
-            explore(explorationSteps)
-
-         val (motifsCounts, elapsed) = FractalSparkRunner.time {
-            gqueryingRes.aggregationMap[Pattern,LongWritable]("motifs")
-         }
-
-         patternsCounts = patternsCounts ++ motifsCounts
-         i += 1
-      }
-
-      for ((p,c) <- patternsCounts) {
-         logInfo(s"${p}: ${c}")
-      }
-   }
-}
-
 class MotifsAppSampling(val fractalGraph: FractalGraph,
                         commStrategy: String,
                         numPartitions: Int,
@@ -221,14 +162,17 @@ class MotifsAppSampling(val fractalGraph: FractalGraph,
          set ("num_partitions", numPartitions).
          explore(explorationSteps)
 
-      val (accums, elapsed) = FractalSparkRunner.time {
-         motifsRes.compute()
+      val motifs = motifsRes
+         .aggregationMap[Pattern,LongWritable]("motifs")
+
+      for ((m,c) <- motifs) {
+         logInfo(s"MotifCount ${m} ${c}")
       }
 
       logInfo (s"MotifsAppSampling comm=${commStrategy}" +
          s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
          s" graph=${fractalGraph} " +
-         s" numValidSubgraphs=${motifsRes.numValidSubgraphs()} elapsed=${elapsed}"
+         s" numPatterns=${motifs.size}"
       )
    }
 }
@@ -243,14 +187,16 @@ class MotifsApp(val fractalGraph: FractalGraph,
          set ("num_partitions", numPartitions).
          explore(explorationSteps)
 
-      val (accums, elapsed) = FractalSparkRunner.time {
-         motifsRes.compute()
+      val motifs = motifsRes
+         .aggregationMap[Pattern,LongWritable]("motifs")
+
+      for ((m,c) <- motifs) {
+         logInfo(s"MotifCount ${m} ${c}")
       }
 
       logInfo (s"MotifsApp comm=${commStrategy}" +
          s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
-         s" graph=${fractalGraph} " +
-         s" numValidSubgraphs=${motifsRes.numValidSubgraphs()} elapsed=${elapsed}"
+         s" graph=${fractalGraph} numPatterns=${motifs.size}"
       )
    }
 }
@@ -672,7 +618,7 @@ object FractalSparkRunner extends Logging {
             new MotifsAppPatternFirst(fractalGraph, commStrategy,
                numPartitions, explorationSteps)
          case "motifspflabeled" =>
-            new MotifsAppPatternFirstLabeled2(fractalGraph, commStrategy,
+            new MotifsAppPatternFirstLabeled(fractalGraph, commStrategy,
                numPartitions, explorationSteps)
          case "motifs" =>
             new MotifsApp(fractalGraph, commStrategy,

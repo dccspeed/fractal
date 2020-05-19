@@ -23,19 +23,21 @@ import scala.reflect.{ClassTag, classTag}
 /**
  * Fractal workflow state.
  */
-case class Fractoid [S <: Subgraph : ClassTag](
-                                                 fractalGraph: FractalGraph,
-                                                 private val mustSync: Boolean,
-                                                 private val scope: Int,
-                                                 step: Int,
-                                                 parentOpt: Option[Fractoid[S]],
-                                                 config: SparkConfiguration[S],
-                                                 private val aggFuncs: Map[String,(
-                                                    (S,Computation[S],_ <: Writable) => _ <: Writable,
-                                                       (S,Computation[S],_ <: Writable) => _ <: Writable)]) extends Logging {
+case class Fractoid [S <: Subgraph : ClassTag]
+(
+   fractalGraph: FractalGraph,
+   private val mustSync: Boolean,
+   private val scope: Int,
+   step: Int,
+   parentOpt: Option[Fractoid[S]],
+   config: SparkConfiguration[S],
+   private val aggCallbacks
+   : Map[String,SubgraphCallback[S]]
+) extends Logging {
 
    def this(arabGraph: FractalGraph, config: SparkConfiguration[S]) = {
-      this(arabGraph, false, 0, 0, None, config, Map.empty)
+      this(arabGraph, false, 0, 0, None, config,
+         Map.empty[String,SubgraphCallback[S]])
    }
 
    def sparkContext: SparkContext = fractalGraph.fractalContext.sparkContext
@@ -222,16 +224,8 @@ case class Fractoid [S <: Subgraph : ClassTag](
    /**
     * Get aggregation mappings defined by the user or empty if it does not exist
     */
-   def aggregationMap [K <: Writable, V <: Writable](name: String,
-                                                     shouldAggregate: (S,Computation[S]) => Boolean): Map[K,V] = {
-      withAggregation [K,V] (name, shouldAggregate).aggregationMap (name)
-   }
-
-   /**
-    * Get aggregation mappings defined by the user or empty if it does not exist
-    */
    def aggregationMap [K <: Writable, V <: Writable](name: String): Map[K,V] = {
-      val aggValue = aggregationStorage [K,V] (name)
+      val aggValue = aggregationStorage[K,V](name)
       if (aggValue == null) Map.empty[K,V]
       else aggValue.getMapping
    }
@@ -241,20 +235,8 @@ case class Fractoid [S <: Subgraph : ClassTag](
     */
    def aggregationStorage [K <: Writable, V <: Writable] (name: String)
    : AggregationStorage[K,V] = {
-      masterEngine.getAggregatedValue [AggregationStorage[K,V]] (name)
-   }
-
-   /*
-    * Get aggregations defined by the user as an RDD or empty if it does not
-    * exist.
-    */
-   def aggregation [K <: Writable, V <: Writable](name: String,
-                                                  shouldAggregate: (S,Computation[S]) => Boolean)
-   : RDD[(SerializableWritable[K],SerializableWritable[V])] = {
-      sparkContext.parallelize (aggregationMap [K,V] (name, shouldAggregate).toSeq.
-         map {
-            case (k,v) => (new SerializableWritable(k), new SerializableWritable(v))
-         }, config.numPartitions)
+      withAggregation(name)
+         .masterEngine.getAggregatedValue[AggregationStorage[K,V]](name)
    }
 
    /*
@@ -263,9 +245,10 @@ case class Fractoid [S <: Subgraph : ClassTag](
     */
    def aggregation [K <: Writable, V <: Writable](name: String)
    : RDD[(SerializableWritable[K],SerializableWritable[V])] = {
-      sparkContext.parallelize (aggregationMap [K,V] (name).toSeq.map {
-         case (k,v) => (new SerializableWritable(k), new SerializableWritable(v))
-      }, config.numPartitions)
+      sparkContext.parallelize (aggregationMap[K,V](name).toSeq.
+         map {
+            case (k,v) => (new SerializableWritable(k), new SerializableWritable(v))
+         }, config.numPartitions)
    }
 
    /**
@@ -593,8 +576,7 @@ case class Fractoid [S <: Subgraph : ClassTag](
          aggregationValue = aggregationValue,
          reductionFunction = new ReductionFunctionContainer(reductionFunction),
          endAggregationFunction = endAggregationFunction,
-         isIncremental = isIncremental).
-         withAggregation [K,V] (name, (_,_) => true)
+         isIncremental = isIncremental)
       logInfo(s"Aggregate before=${this} after=${aggResult}")
       aggResult
    }
@@ -771,37 +753,21 @@ case class Fractoid [S <: Subgraph : ClassTag](
     * Include an aggregation map into the process function
     *
     * @param name aggregation name
-    * @param shouldAggregate condition for aggregating an subgraph
     *
     * @return new result
     */
-   private def withAggregation [K <: Writable, V <: Writable] (name: String,
-                                                               shouldAggregate: (S,Computation[S]) => Boolean): Fractoid[S] = {
+   private def withAggregation [K <: Writable, V <: Writable]
+   (name: String): Fractoid[S] = {
 
-      if (!aggFuncs.get(name).isDefined) {
+      if (!aggCallbacks.get(name).isDefined) {
          logWarning (s"Unknown aggregation ${name}." +
             s" Please register it first with *withAggregationRegistered*")
          return this
       }
 
-      val (_aggregationKey, _aggregationValue) = aggFuncs(name)
-      val (aggregationKey, aggregationValue) = (
-         _aggregationKey.asInstanceOf[(S,Computation[S],K) => K],
-         _aggregationValue.asInstanceOf[(S,Computation[S],V) => V]
-      )
-
-      withProcessInc (
-         (e: S, c: Computation[S]) => {
-            // TODO: remove shouldAggregate properly
-            //if (shouldAggregate(e,c)) {
-            val aggStorage = c.getAggregationStorage[K,V](name)
-            val k = aggregationKey(e, c, aggStorage.reusableKey())
-            val v = aggregationValue(e, c, aggStorage.reusableValue())
-            aggStorage.aggregateWithReusables(k, v)
-            //c.map (name, aggregationKey(e,c), aggregationValue(e,c))
-            //}
-         }
-      )
+      val callback = aggCallbacks(name)
+         .asInstanceOf[SubgraphCallback[S]]
+      withProcessInc((s,c) => callback.apply(s,c))
    }
 
    /**
@@ -937,6 +903,25 @@ case class Fractoid [S <: Subgraph : ClassTag](
       }
       val valueClass = implicitly[ClassTag[V]].runtimeClass.asInstanceOf[Class[V]]
 
+      val callback = new SubgraphCallback[S] {
+         private var aggregationStorage: AggregationStorage[K,V] = _
+         private var reusableKey: K = _
+         private var reusableValue: V = _
+
+         def setAggregationStorage(as: AggregationStorage[K,V]): Unit = {
+            aggregationStorage = as
+            reusableKey = as.reusableKey()
+            reusableValue = as.reusableValue()
+         }
+
+         override def apply(s: S, c: Computation[S]): Unit = {
+            aggregationStorage.aggregateWithReusables(
+               aggregationKey(s, c, reusableKey),
+               aggregationValue(s, c, reusableValue)
+            )
+         }
+      }
+
       // get the old init aggregations function in order to compose it
       val oldInitAggregation = getComputationContainer[S].
          initAggregationsOpt match {
@@ -950,10 +935,14 @@ case class Fractoid [S <: Subgraph : ClassTag](
          c.getConfig().registerAggregation (name, aggStorageClass, keyClass,
             valueClass, persistent, reductionFunction, endAggregationFunction,
             isIncremental)
+         val engine = c.getExecutionEngine()
+         if (engine != null) {
+            callback.setAggregationStorage(engine.getAggregationStorage(name))
+         }
       }
 
       val aggRes = withInitAggregations (initAggregations).copy (
-         aggFuncs = aggFuncs ++ Map(name -> (aggregationKey, aggregationValue))
+         aggCallbacks = aggCallbacks ++ Map(name -> callback)
       )
 
       logInfo(s"WithAggregationRegistered before=${this} after=${aggRes}")

@@ -149,7 +149,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
 
          HashIntSet domain = getDomainSet(i);
 
-         domain.add(vertexMap.getUnchecked(i));
+         domain.add(vertexMap.getu(i));
 
          if (domain.size() >= support) {
             insertDomainsAsFrequent(i);
@@ -364,7 +364,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
 
          HashIntSet domain = getDomainSet(i);
 
-         domain.add(vertices.getUnchecked(i));
+         domain.add(vertices.getu(i));
 
          if (domain.size() >= support) {
             insertDomainsAsFrequent(i);

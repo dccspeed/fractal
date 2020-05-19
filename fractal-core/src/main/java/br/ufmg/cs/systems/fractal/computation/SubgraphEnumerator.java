@@ -151,12 +151,12 @@ public class SubgraphEnumerator<S extends Subgraph> implements Iterator<S> {
          iter.prefix.addAll(this.prefix);
 
          if (prefix.size() > 0) {
-            iter.subgraph.addWord(prefix.getUnchecked(0));
+            iter.subgraph.addWord(prefix.getu(0));
          }
 
          for (int i = 1; i < prefix.size(); ++i) {
             iter.subgraph.nextExtensionLevel(subgraph);
-            iter.subgraph.addWord(prefix.getUnchecked(i));
+            iter.subgraph.addWord(prefix.getu(i));
          }
 
          //iter.rebuildState(this);

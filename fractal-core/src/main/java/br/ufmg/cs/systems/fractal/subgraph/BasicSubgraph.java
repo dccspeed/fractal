@@ -9,12 +9,7 @@ import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.HashIntSetPool;
-import br.ufmg.cs.systems.fractal.util.pool.IntIntArrayListMapPool;
-import br.ufmg.cs.systems.fractal.util.pool.IntIntMapPool;
 import com.koloboke.collect.IntCollection;
-import com.koloboke.collect.map.IntIntMap;
-import com.koloboke.collect.map.hash.HashIntObjMap;
-import com.koloboke.collect.map.hash.HashIntObjMaps;
 import com.koloboke.collect.set.hash.HashIntSet;
 import org.apache.log4j.Logger;
 
@@ -171,7 +166,7 @@ public abstract class BasicSubgraph implements Subgraph {
          int numWords = getNumWords();
          IntArrayList words = getWords();
          for (int i = 0; i < numWords; ++i) {
-            extensionWordIds().removeInt(words.getUnchecked(i));
+            extensionWordIds().removeInt(words.getu(i));
          }
       }
 

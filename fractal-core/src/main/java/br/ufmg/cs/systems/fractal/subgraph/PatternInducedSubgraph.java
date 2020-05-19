@@ -5,8 +5,8 @@ import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.*;
-import br.ufmg.cs.systems.fractal.util.EdgePredicate;
 import br.ufmg.cs.systems.fractal.util.EdgePredicates;
+import br.ufmg.cs.systems.fractal.util.SubgraphCallback;
 import br.ufmg.cs.systems.fractal.util.Utils;
 import br.ufmg.cs.systems.fractal.util.VertexPredicate;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
@@ -81,16 +81,16 @@ public class PatternInducedSubgraph extends BasicSubgraph {
          // fix vertex ids
          IntArrayList patternVertices = pattern.getVertices();
          for (int i = 0; i < vertices.size(); ++i) {
-            patternVertices.set(i, vertices.getUnchecked(i));
+            patternVertices.set(i, vertices.getu(i));
          }
 
          // fix pattern edges, TODO: consider edge labels
          PatternEdgeArrayList patternEdges = pattern.getEdges();
          MainGraph graph = getConfig().getMainGraph();
          for (int i = 0; i < patternEdges.size(); ++i) {
-            PatternEdge pedge = patternEdges.getUnchecked(i);
-            pedge.setSrcLabel(graph.vertexLabel(patternVertices.getUnchecked(pedge.getSrcPos())));
-            pedge.setDestLabel(graph.vertexLabel(patternVertices.getUnchecked(pedge.getDestPos())));
+            PatternEdge pedge = patternEdges.getu(i);
+            pedge.setSrcLabel(graph.vertexLabel(patternVertices.getu(pedge.getSrcPos())));
+            pedge.setDestLabel(graph.vertexLabel(patternVertices.getu(pedge.getDestPos())));
          }
 
          dirtyPattern = false;
@@ -116,7 +116,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       IntArrayList vertices = getVertices();
 
       for (int i = 0; i < vertices.size(); ++i) {
-         sb.append(vertices.getUnchecked(i));
+         sb.append(vertices.getu(i));
          sb.append(" ");
       }
 
@@ -191,7 +191,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
 
       // For each vertex (except the last one added)
       for (int i = 0; i < positionAdded; ++i) {
-         int existingVertexId = vertices.getUnchecked(i);
+         int existingVertexId = vertices.getu(i);
 
          updateEdgesConsumer.reset();
          configuration.getMainGraph().forEachEdge(existingVertexId,
@@ -251,12 +251,12 @@ public class PatternInducedSubgraph extends BasicSubgraph {
 
       intersection.clear();
       for (int i = 0; i < intersectionIdx.size(); ++i) {
-         intersection.add(vertices.getUnchecked(intersectionIdx.getUnchecked(i)));
+         intersection.add(vertices.getu(intersectionIdx.getu(i)));
       }
 
       difference.clear();
       for (int i = 0; i < differenceIdx.size(); ++i) {
-         difference.add(vertices.getUnchecked(differenceIdx.getUnchecked(i)));
+         difference.add(vertices.getu(differenceIdx.getu(i)));
       }
 
       /**
@@ -282,13 +282,13 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    }
 
    private void ensureNeighborhoods(MainGraph graph, Pattern pattern, int mcvcSize, int pos) {
-      if (neighborhoods.getUnchecked(pos) != null) return;
+      if (neighborhoods.getu(pos) != null) return;
       /**
        * Single vertices: neighborhood view
        */
       if (pos < mcvcSize) {
-         IntArrayList view = graph.neighborhoodVertices(vertices.getUnchecked(pos));
-         neighborhoods.setUnchecked(pos, view);
+         IntArrayList view = graph.neighborhoodVertices(vertices.getu(pos));
+         neighborhoods.setu(pos, view);
          neighborhoodsToReclaim.add(view);
          return;
       }
@@ -299,15 +299,15 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       PatternExplorationPlan explorationPlan = pattern.explorationPlan();
       IntArrayList intersections = explorationPlan.intersection(pos);
       for (int i = 0; i < intersections.size(); ++i) {
-         ensureNeighborhoods(graph, pattern, mcvcSize, intersections.getUnchecked(i));
+         ensureNeighborhoods(graph, pattern, mcvcSize, intersections.getu(i));
       }
 
       /**
        * In case intersections is single element, just get reference
        */
       if (intersections.size() == 1) {
-         int dep = intersections.getUnchecked(0);
-         neighborhoods.setUnchecked(pos, neighborhoods.getUnchecked(dep));
+         int dep = intersections.getu(0);
+         neighborhoods.setu(pos, neighborhoods.getu(dep));
          return;
       }
 
@@ -315,11 +315,11 @@ public class PatternInducedSubgraph extends BasicSubgraph {
        * In case intersections have two elements
        */
       if (intersections.size() == 2) {
-         IntArrayList neighborhood1 = neighborhoods.getUnchecked(intersections.getUnchecked(0));
-         IntArrayList neighborhood2 = neighborhoods.getUnchecked(intersections.getUnchecked(1));
+         IntArrayList neighborhood1 = neighborhoods.getu(intersections.getu(0));
+         IntArrayList neighborhood2 = neighborhoods.getu(intersections.getu(1));
          IntArrayList result = IntArrayListPool.instance().createObject();
          Utils.sintersect(neighborhood1, neighborhood2, 0, neighborhood1.size(), 0, neighborhood2.size(), result);
-         neighborhoods.setUnchecked(pos, result);
+         neighborhoods.setu(pos, result);
          neighborhoodsToReclaim.add(result);
          return;
       }
@@ -329,25 +329,27 @@ public class PatternInducedSubgraph extends BasicSubgraph {
        */
       IntArrayList result = IntArrayListPool.instance().createObject();
       IntArrayList previous = IntArrayListPool.instance().createObject();
-      IntArrayList neighborhood1 = neighborhoods.getUnchecked(intersections.getUnchecked(0));
-      IntArrayList neighborhood2 = neighborhoods.getUnchecked(intersections.getUnchecked(1));
+      IntArrayList neighborhood1 = neighborhoods.getu(intersections.getu(0));
+      IntArrayList neighborhood2 = neighborhoods.getu(intersections.getu(1));
       Utils.sintersect(neighborhood1, neighborhood2, 0, neighborhood1.size(), 0, neighborhood2.size(), result);
 
       for (int i = 2; i < intersections.size(); ++i) {
          IntArrayList aux = result;
          result = previous;
          previous = aux;
-         neighborhood1 = neighborhoods.getUnchecked(intersections.getUnchecked(i));
+         neighborhood1 = neighborhoods.getu(intersections.getu(i));
          result.clear();
-         Utils.sintersect(previous, neighborhood1, 0, previous.size(), 0, neighborhood1.size(), result);
+         Utils.sintersect(previous, neighborhood1, 0, previous.size(), 0,
+                 neighborhood1.size(), result);
       }
 
-      neighborhoods.setUnchecked(pos, result);
+      neighborhoods.setu(pos, result);
       neighborhoodsToReclaim.add(result);
       IntArrayListPool.instance().reclaimObject(previous);
    }
 
-   public long completeMatch(Computation computation, Pattern pattern) {
+   public long completeMatch(Computation computation, Pattern pattern,
+                             SubgraphCallback callback) {
       PatternExplorationPlan explorationPlan = pattern.explorationPlan();
       int numOrderings = explorationPlan.numOrderings();
 
@@ -356,7 +358,9 @@ public class PatternInducedSubgraph extends BasicSubgraph {
          originalVertices.addAll(vertices);
       }
 
-      long validSubgraphs = completeMatch(pattern, explorationPlan, numOrderings, 0);
+      long validSubgraphs = completeMatch(computation, pattern,
+              callback, explorationPlan,
+              numOrderings, 0);
 
       if (numOrderings > 1) {
          vertices.clear();
@@ -368,7 +372,10 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       return validSubgraphs;
    }
 
-   private long completeMatch(Pattern pattern, PatternExplorationPlan explorationPlan, int numOrderings, int nextOrdering) {
+   private long completeMatch(Computation computation, Pattern pattern,
+                              SubgraphCallback callback,
+                              PatternExplorationPlan explorationPlan,
+                              int numOrderings, int nextOrdering) {
       int numVertices = pattern.getNumberOfVertices();
       int nextVertexPos = getNumVertices();
       MainGraph graph = pattern.getConfig().getMainGraph();
@@ -382,7 +389,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
          IntArrayList previousOrdering = explorationPlan.ordering(nextOrdering - 1);
          IntArrayList ordering = explorationPlan.ordering(nextOrdering);
          for (int j = 0; j < ordering.size(); ++j) {
-            vertices.setUnchecked(previousOrdering.getUnchecked(j), verticesBackup.getUnchecked(ordering.getUnchecked(j)));
+            vertices.setu(previousOrdering.getu(j), verticesBackup.getu(ordering.getu(j)));
          }
       }
 
@@ -399,7 +406,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
        * Clear and maybe reclaim temporary neighborhoods
        */
       for (int i = 0; i < neighborhoodsToReclaim.size(); ++i) {
-         neighborhoodsToReclaim.getUnchecked(i).reclaim();
+         neighborhoodsToReclaim.getu(i).reclaim();
       }
       neighborhoodsToReclaim.clear();
 
@@ -413,37 +420,42 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       /**
        * Effectively match this ordering
        */
-      long validSubgraphs = completeMatchRec(pattern);
+      long validSubgraphs = completeMatchRec(computation, pattern, callback);
 
       if (nextOrdering >= numOrderings - 1) { // reached last ordering
          return validSubgraphs;
       } else { // accumulate with other orderings
-         return validSubgraphs + completeMatch(pattern, explorationPlan, numOrderings, nextOrdering + 1);
+         return validSubgraphs + completeMatch(computation, pattern,
+                 callback,
+                 explorationPlan,
+                 numOrderings,
+                 nextOrdering + 1);
       }
    }
 
-   private long completeMatchRec(Pattern pattern) {
+   private long completeMatchRec(Computation computation, Pattern pattern,
+                                 SubgraphCallback callback) {
       long validSubgraphs = 0;
       int numVertices = getNumVertices();
-      IntArrayList validExtensions = neighborhoods.getUnchecked(numVertices);
+      IntArrayList validExtensions = neighborhoods.getu(numVertices);
       int lowerBound = pattern.sbLowerBound(this, getNumVertices());
       int startIdx = validExtensions.binarySearch(lowerBound);
       startIdx = (startIdx < 0) ? (-startIdx - 1) : startIdx + 1;
       if (getNumVertices() < pattern.getNumberOfVertices() - 1) {
          for (; startIdx < validExtensions.size(); ++startIdx) {
-            int u = validExtensions.getUnchecked(startIdx);
+            int u = validExtensions.getu(startIdx);
             if (vertices.contains(u)) continue;
             addWord(u);
-            validSubgraphs += completeMatchRec(pattern);
+            validSubgraphs += completeMatchRec(computation, pattern, callback);
             removeLastWord();
          }
       } else {
          for (; startIdx < validExtensions.size(); ++startIdx) {
-            int u = validExtensions.getUnchecked(startIdx);
+            int u = validExtensions.getu(startIdx);
             if (vertices.contains(u)) continue;
             addWord(u);
             validSubgraphs += 1;
-            // callback
+            callback.apply(this, computation);
             removeLastWord();
          }
       }
@@ -462,7 +474,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       int numEdges = edges.size();
 
       for (int i = 0; i < numEdges; ++i) {
-         updateVertices(edges.getUnchecked(i));
+         updateVertices(edges.getu(i));
       }
    }
 
@@ -481,12 +493,12 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       edgeTagger.setEtag(etag);
 
       for (int i = 0; i < numPatternEdges; ++i) {
-         PatternEdge pedge = patternEdges.getUnchecked(i);
+         PatternEdge pedge = patternEdges.getu(i);
          int srcPos = pedge.getSrcPos();
          int destPos = pedge.getDestPos();
          if (destPos >= pos && destPos < numVertices) {
-            int src = vertices.getUnchecked(srcPos);
-            int dest = vertices.getUnchecked(destPos);
+            int src = vertices.getu(srcPos);
+            int dest = vertices.getu(destPos);
             vtag.insert(src);
             vtag.insert(dest);
 
@@ -506,12 +518,12 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       edgeTagger.setEtag(etag);
 
       for (int i = 0; i < numPatternEdges; ++i) {
-         PatternEdge pedge = patternEdges.getUnchecked(i);
+         PatternEdge pedge = patternEdges.getu(i);
          int srcPos = pedge.getSrcPos();
          int destPos = pedge.getDestPos();
          if (destPos <= pos && destPos < numVertices) {
-            int src = vertices.getUnchecked(srcPos);
-            int dest = vertices.getUnchecked(destPos);
+            int src = vertices.getu(srcPos);
+            int dest = vertices.getu(destPos);
             vtag.insert(src);
             vtag.insert(dest);
 

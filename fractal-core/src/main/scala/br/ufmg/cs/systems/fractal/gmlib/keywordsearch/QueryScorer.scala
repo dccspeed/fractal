@@ -33,7 +33,7 @@ class QueryScorer(
     var total = 0.0
     var i = 0
     while (i < n) {
-      val dj = words.getUnchecked(i)
+      val dj = words.getu(i)
       val rj = e.labelledEdge(dj).getEdgeLabel()
       total += (1 / n.toDouble) * pqiDjrj(qi, dj, rj)
       i += 1

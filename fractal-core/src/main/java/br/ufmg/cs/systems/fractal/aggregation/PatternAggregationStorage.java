@@ -372,6 +372,10 @@ public class PatternAggregationStorage<K extends Pattern, V extends Writable> ex
         super.transferKeyFrom(key, otherAggregationStorage);
     }
 
+    public ConcurrentHashMap<K,K> getQuickToCanonicalMapping() {
+        return quick2CanonicalMap;
+    }
+
     @Override
     public String toString() {
         return "PatternAggregationStorage{" +

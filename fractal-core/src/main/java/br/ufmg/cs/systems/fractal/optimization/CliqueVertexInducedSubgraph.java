@@ -22,7 +22,7 @@ public class CliqueVertexInducedSubgraph extends VertexInducedSubgraph {
             IntArrayList orderedVertices = neighbourhood.getOrderedVertices();
             int numOrderedVertices = orderedVertices.size();
             for (int j = numOrderedVertices - 1; j >= 0; --j) {
-               int v = orderedVertices.getUnchecked(j);
+               int v = orderedVertices.getu(j);
                if (v > lastVertex) {
                   extensionWordIds().add(v);
                } else {

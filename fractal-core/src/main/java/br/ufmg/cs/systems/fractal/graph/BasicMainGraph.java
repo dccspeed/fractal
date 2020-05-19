@@ -461,7 +461,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
       if (intersectionSize == 1 && differenceSize == 0) {
          /* Initialize validVertices with the first intersection and considering vertexPredicate */
-         u = intersection.getUnchecked(0);
+         u = intersection.getu(0);
          neighbourhood = vertexNeighborhoods[u];
          orderedVertices = neighbourhood.getOrderedVertices();
          idx = vertexLowerBound == Integer.MIN_VALUE ? 0 : orderedVertices.binarySearch(vertexLowerBound);
@@ -469,9 +469,9 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
          size = orderedVertices.size();
          size = vertexUpperBound == Integer.MAX_VALUE ? size : orderedVertices.binarySearch(vertexUpperBound);
          size = (size < 0) ? (-size - 1) : size;
-         edgePredicate = edgePredicates.getUnchecked(0);
+         edgePredicate = edgePredicates.getu(0);
          for (int i = idx; i < size; ++i) {
-            v = orderedVertices.getUnchecked(i);
+            v = orderedVertices.getu(i);
             if (!vertexPredicate.test(v)) continue;
             e = neighbourhood.getEdge(v);
             if (!edgePredicate.test(e)) continue;
@@ -487,7 +487,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
       if (intersectionSize == 1) {
          /* Initialize validVertices with the first intersection and considering vertexPredicate */
-         u = intersection.getUnchecked(0);
+         u = intersection.getu(0);
          neighbourhood = vertexNeighborhoods[u];
          orderedVertices = neighbourhood.getOrderedVertices();
          idx = vertexLowerBound == Integer.MIN_VALUE ? 0 : orderedVertices.binarySearch(vertexLowerBound);
@@ -495,9 +495,9 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
          size = orderedVertices.size();
          size = vertexUpperBound == Integer.MAX_VALUE ? size : orderedVertices.binarySearch(vertexUpperBound);
          size = (size < 0) ? (-size - 1) : size;
-         edgePredicate = edgePredicates.getUnchecked(0);
+         edgePredicate = edgePredicates.getu(0);
          for (int i = idx; i < size; ++i) {
-            v = orderedVertices.getUnchecked(i);
+            v = orderedVertices.getu(i);
             if (!vertexPredicate.test(v)) continue;
             e = neighbourhood.getEdge(v);
             if (!edgePredicate.test(e)) continue;
@@ -506,7 +506,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
          /* Now that we have valid vertices considering labels, we drop from this set neighborhoods in difference */
          for (int i = 0; i < differenceSize - 1; ++i) {
-            u = difference.getUnchecked(i);
+            u = difference.getu(i);
             neighbourhood = vertexNeighborhoods[u];
             orderedVertices = neighbourhood.getOrderedVertices();
             idx = vertexLowerBound == Integer.MIN_VALUE ? 0 : orderedVertices.binarySearch(vertexLowerBound);
@@ -538,7 +538,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       }
 
       /* Initialize validVertices with the first intersection and considering vertexPredicate */
-      u = intersection.getUnchecked(0);
+      u = intersection.getu(0);
       neighbourhood = vertexNeighborhoods[u];
       orderedVertices = neighbourhood.getOrderedVertices();
       idx = vertexLowerBound == Integer.MIN_VALUE ? 0 : orderedVertices.binarySearch(vertexLowerBound);
@@ -546,9 +546,9 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       size = orderedVertices.size();
       size = vertexUpperBound == Integer.MAX_VALUE ? size : orderedVertices.binarySearch(vertexUpperBound);
       size = (size < 0) ? (-size - 1) : size;
-      edgePredicate = edgePredicates.getUnchecked(0);
+      edgePredicate = edgePredicates.getu(0);
       for (int i = idx; i < size; ++i) {
-         v = orderedVertices.getUnchecked(i);
+         v = orderedVertices.getu(i);
          if (!vertexPredicate.test(v)) continue;
          e = neighbourhood.getEdge(v);
          if (!edgePredicate.test(e)) continue;
@@ -557,7 +557,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
       /* Now that we have valid vertices considering labels, we drop from this set neighborhoods in difference */
       for (int i = 0; i < differenceSize; ++i) {
-         u = difference.getUnchecked(i);
+         u = difference.getu(i);
          neighbourhood = vertexNeighborhoods[u];
          orderedVertices = neighbourhood.getOrderedVertices();
          idx = vertexLowerBound == Integer.MIN_VALUE ? 0 : orderedVertices.binarySearch(vertexLowerBound);
@@ -574,7 +574,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
       /* Now that we have excluded all difference neighborhoods, we intersect the current set with other intersections */
       for (int i = 1; i < intersectionSize - 1; ++i) {
-         u = intersection.getUnchecked(i);
+         u = intersection.getu(i);
          neighbourhood = vertexNeighborhoods[u];
          orderedVertices = neighbourhood.getOrderedVertices();
          idx = vertexLowerBound == Integer.MIN_VALUE ? 0 : orderedVertices.binarySearch(vertexLowerBound);
@@ -585,10 +585,10 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
          edgeNeighborhoods.clear();
          for (int j = 0; j < orderedVertices.size(); ++j) {
-            edgeNeighborhoods.add(neighbourhood.getEdge(orderedVertices.getUnchecked(j)));
+            edgeNeighborhoods.add(neighbourhood.getEdge(orderedVertices.getu(j)));
          }
          Utils.sintersectWithKeyPred(validVertices, orderedVertices, 0, validVertices.size(), idx, size,
-                 resultSet, edgeNeighborhoods, edgePredicates.getUnchecked(i));
+                 resultSet, edgeNeighborhoods, edgePredicates.getu(i));
 
          validVertices.clear();
          IntArrayList aux = validVertices;
@@ -608,7 +608,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
       edgeNeighborhoods.clear();
       for (int j = 0; j < orderedVertices.size(); ++j) {
-         edgeNeighborhoods.add(neighbourhood.getEdge(orderedVertices.getUnchecked(j)));
+         edgeNeighborhoods.add(neighbourhood.getEdge(orderedVertices.getu(j)));
       }
       Utils.sintersectConsumeWithKeyPred(validVertices, orderedVertices, 0, validVertices.size(), idx, size,
               consumer, edgeNeighborhoods, edgePredicates.getLast());

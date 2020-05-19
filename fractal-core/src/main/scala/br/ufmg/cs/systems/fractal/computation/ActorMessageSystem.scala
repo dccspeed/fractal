@@ -650,7 +650,7 @@ object ActorMessageSystem extends Logging {
          oos.writeInt(prefixSize)
          var i = 0
          while (i < prefixSize) {
-            oos.writeInt(prefix.getUnchecked(i))
+            oos.writeInt(prefix.getu(i))
             i += 1
          }
 

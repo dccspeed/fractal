@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal
 
+import br.ufmg.cs.systems.fractal.aggregation.PatternAggregationStorage
 import br.ufmg.cs.systems.fractal.annotation.Experimental
 import br.ufmg.cs.systems.fractal.computation.{Computation, SubgraphEnumerator}
 import br.ufmg.cs.systems.fractal.gmlib.clique.KClistEnumerator
@@ -7,9 +8,11 @@ import br.ufmg.cs.systems.fractal.gmlib.fsm.{DomainSupport, DomainSupportEndAggr
 import br.ufmg.cs.systems.fractal.graph.MainGraph
 import br.ufmg.cs.systems.fractal.pattern.{BasicPattern, Pattern, PatternExplorationPlan, PatternExplorationPlanMCVC, PatternExplorationPlanMCVCOrdering, PatternExplorationPlanMCVCVgroups, PatternUtils}
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
-import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
-import br.ufmg.cs.systems.fractal.util.{Logging, Utils, VertexPredicate}
+import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjSet}
+import br.ufmg.cs.systems.fractal.util.{Logging, SubgraphCallback, Utils, VertexPredicate}
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool
+import com.koloboke.collect.map.ObjObjMap
+import com.koloboke.collect.map.hash.HashObjObjMaps
 import com.koloboke.collect.set.hash.{HashObjSet, HashObjSets}
 import org.apache.hadoop.io.{IntWritable, LongWritable, NullWritable}
 
@@ -162,14 +165,15 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     * @return a map with frequent patterns and their current support
     */
    def fsmpf(supportThreshold: Int, maxNumEdges: Int)
-   : Map[Pattern, DomainSupport] = {
+   : ObjObjMap[Pattern, DomainSupport] = {
       var unlabeledPatterns: HashObjSet[Pattern] = null
       var infrequentPatterns = HashObjSets.newMutableSet[Pattern]()
       val frequentPatterns = HashObjSets.newMutableSet[Pattern]()
-      var patternsMap = Map.empty[Pattern,DomainSupport]
+      var patternsMap = HashObjObjMaps.newMutableMap[Pattern,DomainSupport]()
       var numEdges = 0
 
       do {
+         logInfo(s"ExtendingPatterns ${frequentPatterns}")
          unlabeledPatterns = PatternUtils
             .extendByEdge(frequentPatterns, Int.MinValue)
          numEdges += 1
@@ -231,7 +235,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
                      s" support=${support} minSupport=${minSupport}")
                } else {
                   frequentPatterns.add(labeledPattern)
-                  patternsMap = patternsMap + (labeledPattern -> support)
+                  patternsMap.put(labeledPattern, support)
                   logInfo(s"FrequentPattern" +
                      s" unlabaledPattern=${pattern} " +
                      s" labeledPattern=${labeledPattern} support=${support}" +
@@ -252,12 +256,14 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     * @param numSteps maximum number of exploration steps
     * @return Fractoid with the initial state for FSM
     */
-   def fsm(support: Int, numSteps: Int): Map[Pattern,DomainSupport] = {
+   def fsm(support: Int, numSteps: Int): ObjObjMap[Pattern,DomainSupport] = {
       import scala.collection.JavaConverters._
 
       val AGG_FREQS = "frequent_patterns"
 
-      var frequentPatterns = Map.empty[Pattern,DomainSupport]
+      var frequentPatternsSupports = HashObjObjMaps
+         .newMutableMap[Pattern,DomainSupport]()
+      var quickPatterns = new ObjSet[Pattern]()
 
       val bootstrap = self.efractoid.
          expand(1).
@@ -266,51 +272,58 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
             (e,c,v) => { v.setSupport(support); v.setSubgraph(e); v },
             (v1,v2) => { v1.aggregate(v2); v1 },
             new DomainSupportEndAggregationFunction(),
-            isIncremental = true)
+            isIncremental = false)
 
       var iteration = 0
       var freqFrac = bootstrap
-      var freqPatts = bootstrap.
-         aggregationStorage[Pattern,DomainSupport](AGG_FREQS)
+      var freqPatts = bootstrap
+         .aggregationStorage[Pattern,DomainSupport](AGG_FREQS)
+         .asInstanceOf[PatternAggregationStorage[Pattern,DomainSupport]]
 
-      frequentPatterns = frequentPatterns ++ freqPatts.getMapping.asScala
-      freqPatts.getMapping().asScala.foreach { case (pattern,supp) =>
-         logInfo(s"FrequentPattern iteration=${iteration} ${pattern} ${supp}")
+      quickPatterns.addAll(freqPatts.getQuickToCanonicalMapping.keySet())
+      logInfo(s"QuickPatterns ${quickPatterns}")
+      frequentPatternsSupports.putAll(freqPatts.getMapping)
+      val cur = frequentPatternsSupports.cursor()
+      while (cur.moveNext()) {
+         logInfo(s"FrequentPattern iteration=${iteration}" +
+            s" ${cur.key()} ${cur.value()}")
       }
 
       var remainingSteps = numSteps
-      var numPatts = freqPatts.getNumberMappings()
-      var continue = numPatts > 0 && remainingSteps > 0
+      var continue = freqPatts.getNumberMappings > 0 && remainingSteps > 0
 
       while (continue) {
          iteration += 1
-         freqFrac = freqFrac.
-            filter [Pattern,DomainSupport] (AGG_FREQS) {
-               (e,a) =>
-                  a.containsKey(e.getPattern)
-            }.
-            expand(1).
-            aggregate [Pattern,DomainSupport] (AGG_FREQS,
+         freqFrac = freqFrac
+            .filter{ (s,c) =>
+               quickPatterns.contains(s.getPattern)
+            }
+            .expand(1)
+            .aggregate [Pattern,DomainSupport] (AGG_FREQS,
                (e,c,k) => { e.getPattern },
                (e,c,v) => { v.setSupport(support); v.setSubgraph(e); v },
                (v1,v2) => { v1.aggregate(v2); v1 },
                new DomainSupportEndAggregationFunction(),
-               isIncremental = true)
+               isIncremental = false)
 
-         freqPatts = freqFrac.
-            aggregationStorage[Pattern,DomainSupport](AGG_FREQS)
+         freqPatts = freqFrac
+            .aggregationStorage[Pattern,DomainSupport](AGG_FREQS)
+            .asInstanceOf[PatternAggregationStorage[Pattern,DomainSupport]]
 
-         frequentPatterns = frequentPatterns ++ freqPatts.getMapping.asScala
-         freqPatts.getMapping().asScala.foreach { case (pattern,supp) =>
-            logInfo(s"FrequentPattern iteration=${iteration} ${pattern} ${supp}")
+         quickPatterns.addAll(freqPatts.getQuickToCanonicalMapping.keySet())
+         logInfo(s"QuickPatterns ${quickPatterns}")
+         frequentPatternsSupports.putAll(freqPatts.getMapping)
+         val cur = frequentPatternsSupports.cursor()
+         while (cur.moveNext()) {
+            logInfo(s"FrequentPattern iteration=${iteration}" +
+               s" ${cur.key()} ${cur.value()}")
          }
 
          remainingSteps -= 1
-         continue = freqPatts.getNumberMappings() > numPatts && remainingSteps > 0
-         numPatts = freqPatts.getNumberMappings()
+         continue = freqPatts.getNumberMappings > 0 && remainingSteps > 0
       }
 
-      frequentPatterns
+      frequentPatternsSupports
    }
 
    /**
@@ -320,7 +333,10 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     * @param pattern representing a query
     * @return an array of fractoids with partial query results
     */
-   def gqueryingmcvc(pattern: Pattern): Array[Fractoid[PatternInducedSubgraph]] = {
+   def gqueryingmcvc(pattern: Pattern,
+                     callback: SubgraphCallback[PatternInducedSubgraph] =
+                     SubgraphCallback.defaultPatternInducedCallback)
+   : Array[Fractoid[PatternInducedSubgraph]] = {
       logInfo(s"PatternBeforePlan ${pattern}")
 
       val newPatterns = PatternExplorationPlanMCVC.apply(pattern)
@@ -328,13 +344,13 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
       var i = 0
       while (i < newPatterns.size()) {
-         val nextPattern = newPatterns.getUnchecked(i)
+         val nextPattern = newPatterns.getu(i)
          val explorationPlanMCVC = nextPattern.explorationPlan()
          val mcvcSize = explorationPlanMCVC.mcvcSize()
 
          val gquerying = this.gquerying(nextPattern).
             explore(mcvcSize - 1).
-            process((s,c) => s.completeMatch(c, c.getPattern))
+            process((s,c) => s.completeMatch(c, c.getPattern, callback))
 
          logInfo(s"MCVCPartialResult pattern=${nextPattern} sbLower=${nextPattern.vsymmetryBreakerLowerBound()}" +
             s" sbUpper=${nextPattern.vsymmetryBreakerUpperBound()} plan=${explorationPlanMCVC}" +
@@ -449,7 +465,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
                var i = 0
                while (i < vertices.size()) {
                   val prop = e.vertex[HashObjSet[String]](
-                     vertices.getUnchecked(i)).getProperty()
+                     vertices.getu(i)).getProperty()
                   if (prop != null) {
                      _curs(i) = prop.cursor()
                   }
@@ -460,7 +476,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
                var j = 0
                while (i < _curs.length) {
                   val prop = e.edge[HashObjSet[String]](
-                     edges.getUnchecked(j)).getProperty()
+                     edges.getu(j)).getProperty()
                   if (prop != null) {
                      _curs(i) = prop.cursor()
                   }
@@ -497,7 +513,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
             INVERTED_INDEX,
             (e: EdgeInducedSubgraph, c: Computation[EdgeInducedSubgraph]) => {
                val reusableTuple = (new Text(), new InvertedIndexMap())
-               val singleEdge = e.getEdges().getUnchecked(0)
+               val singleEdge = e.getEdges().getu(0)
                docIterator(e,c).filter (w => keywords.contains(w)).map { word =>
                   reusableTuple._1.set(word)
                   reusableTuple._2.clear()
@@ -511,7 +527,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
             PREDICATE_INDEX,
             (e: EdgeInducedSubgraph, c: Computation[EdgeInducedSubgraph]) => {
                val reusableTuple = (new Text(), new InvertedIndexMap())
-               val singleEdge = e.getEdges().getUnchecked(0)
+               val singleEdge = e.getEdges().getu(0)
                val predicate = e.labelledEdge(singleEdge).getEdgeLabel()
                docIterator(e,c).map { word =>
                   reusableTuple._1.set(word)
@@ -527,7 +543,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
             (e: EdgeInducedSubgraph, c: Computation[EdgeInducedSubgraph]) => {
                if (!docIterator(e,c).filter (w => keywords.contains(w)).isEmpty) {
                   val reusableTuple = (new Text(VALID_VERTICES), new IntSet())
-                  val edgeId = e.getEdges().getUnchecked(0)
+                  val edgeId = e.getEdges().getu(0)
                   val edge = e.labelledEdge(edgeId)
                   val vertices = Iterator(edge.getSourceId(), edge.getDestinationId())
                   vertices.map { v =>

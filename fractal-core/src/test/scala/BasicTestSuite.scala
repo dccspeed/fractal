@@ -163,9 +163,6 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
    }
 
    test ("[cube,fsm]", Tag("cube.fsm")) {
-      import br.ufmg.cs.systems.fractal.gmlib.fsm.DomainSupport
-      import br.ufmg.cs.systems.fractal.pattern.Pattern
-
       // Critical test
       // Test output for fsm with support 2 for Subgraphs with size 2 to 3
       val support = 2
@@ -386,14 +383,14 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
          // subgraph-first approach: edge by edge
          val frequentPatterns = chosenGraph
             .fsm(minSupport, Int.MaxValue)
-            .keys
+            .keySet()
 
          assert(frequentPatterns.size == numPatterns)
 
          // pattern-first approach: pattern-matching on every possible pattern
          val frequentPatternsPf = chosenGraph
             .fsmpf(minSupport, Int.MaxValue)
-            .keys
+            .keySet()
 
          assert(frequentPatternsPf.size == numPatterns)
 

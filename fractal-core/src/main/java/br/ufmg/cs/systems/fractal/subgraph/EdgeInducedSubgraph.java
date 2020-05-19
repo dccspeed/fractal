@@ -53,7 +53,7 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
 
       for (int i = 0; i < numEdges; ++i) {
          Edge edge = configuration.getMainGraph().
-                 getEdge(edges.getUnchecked(i));
+                 getEdge(edges.getu(i));
          sb.append(edge.getSourceId());
          sb.append("-");
          sb.append(edge.getDestinationId());
@@ -184,17 +184,17 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
 
       int currVertice = numVertices - 1;
       int wordId;
-      int lowerBound = edges.getUnchecked(0);
+      int lowerBound = edges.getu(0);
       MainGraph graph = configuration.getMainGraph();
 
       for (int i = numEdges - 1; i >= 0; --i) {
-         wordId = edges.getUnchecked(i);
+         wordId = edges.getu(i);
 
-         int numVerticesAdded = numVerticesAddedWithWord.getUnchecked(i);
+         int numVerticesAdded = numVerticesAddedWithWord.getu(i);
          for (int j = 0; j < numVerticesAdded; ++j) {
-            int vertexId = vertices.getUnchecked(currVertice);
+            int vertexId = vertices.getu(currVertice);
             updateExtensionsConsumer.setLowerBound(lowerBound);
-            graph.neighborhoodTraversalEdgeRange(vertexId, edges.getUnchecked(0), updateExtensionsConsumer);
+            graph.neighborhoodTraversalEdgeRange(vertexId, edges.getu(0), updateExtensionsConsumer);
             --currVertice;
          }
 
@@ -236,7 +236,7 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
       int numEdges = edges.size();
 
       for (int i = 0; i < numEdges; ++i) {
-         updateVertices(edges.getUnchecked(i));
+         updateVertices(edges.getu(i));
       }
    }
 
@@ -255,12 +255,12 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
 
       for (int i = numEdges - 1; i >= pos; --i) {
          // tag edge
-         etag.insert(edges.getUnchecked(i));
+         etag.insert(edges.getu(i));
 
-         int lowerIdx = upperIdx - numVerticesAddedWithWord.getUnchecked(i);
+         int lowerIdx = upperIdx - numVerticesAddedWithWord.getu(i);
 
          for (int j = upperIdx; j > lowerIdx; --j) {
-            vtag.insert(vertices.getUnchecked(j));
+            vtag.insert(vertices.getu(j));
          }
 
          upperIdx = lowerIdx;
@@ -274,12 +274,12 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
 
       for (int i = 0; i <= pos; ++i) {
          // tag edge
-         etag.insert(edges.getUnchecked(i));
+         etag.insert(edges.getu(i));
 
-         int upperIdx = lowerIdx + numVerticesAddedWithWord.getUnchecked(i);
+         int upperIdx = lowerIdx + numVerticesAddedWithWord.getu(i);
 
          for (int j = lowerIdx; j < upperIdx; ++j) {
-            vtag.insert(vertices.getUnchecked(j));
+            vtag.insert(vertices.getu(j));
          }
 
          lowerIdx = upperIdx;

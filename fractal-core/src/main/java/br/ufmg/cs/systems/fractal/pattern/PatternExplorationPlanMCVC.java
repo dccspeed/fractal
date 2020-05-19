@@ -36,7 +36,7 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
 
       // sanity check
       for (i = 0; i < mcvc.size(); ++i) {
-         if (labeling.get(mcvc.getUnchecked(i)) != i) {
+         if (labeling.get(mcvc.getu(i)) != i) {
             throw new RuntimeException("Labeling does not match vertex cover order");
          }
       }

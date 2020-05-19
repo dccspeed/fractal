@@ -206,7 +206,7 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
       idx = (idx < 0) ? (-idx - 1) : idx;
 
       for (int i = idx; i < size; ++i) {
-         int e = orderedEdges.getUnchecked(i);
+         int e = orderedEdges.getu(i);
          Edge edge = graph.getEdge(e);
          int u = edge.getSourceId();
          if (neighbourhoodMap.containsKey(u)) {
@@ -226,7 +226,7 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
       idx = (idx < 0) ? (-idx - 1) : idx;
 
       for (int i = idx; i < size; ++i) {
-         int v = orderedVertices.getUnchecked(i);
+         int v = orderedVertices.getu(i);
          consumer.accept(v, neighbourhoodMap.get(v));
       }
    }

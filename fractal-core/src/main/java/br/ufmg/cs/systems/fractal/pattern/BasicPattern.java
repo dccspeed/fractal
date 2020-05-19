@@ -234,7 +234,7 @@ public abstract class BasicPattern implements Pattern {
       // so we check
       final IntArrayList words = subgraph.getWords();
       for (int i = previousWords.size() - 2; i >= 0; i--) {
-         if (words.getUnchecked(i) != previousWords.getUnchecked(i)) {
+         if (words.getu(i) != previousWords.getu(i)) {
             return false;
          }
       }
@@ -450,8 +450,8 @@ public abstract class BasicPattern implements Pattern {
             continue;
          }
 
-         int vertexId = oldVertices.getUnchecked(i);
-         vertices.setUnchecked(newPos, vertexId);
+         int vertexId = oldVertices.getu(i);
+         vertices.setu(newPos, vertexId);
 
          vertexPositions.put(vertexId, newPos);
       }
@@ -624,24 +624,24 @@ public abstract class BasicPattern implements Pattern {
 
    @Override
    public int sbUpperBound(Subgraph subgraph, int pos) {
-      IntArrayList conditions = vsymmetryBreakerUpperBound().getUnchecked(pos);
+      IntArrayList conditions = vsymmetryBreakerUpperBound().getu(pos);
       IntArrayList vertices = subgraph.getVertices();
       int numConditions = conditions.size();
       int upperBound = Integer.MAX_VALUE;
       for (int i = 0; i < numConditions; ++i) {
-         upperBound = Math.min(upperBound, vertices.getUnchecked(conditions.get(i)));
+         upperBound = Math.min(upperBound, vertices.getu(conditions.get(i)));
       }
       return upperBound;
    }
 
    @Override
    public int sbLowerBound(Subgraph subgraph, int pos) {
-      IntArrayList conditions = vsymmetryBreakerLowerBound().getUnchecked(pos);
+      IntArrayList conditions = vsymmetryBreakerLowerBound().getu(pos);
       IntArrayList vertices = subgraph.getVertices();
       int numConditions = conditions.size();
       int lowerBound = Integer.MIN_VALUE;
       for (int i = 0; i < numConditions; ++i) {
-         lowerBound = Math.max(lowerBound, vertices.getUnchecked(conditions.get(i)));
+         lowerBound = Math.max(lowerBound, vertices.getu(conditions.get(i)));
       }
       return lowerBound;
    }
@@ -666,8 +666,8 @@ public abstract class BasicPattern implements Pattern {
       boolean valid = false;
 
       // first edge in ordering must exist
-      int ord1 = ordering.getUnchecked(0);
-      int ord2 = ordering.getUnchecked(1);
+      int ord1 = ordering.getu(0);
+      int ord2 = ordering.getu(1);
       for (PatternEdge pedge : edges) {
          int src = pedge.getSrcPos();
          int dst = pedge.getDestPos();
@@ -684,7 +684,7 @@ public abstract class BasicPattern implements Pattern {
       visited.add(ord1);
       visited.add(ord2);
       for (int i = 2; i < ordering.size(); ++i) {
-         ord1 = ordering.getUnchecked(i);
+         ord1 = ordering.getu(i);
          // ensure new vertex connects to visited vertices
          valid = false;
          for (PatternEdge pedge : edges) {
@@ -721,9 +721,9 @@ public abstract class BasicPattern implements Pattern {
       int[][] sbMatrix = vsymmetryBreakerMatrix();
 
       for (int i = 0; i < ordering.size(); ++i) {
-         int u = ordering.getUnchecked(i);
+         int u = ordering.getu(i);
          for (int j = i + 1; j < ordering.size(); ++j) {
-            int v = ordering.getUnchecked(j);
+            int v = ordering.getu(j);
             // make u < v in the partial ordering (symmetry breaking conditions)
             sbMatrix[u][v] = -1;
             sbMatrix[v][u] = 1;
@@ -764,7 +764,7 @@ public abstract class BasicPattern implements Pattern {
       if (getNumberOfEdges() > 0) {
          return StringUtils.join(edges, ",");
       } else if (getNumberOfVertices() == 1) {
-         Vertex vertex = getMainGraph().getVertex(vertices.getUnchecked(0));
+         Vertex vertex = getMainGraph().getVertex(vertices.getu(0));
 
          return "0(" + vertex.getVertexLabel() + ")";
       } else {
@@ -782,7 +782,7 @@ public abstract class BasicPattern implements Pattern {
 
       PatternEdgeArrayList otherEdges = that.getEdges();
       for (int i = 0; i < upTo; i++) {
-         if (!edges.getUnchecked(i).equals(otherEdges.getUnchecked(i)))
+         if (!edges.getu(i).equals(otherEdges.getu(i)))
             return false;
       }
 
@@ -877,7 +877,7 @@ public abstract class BasicPattern implements Pattern {
 
       for (int i = vertices.size() - 1; i >= targetI; --i) {
          try {
-            vertexPositions.remove(vertices.getUnchecked(i));
+            vertexPositions.remove(vertices.getu(i));
          } catch (IllegalArgumentException e) {
             System.err.println(e.toString());
             System.err.println("i=" + i);
@@ -916,7 +916,7 @@ public abstract class BasicPattern implements Pattern {
       IntArrayList SubgraphVertices = subgraph.getVertices();
 
       for (int i = 0; i < numVerticesInSubgraph; ++i) {
-         addVertex(SubgraphVertices.getUnchecked(i));
+         addVertex(SubgraphVertices.getu(i));
       }
 
       numVerticesAddedFromPrevious = subgraph.numVerticesAdded();
@@ -924,7 +924,7 @@ public abstract class BasicPattern implements Pattern {
       IntArrayList SubgraphEdges = subgraph.getEdges();
 
       for (int i = 0; i < numEdgesInSubgraph; ++i) {
-         addEdge(SubgraphEdges.getUnchecked(i));
+         addEdge(SubgraphEdges.getu(i));
       }
 
       numAddedEdgesFromPrevious = subgraph.numEdgesAdded();
@@ -949,13 +949,13 @@ public abstract class BasicPattern implements Pattern {
       IntArrayList SubgraphVertices = subgraph.getVertices();
       int numVerticesInSubgraph = subgraph.getNumVertices();
       for (int i = (numVerticesInSubgraph - numVerticesAddedFromPrevious); i < numVerticesInSubgraph; ++i) {
-         addVertex(SubgraphVertices.getUnchecked(i));
+         addVertex(SubgraphVertices.getu(i));
       }
 
       IntArrayList SubgraphEdges = subgraph.getEdges();
       int numEdgesInSubgraph = subgraph.getNumEdges();
       for (int i = (numEdgesInSubgraph - numAddedEdgesFromPrevious); i < numEdgesInSubgraph; ++i) {
-         addEdge(SubgraphEdges.getUnchecked(i));
+         addEdge(SubgraphEdges.getu(i));
       }
 
       updateUsedSubgraphIncremental(subgraph);
@@ -971,7 +971,7 @@ public abstract class BasicPattern implements Pattern {
       IntArrayList words = subgraph.getWords();
 
       for (int i = 0; i < SubgraphNumWords; i++) {
-         previousWords.add(words.getUnchecked(i));
+         previousWords.add(words.getu(i));
       }
    }
 
@@ -981,7 +981,7 @@ public abstract class BasicPattern implements Pattern {
     * @param subgraph
     */
    private void updateUsedSubgraphIncremental(Subgraph subgraph) {
-      previousWords.setUnchecked(previousWords.size() - 1, subgraph.getWords().getUnchecked(previousWords.size() - 1));
+      previousWords.setu(previousWords.size() - 1, subgraph.getWords().getu(previousWords.size() - 1));
    }
 
    private int[][] vsymmetryBreakerMatrix() {
@@ -1045,7 +1045,7 @@ public abstract class BasicPattern implements Pattern {
          dataOutput.writeBoolean(true);
          dataOutput.writeInt(vsymmetryBreakerLowerBound.size());
          for (int i = 0; i < vsymmetryBreakerLowerBound.size(); ++i) {
-            vsymmetryBreakerLowerBound.getUnchecked(i).write(dataOutput);
+            vsymmetryBreakerLowerBound.getu(i).write(dataOutput);
          }
       } else {
          dataOutput.writeBoolean(false);
@@ -1055,7 +1055,7 @@ public abstract class BasicPattern implements Pattern {
          dataOutput.writeBoolean(true);
          dataOutput.writeInt(vsymmetryBreakerUpperBound.size());
          for (int i = 0; i < vsymmetryBreakerUpperBound.size(); ++i) {
-            vsymmetryBreakerUpperBound.getUnchecked(i).write(dataOutput);
+            vsymmetryBreakerUpperBound.getu(i).write(dataOutput);
          }
       } else {
          dataOutput.writeBoolean(false);
@@ -1095,7 +1095,7 @@ public abstract class BasicPattern implements Pattern {
       vertices.readFields(dataInput);
 
       for (int i = 0; i < vertices.size(); ++i) {
-         vertexPositions.put(vertices.getUnchecked(i), i);
+         vertexPositions.put(vertices.getu(i), i);
       }
 
       boolean hasLowerVsymmetryBreaker = dataInput.readBoolean();

@@ -47,7 +47,7 @@ public class PatternExplorationPlanMCVCOrdering extends PatternExplorationPlan {
 
    @Override
    public IntArrayList ordering(int i) {
-      return vgroupOrderings.getUnchecked(i);
+      return vgroupOrderings.getu(i);
    }
 
    private static void relabelMCVC(Pattern pattern, IntArrayList mcvc) {
@@ -66,7 +66,7 @@ public class PatternExplorationPlanMCVCOrdering extends PatternExplorationPlan {
 
       // sanity check
       for (i = 0; i < mcvc.size(); ++i) {
-         if (labeling.get(mcvc.getUnchecked(i)) != i) {
+         if (labeling.get(mcvc.getu(i)) != i) {
             throw new RuntimeException("Labeling does not match vertex cover order");
          }
       }
@@ -262,7 +262,7 @@ public class PatternExplorationPlanMCVCOrdering extends PatternExplorationPlan {
       super.write(out);
       out.writeInt(vgroupOrderings.size());
       for (int i = 0; i < vgroupOrderings.size(); ++i) {
-         IntArrayList ordering = vgroupOrderings.getUnchecked(i);
+         IntArrayList ordering = vgroupOrderings.getu(i);
          ordering.write(out);
       }
    }

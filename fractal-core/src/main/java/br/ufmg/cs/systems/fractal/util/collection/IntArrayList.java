@@ -560,19 +560,19 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
 
    public int get(int index) {
       checkIndex(index);
-      return getUnchecked(index);
+      return getu(index);
    }
 
-   public int getUnchecked(int index) {
+   public int getu(int index) {
       return backingArray[index];
    }
 
    public void set(int index, int newValue) {
       checkIndex(index);
-      setUnchecked(index, newValue);
+      setu(index, newValue);
    }
 
-   public void setUnchecked(int index, int newValue) {
+   public void setu(int index, int newValue) {
       backingArray[index] = newValue;
    }
 
@@ -784,7 +784,7 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
       int minPos = Math.min(size(), other.size());
 
       for (pos = 0; pos < minPos; ++pos) {
-         if (getUnchecked(pos) != other.getUnchecked(pos)) {
+         if (getu(pos) != other.getu(pos)) {
             return pos;
          }
       }
@@ -823,26 +823,26 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
 
       private boolean loadNext() {
          int i = k - 1;
-         indices.setUnchecked (i, indices.getUnchecked(i) + 1);
-         while ((i >= 0) && (indices.getUnchecked(i) >= n - k + 1 + i)) {
+         indices.setu(i, indices.getu(i) + 1);
+         while ((i >= 0) && (indices.getu(i) >= n - k + 1 + i)) {
             --i;
             if (i < 0) return false;
-            indices.setUnchecked (i, indices.getUnchecked(i) + 1);
+            indices.setu(i, indices.getu(i) + 1);
          }
 
-         if (indices.getUnchecked(0) > n - k) {
+         if (indices.getu(0) > n - k) {
             return false;
          }
 
          for (i = i + 1; i < k; ++i)
-            indices.setUnchecked (i, indices.getUnchecked(i - 1) + 1);
+            indices.setu(i, indices.getu(i - 1) + 1);
 
          return true;
       }
 
       public IntArrayList next() {
          for (int i = 0; i < k; ++i)
-            target.setUnchecked (i, source.getUnchecked(indices.getUnchecked(i)));
+            target.setu(i, source.getu(indices.getu(i)));
          hasNext = loadNext();
          return target;
       }
@@ -885,17 +885,17 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
 
       private boolean loadNext() {
          while (i < n) {
-            if (indices.getUnchecked(i) < i) {
-               int i1 = i % 2 == 0 ? 0 : indices.getUnchecked(i);
+            if (indices.getu(i) < i) {
+               int i1 = i % 2 == 0 ? 0 : indices.getu(i);
                int i2 = i;
-               int aux = targetIndexes.getUnchecked(i1);
-               targetIndexes.setUnchecked(i1, targetIndexes.getUnchecked(i2));
-               targetIndexes.setUnchecked(i2, aux);
-               indices.setUnchecked(i, indices.getUnchecked(i) + 1);
+               int aux = targetIndexes.getu(i1);
+               targetIndexes.setu(i1, targetIndexes.getu(i2));
+               targetIndexes.setu(i2, aux);
+               indices.setu(i, indices.getu(i) + 1);
                i = 0;
                return true;
             } else {
-               indices.setUnchecked(i, 0);
+               indices.setu(i, 0);
                ++i;
             }
          }
@@ -905,7 +905,7 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
 
       public IntArrayList next() {
          for (int i = 0; i < n; ++i)
-            target.setUnchecked (i, source.getUnchecked(targetIndexes.getUnchecked(i)));
+            target.setu(i, source.getu(targetIndexes.getu(i)));
          hasNext = loadNext();
          return target;
       }

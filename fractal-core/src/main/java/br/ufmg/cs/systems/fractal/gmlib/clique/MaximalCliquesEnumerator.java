@@ -14,7 +14,6 @@ import com.koloboke.collect.map.IntObjMap;
 import com.koloboke.collect.map.hash.HashIntObjMaps;
 import com.koloboke.function.IntObjConsumer;
 import org.apache.log4j.Logger;
-import org.apache.spark.util.LongAccumulator;
 
 public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> {
    private static final Logger LOG = Logger.getLogger(MaximalCliquesEnumerator.class);
@@ -58,7 +57,7 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
 
       for (int i = 1; i < subgraph.getNumWords(); ++i) {
          // extend
-         int u = subgraph.getVertices().getUnchecked(i);
+         int u = subgraph.getVertices().getu(i);
          computeSets(u, candTmp, finiTmp);
 
          // swap
@@ -112,7 +111,7 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
    }
 
    private void bootstrap(MainGraph graph) {
-      int u = subgraph.getVertices().getUnchecked(0);
+      int u = subgraph.getVertices().getu(0);
       graph.neighborhoodVertices(u, neighborhood);
 
       // clear cand and fini sets
@@ -127,7 +126,7 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
       inducedGraph.clear();
       inducedGraph.put(u, IntArrayListPool.instance().createObject());
       for (int i = 0; i < neighborhood.size(); ++i) {
-         int v = neighborhood.getUnchecked(i);
+         int v = neighborhood.getu(i);
          inducedGraph.put(v, IntArrayListPool.instance().createObject());
          if (v > u) cand.add(v);
          else fini.add(v);
@@ -140,7 +139,7 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
          IntArrayList vneighbors = cur.value();
          graph.neighborhoodVertices(v, neighborhood);
          for (int i = 0; i < neighborhood.size(); ++i) {
-            int w = neighborhood.getUnchecked(i);
+            int w = neighborhood.getu(i);
             if (inducedGraph.containsKey(w)) {
                vneighbors.add(w);
             }
@@ -152,7 +151,7 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
    private int generatePivot() {
       int pivot = -1, maxIntersectionSize = Integer.MIN_VALUE;
       for (int i = 0; i < cand.size(); ++i) {
-         int u = cand.getUnchecked(i);
+         int u = cand.getu(i);
          IntArrayList uneighbors = inducedGraph.get(u);
          int intersectionSize = Utils.sintersectSize(cand, uneighbors, 0,
                  cand.size(), 0, uneighbors.size());
@@ -163,7 +162,7 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
       }
 
       for (int i = 0; i < fini.size(); ++i) {
-         int u = fini.getUnchecked(i);
+         int u = fini.getu(i);
          IntArrayList uneighbors = inducedGraph.get(u);
          int intersectionSize = Utils.sintersectSize(cand, uneighbors, 0,
                  cand.size(), 0, uneighbors.size());

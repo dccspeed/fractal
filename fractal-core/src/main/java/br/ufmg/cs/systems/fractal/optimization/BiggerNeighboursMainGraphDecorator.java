@@ -18,7 +18,7 @@ public class BiggerNeighboursMainGraphDecorator extends OrderedNeighboursMainGra
            IntArrayList neighbors = neighborhood.getOrderedVertices();
 
            for (int i = 0; i < neighbors.size(); ++i) {
-              int u = neighbors.getUnchecked(i);
+              int u = neighbors.getu(i);
               if (u < v) {
                  neighborhood.removeVertex(u);
                  ++removed;

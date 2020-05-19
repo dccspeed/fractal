@@ -438,16 +438,16 @@ public class ObjArrayList<O> implements ReclaimableObjCollection<O>, List<O> {
 
     public O get(int index) {
         checkIndex(index);
-        return getUnchecked(index);
+        return getu(index);
     }
 
-    public O getUnchecked(int index) {
+    public O getu(int index) {
         return backingArray[index];
     }
 
     public O set(int index, O newValue) {
         checkIndex(index);
-        return setUnchecked(index, newValue);
+        return setu(index, newValue);
     }
 
     @Override
@@ -455,7 +455,7 @@ public class ObjArrayList<O> implements ReclaimableObjCollection<O>, List<O> {
         throw new UnsupportedOperationException();
     }
 
-    public O setUnchecked(int index, O newValue) {
+    public O setu(int index, O newValue) {
         O existingElement = backingArray[index];
         backingArray[index] = newValue;
         return existingElement;

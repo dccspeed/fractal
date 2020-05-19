@@ -275,7 +275,7 @@ public class VICPattern extends BasicPattern {
 
             // Add it...
             int newTmpVertexPos = addTmpVertex(underlyingVertexPosToAdd);
-            int newTmpVertexLabel = underlyingPosToLabel.getUnchecked(underlyingVertexPosToAdd);
+            int newTmpVertexLabel = underlyingPosToLabel.getu(underlyingVertexPosToAdd);
 
             // And find its neighbours
             IntSet neighbourUnderlyingPositions = underlyingAdjacencyList.get(underlyingVertexPosToAdd);
@@ -324,7 +324,7 @@ public class VICPattern extends BasicPattern {
                     // Else, if this is the first vertex, check if the labels match
                     else {
                         int minFirstUnderlyingVertexPos = minInverseLabelling.get(newTmpVertexPos);
-                        int minFirstUnderylingVertexLabel = underlyingPosToLabel.getUnchecked(minFirstUnderlyingVertexPos);
+                        int minFirstUnderylingVertexLabel = underlyingPosToLabel.getu(minFirstUnderlyingVertexPos);
 
                         comparisonResult = Integer.compare(newTmpVertexLabel, minFirstUnderylingVertexLabel);
                     }
@@ -416,8 +416,8 @@ public class VICPattern extends BasicPattern {
 
         IntArrayList vertices = getVertices();
 
-        int neighbourVertexId = vertices.getUnchecked(neighbourUnderlyingPos);
-        int newVertexId = vertices.getUnchecked(underlyingVertexPosToAdd);
+        int neighbourVertexId = vertices.getu(neighbourUnderlyingPos);
+        int newVertexId = vertices.getu(underlyingVertexPosToAdd);
 
         addCandidatePatternEdgeConsumer.setCandidateEdgesList(edgesToAdd);
         addCandidatePatternEdgeConsumer.setNeighbourTmpPos(neighbourTmpPos);

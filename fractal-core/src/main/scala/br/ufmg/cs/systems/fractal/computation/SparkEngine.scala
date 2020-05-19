@@ -60,7 +60,6 @@ trait SparkEngine [E <: Subgraph]
     while (currComp != null) {
       currComp.setExecutionEngine(this)
       currComp.init(configuration)
-      currComp.initAggregations(configuration)
       currComp = currComp.nextComputation()
     }
     computation.setDepth(0)
@@ -74,6 +73,12 @@ trait SparkEngine [E <: Subgraph]
     configuration.getAggregationsMetadata.asScala.keys.foreach { name =>
       val agg = aggregationStorageFactory.createAggregationStorage (name)
       aggregationStorages.update (name, agg)
+    }
+
+    currComp = computation
+    while (currComp != null) {
+      currComp.initAggregations(configuration)
+      currComp = currComp.nextComputation()
     }
   }
 

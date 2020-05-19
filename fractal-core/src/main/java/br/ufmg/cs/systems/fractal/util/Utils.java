@@ -25,8 +25,8 @@ public class Utils {
                                  int i1, int size1, int i2, int size2) {
       int size = 0;
       while (i1 < size1 && i2 < size2) {
-         int v1 = arr1.getUnchecked(i1);
-         int v2 = arr2.getUnchecked(i2);
+         int v1 = arr1.getu(i1);
+         int v2 = arr2.getu(i2);
          if (v1 == v2) {
             ++size;
             ++i1;
@@ -44,8 +44,8 @@ public class Utils {
    public static void sintersect(IntArrayList arr1, IntArrayList arr2,
                                 int i1, int size1, int i2, int size2, IntCollection target) {
       while (i1 < size1 && i2 < size2) {
-         int v1 = arr1.getUnchecked(i1);
-         int v2 = arr2.getUnchecked(i2);
+         int v1 = arr1.getu(i1);
+         int v2 = arr2.getu(i2);
          if (v1 == v2) {
             target.add(v1);
             ++i1;
@@ -62,10 +62,10 @@ public class Utils {
                                            int i1, int size1, int i2, int size2, IntCollection target,
                                            IntArrayList arr2Keys, IntPredicate pred) {
       while (i1 < size1 && i2 < size2) {
-         int v1 = arr1.getUnchecked(i1);
-         int v2 = arr2.getUnchecked(i2);
+         int v1 = arr1.getu(i1);
+         int v2 = arr2.getu(i2);
          if (v1 == v2) {
-            if (pred.test(arr2Keys.getUnchecked(i2))) {
+            if (pred.test(arr2Keys.getu(i2))) {
                target.add(v1);
             }
             ++i1;
@@ -82,8 +82,8 @@ public class Utils {
                                 int i1, int size1, int i2, int size2, IntCollection target, IntPredicate pred) {
       int cost = 0;
       while (i1 < size1 && i2 < size2) {
-         int v1 = arr1.getUnchecked(i1);
-         int v2 = arr2.getUnchecked(i2);
+         int v1 = arr1.getu(i1);
+         int v2 = arr2.getu(i2);
          if (v1 == v2) {
             if (pred.test(v1)) {
                target.add(v1);
@@ -104,10 +104,10 @@ public class Utils {
                                                    int i1, int size1, int i2, int size2, IntConsumer consumer,
                                                    IntArrayList arr2Keys, IntPredicate pred) {
       while (i1 < size1 && i2 < size2) {
-         int v1 = arr1.getUnchecked(i1);
-         int v2 = arr2.getUnchecked(i2);
+         int v1 = arr1.getu(i1);
+         int v2 = arr2.getu(i2);
          if (v1 == v2) {
-            if (pred.test(arr2Keys.getUnchecked(i2))) {
+            if (pred.test(arr2Keys.getu(i2))) {
                consumer.accept(v1);
             }
             ++i1;
@@ -123,8 +123,8 @@ public class Utils {
   public static void sintersectConsume(IntArrayList arr1, IntArrayList arr2,
                                        int i1, int size1, int i2, int size2, IntConsumer consumer) {
      while (i1 < size1 && i2 < size2) {
-        int v1 = arr1.getUnchecked(i1);
-        int v2 = arr2.getUnchecked(i2);
+        int v1 = arr1.getu(i1);
+        int v2 = arr2.getu(i2);
         if (v1 == v2) {
            consumer.accept(v1);
            ++i1;
@@ -140,8 +140,8 @@ public class Utils {
   public static void sdifferenceConsume(IntArrayList arr1, IntArrayList arr2,
                                         int i1, int size1, int i2, int size2, IntConsumer consumer) {
      while (i1 < size1 && i2 < size2) {
-        int v1 = arr1.getUnchecked(i1);
-        int v2 = arr2.getUnchecked(i2);
+        int v1 = arr1.getu(i1);
+        int v2 = arr2.getu(i2);
         if (v1 == v2) {
            ++i1;
            ++i2;
@@ -154,7 +154,7 @@ public class Utils {
      }
 
      while (i1 < size1) {
-        consumer.accept(arr1.getUnchecked(i1));
+        consumer.accept(arr1.getu(i1));
         ++i1;
      }
   }
@@ -163,8 +163,8 @@ public class Utils {
                                 int i1, int size1, int i2, int size2, IntCollection target) {
      int cost = 0;
      while (i1 < size1 && i2 < size2) {
-        int v1 = arr1.getUnchecked(i1);
-        int v2 = arr2.getUnchecked(i2);
+        int v1 = arr1.getu(i1);
+        int v2 = arr2.getu(i2);
         if (v1 == v2) {
            ++i1;
            ++i2;
@@ -178,7 +178,7 @@ public class Utils {
      }
 
      while (i1 < size1) {
-        target.add(arr1.getUnchecked(i1));
+        target.add(arr1.getu(i1));
         ++i1;
      }
 
@@ -189,8 +189,8 @@ public class Utils {
                            int i1, int size1, int i2, int size2, IntCollection target) {
      int cost = 0;
      while (i1 < size1 && i2 < size2) {
-        int v1 = arr1.getUnchecked(i1);
-        int v2 = arr2.getUnchecked(i2);
+        int v1 = arr1.getu(i1);
+        int v2 = arr2.getu(i2);
         if (v1 == v2) {
            target.add(v1);
            ++i1;
@@ -206,12 +206,12 @@ public class Utils {
      }
 
      while (i1 < size1) {
-        target.add(arr1.getUnchecked(i1));
+        target.add(arr1.getu(i1));
         ++i1;
      }
 
      while (i2 < size2) {
-        target.add(arr2.getUnchecked(i2));
+        target.add(arr2.getu(i2));
         ++i2;
      }
 

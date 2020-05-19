@@ -96,7 +96,7 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
       dag.ensureCapacity(orderedVertices.size());
 
       for (int i = 0; i < orderedVertices.size(); ++i) {
-         int v = orderedVertices.getUnchecked(i);
+         int v = orderedVertices.getu(i);
          IntArrayList orderedVertices2 = currentDag.get(v);
          IntArrayList target = IntArrayListPool.instance().createObject();
          Utils.sintersect(orderedVertices, orderedVertices2,
@@ -123,7 +123,7 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
       dag.ensureCapacity(orderedVertices.size());
 
       for (int i = 0; i < orderedVertices.size(); ++i) {
-         int v = orderedVertices.getUnchecked(i);
+         int v = orderedVertices.getu(i);
          if (v > u) {
             dag.put(v, IntArrayListPool.instance().createObject());
          }
@@ -139,7 +139,7 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
          IntArrayList orderedVertices2 = neighborhood.getOrderedVertices();
 
          for (int j = 0; j < orderedVertices2.size(); ++j) {
-            int w = orderedVertices2.getUnchecked(j);
+            int w = orderedVertices2.getu(j);
             if (w > v && dag.containsKey(w)) {
                cur.value().add(w);
             }

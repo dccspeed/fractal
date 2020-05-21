@@ -298,9 +298,7 @@ object FractalSparkRunner {
       graphPath = s"${fc.tmpPath}/graph.edges"
 
       val file = new File(graphPath)
-      if (!file.exists()) {
-        new File(fc.tmpPath).mkdirs()
-      }
+      new File(fc.tmpPath).mkdirs()
 
       val outputBuffer = new BufferedWriter(new FileWriter(file))
       inputBuffer.getLines

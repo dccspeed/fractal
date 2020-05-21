@@ -296,10 +296,10 @@ object FractalSparkRunner {
       val inputBuffer = Source.fromFile(graphPath)
 
       graphPath = s"${fc.tmpPath}/graph.edges"
+
       val file = new File(graphPath)
       if (!file.exists()) {
         new File(fc.tmpPath).mkdirs()
-        file.createNewFile()
       }
 
       val outputBuffer = new BufferedWriter(new FileWriter(file))
@@ -371,7 +371,16 @@ object FractalSparkRunner {
     val appRes = app.execute
 
     if (isCsvInput) {
-      //      TODO: output to csv
+      val outputPath = s"${sys.env("HOME")}/fractal-outputs/${fc.tmpPath.split('/')(2)}.csv"
+      val outputBuffer = new BufferedWriter(new FileWriter(new File(outputPath)))
+
+      //      TODO: without the collect, a not serializable
+      //       error explodes due to ArrayBuffer mappedWords
+      appRes.mappedSubgraphs.collect.foreach(subgraph => {
+        outputBuffer.write(s"${subgraph.mappedWords.mkString(",")}\n")
+      })
+
+      outputBuffer.close
     }
 
     fc.stop()

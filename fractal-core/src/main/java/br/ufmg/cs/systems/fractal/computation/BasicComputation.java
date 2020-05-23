@@ -67,8 +67,9 @@ public abstract class BasicComputation<S extends Subgraph>
 
    @Override
    public final long compute(S subgraph) {
-      //subgraphEnumerator.set(this, subgraph);
-      return processCompute(expandCompute(subgraph));
+      subgraphEnumerator.computeExtensions();
+      return processCompute(subgraphEnumerator);
+      //return processCompute(expandCompute(subgraph));
    }
 
    @Override

@@ -392,7 +392,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
          }
 
          val elapsedFilter = System.currentTimeMillis - startFilter
-         System.gc()
+         //System.gc()
 
          if (removedVertices + removedEdges > 0) {
             logInfo (s"GraphFiltering took ${elapsedFilter} ms" +

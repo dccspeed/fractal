@@ -18,6 +18,9 @@ class FractalContext(sc: SparkContext, logLevel: String = "info",
                      tmpDir: String = Configuration.CONF_TMP_DIR_DEFAULT)
     extends Logging {
 
+  setLogLevel(logLevel)
+  sc.setLogLevel(logLevel.toUpperCase())
+
   private val uuid: UUID = UUID.randomUUID
 
   def tmpPath: String = s"${tmpDir}-${uuid}" // TODO: base dir as config

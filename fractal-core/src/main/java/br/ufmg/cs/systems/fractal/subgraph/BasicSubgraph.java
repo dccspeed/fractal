@@ -173,30 +173,20 @@ public abstract class BasicSubgraph implements Subgraph {
       return extensionWordIds();
    }
 
-  protected void updateInitExtensions(Computation computation) {
+   protected void updateInitExtensions(Computation computation) {
       int totalNumWords = computation.getInitialNumWords();
       int numPartitions = computation.getNumberPartitions();
       int myPartitionId = computation.getPartitionId();
-      int numWordsPerPartition = Math.max(totalNumWords / numPartitions, 1);
-      int startMyWordRange = myPartitionId * numWordsPerPartition;
-      int endMyWordRange = startMyWordRange + numWordsPerPartition;
 
-      // If we are the last partition or our range end goes over the total
-      // number of vertices, set the range end to the total number of vertices
-      if (myPartitionId == numPartitions - 1 ||
-            endMyWordRange > totalNumWords) {
-         endMyWordRange = totalNumWords;
-      }
-
-      for (int i = startMyWordRange; i < endMyWordRange; ++i) {
-         if (computation.containsWord(i)) {
-            extensionWordIds().add(i);
+      for (int u = myPartitionId; u < totalNumWords; u += numPartitions) {
+         if (computation.containsWord(u)) {
+            extensionWordIds().add(u);
          }
       }
 
       computation.getExecutionEngine().aggregate(
-            Configuration.NEIGHBORHOOD_LOOKUPS(getNumWords()),
-            (endMyWordRange - startMyWordRange));
+              Configuration.NEIGHBORHOOD_LOOKUPS(getNumWords()),
+              extensionWordIds().size());
    }
 
    protected abstract void updateExtensions(Computation computation);

@@ -97,6 +97,7 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
       if (cand.isEmpty() && fini.isEmpty()) {
          exts.clear();
          set(exts);
+         computation.getExecutionEngine().addValidSubgraphs(1);
          computation.lastComputation().process(subgraph);
          return;
       }
@@ -120,11 +121,14 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
 
       // create induced subgraph vertices and fill cand and fini
       if (inducedGraph == null) {
-         inducedGraph = HashIntObjMaps.newMutableMap();
+         inducedGraph = HashIntObjMaps.newMutableMap(neighborhood.size() + 1);
       }
       inducedGraph.forEach(inducedGraphCleaner);
       inducedGraph.clear();
+      inducedGraph.ensureCapacity(neighborhood.size() + 1);
       inducedGraph.put(u, IntArrayListPool.instance().createObject());
+      cand.ensureCapacity(neighborhood.size());
+      fini.ensureCapacity(neighborhood.size());
       for (int i = 0; i < neighborhood.size(); ++i) {
          int v = neighborhood.getu(i);
          inducedGraph.put(v, IntArrayListPool.instance().createObject());
@@ -138,6 +142,7 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
          int v = cur.key();
          IntArrayList vneighbors = cur.value();
          graph.neighborhoodVertices(v, neighborhood);
+         vneighbors.ensureCapacity(neighborhood.size());
          for (int i = 0; i < neighborhood.size(); ++i) {
             int w = neighborhood.getu(i);
             if (inducedGraph.containsKey(w)) {
@@ -145,7 +150,6 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
             }
          }
       }
-
    }
 
    private int generatePivot() {
@@ -180,18 +184,10 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
       if (subgraph.getNumVertices() == 0) return super.extend();
       MaximalCliquesEnumerator<S> nextEnumerator =
               (MaximalCliquesEnumerator<S>) super.extend();
-      //int u = nextElem();
       int u = subgraph.getVertices().getLast();
-
-      //MaximalCliquesEnumerator<S> nextEnumerator =
-      //        (MaximalCliquesEnumerator<S>) computation.
-      //        nextComputation().getSubgraphEnumerator();
 
       computeSets(u, nextEnumerator.cand, nextEnumerator.fini);
       nextEnumerator.inducedGraph = inducedGraph;
-
-      //subgraph.addWord(u);
-      //shouldRemoveLastWord = true;
 
       return nextEnumerator;
    }

@@ -3,6 +3,10 @@ package br.ufmg.cs.systems.fractal
 import br.ufmg.cs.systems.fractal.gmlib.fsm.DomainSupport
 import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.util.Logging
+import com.koloboke.collect.map.hash.HashObjObjMaps
+import com.koloboke.collect.set.{IntSet, LongSet}
+import com.koloboke.collect.set.hash.{HashIntSets, HashLongSets, HashObjSets}
+import org.apache.hadoop.io.LongWritable
 import org.apache.spark.{SparkConf, SparkContext}
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 
@@ -20,6 +24,25 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
    private var fgraphEdgeLabel: FractalGraph = _
    private var citeseerSingleLabelGraph: FractalGraph = _
    private var citeseerGraph: FractalGraph = _
+
+   /**
+    * Ground truth for testing motifs application
+    */
+   private val motifsGt: Map[(String,Int),Array[Long]] = {
+      var motifsGt = Map.empty[(String,Int),Array[Long]]
+      val in = Source.fromFile("../data/motifs-test.gt")
+      for (line <- in.getLines) {
+         val toks = line.trim.split(" ")
+         val (graph, numVertices, numMotifs) = (toks(0), toks(1), toks(2))
+         val counts = new Array[Long](numMotifs.toInt)
+         for (i <- 0 until numMotifs.toInt) counts(i) = toks(i+3).toLong
+         java.util.Arrays.sort(counts)
+         motifsGt = motifsGt +
+            ((graph,numVertices.toInt) -> counts)
+      }
+      in.close()
+      motifsGt
+   }
 
    /**
     * Ground truth for testing pattern matching application
@@ -347,6 +370,37 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       assert (error <= 20)
    }
 
+   test ("[citeseer.motifs.gt]", Tag("citeseer.motifs.gt")) {
+      for (((graph,numVertices),counts) <- motifsGt) {
+         val chosenGraph = if (graph == "citeseer-single-label") {
+            citeseerSingleLabelGraph
+         } else if (graph == "citeseer") {
+            citeseerGraph
+         } else {
+            throw new RuntimeException(s"Invalid graph string ${graph}")
+         }
+
+         chosenGraph.set("num_partitions", numPartitions)
+
+         val mapping = chosenGraph.motifs.explore(numVertices - 1)
+            .aggregationMap[Pattern,LongWritable]("motifs")
+         val motifsMap1 = HashObjObjMaps.newImmutableMap(
+            mapping.keys.toArray,
+            mapping.values.toArray
+         )
+         val counts1 = mapping.values.map(_.get()).toArray
+         java.util.Arrays.sort(counts1)
+         assert(java.util.Arrays.equals(counts, counts1))
+
+         val motifsMap2 = chosenGraph.motifspf(numVertices)
+         assert (motifsMap2.equals(motifsMap1))
+
+         val motifsMap3 = chosenGraph.motifspfmcvc(numVertices)
+         assert (motifsMap3.equals(motifsMap1))
+
+      }
+   }
+
    test ("[citeseer.gquerying.gt]", Tag("citeseer.gquerying.gt")) {
       for (((_,query,numVertices),numSubgraphs) <- patternMatchingGt.filter(_._1._1 == "citeseer")) {
 
@@ -384,18 +438,21 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
          val frequentPatterns = chosenGraph
             .fsm(minSupport, Int.MaxValue)
             .keySet()
-
          assert(frequentPatterns.size == numPatterns)
 
          // pattern-first approach: pattern-matching on every possible pattern
          val frequentPatternsPf = chosenGraph
             .fsmpf(minSupport, Int.MaxValue)
             .keySet()
-
          assert(frequentPatternsPf.size == numPatterns)
-
-         // assert patterns found are the same
          assert(frequentPatterns.equals(frequentPatternsPf))
+
+         // pattern-first approach using MCVC optimization
+         val frequentPatternsPf2 = chosenGraph
+            .fsmpf(minSupport, Int.MaxValue)
+            .keySet()
+         assert(frequentPatternsPf2.size == numPatterns)
+         assert(frequentPatterns.equals(frequentPatternsPf2))
       }
    }
 }

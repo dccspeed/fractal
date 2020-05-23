@@ -1,6 +1,9 @@
 package br.ufmg.cs.systems.fractal.util.collection;
 
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListViewPool;
+import sun.reflect.generics.reflectiveObjects.NotImplementedException;
+
+import java.util.Arrays;
 
 public final class IntArrayListView extends IntArrayList{
    private int offset;
@@ -37,4 +40,20 @@ public final class IntArrayListView extends IntArrayList{
       IntArrayListViewPool.instance().reclaimObject(this);
    }
 
+   @Override
+   public int binarySearch(int value) {
+      int idx = Arrays.binarySearch(backingArray, offset, offset + numElements,
+              value);
+      return (idx < 0) ? idx + offset: idx - offset;
+   }
+
+   @Override
+   public int binarySearch(int value, int from, int size) {
+      throw new UnsupportedOperationException();
+   }
+
+   @Override
+   public String toString() {
+      return "view" + super.toString();
+   }
 }

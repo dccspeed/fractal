@@ -3,9 +3,9 @@
 printf "Description: Script launcher for Fractal built-in applications\n\n"
 
 gqueryings="gqueryingmcvc|gquerying|gqueryinginduced|gqueryingsampling|gqueryinginducedsampling|gqueryingnaive"
-motifss="motifssampling|motifspf|motifspflabeled|motifs"
+motifss="motifssampling|motifspf|motifspfmcvc|motifspflabeled|motifs"
 cliquess="cliques|cliquesopt|maximalcliques"
-fsms="fsm|fsmpf|fsmpflabeled"
+fsms="fsm|fsmpf|fsmpflabeled|fsmpfmcvc"
 enumerations="esubgraphs|vsubgraphswithedges|vsubgraphs|vsubgraphssampling"
 extras="kws"
 apps="${gqueryings}|${motifss}|${cliquess}|${fsms}|${enumerations}|${extras}"
@@ -77,6 +77,15 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
 	;;
+	fsmpfmcvc)
+	required="inputgraph steps fsmsupp"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
+	;;
 	esubgraphs)
 	required="inputgraph steps"
         appusage="
@@ -128,6 +137,14 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 	motifspf)
+	required="inputgraph steps"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
+	;;
+	motifspfmcvc)
 	required="inputgraph steps"
         appusage="
 

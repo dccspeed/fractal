@@ -253,9 +253,9 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
 
       val enumerationStart = System.currentTimeMillis
 
-      val _aggAccums = aggAccums
-      aggAccums.update("maximal_cliques", sc.longAccumulator)
       validSubgraphsAccum = sc.longAccumulator
+      aggAccums.update("valid_subgraphs", validSubgraphsAccum)
+      val _aggAccums = aggAccums
 
       val execEngines = getExecutionEngines (
          superstepRDD = stepRDD,
@@ -321,13 +321,12 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
       /**
        * Print statistics of this step
        */
-      aggAccums.toArray.sortBy(_._1).foreach { case (name, accum) =>
-         logInfo (s"FractalStep[${step}][${name}]: ${accum.value}")
-      }
       if (validSubgraphsAccum.value == 0) {
          validSubgraphsAccum.add(aggAccums(s"${VALID_SUBGRAPHS}_${numComputations - 1}").value)
       }
-      logInfo(s"FractalStep[${step}][valid_subgraphs]: ${validSubgraphsAccum.value}")
+      aggAccums.toArray.sortBy(_._1).foreach { case (name, accum) =>
+         logInfo (s"FractalStep[${step}][${name}]: ${accum.value}")
+      }
       logInfo(s"FractalStep[${step}][initialization_time]: ${initElapsed}")
       logInfo(s"FractalStep[${step}][enumeration_time]: ${enumerationElapsed}")
       logInfo(s"FractalStep[${step}][global_aggregation_time]: ${globalAggElapsed}")

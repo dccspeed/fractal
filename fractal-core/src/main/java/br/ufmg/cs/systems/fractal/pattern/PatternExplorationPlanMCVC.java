@@ -65,6 +65,7 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
          PatternEdge pedge = patternEdges.get(i);
          explorationPlan.intersectionIdxs.get(pedge.getDestPos()).add(pedge.getSrcPos());
          explorationPlan.vertexPredicates.get(pedge.getDestPos()).setLabel(pedge.getDestLabel());
+         explorationPlan.vertexPredicates.get(pedge.getSrcPos()).setLabel(pedge.getSrcLabel());
          EdgePredicate edgePredicate = new EdgePredicate();
          edgePredicate.setLabel(pedge.getLabel());
          explorationPlan.edgePredicates.get(pedge.getDestPos()).add(edgePredicate);
@@ -117,20 +118,27 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
          Iterator<IntArrayList> covers = pattern.getVertices().combinations(numCoverVertices);
          while (covers.hasNext()) {
             IntArrayList coverCandidate = covers.next();
+            Iterator<IntArrayList> iter = coverCandidate.permutations();
 
-            // check if this is a valid connected cover
-            boolean validCover = true;
-            for (PatternEdge pedge : pattern.getEdges()) {
-               if (!coverCandidate.contains(pedge.getSrcPos()) && !coverCandidate.contains(pedge.getDestPos())) {
-                  validCover = false;
-                  break;
+            while (iter.hasNext()) {
+               IntArrayList coverCandidatePer = iter.next();
+               // check if this is a valid connected cover
+               boolean validCover = true;
+               for (PatternEdge pedge : pattern.getEdges()) {
+                  if (!coverCandidatePer.contains(pedge.getSrcPos())
+                          && !coverCandidatePer.contains(pedge.getDestPos())) {
+                     validCover = false;
+                     break;
+                  }
+               }
+
+               if (validCover
+                       && pattern.connectedValidOrdering(coverCandidatePer)) {
+                  minCovers.add(new IntArrayList(coverCandidatePer));
                }
             }
-
-            if (validCover && pattern.connectedValidOrdering(coverCandidate)) {
-               minCovers.add(new IntArrayList(coverCandidate));
-            }
          }
+
          if (minCovers.size() > 0) {
             break;
          }
@@ -166,7 +174,10 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
       ObjArrayList<ObjArrayList<Pattern>> executions = new ObjArrayList<>();
       ObjArrayList<IntArrayList> mcvcs = minimumConnectedVertexCover(pattern);
       for (int i = 0; i < mcvcs.size(); ++i) {
-         executions.addAll(allExecutionsWithCover(pattern, mcvcs.get(i)));
+         IntArrayList mcvc = mcvcs.get(i);
+         if (pattern.connectedValidOrdering(mcvc)) {
+            executions.addAll(allExecutionsWithCover(pattern, mcvc));
+         }
       }
 
       return executions;

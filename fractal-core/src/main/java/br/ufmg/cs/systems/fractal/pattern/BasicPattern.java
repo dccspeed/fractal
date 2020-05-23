@@ -18,6 +18,7 @@ import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMapFactory;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
 import com.koloboke.collect.set.IntSet;
+import com.koloboke.collect.set.hash.HashIntSets;
 import org.apache.commons.io.input.BOMInputStream;
 import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
@@ -662,6 +663,7 @@ public abstract class BasicPattern implements Pattern {
 
    @Override
    public boolean connectedValidOrdering(IntArrayList ordering) {
+      LOG.info("OrderingCheck " + ordering + " " + this);
       if (ordering.size() <= 1) return true;
       boolean valid = false;
 

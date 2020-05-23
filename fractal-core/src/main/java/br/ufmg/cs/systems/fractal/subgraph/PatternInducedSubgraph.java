@@ -11,14 +11,17 @@ import br.ufmg.cs.systems.fractal.util.Utils;
 import br.ufmg.cs.systems.fractal.util.VertexPredicate;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
+import com.koloboke.collect.set.IntSet;
 import com.koloboke.collect.set.hash.HashIntSet;
 import org.apache.log4j.Logger;
 
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.ObjectInput;
+import java.util.BitSet;
 import java.util.function.IntConsumer;
 
 public class PatternInducedSubgraph extends BasicSubgraph {
@@ -36,6 +39,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    private IntArrayList verticesBackup;
    private ObjArrayList<IntArrayList> neighborhoods;
    private ObjArrayList<IntArrayList> neighborhoodsToReclaim;
+   private IntSet verticesSet;
    // }}
 
    // Edge tracking for incremental modifications {{
@@ -214,29 +218,20 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       int totalNumWords = computation.getInitialNumWords();
       int numPartitions = computation.getNumberPartitions();
       int myPartitionId = computation.getPartitionId();
-      int numWordsPerPartition = Math.max(totalNumWords / numPartitions, 1);
-      int startMyWordRange = myPartitionId * numWordsPerPartition;
-      int endMyWordRange = startMyWordRange + numWordsPerPartition;
 
-      VertexPredicate vertexPredicate = pattern.explorationPlan().vertexPredicate(0);
+      VertexPredicate vertexPredicate = pattern.explorationPlan()
+              .vertexPredicate(0);
       boolean vertexLabeled = pattern.vertexLabeled();
 
-      // If we are the last partition or our range end goes over the total
-      // number of vertices, set the range end to the total number of vertices
-      if (myPartitionId == numPartitions - 1 ||
-            endMyWordRange > totalNumWords) {
-         endMyWordRange = totalNumWords;
-      }
-
-      for (int i = startMyWordRange; i < endMyWordRange; ++i) {
-         if (!vertexLabeled || vertexPredicate.test(i)) {
-            extensionWordIds().add(i);
+      for (int u = myPartitionId; u < totalNumWords; u += numPartitions) {
+         if (!vertexLabeled || vertexPredicate.test(u)) {
+            extensionWordIds().add(u);
          }
       }
 
       computation.getExecutionEngine().aggregate(
             Configuration.NEIGHBORHOOD_LOOKUPS(getNumWords()),
-            (endMyWordRange - startMyWordRange));
+            extensionWordIds().size());
    }
 
    @Override
@@ -329,6 +324,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
        */
       IntArrayList result = IntArrayListPool.instance().createObject();
       IntArrayList previous = IntArrayListPool.instance().createObject();
+      previous.clear();
       IntArrayList neighborhood1 = neighborhoods.getu(intersections.getu(0));
       IntArrayList neighborhood2 = neighborhoods.getu(intersections.getu(1));
       Utils.sintersect(neighborhood1, neighborhood2, 0, neighborhood1.size(), 0, neighborhood2.size(), result);
@@ -438,13 +434,44 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       long validSubgraphs = 0;
       int numVertices = getNumVertices();
       IntArrayList validExtensions = neighborhoods.getu(numVertices);
+      PatternExplorationPlan explorationPlan = pattern.explorationPlan();
+      IntArrayList differences = explorationPlan.difference(numVertices);
+      VertexPredicate vertexPredicate = explorationPlan
+              .vertexPredicate(numVertices);
+
+      if (differences.size() > 0) {
+         MainGraph graph = computation.getConfig().getMainGraph();
+         IntArrayList result = IntArrayListPool.instance().createObject();
+         IntArrayList previous = IntArrayListPool.instance().createObject();
+         IntArrayListView nextNeighborhood = graph
+                 .neighborhoodVertices(vertices.getu(differences.getu(0)));
+         Utils.sdifference(validExtensions, nextNeighborhood,
+                 0, validExtensions.size(), 0, nextNeighborhood.size(),
+                 result);
+
+         for (int i = 1; i < differences.size(); ++i) {
+            IntArrayList aux = result;
+            result = previous;
+            previous = aux;
+            graph.neighborhoodVertices(vertices.getu(differences.getu(i)),
+                    nextNeighborhood);
+            result.clear();
+            Utils.sdifference(previous, nextNeighborhood, 0, previous.size(),
+                    0, nextNeighborhood.size(), result);
+         }
+
+         nextNeighborhood.reclaim();
+         previous.reclaim();
+         validExtensions = result;
+      }
+
       int lowerBound = pattern.sbLowerBound(this, getNumVertices());
       int startIdx = validExtensions.binarySearch(lowerBound);
       startIdx = (startIdx < 0) ? (-startIdx - 1) : startIdx + 1;
       if (getNumVertices() < pattern.getNumberOfVertices() - 1) {
          for (; startIdx < validExtensions.size(); ++startIdx) {
             int u = validExtensions.getu(startIdx);
-            if (vertices.contains(u)) continue;
+            if (!vertexPredicate.test(u) || vertices.contains(u)) continue;
             addWord(u);
             validSubgraphs += completeMatchRec(computation, pattern, callback);
             removeLastWord();
@@ -452,12 +479,16 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       } else {
          for (; startIdx < validExtensions.size(); ++startIdx) {
             int u = validExtensions.getu(startIdx);
-            if (vertices.contains(u)) continue;
+            if (!vertexPredicate.test(u) || vertices.contains(u)) continue;
             addWord(u);
             validSubgraphs += 1;
             callback.apply(this, computation);
             removeLastWord();
          }
+      }
+
+      if (differences.size() > 0) {
+         validExtensions.reclaim();
       }
 
       return validSubgraphs;

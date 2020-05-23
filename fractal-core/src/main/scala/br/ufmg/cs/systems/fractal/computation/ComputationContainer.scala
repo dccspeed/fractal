@@ -188,12 +188,35 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
          Array(primitiveOpt.getOrElse(Primitive.None))
    }
 
+   def toStringPrimitives: String = {
+      var curr = this
+      var lastPrimitive = curr.primitiveOpt.getOrElse(Primitive.None)
+      var lastPrimitiveCount = 1
+      var str = ""
+      curr = curr.nextComputationOpt.getOrElse(null)
+         .asInstanceOf[ComputationContainer[E]]
+      while (curr != null) {
+         val primitive = curr.primitiveOpt.getOrElse(Primitive.None)
+         if (lastPrimitive != primitive) {
+            str = s"${str}${lastPrimitive.name()}(${lastPrimitiveCount})"
+            lastPrimitive = primitive
+            lastPrimitiveCount = 1
+         } else {
+            lastPrimitiveCount += 1
+         }
+         curr = curr.nextComputationOpt.getOrElse(null)
+            .asInstanceOf[ComputationContainer[E]]
+      }
+      s"${str}${lastPrimitive.name()}(${lastPrimitiveCount})"
+   }
+
    override def toString: String = {
-      s"CC[${primitiveOpt.getOrElse(Primitive.None).name()}]" +
-         s"[${containerId}]" +
-         s"[${computationLabel()}]" +
-         s"(${computationRepr.mkString(",")})" +
-         s"${nextComputationOpt.map(c => "::" + c.toString).getOrElse("")}"
+      toStringPrimitives
+      //s"CC[${primitiveOpt.getOrElse(Primitive.None).name()}]" +
+         //s"[${containerId}]" +
+         //s"[${computationLabel()}]" +
+         //s"(${computationRepr.mkString(",")})" +
+         //s"${nextComputationOpt.map(c => "::" + c.toString).getOrElse("")}"
    }
 }
 

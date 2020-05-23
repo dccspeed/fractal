@@ -609,7 +609,7 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
             strBuilder.append(",");
          }
 
-         strBuilder.append(backingArray[i]);
+         strBuilder.append(getu(i));
 
          first = false;
       }

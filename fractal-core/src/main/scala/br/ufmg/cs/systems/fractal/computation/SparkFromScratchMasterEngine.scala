@@ -789,10 +789,8 @@ class LastStepConsumer[E <: Subgraph] extends IntConsumer with Serializable {
    override def accept(w: Int): Unit = {
       addWords += 1
       subgraph.addWord(w)
-      //if (computation.filter(subgraph)) {
-         subgraphsGenerated += 1
-         computation.process(subgraph)
-      //}
+      subgraphsGenerated += 1
+      computation.process(subgraph)
       subgraph.removeLastWord()
    }
 }

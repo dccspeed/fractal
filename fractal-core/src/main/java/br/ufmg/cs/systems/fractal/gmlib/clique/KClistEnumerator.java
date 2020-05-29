@@ -8,6 +8,7 @@ import br.ufmg.cs.systems.fractal.graph.VertexNeighbourhood;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.Utils;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import com.koloboke.collect.map.IntObjCursor;
 import com.koloboke.collect.map.IntObjMap;
@@ -22,10 +23,14 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
    // used to clear the dag
    private DagCleaner dagCleaner;
 
+   // used to inspect graph neighborhoods
+   private IntArrayListView neighborhood;
+
    @Override
    public void init(Configuration<S> config, Computation<S> computation) {
       dag = HashIntObjMaps.newMutableMap();
       dagCleaner = new DagCleaner();
+      neighborhood = new IntArrayListView();
    }
 
    @Override
@@ -36,7 +41,7 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
       IntObjMap<IntArrayList> currentDag = HashIntObjMaps.newMutableMap();
       IntObjMap<IntArrayList> aux;
 
-      extendFromGraph(computation.getConfig().getMainGraph(),
+      extendFromGraph(computation.getConfig().getMainGraph(), neighborhood,
               dag, vertices.get(0));
 
       for (int i = 1; i < vertices.size(); ++i) {
@@ -60,23 +65,16 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
    @Override
    public SubgraphEnumerator<S> extend() {
       KClistEnumerator<S> nextEnumerator = (KClistEnumerator<S>) super.extend();
-      //int u = nextElem();
       int u = subgraph.getVertices().getLast();
-
-      //KClistEnumerator<S> nextEnumerator = (KClistEnumerator<S>) computation.
-      //        nextComputation().getSubgraphEnumerator();
 
       nextEnumerator.clearDag();
 
       if (subgraph.getNumVertices() == 1) {
-         extendFromGraph(subgraph.getConfig().getMainGraph(),
+         extendFromGraph(subgraph.getConfig().getMainGraph(), neighborhood,
                  nextEnumerator.dag, u);
       } else {
          extendFromDag(dag, nextEnumerator.dag, u);
       }
-
-      //subgraph.addWord(u);
-      //shouldRemoveLastWord = true;
 
       return nextEnumerator;
    }
@@ -111,19 +109,15 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
     * @param u first vertex being added to the current subgraph
     */
    private static void extendFromGraph(MainGraph graph,
-                                       IntObjMap<IntArrayList> dag, int u) {
-      VertexNeighbourhood neighborhood = graph.getVertexNeighbourhood(u);
+                                       IntArrayListView neighborhood,
+                                       IntObjMap<IntArrayList> dag,
+                                       int u) {
+      graph.neighborhoodVertices(u, neighborhood);
 
-      if (neighborhood == null) {
-         return;
-      }
+      dag.ensureCapacity(neighborhood.size());
 
-      IntArrayList orderedVertices = neighborhood.getOrderedVertices();
-
-      dag.ensureCapacity(orderedVertices.size());
-
-      for (int i = 0; i < orderedVertices.size(); ++i) {
-         int v = orderedVertices.getu(i);
+      for (int i = 0; i < neighborhood.size(); ++i) {
+         int v = neighborhood.getu(i);
          if (v > u) {
             dag.put(v, IntArrayListPool.instance().createObject());
          }
@@ -132,14 +126,10 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
       IntObjCursor<IntArrayList> cur = dag.cursor();
       while (cur.moveNext()) {
          int v = cur.key();
-         neighborhood = graph.getVertexNeighbourhood(v);
+         graph.neighborhoodVertices(v, neighborhood);
 
-         if (neighborhood == null) continue;
-
-         IntArrayList orderedVertices2 = neighborhood.getOrderedVertices();
-
-         for (int j = 0; j < orderedVertices2.size(); ++j) {
-            int w = orderedVertices2.getu(j);
+         for (int j = 0; j < neighborhood.size(); ++j) {
+            int w = neighborhood.getu(j);
             if (w > v && dag.containsKey(w)) {
                cur.value().add(w);
             }

@@ -5,6 +5,7 @@ import br.ufmg.cs.systems.fractal.gmlib.fsm.DomainSupport
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternUtils}
 import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.{Logging, SubgraphCallback}
+import com.koloboke.collect.map.hash.HashObjObjMaps
 import com.koloboke.collect.set.hash.HashObjSets
 import org.apache.hadoop.io._
 import org.apache.spark.{SparkConf, SparkContext}
@@ -42,6 +43,43 @@ class VSubgraphsWithEdgesApp(val fractalGraph: FractalGraph,
    }
 }
 
+class VSubgraphsAppPatternFirstMCVC(val fractalGraph: FractalGraph,
+                                    commStrategy: String,
+                                    numPartitions: Int,
+                                    explorationSteps: Int) extends FractalSparkApp {
+   def execute: Unit = {
+      val cur = fractalGraph
+         .inducedSubgraphsPfMCVC(explorationSteps + 1)
+         .cursor()
+      var numValidSubgraphs = 0L
+      while (cur.moveNext()) {
+         val partialResult = cur.elem()
+         numValidSubgraphs += partialResult.compute(
+            (s,c) => s.completeMatch(c, c.getPattern,
+               SubgraphCallback.defaultPatternInducedCallback)
+         )("valid_subgraphs")
+      }
+      logInfo(s"VSubgraphsAppPatternFirstMCVC" +
+         s" numValidSubgraphs=${numValidSubgraphs}")
+   }
+}
+
+class VSubgraphsAppPatternFirst(val fractalGraph: FractalGraph,
+                    commStrategy: String,
+                    numPartitions: Int,
+                    explorationSteps: Int) extends FractalSparkApp {
+   def execute: Unit = {
+      val cur = fractalGraph.vertexInducedPf(explorationSteps + 1).cursor()
+      var numValidSubgraphs = 0L
+      while (cur.moveNext()) {
+         val partialResult = cur.elem()
+         numValidSubgraphs += partialResult.compute()("valid_subgraphs")
+      }
+      logInfo(s"VSubgraphsAppPatternFirst" +
+         s" numValidSubgraphs=${numValidSubgraphs}")
+   }
+}
+
 class VSubgraphsApp(val fractalGraph: FractalGraph,
                     commStrategy: String,
                     numPartitions: Int,
@@ -52,7 +90,9 @@ class VSubgraphsApp(val fractalGraph: FractalGraph,
          set ("num_partitions", numPartitions).
          explore (explorationSteps)
 
-      vsubgraphsRes.compute()
+      val numValidSubgraphs = vsubgraphsRes.compute()("valid_subgraphs")
+      logInfo(s"VSubgraphsApp" +
+         s" numValidSubgraphs=${numValidSubgraphs}")
    }
 }
 
@@ -214,7 +254,7 @@ class CliquesOptApp(val fractalGraph: FractalGraph,
                     numPartitions: Int,
                     explorationSteps: Int) extends FractalSparkApp {
    def execute: Unit = {
-      val cliquesRes = fractalGraph.cliquesKClist(explorationSteps + 1).
+      val cliquesRes = fractalGraph.cliquesKClist.
          set ("comm_strategy", commStrategy).
          set ("num_partitions", numPartitions).
          explore(explorationSteps)
@@ -252,6 +292,22 @@ class CliquesApp(val fractalGraph: FractalGraph,
    }
 }
 
+class MaximalCliquesAppPatternFirst(val fractalGraph: FractalGraph,
+                                    commStrategy: String,
+                                    numPartitions: Int,
+                                    explorationSteps: Int) extends FractalSparkApp {
+   def execute: Unit = {
+      fractalGraph.set("num_partitions", numPartitions)
+      fractalGraph.set("comm_strategy", commStrategy)
+
+      val numMaximalCliques = fractalGraph
+         .maximalCliquesPf(explorationSteps + 1)
+
+      logInfo(s"MaximalCliquesAppNaive" +
+         s" numMaximalCliques=${numMaximalCliques}")
+   }
+}
+
 class MaximalCliquesApp(val fractalGraph: FractalGraph,
                         commStrategy: String,
                         numPartitions: Int,
@@ -260,7 +316,7 @@ class MaximalCliquesApp(val fractalGraph: FractalGraph,
       val maximalcliquesRes = fractalGraph.maximalCliques.
          set ("comm_strategy", commStrategy).
          set ("num_partitions", numPartitions).
-         explore(explorationSteps)
+         explore(explorationSteps + 1)
 
       val numValidSubgraphs = maximalcliquesRes.compute()("valid_subgraphs")
 
@@ -298,7 +354,10 @@ class FSMApp(val fractalGraph: FractalGraph,
    def execute: Unit = {
       fractalGraph.set ("comm_strategy", commStrategy)
       fractalGraph.set ("num_partitions", numPartitions)
-      fractalGraph.fsm(support, explorationSteps)
+      val cur = fractalGraph.fsm(support, explorationSteps).cursor()
+      while (cur.moveNext()) {
+         logInfo(s"FrequentPattern ${cur.key()} ${cur.value()}")
+      }
    }
 }
 
@@ -311,6 +370,8 @@ class FSMAppPatternFirst(val fractalGraph: FractalGraph,
 
       var patterns = HashObjSets.newMutableSet[Pattern]()
       var infrequentPatterns = HashObjSets.newMutableSet[Pattern]()
+      val frequentPatternsSupports = HashObjObjMaps
+         .newMutableMap[Pattern,DomainSupport]()
 
       do {
          patterns = PatternUtils.extendByEdge(patterns, 1)
@@ -359,13 +420,22 @@ class FSMAppPatternFirst(val fractalGraph: FractalGraph,
             if (!support.hasEnoughSupport) {
                infrequentPatterns.add(pattern)
                patternsCur.remove()
-               logInfo(s"InfrequentPattern ${pattern} support=${support} minSupport=${minSupport}")
+               logInfo(s"InfrequentPatternPartial ${pattern} " +
+                  s"support=${support} minSupport=${minSupport}")
             } else {
-               logInfo(s"FrequentPattern ${pattern} support=${support} minSupport=${minSupport}")
+               frequentPatternsSupports.put(pattern, support)
+               logInfo(s"FrequentPatternPartial ${pattern} support=${support}" +
+                  s" " +
+                  s"minSupport=${minSupport}")
             }
          }
 
       } while (!patterns.isEmpty)
+
+      val cur = frequentPatternsSupports.cursor()
+      while (cur.moveNext()) {
+         logInfo(s"FrequentPattern ${cur.key()} ${cur.value()}")
+      }
    }
 }
 
@@ -393,7 +463,7 @@ class FSMAppPatternFirstMCVC(val fractalGraph: FractalGraph,
    def execute: Unit = {
       fractalGraph.set("comm_strategy", commStrategy)
       fractalGraph.set("num_partitions", numPartitions)
-      val cur = fractalGraph.fsmpfmcvc(supportThreshold,
+      val cur = fractalGraph.fsmpfmcvc2(supportThreshold,
          explorationSteps + 1).cursor()
       while (cur.moveNext()) {
          logInfo(s"FrequentPattern ${cur.key()} ${cur.value()}")
@@ -623,6 +693,12 @@ object FractalSparkRunner extends Logging {
          case "vsubgraphs" =>
             new VSubgraphsApp(fractalGraph, commStrategy,
                numPartitions, explorationSteps)
+         case "vsubgraphspf" =>
+            new VSubgraphsAppPatternFirst(fractalGraph, commStrategy,
+               numPartitions, explorationSteps)
+         case "vsubgraphspfmcvc" =>
+            new VSubgraphsAppPatternFirstMCVC(fractalGraph, commStrategy,
+               numPartitions, explorationSteps)
          case "vsubgraphssampling" =>
             i += 1
             val fraction = args(i).toDouble
@@ -653,6 +729,9 @@ object FractalSparkRunner extends Logging {
                numPartitions, explorationSteps)
          case "maximalcliques" =>
             new MaximalCliquesApp(fractalGraph, commStrategy,
+               numPartitions, explorationSteps)
+         case "maximalcliquespf" =>
+            new MaximalCliquesAppPatternFirst(fractalGraph, commStrategy,
                numPartitions, explorationSteps)
          case "quasicliques" =>
             i += 1

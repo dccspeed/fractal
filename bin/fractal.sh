@@ -4,9 +4,9 @@ printf "Description: Script launcher for Fractal built-in applications\n\n"
 
 gqueryings="gqueryingmcvc|gquerying|gqueryinginduced|gqueryingsampling|gqueryinginducedsampling|gqueryingnaive"
 motifss="motifssampling|motifspf|motifspfmcvc|motifspflabeled|motifs"
-cliquess="cliques|cliquesopt|maximalcliques"
+cliquess="cliques|cliquesopt|maximalcliques|maximalcliquespf"
 fsms="fsm|fsmpf|fsmpflabeled|fsmpfmcvc"
-enumerations="esubgraphs|vsubgraphswithedges|vsubgraphs|vsubgraphssampling"
+enumerations="esubgraphs|vsubgraphswithedges|vsubgraphs|vsubgraphssampling|vsubgraphspf|vsubgraphspfmcvc"
 extras="kws"
 apps="${gqueryings}|${motifss}|${cliquess}|${fsms}|${enumerations}|${extras}"
 
@@ -110,6 +110,22 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
+	vsubgraphspf)
+	required="inputgraph steps"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
+	;;
+	vsubgraphspfmcvc)
+	required="inputgraph steps"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
+	;;
 	vsubgraphssampling)
 	required="inputgraph steps fraction"
         appusage="
@@ -177,6 +193,14 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 	maximalcliques)
+	required="inputgraph steps"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
+	;;
+	maximalcliquespf)
 	required="inputgraph steps"
         appusage="
 

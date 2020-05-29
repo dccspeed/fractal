@@ -149,7 +149,7 @@ public class PatternEdge implements Comparable<PatternEdge>, Writable {
    }
 
    public String toString() {
-      return ("[" + srcPos + "," + srcLabel + "-" + destPos + "," + destLabel + "]");
+      return ("(" + srcPos + "," + srcLabel + "-" + destPos + "," + destLabel + ")");
    }
 
    @Override

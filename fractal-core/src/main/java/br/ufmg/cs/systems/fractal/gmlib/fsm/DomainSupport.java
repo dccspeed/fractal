@@ -32,7 +32,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
    private HashIntSet domainsReachedSupport;
    private boolean enoughSupport;
    private int support;
-   private long currentSupport;
+   private long numSubgraphsAggregated;
    private int numberOfDomains;
    private IntWriterConsumer intWriterConsumer;
    private IntCollectionAddConsumer intAdderConsumer;
@@ -44,7 +44,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
       this.domainsReachedSupport = HashIntSets.newMutableSet();
       this.enoughSupport = false;
       this.setFromSubgraph = false;
-      this.currentSupport = 1;
+      this.numSubgraphsAggregated = 1;
    }
 
    public DomainSupport(int support) {
@@ -134,6 +134,10 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
       return enoughSupport;
    }
 
+   public long getNumSubgraphsAggregated() {
+      return numSubgraphsAggregated;
+   }
+
    private void convertFromSubgraphToNormal() {
       numberOfDomains = subgraph.getNumVertices();
       ensureCanStoreNDomains(numberOfDomains);
@@ -171,7 +175,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
       }
 
       dataOutput.writeInt(support);
-      dataOutput.writeLong(currentSupport);
+      dataOutput.writeLong(numSubgraphsAggregated);
       dataOutput.writeInt(numberOfDomains);
 
       if (enoughSupport) {
@@ -209,7 +213,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
       this.clear();
 
       support = dataInput.readInt();
-      currentSupport = dataInput.readLong();
+      numSubgraphsAggregated = dataInput.readLong();
       numberOfDomains = dataInput.readInt();
 
       if (dataInput.readBoolean()) {
@@ -243,7 +247,9 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
 
    @Override
    public String toString() {
-      return "mis{enoughSupport=" + enoughSupport + ", numSubgraphs=" + currentSupport + "}";
+      return "mis{minSupport=" + support +
+              ", enoughSupport=" + enoughSupport +
+              ", numSubgraphs=" + numSubgraphsAggregated + "}";
       //return toStringDetailed();
    }
 
@@ -253,7 +259,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
               "domainsReachedSupport=" + domainsReachedSupport +
               ", enoughSupport=" + enoughSupport +
               ", support=" + support +
-              ", currentSupport=" + currentSupport +
+              ", currentSupport=" + numSubgraphsAggregated +
               ", numberOfDomains=" + numberOfDomains +
               ", domainSets=" + domainSets +
               ", intWriterConsumer=" + intWriterConsumer +
@@ -304,8 +310,9 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
    }
 
    public void aggregate(final HashIntSet[] domains) {
-      if (enoughSupport)
+      if (enoughSupport) {
          return;
+      }
 
       for (int i = 0; i < numberOfDomains; ++i) {
          aggregate(domains[i], i);
@@ -348,7 +355,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
       source.forEach(intAdderConsumer);
    }
 
-   private void SubgraphAggregate(Subgraph subgraph) {
+   private void subgraphAggregate(Subgraph subgraph) {
       int numVertices = subgraph.getNumVertices();
 
       if (numVertices != numberOfDomains) {
@@ -373,11 +380,12 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
    }
 
    public void aggregate(DomainSupport other) {
-      if (this == other)
+      if (this == other) {
          return;
+      }
 
-      // current support
-      this.currentSupport += other.currentSupport;
+      // number of subgraphs aggregated
+      this.numSubgraphsAggregated += other.numSubgraphsAggregated;
 
       // If we already have support, do nothing
       if (this.enoughSupport) {
@@ -386,7 +394,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
 
       // If other simply references an subgraph, do special quick aggregate
       if (other.setFromSubgraph) {
-         SubgraphAggregate(other.subgraph);
+         subgraphAggregate(other.subgraph);
          return;
       }
 

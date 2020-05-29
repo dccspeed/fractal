@@ -11,16 +11,114 @@ import br.ufmg.cs.systems.fractal.gmlib.fsm.{DomainSupport, DomainSupportEndAggr
 import br.ufmg.cs.systems.fractal.graph.MainGraph
 import br.ufmg.cs.systems.fractal.pattern.{BasicPattern, Pattern, PatternExplorationPlan, PatternExplorationPlanMCVC, PatternExplorationPlanMCVCOrdering, PatternExplorationPlanMCVCVgroups, PatternUtils}
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
-import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjSet}
+import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjArrayList, ObjSet}
 import br.ufmg.cs.systems.fractal.util.{Logging, SubgraphCallback, Utils, VertexPredicate}
-import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool
+import br.ufmg.cs.systems.fractal.util.pool.{IntArrayListPool, IntArrayListViewPool}
 import com.koloboke.collect.map.ObjObjMap
 import com.koloboke.collect.map.hash.HashObjObjMaps
-import com.koloboke.collect.set.hash.{HashObjSet, HashObjSets}
+import com.koloboke.collect.set.hash.{HashIntSet, HashIntSets, HashObjSet, HashObjSets}
 import org.apache.hadoop.io.{IntWritable, LongWritable, NullWritable}
+
 import scala.collection.JavaConverters._
 
 class BuiltInAlgorithms(self: FractalGraph) extends Logging {
+
+   /**
+    * Induced subgraphs using the pattern-first approach and the MCVC pattern
+    * matching optimization
+    * @return induced subgraphs fractoids with partial results representing
+    *         the minimum connected vertex cover matching
+    */
+   def inducedSubgraphsPfMCVC(numVertices: Int)
+   : ObjArrayList[Fractoid[PatternInducedSubgraph]] = {
+      /**
+       * Generate all patterns with *numVertices* vertices
+       */
+      val startPatternGeneration = System.currentTimeMillis()
+      var patterns = PatternUtils.singleVertexPatternSet()
+      logInfo(s"PatternSet ${patterns}")
+      for (i <- 0 until numVertices - 1) {
+         patterns = PatternUtils.extendByVertex(patterns, 1)
+         logInfo(s"PatternSetExtension[${i + 1}] ${patterns}")
+      }
+      val elapsedPatternGeneration = System.currentTimeMillis() -
+         startPatternGeneration
+
+      logInfo(s"CanonicalPatterns numVertices=${numVertices}" +
+         s" numPatterns=${patterns.size()}" +
+         s" elapsed=${elapsedPatternGeneration}")
+
+      val fractoids = new ObjArrayList[Fractoid[PatternInducedSubgraph]](
+         patterns.size()
+      )
+
+      val cur = patterns.cursor()
+      while (cur.moveNext()) {
+         val patternWithoutPlan = cur.elem()
+         patternWithoutPlan.setInduced(true)
+         patternWithoutPlan.setVertexLabeled(false)
+
+         val newPatternsCur = PatternExplorationPlanMCVC
+            .apply(patternWithoutPlan).cursor()
+
+         while (newPatternsCur.moveNext()) {
+            val pattern = newPatternsCur.elem()
+            val mcvcSize = pattern.explorationPlan().mcvcSize()
+            val partialResult = gquerying(pattern).explore(mcvcSize - 1)
+            fractoids.add(partialResult)
+         }
+      }
+
+      fractoids
+   }
+
+   /**
+    * Motifs counting using the pattern-first approach
+    * @return motif counts
+    */
+   def vertexInducedPf(numVertices: Int)
+   : ObjArrayList[Fractoid[PatternInducedSubgraph]] = {
+      /**
+       * Generate all patterns with *numVertices* vertices
+       */
+      val startPatternGeneration = System.currentTimeMillis()
+      var patterns = PatternUtils.singleVertexPatternSet()
+      logInfo(s"PatternSet ${patterns}")
+      for (i <- 0 until numVertices - 1) {
+         patterns = PatternUtils.extendByVertex(patterns, 1)
+         logInfo(s"PatternSetExtension[${i + 1}] ${patterns}")
+      }
+      val elapsedPatternGeneration = System.currentTimeMillis() -
+         startPatternGeneration
+
+      logInfo(s"CanonicalPatterns numVertices=${numVertices}" +
+         s" numPatterns=${patterns.size()}" +
+         s" elapsed=${elapsedPatternGeneration}")
+
+      val fractoids = new ObjArrayList[Fractoid[PatternInducedSubgraph]]()
+
+      val cur = patterns.cursor()
+      while (cur.moveNext()) {
+         val patternWithoutPlan = cur.elem()
+
+         /**
+          * Motifs counting consider induced subgraphs, unlabeled at first
+          */
+         patternWithoutPlan.setInduced(true)
+         patternWithoutPlan.setVertexLabeled(false)
+
+         /**
+          * Naive exploration plan
+          */
+         val pattern = PatternExplorationPlan.apply(patternWithoutPlan).get(0)
+         pattern.updateSymmetryBreakerVertexUnlabeled()
+
+         val partialResult = gquerying(pattern).explore(numVertices - 1)
+         fractoids.add(partialResult)
+      }
+
+      fractoids
+   }
 
    /**
     * Motifs counting
@@ -218,14 +316,82 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
    /**
     * All-cliques listing implementing the efficient DAG structure from
     * [[https://dl.acm.org/citation.cfm?id=3186125]]
-    * @param cliqueSize
     * @return Fractoid with the initial state for cliques
     */
-   def cliquesKClist(cliqueSize: Int): Fractoid[VertexInducedSubgraph] = {
+   def cliquesKClist: Fractoid[VertexInducedSubgraph] = {
       self.vfractoid.
          expand(1).
          set ("subgraph_enumerator",
             "br.ufmg.cs.systems.fractal.gmlib.clique.KClistEnumerator")
+   }
+
+   /**
+    * All maximal cliques listing using the naive approach of enumerating
+    * cliques and verifying whether they are maximal or not
+    * @return new fractoid with the initial state for maximal cliques
+    */
+   def maximalCliquesPf(maxNumVertices: Int): Long = {
+      val isMaximal = (s: PatternInducedSubgraph,
+         c: Computation[PatternInducedSubgraph]) => {
+         val vertices = s.getVertices
+         val graph = c.getConfig.getMainGraph[MainGraph[_,_]]
+         val neighborhood = IntArrayListViewPool.instance().createObject()
+
+         if (vertices.size() == 1) {
+            graph.neighborhoodVertices(vertices.getu(0), neighborhood)
+            neighborhood.isEmpty
+         } else {
+
+            var intersectionEmpty = false
+            var intersection = IntArrayListPool.instance().createObject()
+            var previous = IntArrayListPool.instance().createObject()
+
+            // first neighborhood
+            val n1 = graph.neighborhoodVertices(vertices.getu(0))
+            val n2 = graph.neighborhoodVertices(vertices.getu(1))
+            Utils.sintersect(n1, n2, 0, n1.size(), 0, n2.size(), intersection)
+            n1.reclaim()
+            n2.reclaim()
+
+            intersectionEmpty = intersection.isEmpty
+
+            var i = 2
+            while (!intersectionEmpty && i < vertices.size()) {
+               val aux = intersection
+               intersection = previous
+               previous = aux
+               graph.neighborhoodVertices(vertices.getu(i), neighborhood)
+               Utils.sintersect(previous, neighborhood, 0, previous.size(), 0,
+                  neighborhood.size(), intersection)
+               intersectionEmpty = intersection.isEmpty
+               i += 1
+            }
+
+            intersection.reclaim()
+            previous.reclaim()
+            neighborhood.reclaim()
+            intersectionEmpty
+         }
+      }
+
+
+      var pattern = PatternUtils.singleVertexPattern()
+      var totalNumMaximalCliques = 0L
+
+      while (pattern.getNumberOfVertices <= maxNumVertices) {
+         pattern.setVertexLabeled(false)
+         val maximalCliquesRes = gquerying(pattern)
+            .explore(pattern.getNumberOfVertices - 1)
+            .filter(isMaximal)
+
+         val numMaximalCliques = maximalCliquesRes.compute()("valid_subgraphs")
+
+         totalNumMaximalCliques += numMaximalCliques
+         val newEdges = (0 until pattern.getNumberOfVertices).toArray
+         pattern = PatternUtils.addVertex(pattern, newEdges:_*)
+      }
+
+      totalNumMaximalCliques
    }
 
    /**
@@ -251,34 +417,34 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
    def fsmpf(supportThreshold: Int, maxNumEdges: Int)
    : ObjObjMap[Pattern, DomainSupport] = {
       var unlabeledPatterns: HashObjSet[Pattern] = null
-      var infrequentPatterns = HashObjSets.newMutableSet[Pattern]()
-      val frequentPatterns = HashObjSets.newMutableSet[Pattern]()
-      var patternsMap = HashObjObjMaps.newMutableMap[Pattern,DomainSupport]()
+      var lastInfrequentPatterns = HashObjSets.newMutableSet[Pattern]()
+      val lastFrequentPatterns = HashObjObjMaps.newMutableMap[Pattern,DomainSupport]()
+      val frequentPatterns = HashObjObjMaps.newMutableMap[Pattern,DomainSupport]()
       var numEdges = 0
 
       do {
-         logInfo(s"ExtendingPatterns ${frequentPatterns}")
+         //logInfo(s"ExtendingPatterns ${frequentPatterns}")
          unlabeledPatterns = PatternUtils
-            .extendByEdge(frequentPatterns, Int.MinValue)
+            .extendByEdge(lastFrequentPatterns.keySet(), Int.MinValue)
          numEdges += 1
-         frequentPatterns.clear()
+         lastFrequentPatterns.clear()
 
-         logInfo(s"PatternSetBeforeRemovingInfrequent " +
-            s"size=${unlabeledPatterns.size()} ${unlabeledPatterns}")
+         //logInfo(s"PatternSetBeforeRemovingInfrequent " +
+         //   s"size=${unlabeledPatterns.size()} ${unlabeledPatterns}")
 
-         if (!infrequentPatterns.isEmpty) {
-            logInfo(s"InfrequentPatternsBeforeExtension " +
-               s"size=${infrequentPatterns.size()} ${infrequentPatterns}")
-            infrequentPatterns = PatternUtils
-               .extendByEdge(infrequentPatterns, Int.MinValue)
-            logInfo(s"InfrequentPatternsAfterExtension " +
-               s"size=${infrequentPatterns.size()} ${infrequentPatterns}")
-            unlabeledPatterns.removeAll(infrequentPatterns)
-            infrequentPatterns.clear()
+         if (!lastInfrequentPatterns.isEmpty) {
+            //logInfo(s"InfrequentPatternsBeforeExtension " +
+            //   s"size=${infrequentPatterns.size()} ${infrequentPatterns}")
+            lastInfrequentPatterns = PatternUtils
+               .extendByEdge(lastInfrequentPatterns, Int.MinValue)
+            //logInfo(s"InfrequentPatternsAfterExtension " +
+            //   s"size=${infrequentPatterns.size()} ${infrequentPatterns}")
+            unlabeledPatterns.removeAll(lastInfrequentPatterns)
+            lastInfrequentPatterns.clear()
          }
 
-         logInfo(s"PatternSetAfterRemovingInfrequent" +
-            s" size=${unlabeledPatterns.size()} ${unlabeledPatterns}")
+         //logInfo(s"PatternSetAfterRemovingInfrequent" +
+         //   s" size=${unlabeledPatterns.size()} ${unlabeledPatterns}")
 
          val patternsCur = unlabeledPatterns.cursor()
          while (patternsCur.moveNext()) {
@@ -311,26 +477,185 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
             val patternSupport = gqueryingRes
                .aggregationMap[Pattern, DomainSupport]("support")
+
             for ((labeledPattern, support) <- patternSupport) {
-               if (!support.hasEnoughSupport) {
-                  infrequentPatterns.add(labeledPattern)
-                  logInfo(s"InfrequentPattern" +
-                     s" unlabeledPattern=${pattern} ${labeledPattern}" +
-                     s" support=${support} minSupport=${minSupport}")
+               val existingSupport = lastFrequentPatterns.get(labeledPattern)
+               if (existingSupport != null) {
+                  existingSupport.aggregate(support)
                } else {
-                  frequentPatterns.add(labeledPattern)
-                  patternsMap.put(labeledPattern, support)
-                  logInfo(s"FrequentPattern" +
-                     s" unlabaledPattern=${pattern} " +
-                     s" labeledPattern=${labeledPattern} support=${support}" +
-                     s" minSupport=${minSupport}")
+                  lastFrequentPatterns.put(labeledPattern, support)
                }
             }
          }
 
-      } while (!frequentPatterns.isEmpty && numEdges < maxNumEdges)
+         // filter infrequent patterns
+         val candidatesIter = lastFrequentPatterns.cursor()
+         while (candidatesIter.moveNext()) {
+            val labeledPattern = candidatesIter.key()
+            val support = candidatesIter.value()
+            if (!support.hasEnoughSupport) {
+               candidatesIter.remove()
+               lastInfrequentPatterns.add(labeledPattern)
+            } else {
+               frequentPatterns.put(labeledPattern, support)
+            }
+         }
 
-      patternsMap
+      } while (!lastFrequentPatterns.isEmpty && numEdges < maxNumEdges)
+
+      frequentPatterns
+   }
+
+   /**
+    * Frequent subgraph mining using the "pattern-first" approach and the MNI
+    * (Minimum Node Image) as support metric and using the optimized MCVC
+    * approach for pattern matching
+    * @param supportThreshold Minimum support value
+    * @param maxNumEdges Hard limit on the size of the interesting patterns
+    * @return a map with frequent patterns and their current support
+    */
+   def fsmpfmcvc2(supportThreshold: Int, maxNumEdges: Int)
+   : ObjObjMap[Pattern, DomainSupport] = {
+      val frequentLabels = HashIntSets.newMutableSet()
+      val lastInfrequentPatterns = HashObjSets.newMutableSet[Pattern]()
+      val lastFrequentPatterns = HashObjObjMaps.newMutableMap[Pattern,DomainSupport]()
+      val frequentPatterns = HashObjObjMaps.newMutableMap[Pattern,DomainSupport]()
+      var numEdges = 0
+      val FSM = "fsm"
+      val minSupport = supportThreshold
+
+      val matchCallback = new SubgraphCallback[PatternInducedSubgraph] {
+         private var aggregationStorage: AggregationStorage[Pattern,DomainSupport] = _
+         private var reusableValue: DomainSupport = _
+
+         override def apply(s: PatternInducedSubgraph, c: Computation[PatternInducedSubgraph])
+         : Unit = {
+            reusableValue.setSupport(minSupport)
+            reusableValue.setSubgraph(s)
+            aggregationStorage.aggregateWithReusables(
+               s.labeledPattern(c.getPattern),
+               reusableValue
+            )
+         }
+
+         override def init(computation: Computation[PatternInducedSubgraph]): Unit = {
+            val engine = computation.getExecutionEngine
+            if (engine != null) {
+               aggregationStorage = engine.getAggregationStorage(FSM)
+               reusableValue = aggregationStorage.reusableValue()
+            }
+         }
+      }
+
+      val callback = new SubgraphCallback[PatternInducedSubgraph] {
+         val callback = matchCallback
+         override def apply(s: PatternInducedSubgraph,
+                            c: Computation[PatternInducedSubgraph]): Unit = {
+            s.completeMatch(c, c.getPattern, callback)
+         }
+
+         override def init(c: Computation[PatternInducedSubgraph]): Unit = {
+            callback.init(c)
+         }
+      }
+
+      val singleEdgePattern = PatternUtils.singleEdgePattern()
+      singleEdgePattern.setVertexLabeled(false)
+
+      val edgesSupports = gquerying(singleEdgePattern)
+         .aggregationMapWithCallback[Pattern,DomainSupport](
+            FSM,
+            callback,
+            (v1,v2) => {v1.aggregate(v2); v1}
+         )
+
+      for ((p,s) <- edgesSupports) {
+         if (s.hasEnoughSupport) {
+            val pedge = p.getEdges.get(0)
+            frequentLabels.add(pedge.getSrcLabel)
+            frequentLabels.add(pedge.getDestLabel)
+            lastFrequentPatterns.put(p, s)
+            frequentPatterns.put(p, s)
+         } else {
+            lastInfrequentPatterns.add(p)
+         }
+      }
+
+      logInfo(s"FrequentLabels ${frequentLabels}")
+
+      numEdges = 1
+
+      while (!lastFrequentPatterns.isEmpty && numEdges < maxNumEdges) {
+         logInfo(s"ExtendingPatterns ${lastFrequentPatterns}")
+
+         // generate candidates
+         val candPatterns = HashObjSets.newMutableSet[Pattern]()
+         val frequentLabelsCur = frequentLabels.cursor()
+         while (frequentLabelsCur.moveNext()) {
+            candPatterns.addAll(
+               PatternUtils.extendByEdge(lastFrequentPatterns.keySet(),
+                  frequentLabelsCur.elem()))
+         }
+         lastFrequentPatterns.clear()
+
+         // remove infrequent candidates
+         logInfo(s"PatternSetBeforeRemovingInfrequent " +
+            s"size=${candPatterns.size()} ${candPatterns}")
+         if (!lastInfrequentPatterns.isEmpty) {
+            logInfo(s"InfrequentPatternsBeforeExtension " +
+               s"size=${lastInfrequentPatterns.size()} ${lastInfrequentPatterns}")
+            val frequentLabelsCur = frequentLabels.cursor()
+            while (frequentLabelsCur.moveNext()) {
+               candPatterns.removeAll(
+                  PatternUtils.extendByEdge(lastInfrequentPatterns,
+                     frequentLabelsCur.elem())
+               )
+            }
+            logInfo(s"InfrequentPatternsAfterExtension " +
+               s"size=${lastInfrequentPatterns.size()} ${lastInfrequentPatterns}")
+            lastInfrequentPatterns.clear()
+         }
+
+         logInfo(s"PatternSetAfterRemovingInfrequent" +
+            s" size=${candPatterns.size()} ${candPatterns}")
+
+         val patternsCur = candPatterns.cursor()
+         while (patternsCur.moveNext()) {
+            val patternWithoutPlan = patternsCur.elem()
+            patternWithoutPlan.setVertexLabeled(true)
+
+            val newPatterns = PatternExplorationPlanMCVC
+               .apply(patternWithoutPlan)
+            val newPatternsCur = newPatterns.cursor()
+
+            while (newPatternsCur.moveNext()) {
+               val pattern = newPatternsCur.elem()
+
+               val explorationPlanMCVC = pattern.explorationPlan()
+               val mcvcSize = explorationPlanMCVC.mcvcSize()
+
+               val patternSupport = gquerying(pattern)
+                  .explore(mcvcSize - 1)
+                  .aggregationMapWithCallback[Pattern,DomainSupport](
+                     FSM,
+                     callback,
+                     (v1,v2) => {v1.aggregate(v2); v1}
+                  )
+
+               for ((p,s) <- patternSupport) {
+                  if (s.hasEnoughSupport) {
+                     lastFrequentPatterns.put(p, s)
+                     frequentPatterns.put(p, s)
+                  } else {
+                     lastInfrequentPatterns.add(p)
+                  }
+               }
+            }
+         }
+         numEdges += 1
+      }
+
+      frequentPatterns
    }
 
    /**
@@ -344,9 +669,11 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
    def fsmpfmcvc(supportThreshold: Int, maxNumEdges: Int)
    : ObjObjMap[Pattern, DomainSupport] = {
       var unlabeledPatterns: HashObjSet[Pattern] = null
-      var infrequentPatterns = HashObjSets.newMutableSet[Pattern]()
-      val frequentPatterns = HashObjSets.newMutableSet[Pattern]()
-      var patternsMap = HashObjObjMaps.newMutableMap[Pattern,DomainSupport]()
+      var lastInfrequentPatterns = HashObjSets.newMutableSet[Pattern]()
+      val lastFrequentPatterns = HashObjObjMaps.newMutableMap[Pattern,DomainSupport]()
+      val frequentPatterns = HashObjObjMaps.newMutableMap[Pattern,DomainSupport]()
+      val labeledToUnlabeleds = HashObjObjMaps.newMutableMap[Pattern,
+         HashObjSet[Pattern]]()
       var numEdges = 0
       val FSM = "fsm"
       val minSupport = supportThreshold
@@ -387,24 +714,24 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
       }
 
       do {
-         logInfo(s"ExtendingPatterns ${frequentPatterns}")
+         logInfo(s"ExtendingPatterns ${lastFrequentPatterns}")
          unlabeledPatterns = PatternUtils
-            .extendByEdge(frequentPatterns, Int.MinValue)
+            .extendByEdge(lastFrequentPatterns.keySet(), Int.MinValue)
          numEdges += 1
-         frequentPatterns.clear()
+         lastFrequentPatterns.clear()
 
          logInfo(s"PatternSetBeforeRemovingInfrequent " +
             s"size=${unlabeledPatterns.size()} ${unlabeledPatterns}")
 
-         if (!infrequentPatterns.isEmpty) {
+         if (!lastInfrequentPatterns.isEmpty) {
             logInfo(s"InfrequentPatternsBeforeExtension " +
-               s"size=${infrequentPatterns.size()} ${infrequentPatterns}")
-            infrequentPatterns = PatternUtils
-               .extendByEdge(infrequentPatterns, Int.MinValue)
+               s"size=${lastInfrequentPatterns.size()} ${lastInfrequentPatterns}")
+            lastInfrequentPatterns = PatternUtils
+               .extendByEdge(lastInfrequentPatterns, Int.MinValue)
             logInfo(s"InfrequentPatternsAfterExtension " +
-               s"size=${infrequentPatterns.size()} ${infrequentPatterns}")
-            unlabeledPatterns.removeAll(infrequentPatterns)
-            infrequentPatterns.clear()
+               s"size=${lastInfrequentPatterns.size()} ${lastInfrequentPatterns}")
+            unlabeledPatterns.removeAll(lastInfrequentPatterns)
+            lastInfrequentPatterns.clear()
          }
 
          logInfo(s"PatternSetAfterRemovingInfrequent" +
@@ -421,7 +748,6 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
             val newPatterns = PatternExplorationPlanMCVC
                .apply(patternWithoutPlan)
-            logInfo(s"NewPatterns ${newPatterns} ${patternWithoutPlan}")
             val newPatternsCur = newPatterns.cursor()
 
             while (newPatternsCur.moveNext()) {
@@ -450,26 +776,50 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
                      (v1,v2) => {v1.aggregate(v2); v1}
                   )
 
-               for ((labeledPattern, support) <- patternSupport) {
-                  if (!support.hasEnoughSupport) {
-                     infrequentPatterns.add(labeledPattern)
-                     logInfo(s"InfrequentPattern" +
-                        s" unlabeledPattern=${pattern} ${labeledPattern}" +
-                        s" support=${support} minSupport=${minSupport}")
+               for ((labeledPattern,support) <- patternSupport) {
+                  val unlabeleds = labeledToUnlabeleds
+                     .getOrDefault(labeledPattern,
+                        HashObjSets.newMutableSet[Pattern]())
+                  unlabeleds.add(pattern)
+                  labeledToUnlabeleds.putIfAbsent(labeledPattern, unlabeleds)
+                  val existingSupport = lastFrequentPatterns.get(labeledPattern)
+                  if (existingSupport != null) {
+                     existingSupport.aggregate(support)
                   } else {
-                     frequentPatterns.add(labeledPattern)
-                     patternsMap.put(labeledPattern, support)
-                     logInfo(s"FrequentPattern" +
-                        s" unlabaledPattern=${pattern} " +
-                        s" labeledPattern=${labeledPattern} support=${support}" +
-                        s" minSupport=${minSupport}")
+                     lastFrequentPatterns.put(labeledPattern, support)
                   }
                }
             }
          }
-      } while (!frequentPatterns.isEmpty && numEdges < maxNumEdges)
 
-      patternsMap
+         // filter infrequent patterns
+         val candidatesCur = lastFrequentPatterns.cursor()
+         while (candidatesCur.moveNext()) {
+            val labeledPattern = candidatesCur.key()
+            val support = candidatesCur.value()
+            if (!support.hasEnoughSupport) {
+               candidatesCur.remove()
+               lastInfrequentPatterns.add(labeledPattern)
+               val unlabeledsCur = labeledToUnlabeleds.get(labeledPattern).cursor()
+               while (unlabeledsCur.moveNext()) {
+                  logInfo(s"InfrequentPatternPartial ${labeledPattern} " +
+                     s"${unlabeledsCur.elem()}" +
+                     s" ${support}")
+               }
+            } else {
+               frequentPatterns.put(labeledPattern, support)
+               val unlabeledsCur = labeledToUnlabeleds.get(labeledPattern).cursor()
+               while (unlabeledsCur.moveNext()) {
+                  logInfo(s"FrequentPatternPartial ${labeledPattern} " +
+                     s"${unlabeledsCur.elem()}" +
+                     s" ${support}")
+               }
+            }
+         }
+
+      } while (!lastFrequentPatterns.isEmpty && numEdges < maxNumEdges)
+
+      frequentPatterns
    }
 
    /**
@@ -513,13 +863,12 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
       filterInfrequents(freqPatts)
 
-      logInfo(s"QuickPatterns ${quickPatterns}")
-
-      val cur = frequentPatternsSupports.cursor()
-      while (cur.moveNext()) {
-         logInfo(s"FrequentPattern iteration=${iteration}" +
-            s" ${cur.key()} ${cur.value()}")
-      }
+      //logInfo(s"QuickPatterns ${quickPatterns}")
+      //val cur = frequentPatternsSupports.cursor()
+      //while (cur.moveNext()) {
+      //   logInfo(s"FrequentPatternPartial iteration=${iteration}" +
+      //      s" ${cur.key()} ${cur.value()}")
+      //}
 
       var remainingSteps = numSteps
       var continue = freqPatts.getNumberMappings > 0 && remainingSteps > 0
@@ -540,13 +889,12 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
          filterInfrequents(freqPatts)
 
-         logInfo(s"QuickPatterns ${quickPatterns}")
-
-         val cur = frequentPatternsSupports.cursor()
-         while (cur.moveNext()) {
-            logInfo(s"FrequentPattern iteration=${iteration}" +
-               s" ${cur.key()} ${cur.value()}")
-         }
+         //logInfo(s"QuickPatterns ${quickPatterns}")
+         //val cur = frequentPatternsSupports.cursor()
+         //while (cur.moveNext()) {
+         //   logInfo(s"FrequentPatternPartial iteration=${iteration}" +
+         //      s" ${cur.key()} ${cur.value()}")
+         //}
 
          remainingSteps -= 1
          continue = freqPatts.getNumberMappings > 0 && remainingSteps > 0

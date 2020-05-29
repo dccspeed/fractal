@@ -543,17 +543,13 @@ public abstract class BasicPattern implements Pattern {
                if (edgePositionEquivalences == null) {
                   edgePositionEquivalences = new EdgePositionEquivalences();
                }
-
                edgePositionEquivalences.setNumEdges(getNumberOfEdges());
                edgePositionEquivalences.clear();
-
                fillEdgePositionEquivalences(edgePositionEquivalences, edgeLabels);
-
                dirtyEdgePositionEquivalences = false;
             }
          }
       }
-
       return edgePositionEquivalences;
    }
 
@@ -566,16 +562,12 @@ public abstract class BasicPattern implements Pattern {
                   canonicalLabelling = HashIntIntMaps.newMutableMap(
                           getNumberOfVertices());
                }
-
                canonicalLabelling.clear();
-
                fillCanonicalLabelling(canonicalLabelling);
-
                dirtyCanonicalLabelling = false;
             }
          }
       }
-
       return canonicalLabelling;
    }
 
@@ -663,7 +655,6 @@ public abstract class BasicPattern implements Pattern {
 
    @Override
    public boolean connectedValidOrdering(IntArrayList ordering) {
-      LOG.info("OrderingCheck " + ordering + " " + this);
       if (ordering.size() <= 1) return true;
       boolean valid = false;
 
@@ -701,10 +692,6 @@ public abstract class BasicPattern implements Pattern {
                   break;
                }
             }
-            //if (visited.contains(pedge.getSrcPos()) || visited.contains(pedge.getDestPos())) {
-            //   valid = true;
-            //   break;
-            //}
          }
 
          if (!valid) return false;

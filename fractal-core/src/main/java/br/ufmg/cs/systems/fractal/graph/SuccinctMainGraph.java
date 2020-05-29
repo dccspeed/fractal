@@ -124,7 +124,6 @@ public class SuccinctMainGraph implements MainGraph {
    }
 
    protected void readFromInputStream(InputStream is) {
-      long start = System.currentTimeMillis();
       try {
          TextFileParser stream = new TextFileParser(is);
          int u, v, ulabel, e, elabel;
@@ -231,7 +230,13 @@ public class SuccinctMainGraph implements MainGraph {
    }
 
    public int edgeId(int u, int v) {
-      return edgeNeighborhoods.getu(vertexNeighborhoods.binarySearch(v, vertexNeighborhoodIdx.getu(u), vertexNeighborhoodIdx.getu(u+1)));
+      return edgeNeighborhoods.getu(
+              vertexNeighborhoods.binarySearch(
+                      v,
+                      vertexNeighborhoodIdx.getu(u),
+                      vertexNeighborhoodIdx.getu(u+1)
+              )
+      );
    }
 
    @Override

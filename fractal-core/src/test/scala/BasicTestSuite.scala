@@ -159,7 +159,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       val numSubgraph = List(8, 12, 0)
 
       for (k <- 0 to (numSubgraph.size - 1)) {
-         val cliqueRes = fgraph.cliquesKClist(k+1).
+         val cliqueRes = fgraph.cliquesKClist.
             set ("num_partitions", numPartitions).
             explore(k)
 
@@ -449,7 +449,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
          // pattern-first approach using MCVC optimization
          val frequentPatternsPf2 = chosenGraph
-            .fsmpf(minSupport, Int.MaxValue)
+            .fsmpfmcvc2(minSupport, Int.MaxValue)
             .keySet()
          assert(frequentPatternsPf2.size == numPatterns)
          assert(frequentPatterns.equals(frequentPatternsPf2))

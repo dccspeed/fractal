@@ -434,7 +434,14 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
    @Override
    public void neighborhoodVertices(int u, IntArrayListView view) {
-
+      VertexNeighbourhood neighbourhood = vertexNeighborhoods[u];
+      if (neighbourhood != null) {
+         IntArrayList orderedVertices = neighbourhood.getOrderedVertices();
+         view.set(orderedVertices, 0, orderedVertices.size());
+      } else {
+         view.set(null, 0, 0);
+         return;
+      }
    }
 
    @Override

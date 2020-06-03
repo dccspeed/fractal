@@ -290,7 +290,6 @@ object FractalSparkRunner extends Logging {
       Thread.sleep(10000)
     }
 
-    //    TODO: ler json
     val databaseConfig = ujson.read(scala.reflect.io.File(databaseConfigFile).slurp)
 
     val url = databaseConfig("url").str
@@ -298,10 +297,8 @@ object FractalSparkRunner extends Logging {
     val password = databaseConfig("password").str
     val query = databaseConfig("query").str
 
-    //        TODO: abrir conexão com o banco
     logInfo("Reading data from " + url)
 
-    //    TODO: ler linhas do banco
     var connection: Connection = null
     val graphPath = s"${fc.tmpPath}/graph.edges"
     var outputBuffer: BufferedWriter = null
@@ -311,7 +308,6 @@ object FractalSparkRunner extends Logging {
       val statement = connection.createStatement()
       val resultSet = statement.executeQuery(query)
 
-      //      TODO: escrever linhas em arquivo no formato: ID ID
       val file = new File(graphPath)
       new File(fc.tmpPath).mkdirs()
 
@@ -326,7 +322,6 @@ object FractalSparkRunner extends Logging {
 
     val fractalGraph = fc.textFile(graphPath, graphClass = graphClass)
 
-    //    TODO: rodar  app
     val app = algorithm.toLowerCase match {
       case "vsubgraphs" =>
         new VSubgraphsApp(fractalGraph, commStrategy,

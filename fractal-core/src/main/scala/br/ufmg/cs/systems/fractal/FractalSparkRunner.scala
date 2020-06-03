@@ -1,11 +1,11 @@
 package br.ufmg.cs.systems.fractal
 
 import java.io.{BufferedWriter, File, FileWriter}
+import java.sql.{Connection, DriverManager}
 
 import br.ufmg.cs.systems.fractal.util.Logging
 import org.apache.spark.{SparkConf, SparkContext}
 
-import scala.io.Source
 
 trait FractalSparkApp extends Logging {
   def fractalGraph: FractalGraph
@@ -246,7 +246,7 @@ class PathsApp(val fractalGraph: FractalGraph,
   }
 }
 
-object FractalSparkRunner {
+object FractalSparkRunner extends Logging {
   def time[R](block: => R): (R, Long) = {
     val t0 = System.currentTimeMillis()
     val result = block // call-by-name
@@ -257,6 +257,8 @@ object FractalSparkRunner {
   def main(args: Array[String]) {
     // args
     var i = 0
+    val databaseConfigFile = args(i)
+    i += 1
     val graphClass = args(i) match {
       case "al" =>
         "br.ufmg.cs.systems.fractal.graph.BasicMainGraph"
@@ -267,8 +269,6 @@ object FractalSparkRunner {
       case other =>
         throw new RuntimeException(s"Input graph format '${other}' is invalid")
     }
-    i += 1
-    var graphPath = args(i)
     i += 1
     val algorithm = args(i)
     i += 1
@@ -282,6 +282,7 @@ object FractalSparkRunner {
 
     val conf = new SparkConf()
     val sc = new SparkContext(conf)
+    val fc = new FractalContext(sc, logLevel)
 
     if (!sc.isLocal) {
       // TODO: this is ugly but have to make sure all spark executors are up by
@@ -289,30 +290,43 @@ object FractalSparkRunner {
       Thread.sleep(10000)
     }
 
-    val fc = new FractalContext(sc, logLevel)
-    val isCsvInput = graphPath.endsWith(".csv")
+    //    TODO: ler json
+    val databaseConfig = ujson.read(scala.reflect.io.File(databaseConfigFile).slurp)
 
-    if (isCsvInput) {
-      val inputBuffer = Source.fromFile(graphPath)
+    val url = databaseConfig("url").str
+    val username = databaseConfig("username").str
+    val password = databaseConfig("password").str
+    val query = databaseConfig("query").str
 
-      graphPath = s"${fc.tmpPath}/graph.edges"
+    //        TODO: abrir conexão com o banco
+    logInfo("Reading data from " + url)
 
+    //    TODO: ler linhas do banco
+    var connection: Connection = null
+    val graphPath = s"${fc.tmpPath}/graph.edges"
+    var outputBuffer: BufferedWriter = null
+
+    try {
+      connection = DriverManager.getConnection(url, username, password)
+      val statement = connection.createStatement()
+      val resultSet = statement.executeQuery(query)
+
+      //      TODO: escrever linhas em arquivo no formato: ID ID
       val file = new File(graphPath)
       new File(fc.tmpPath).mkdirs()
 
-      val outputBuffer = new BufferedWriter(new FileWriter(file))
-      inputBuffer.getLines
-        .foreach(line => {
-          val cols = line.split(',').map(_.trim)
-          outputBuffer.write(s"${cols(0)} ${cols(1)}\n")
-        })
-
-      outputBuffer.close
-      inputBuffer.close
+      outputBuffer = new BufferedWriter(new FileWriter(file))
+      while (resultSet.next) {
+        outputBuffer.write(s"${resultSet.getString(1)} ${resultSet.getString(2)}\n")
+      }
+    } finally {
+      outputBuffer.close()
+      connection.close()
     }
 
     val fractalGraph = fc.textFile(graphPath, graphClass = graphClass)
 
+    //    TODO: rodar  app
     val app = algorithm.toLowerCase match {
       case "vsubgraphs" =>
         new VSubgraphsApp(fractalGraph, commStrategy,
@@ -368,18 +382,16 @@ object FractalSparkRunner {
 
     val appRes = app.execute
 
-    if (isCsvInput) {
-      val outputPath = s"${sys.env("HOME")}/fractal-outputs/${fc.tmpPath.split('/')(2)}.csv"
-      val outputBuffer = new BufferedWriter(new FileWriter(new File(outputPath)))
+    val outputPath = s"${sys.env("HOME")}/fractal-outputs/${fc.tmpPath.split('/')(2)}.csv"
+    outputBuffer = new BufferedWriter(new FileWriter(new File(outputPath)))
 
-      //      TODO: without the collect, a not serializable
-      //       error explodes due to ArrayBuffer mappedWords
-      appRes.mappedSubgraphs.collect.foreach(subgraph => {
-        outputBuffer.write(s"${subgraph.mappedWords.mkString(",")}\n")
-      })
+    //      TODO: without the collect, a not serializable
+    //       error explodes due to ArrayBuffer mappedWords
+    appRes.mappedSubgraphs.collect.foreach(subgraph => {
+      outputBuffer.write(s"${subgraph.mappedWords.mkString(",")}\n")
+    })
 
-      outputBuffer.close
-    }
+    outputBuffer.close()
 
     fc.stop()
     sc.stop()

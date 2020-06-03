@@ -37,6 +37,19 @@ class FractalContext(sc: SparkContext, logLevel: String = "info",
     new FractalGraph(path, graphClass, this, logLevel)
   }
 
+  //      TODO: read data from dataframe
+
+  /**
+   * Read graph from text file
+   * @param graphClass specifies how the graph is read (default adj. lists)
+   * @param local specifies whether this path is in the local fs or not
+   * @return fractal graph
+   */
+  def dataFrame (graphClass: String = Configuration.CONF_MAINGRAPH_CLASS_DEFAULT,
+       local: Boolean = false): FractalGraph = {
+    new FractalGraph(null, graphClass, this, logLevel)
+  }
+
   /**
     * Stop this context, cleaning the temporary directory
     */

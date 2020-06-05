@@ -4,6 +4,8 @@ import java.io.{BufferedWriter, File, FileWriter}
 import java.sql.{Connection, DriverManager}
 
 import br.ufmg.cs.systems.fractal.util.Logging
+import com.hortonworks.spark.sql.hive.llap.HiveWarehouseBuilder
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.{SparkConf, SparkContext}
 
 
@@ -257,7 +259,7 @@ object FractalSparkRunner extends Logging {
   def main(args: Array[String]) {
     // args
     var i = 0
-    val databaseConfigFile = args(i)
+    val configPath = args(i)
     i += 1
     val graphClass = args(i) match {
       case "al" =>
@@ -280,45 +282,40 @@ object FractalSparkRunner extends Logging {
     i += 1
     val logLevel = args(i)
 
-    val conf = new SparkConf()
-    val sc = new SparkContext(conf)
-    val fc = new FractalContext(sc, logLevel)
+    val config = ujson.read(scala.reflect.io.File(configPath).slurp)
 
-    if (!sc.isLocal) {
+    val conf = new SparkConf()
+      .setAppName(config("app").str)
+      .setMaster(config("master").str)
+      .set(config("driver").str, config("url").str)
+
+    val ss = SparkSession.builder.config(conf).getOrCreate()
+
+    if (!ss.sparkContext.isLocal) {
       // TODO: this is ugly but have to make sure all spark executors are up by
       //  the time we start executing fractal applications
       Thread.sleep(10000)
     }
 
-    val databaseConfig = ujson.read(scala.reflect.io.File(databaseConfigFile).slurp)
+    val fc = new FractalContext(ss.sparkContext, logLevel)
 
-    val url = databaseConfig("url").str
-    val username = databaseConfig("username").str
-    val password = databaseConfig("password").str
-    val query = databaseConfig("query").str
+    val hive = HiveWarehouseBuilder.session(ss).build()
 
-    logInfo("Reading data from " + url)
+    val edges = hive.execute(config("query").str)
 
-    var connection: Connection = null
     val graphPath = s"${fc.tmpPath}/graph.edges"
     var outputBuffer: BufferedWriter = null
 
-    try {
-      connection = DriverManager.getConnection(url, username, password)
-      val statement = connection.createStatement()
-      val resultSet = statement.executeQuery(query)
+    val file = new File(graphPath)
+    new File(fc.tmpPath).mkdirs()
 
-      val file = new File(graphPath)
-      new File(fc.tmpPath).mkdirs()
+    outputBuffer = new BufferedWriter(new FileWriter(file))
 
-      outputBuffer = new BufferedWriter(new FileWriter(file))
-      while (resultSet.next) {
-        outputBuffer.write(s"${resultSet.getString(1)} ${resultSet.getString(2)}\n")
-      }
-    } finally {
-      outputBuffer.close()
-      connection.close()
-    }
+    edges.collect.foreach(edge => {
+      outputBuffer.write(s"${edge.get(0)} ${edge.get(1)}\n")
+    })
+
+    outputBuffer.close()
 
     val fractalGraph = fc.textFile(graphPath, graphClass = graphClass)
 
@@ -388,7 +385,9 @@ object FractalSparkRunner extends Logging {
 
     outputBuffer.close()
 
+    hive.close()
     fc.stop()
-    sc.stop()
+    ss.stop()
   }
+
 }

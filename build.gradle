@@ -6,29 +6,30 @@
  * user guide available at https://docs.gradle.org/4.2.1/userguide/java_library_plugin.html
  */
 
-version="SPARK-2.4.5"
+version = "SPARK-2.4.5"
 
 buildscript {
-   repositories {
-      mavenLocal()
-      mavenCentral()
-      jcenter()
-      maven { url "https://plugins.gradle.org/m2/" }
-   }
-   dependencies {
-      classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
-   }
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        jcenter()
+        maven { url "https://plugins.gradle.org/m2/" }
+    }
+    dependencies {
+        classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
+    }
 }
 
 apply plugin: 'java-library'
 apply plugin: 'java'
 apply plugin: 'scala'
 apply plugin: "com.github.johnrengelman.shadow"
- 
+
 repositories {
     jcenter()
     mavenCentral()
     maven { url 'https://jitpack.io' }
+    maven { url 'https://repo.hortonworks.com/content/repositories/releases/' }
 }
 
 dependencies {
@@ -37,50 +38,45 @@ dependencies {
 }
 
 shadowJar {
-   zip64 true
-   transform(com.github.jengelman.gradle.plugins.shadow.transformers.AppendingTransformer.class) {
-      resource = "reference.conf"
-   }
+    zip64 true
+    transform(com.github.jengelman.gradle.plugins.shadow.transformers.AppendingTransformer.class) {
+        resource = "reference.conf"
+    }
 }
 
 task scalaTest(dependsOn: ['testClasses'], type: JavaExec) {
-  environment "SPARK_SCALA_VERSION", "2.11"
-  main = 'org.scalatest.tools.Runner'
-  args = ['-R', 'build/classes/scala/test', '-o']
-  classpath = sourceSets.test.runtimeClasspath
+    environment "SPARK_SCALA_VERSION", "2.11"
+    main = 'org.scalatest.tools.Runner'
+    args = ['-R', 'build/classes/scala/test', '-o']
+    classpath = sourceSets.test.runtimeClasspath
 }
 
 test.dependsOn scalaTest
 
 task assemble(dependsOn: ['shadowJar'], overwrite: true)
 
-//test {
-//    testLogging.showStandardStreams = true
-//    jvmArgs "-javaagent:${projectDir}/lib/aspectjweaver-1.8.10.jar"
-//}
-
 
 subprojects {
-   apply plugin: 'java-library'
-   apply plugin: 'java'
-   apply plugin: 'scala'
-   apply plugin: "com.github.johnrengelman.shadow"
+    apply plugin: 'java-library'
+    apply plugin: 'java'
+    apply plugin: 'scala'
+    apply plugin: "com.github.johnrengelman.shadow"
 
-   task scalaTest(dependsOn: ['testClasses'], type: JavaExec) {
-      environment "SPARK_SCALA_VERSION", "2.11"
-      main = 'org.scalatest.tools.Runner'
-      args = ['-R', 'build/classes/scala/test', '-o']
-      classpath = sourceSets.test.runtimeClasspath
-   }
+    task scalaTest(dependsOn: ['testClasses'], type: JavaExec) {
+        environment "SPARK_SCALA_VERSION", "2.11"
+        main = 'org.scalatest.tools.Runner'
+        args = ['-R', 'build/classes/scala/test', '-o']
+        classpath = sourceSets.test.runtimeClasspath
+    }
 
-   shadowJar {
-      zip64 true
-      transform(com.github.jengelman.gradle.plugins.shadow.transformers.AppendingTransformer.class) {
-         resource = "reference.conf"
-      }
-   }
+    shadowJar {
+        zip64 true
+        transform(com.github.jengelman.gradle.plugins.shadow.transformers.AppendingTransformer.class) {
+            resource = "reference.conf"
+        }
+    }
 
-   test.dependsOn scalaTest
+    test.dependsOn scalaTest
 
-   task assemble(dependsOn: ['test', 'shadowJar'], overwrite: true)
+    task assemble(dependsOn: ['test', 'shadowJar'], overwrite: true)
 }

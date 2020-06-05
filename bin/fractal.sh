@@ -48,78 +48,78 @@ fi
 
 case "$app" in
 	fsm)
-	required="database_config steps fsmsupp"
+	required="config steps fsmsupp"
         appusage="
 
 ALGOPTION for '$app':
-   database_config=<database-config-path>  'Database configuration file path'
+   config=<database-config-path>           'Configuration file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
 	;;
 
 	motifs)
-	required="database_config steps"
+	required="config steps"
         appusage="
 
 ALGOPTION for '$app':
-   database_config=<database-config-path>  'Database configuration file path'
+   config=<database-config-path>           'Configuration file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 
 	cliques)
-	required="database_config steps"
+	required="config steps"
         appusage="
 
 ALGOPTION for '$app':
-   database_config=<database-config-path>  'Database configuration file path'
+   config=<database-config-path>           'Configuration file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 
 	cliquesopt)
-	required="database_config steps"
+	required="config steps"
         appusage="
 
 ALGOPTION for '$app':
-   database_config=<database-config-path>  'Database configuration file path'
+   config=<database-config-path>           'Configuration file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 
 	gquerying)
-	required="database_config steps query"
+	required="config steps query"
         appusage="
 
 ALGOPTION for '$app':
-   database_config=<database-config-path>  'Database configuration file path'
+   config=<database-config-path>           'Configuration file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 
 	gqueryingnaive)
-	required="database_config steps query"
+	required="config steps query"
         appusage="
 
 ALGOPTION for '$app':
-   database_config=<database-config-path>  'Database configuration file path'
+   config=<database-config-path>           'Configuration file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 
 	kws)
-	required="database_config steps query"
+	required="config steps query"
         appusage="
 
 ALGOPTION for '$app':
-   database_config=<database-config-path>  'Database configuration file path'
+   config=<database-config-path>           'Configuration file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=\"keyword1 keyword2 ...\"         'Keywords for the query'"
 	;;
 
 	paths)
-	required="database_config steps"
+	required="config steps"
         appusage="
 
 ALGOPTION for '$app':
-   database_config=<database-config-path>  'Database configuration file path'
+   config=<database-config-path>           'Configuration file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 
@@ -151,7 +151,9 @@ comm=${comm:-scratch}
 total_cores=$((num_workers * worker_cores))
 deploy_mode=${deploy_mode:-client}
 log_level=${log_level:-info}
-packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3,org.postgresql:postgresql:42.2.0,com.lihaoyi:upickle_2.11:0.7.4"
+jars="$FRACTAL_HOME/fractal-core/build/libs/fractal-core-${fractal_version}.jar,$FRACTAL_HOME/jars/hive-warehouse-connector_2.11-1.0.0.3.1.5.0-152.jar"
+repositories="https://repo.hortonworks.com/content/repositories/releases/"
+packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3,com.lihaoyi:upickle_2.11:0.7.4"
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\
@@ -160,10 +162,11 @@ cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --executor-cores $worker_cores \\
    --executor-memory $worker_memory \\
    --class br.ufmg.cs.systems.fractal.FractalSparkRunner \\
-   --jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-${fractal_version}.jar \\
+   --jars $jars \\
+   --repositories $repositories \\
    --packages=$packages \\
    $FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-${fractal_version}.jar \\
-      $database_config $input_format $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $configs"
+      $config $input_format $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $configs"
 
 printf "info: Submitting command:\n$cmd\n\n"
 bash -c "$cmd"

@@ -151,9 +151,7 @@ comm=${comm:-scratch}
 total_cores=$((num_workers * worker_cores))
 deploy_mode=${deploy_mode:-client}
 log_level=${log_level:-info}
-jars="$FRACTAL_HOME/fractal-core/build/libs/fractal-core-${fractal_version}.jar,$FRACTAL_HOME/jars/hive-warehouse-connector_2.11-1.0.0.3.1.5.0-152.jar"
-repositories="https://repo.hortonworks.com/content/repositories/releases/"
-packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3,com.lihaoyi:upickle_2.11:0.7.4"
+jars="$FRACTAL_HOME/fractal-core/build/libs/fractal-core-${fractal_version}.jar"
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\
@@ -163,8 +161,6 @@ cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --executor-memory $worker_memory \\
    --class br.ufmg.cs.systems.fractal.FractalSparkRunner \\
    --jars $jars \\
-   --repositories $repositories \\
-   --packages=$packages \\
    $FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-${fractal_version}.jar \\
       $config $input_format $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $configs"
 

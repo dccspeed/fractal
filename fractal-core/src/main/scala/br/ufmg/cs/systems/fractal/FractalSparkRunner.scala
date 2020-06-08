@@ -1,12 +1,11 @@
 package br.ufmg.cs.systems.fractal
 
 import java.io.{BufferedWriter, File, FileWriter}
-import java.sql.{Connection, DriverManager}
 
 import br.ufmg.cs.systems.fractal.util.Logging
 import com.hortonworks.spark.sql.hive.llap.HiveWarehouseBuilder
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.{SparkConf, SparkContext}
 
 
 trait FractalSparkApp extends Logging {

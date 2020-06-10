@@ -1,6 +1,7 @@
 package br.ufmg.cs.systems.fractal.computation;
 
 import br.ufmg.cs.systems.fractal.aggregation.AggregationStorage;
+import br.ufmg.cs.systems.fractal.aggregation.SubgraphAggregation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
@@ -104,6 +105,15 @@ public abstract class BasicComputation<S extends Subgraph>
    public <K extends Writable, V extends Writable>
    void map(String name, K key, V value) {
       executionEngine.map(name, key, value);
+   }
+
+   @Override
+   public SubgraphAggregation<S> getSubgraphAggregation() {
+      if (executionEngine != null) {
+         return executionEngine.getSubgraphAggregation();
+      } else {
+         return null;
+      }
    }
 
    @Override

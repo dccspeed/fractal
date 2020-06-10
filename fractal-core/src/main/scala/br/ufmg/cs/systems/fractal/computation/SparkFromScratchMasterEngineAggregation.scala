@@ -1,14 +1,17 @@
 package br.ufmg.cs.systems.fractal.computation
 
+import java.io.Serializable
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicLong
 import java.util.function.IntConsumer
 
 import akka.actor._
 import br.ufmg.cs.systems.fractal.Primitive
+import br.ufmg.cs.systems.fractal.aggregation.AggregationStorageFactory
 import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
+import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.subgraph._
-import br.ufmg.cs.systems.fractal.util.{Logging, ProcessComputeFunc}
+import br.ufmg.cs.systems.fractal.util.{Logging, ProcessComputeFunc, SerializableWritable}
+import org.apache.hadoop.io.{LongWritable, Writable}
 import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
@@ -26,11 +29,11 @@ import scala.util.{Failure, Success}
  * It interacts directly with the RDD interface in Spark by handling the
  * SparkContext.
  */
-class SparkFromScratchMasterEngine[S <: Subgraph](
+class SparkFromScratchMasterEngineAggregation[S <: Subgraph](
                                                     _config: SparkConfiguration[S],
                                                     _parentOpt: Option[SparkMasterEngine[S]]) extends SparkMasterEngine [S] {
 
-   import SparkFromScratchMasterEngine._
+   import SparkFromScratchMasterEngineAggregation._
 
    def config: SparkConfiguration[S] = _config
 
@@ -72,10 +75,28 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
       logInfo(s"${this} took ${(end - start)}ms to initialize.")
    }
 
-   /**
-    * Master's computation takes place here, superstep by superstep
-    */
-   lazy val next: Boolean = {
+   override def longRDD
+   (defaultValue: Long, value: S => Long, reduce: (Long,Long) => Long)
+   : RDD[Long] = {
+      execEnginesRDD.map(_.computeAggregationLong(defaultValue, value, reduce))
+   }
+
+   override def objLongRDD[K <: Serializable]
+   (key: S => K, defaultValue: Long, value: S => Long,
+    reduce: (Long,Long) => Long)
+   : RDD[(K,Long)] = {
+      execEnginesRDD.flatMap(
+         _.computeAggregationObjLong[K](key, defaultValue, value, reduce))
+   }
+
+   override def objObjRDD[K <: Serializable, V <: Serializable]
+   (key: S => K, value: S => V, aggregate: (V,V) => Unit)
+   : RDD[(K,V)] = {
+      execEnginesRDD.flatMap(
+         _.computeAggregationObjObj[K,V](key, value, aggregate))
+   }
+
+   private def execEnginesRDD: RDD[SparkEngine[S]] = {
 
       logInfo (s"${this} Computation starting from ${stepRDD}," +
          s", StorageLevel=${stepRDD.getStorageLevel}")
@@ -129,17 +150,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
          cc = curr.config.computationContainer[S].withComputationAppended(cc)
       }
 
-      // configure custom ProcessComputeFunc and aggregations
       val extensionFunc = getProcessComputeFunc(egAccums, awAccums)
-      //val extensionFuncFirst = getProcessComputeFuncFirst(egAccums, awAccums)
-      //val extensionFuncFirstLast = getProcessComputeFuncFirstLast(egAccums,
-      //   awAccums)
-      //val extensionFuncMiddle = getProcessComputeFuncMiddle(egAccums,
-      // awAccums)
-      //val extensionFuncLast = getProcessComputeFuncLast(egAccums, awAccums)
-      //val filterFunc = getProcessComputeFuncFilter(egAccums, awAccums)
-      //val filterFuncLast = getProcessComputeFuncFilterLast(egAccums, awAccums)
-
       cc = {
          def withCustomFuncs(cc: ComputationContainer[S], depth: Int)
          : ComputationContainer[S] = cc.nextComputationOpt match {
@@ -182,10 +193,6 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
                         nextComputationOpt = Option(ncc),
                         processOpt = None)
                }
-               //cc.shallowCopy(
-               //   processComputeOpt = Option(extensionFunc),
-               //   nextComputationOpt = Option(ncc),
-               //   processOpt = None)
 
             case None =>
                cc.primitiveOpt match {
@@ -216,7 +223,6 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
                      cc.shallowCopy(
                         processComputeOpt = Option(extensionFunc))
                }
-               //cc.shallowCopy(processComputeOpt = Option(extensionFunc))
          }
 
          cc = withCustomFuncs(cc, 0).withComputationLabel("first_computation")
@@ -227,10 +233,6 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
       // set the modified pipelined computation
       this.config.set(SparkConfiguration.COMPUTATION_CONTAINER, cc)
 
-      // NOTE: We need this extra initAggregations because this communication
-      // strategy adds a 'previous_enumeration' aggregation
-      cc.initAggregations(this.config)
-
       logInfo (s"From scratch computation (${this}). Final computation: ${cc}")
 
       logInfo (s"SparkConfiguration estimated size = " +
@@ -238,141 +240,32 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
       logInfo (s"HadoopConfiguration estimated size = " +
          s"${SizeEstimator.estimate(config.hadoopConf)} bytes")
 
-      val initStart = System.currentTimeMillis
-      val _configBc = configBc
-      stepRDD.mapPartitions { iter =>
-         _configBc.value.initializeWithTag(isMaster = false)
-         iter
-      }.foreachPartition(_ => {})
-
-      val initElapsed = System.currentTimeMillis - initStart
-
-      logInfo (s"Initialization took ${initElapsed} ms")
-
-      val superstepStart = System.currentTimeMillis
-
-      val enumerationStart = System.currentTimeMillis
-
       validSubgraphsAccum = sc.longAccumulator
       aggAccums.update("valid_subgraphs", validSubgraphsAccum)
-      val _aggAccums = aggAccums
 
-      val execEngines = getExecutionEngines (
-         superstepRDD = stepRDD,
-         superstep = step,
-         configBc = configBc,
-         aggAccums = _aggAccums,
-         validSubgraphsAccum,
-         previousAggregationsBc = previousAggregationsBc)
-
-      execEngines.persist(MEMORY_ONLY_SER)
-      execEngines.foreachPartition (_ => {})
-
-      val enumerationElapsed = System.currentTimeMillis - enumerationStart
-
-      logInfo(s"Enumeration step=${step} took ${enumerationElapsed} ms")
-
-      val globalAggStart = System.currentTimeMillis()
-
-      /** [1] We extract and aggregate the *aggregations* globally.
-       */
-      val aggregationsFuture = getAggregations (execEngines, numPartitions)
-      // aggregations
-      Await.ready (aggregationsFuture, atMost = Duration.Inf)
-      aggregationsFuture.value.get match {
-         case Success(previousAggregations) =>
-            aggregations = mergeOrReplaceAggregations (aggregations,
-               previousAggregations)
-
-            aggregations.foreach { case (name, agg) =>
-               val mapping = agg.getMapping
-               val numMappings = agg.getNumberMappings
-               logInfo (s"Aggregation[${name}][numMappings=${numMappings}][${agg}]\n" +
-                  s"${mapping.take(10).map(t => s"Aggregation[${name}][${step}]" +
-                     s" ${t._1}: ${t._2}").mkString("\n")}\n...")
-            }
-
-            previousAggregationsBc = sc.broadcast (aggregations)
-
-         case Failure(e) =>
-            logError (s"Error in collecting aggregations: ${e.getMessage}")
-            throw e
+      val _step = step
+      val _accums = aggAccums
+      val _validSubgraphsAccum = validSubgraphsAccum
+      val _previousAggregationsBc = previousAggregationsBc
+      val _configBc = configBc
+      stepRDD.mapPartitionsWithIndex { (idx, _) =>
+         _configBc.value.initializeWithTag(isMaster = false)
+         val execEngine = new SparkFromScratchEngine [S] (
+            partitionId = idx,
+            step = _step,
+            accums = _accums,
+            validSubgraphsAccum = _validSubgraphsAccum,
+            previousAggregationsBc = _previousAggregationsBc,
+            configurationId = _configBc.value.getId
+         )
+         Iterator[SparkEngine[S]](execEngine)
       }
-
-      execEngines.unpersist()
-
-      logInfo (s"StorageLevel = ${storageLevel}")
-
-      // whether the user chose to customize master computation, executed every
-      // superstep
-      masterComputation.compute()
-
-      val globalAggElapsed = System.currentTimeMillis() - globalAggStart
-
-
-      val superstepFinish = System.currentTimeMillis
-      logInfo (
-         s"Superstep $step finished in ${superstepFinish - superstepStart} ms"
-      )
-
-      // make sure we maintain the engine's original state
-      this.config.set(SparkConfiguration.COMPUTATION_CONTAINER, originalContainer)
-
-      /**
-       * Print statistics of this step
-       */
-      if (validSubgraphsAccum.value == 0) {
-         validSubgraphsAccum.add(aggAccums(s"${VALID_SUBGRAPHS}_${numComputations - 1}").value)
-      }
-      aggAccums.toArray.sortBy(_._1).foreach { case (name, accum) =>
-         logInfo (s"FractalStep[${step}][${name}]: ${accum.value}")
-      }
-      logInfo(s"FractalStep[${step}][initialization_time]: ${initElapsed}")
-      logInfo(s"FractalStep[${step}][enumeration_time]: ${enumerationElapsed}")
-      logInfo(s"FractalStep[${step}][global_aggregation_time]: ${globalAggElapsed}")
-      logInfo(s"FractalStep[${step}][total_time]: ${initElapsed + enumerationElapsed + globalAggElapsed}")
-
-      // master will send poison pills to all executor actors of this step
-      masterActorRef ! Reset
-
-      !sc.isStopped && !isComputationHalted
    }
 
    /**
-    * Creates an RDD of execution engines
-    * TODO
+    * Master's computation takes place here, superstep by superstep
     */
-   def getExecutionEngines[E <: Subgraph]
-   (
-      superstepRDD: RDD[Unit],
-      superstep: Int,
-      configBc: Broadcast[SparkConfiguration[E]],
-      aggAccums: Map[String,LongAccumulator],
-      validSubgraphsAccum: LongAccumulator,
-      previousAggregationsBc: Broadcast[_]): RDD[SparkEngine[E]] = {
-
-      val execEngines = superstepRDD.mapPartitionsWithIndex { (idx, cacheIter) =>
-
-         configBc.value.initializeWithTag(isMaster = false)
-
-         val execEngine = new SparkFromScratchEngine [E] (
-            partitionId = idx,
-            step = superstep,
-            accums = aggAccums,
-            validSubgraphsAccum = validSubgraphsAccum,
-            previousAggregationsBc = previousAggregationsBc,
-            configurationId = configBc.value.getId
-         )
-
-         execEngine.init()
-         execEngine.compute()
-         execEngine.finalize()
-
-         Iterator[SparkEngine[E]](execEngine)
-      }
-
-      execEngines
-   }
+   lazy val next: Boolean = true
 
    def getProcessComputeFuncFilterLast(
                                          _egAccum: LongAccumulator,
@@ -773,30 +666,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph](
    }
 }
 
-class LastStepConsumer[E <: Subgraph] extends IntConsumer with Serializable {
-   var subgraph: E = _
-   var computation: Computation[E] = _
-   var addWords: Long = _
-   var subgraphsGenerated: Long = _
-
-   def set(subgraph: E, computation: Computation[E]): LastStepConsumer[E] = {
-      this.subgraph = subgraph
-      this.computation = computation
-      this.addWords = 0L
-      this.subgraphsGenerated = 0L
-      this
-   }
-
-   override def accept(w: Int): Unit = {
-      addWords += 1
-      subgraph.addWord(w)
-      subgraphsGenerated += 1
-      computation.process(subgraph)
-      subgraph.removeLastWord()
-   }
-}
-
-object SparkFromScratchMasterEngine {
+object SparkFromScratchMasterEngineAggregation {
    val NEIGHBORHOOD_LOOKUPS = "neighborhood_lookups"
 
    val NEIGHBORHOOD_LOOKUPS_ARR = {

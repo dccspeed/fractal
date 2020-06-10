@@ -1,6 +1,7 @@
 package br.ufmg.cs.systems.fractal.computation;
 
 import br.ufmg.cs.systems.fractal.aggregation.AggregationStorage;
+import br.ufmg.cs.systems.fractal.aggregation.SubgraphAggregation;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Writable;
@@ -22,6 +23,8 @@ public interface CommonExecutionEngine<O extends Subgraph> {
     void aggregate(String name, LongWritable value);
     
     void aggregate(String name, long value);
+
+    SubgraphAggregation<O> getSubgraphAggregation();
 
     void addValidSubgraphs(long n);
 

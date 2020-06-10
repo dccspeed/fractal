@@ -22,6 +22,10 @@ public class ObjSet<T> implements Externalizable {
       for (T elem : collection) this.underlying.add(elem);
    }
 
+   public void addAll(ObjSet<T> other) {
+      addAll(other.underlying);
+   }
+
    public boolean contains(T elem) {
       return this.underlying.contains(elem);
    }

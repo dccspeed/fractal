@@ -58,9 +58,9 @@ public class VertexInducedSubgraph extends BasicSubgraph {
    }
    
    @Override
-   public Pattern getPattern() {
+   public Pattern quickPattern() {
       ensureEdges();
-      return super.getPattern();
+      return super.quickPattern();
    }
 
    @Override

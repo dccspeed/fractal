@@ -611,6 +611,8 @@ object SparkConfiguration extends Logging {
 
    // re-enumerates from scratch every superstep
    val COMM_FROM_SCRATCH = "scratch"
+   // re-enumerates from scratch every superstep (aggregation based)
+   val COMM_FROM_SCRATCH_AGG = "scratchagg"
    // transparently reducing input graph each fractal step
    val COMM_GRAPH_RED = "graphred"
 

@@ -10,16 +10,12 @@ import java.lang.reflect.Constructor;
 import java.util.*;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicLongArray;
 
 public class AggregationStorage<K extends Writable, V extends Writable> implements Writable, Externalizable {
     private static final org.apache.hadoop.conf.Configuration hadoopConf =
             new org.apache.hadoop.conf.Configuration();
     private String name;
-    transient protected AtomicLongArray atomicArray;
-    protected boolean atomicArrayDirty = true;
-    protected boolean isIncremental;
+   protected boolean isIncremental;
     protected AbstractMap<K, V> keyValueMap;
     protected Class<K> keyClass;
     protected Class<V> valueClass;
@@ -82,7 +78,15 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
         }
     }
 
-    public String getName() {
+   public void setAggStorageIterator(AggregationIterator<K, V> aggStorageIterator) {
+       throw new RuntimeException("Not allowed");
+   }
+
+   public void finishAggregationStorage() {
+
+   }
+
+   public String getName() {
         return name;
     }
 
@@ -90,74 +94,8 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
         return keyValueMap.size();
     }
 
-    public Set<K> getKeys() {
-        return Collections.unmodifiableSet(keyValueMap.keySet());
-    }
-
-    public Map<K, V> getMapping() {
+   public Map<K, V> getMapping() {
         return Collections.unmodifiableMap(keyValueMap);
-    }
-
-    public AbstractMap<K, V> getModifiableMap() {
-        return keyValueMap;
-    }
-
-    public synchronized void setAtomicArrayDirty(AtomicLong semaphore) {
-       //for (int i = 0; i < atomicArray.length(); ++i) {
-       //   long count = atomicArray.get(i);
-       //   if (count != 0 && count != -1) {
-       //      throw new RuntimeException("Should be zero. count=" + count);
-       //   }
-       //}
-       semaphore.decrementAndGet();
-       atomicArrayDirty = true;
-    }
-
-    private AtomicLong semaphore;
-
-    public synchronized AtomicLong resetAtomicArray(int length) {
-       if (!atomicArrayDirty) {
-          assert semaphore != null;
-          semaphore.incrementAndGet();
-          return semaphore;
-       }
-
-       if (atomicArray == null) {
-          atomicArray = new AtomicLongArray(length);
-       }
-
-       semaphore = new AtomicLong(1);
-    
-       AbstractMap<IntWritable, LongWritable> counts =
-          (AbstractMap<IntWritable,LongWritable>) keyValueMap;
-
-       IntWritable reusableKey = new IntWritable();
-       LongWritable reusableValue;
-
-       for (int i = 0; i < atomicArray.length(); ++i) {
-          reusableKey.set(i);
-          reusableValue = counts.get(reusableKey);
-          if (reusableValue == null) {
-             atomicArray.set(i, -1);
-          } else {
-             atomicArray.set(i, reusableValue.get());
-          }
-       }
-       
-       atomicArrayDirty = false;
-       return semaphore;
-    }
-
-    public synchronized AtomicLongArray asAtomicArray(int length) {
-       return atomicArray;
-    }
-    
-    public K getKey(K key) {
-        if (keyValueMap.containsKey(key)) {
-            return key;
-        } else {
-            return null;
-        }
     }
 
     public V getValue(K key) {

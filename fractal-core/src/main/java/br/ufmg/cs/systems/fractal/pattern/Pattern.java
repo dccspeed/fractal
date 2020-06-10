@@ -13,7 +13,9 @@ import java.io.IOException;
 public interface Pattern extends Writable, Externalizable {
     Pattern copy();
 
-    void init(Configuration config);
+   int getFirstVertexLabel();
+
+   void init(Configuration config);
 
    void removeLastNEdges(int n);
 

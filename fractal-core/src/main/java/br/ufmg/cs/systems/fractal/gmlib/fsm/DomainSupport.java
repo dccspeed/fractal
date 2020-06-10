@@ -439,7 +439,12 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
       VertexPositionEquivalences vertexPositionEquivalences = quickPattern.getVertexPositionEquivalences();
 
       if (vertexPositionEquivalences.getNumVertices() != numberOfDomains) {
-         throw new RuntimeException("Mismatch between # number domains and size of autovertexset");
+         throw new RuntimeException("Mismatch between # number domains and " +
+                 "size of autovertexset quickPattern=" + quickPattern
+                 + " canonicalPattern=" + canonicalPattern
+                 + " vertexEquivalences=" + vertexPositionEquivalences
+                 + " domainSupport=" + this.toStringDetailed()
+                 + " numDomains=" + numberOfDomains);
       }
 
       for (int i = 0; i < numberOfDomains; ++i) {

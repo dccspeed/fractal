@@ -20,7 +20,7 @@ object MyMotifsApp extends Logging {
       expand(1).
       aggregate [Pattern,LongWritable] (
         AGG_MOTIFS,
-        (e,c,k) => { e.getPattern },
+        (e,c,k) => { e.quickPattern },
         (e,c,v) => { v.set(1); v },
         (v1,v2) => { v1.set(v1.get() + v2.get()); v1 }).
       explore(2)

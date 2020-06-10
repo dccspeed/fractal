@@ -75,7 +75,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       numVerticesAddedWithWord.clear();
    }
 
-   public Pattern labeledPattern(Pattern unlabeledPattern) {
+   public Pattern applyLabels(Pattern unlabeledPattern) {
       if (dirtyPattern) {
          if (pattern == null) {
             pattern = unlabeledPattern.copy();

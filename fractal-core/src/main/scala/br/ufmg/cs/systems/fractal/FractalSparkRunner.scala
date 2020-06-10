@@ -249,6 +249,37 @@ class MotifsApp(val fractalGraph: FractalGraph,
    }
 }
 
+
+class MotifsApp2(val fractalGraph: FractalGraph,
+                commStrategy: String,
+                numPartitions: Int,
+                explorationSteps: Int) extends FractalSparkApp {
+   def execute: Unit = {
+      val motifsRes = fractalGraph.vfractoid
+         .expand(1)
+         .set("num_partitions", numPartitions)
+         .set("comm_strategy", commStrategy)
+         .explore(explorationSteps)
+
+      val motifCountRDD = motifsRes.aggregationObjLong[Pattern](
+         s => s.quickPattern,
+         0L,
+         _ => 1L,
+         _ + _
+      )
+
+      val (motifCountMap, elapsed) = FractalSparkRunner.time {
+         motifCountRDD.collectAsMap()
+      }
+
+      for ((m,c) <- motifCountMap) {
+         logInfo(s"MotifCount ${m} ${c}")
+      }
+
+      logInfo(s"MotifsApp2 took ${elapsed} ms")
+   }
+}
+
 class CliquesOptApp(val fractalGraph: FractalGraph,
                     commStrategy: String,
                     numPartitions: Int,
@@ -318,7 +349,14 @@ class MaximalCliquesApp(val fractalGraph: FractalGraph,
          set ("num_partitions", numPartitions).
          explore(explorationSteps + 1)
 
-      val numValidSubgraphs = maximalcliquesRes.compute()("valid_subgraphs")
+      val numMaximalCliquesAccum = fractalGraph.fractalContext.sparkContext
+         .longAccumulator
+
+      maximalcliquesRes.compute(
+         (s,c) => numMaximalCliquesAccum.add(1)
+      )
+
+      val numValidSubgraphs = numMaximalCliquesAccum.value
 
       logInfo(s"MaximalCliquesApp" +
          s" numMaximalCliques=${numValidSubgraphs}")
@@ -354,7 +392,7 @@ class FSMApp(val fractalGraph: FractalGraph,
    def execute: Unit = {
       fractalGraph.set ("comm_strategy", commStrategy)
       fractalGraph.set ("num_partitions", numPartitions)
-      val cur = fractalGraph.fsm(support, explorationSteps).cursor()
+      val cur = fractalGraph.fsm2(support, explorationSteps).cursor()
       while (cur.moveNext()) {
          logInfo(s"FrequentPattern ${cur.key()} ${cur.value()}")
       }
@@ -447,7 +485,7 @@ class FSMAppPatternFirstLabeled(val fractalGraph: FractalGraph,
    def execute: Unit = {
       fractalGraph.set("comm_strategy", commStrategy)
       fractalGraph.set("num_partitions", numPartitions)
-      val cur = fractalGraph.fsmpf(supportThreshold,
+      val cur = fractalGraph.fsmpf2(supportThreshold,
          explorationSteps + 1).cursor()
       while (cur.moveNext()) {
          logInfo(s"FrequentPattern ${cur.key()} ${cur.value()}")
@@ -715,6 +753,9 @@ object FractalSparkRunner extends Logging {
                numPartitions, explorationSteps)
          case "motifs" =>
             new MotifsApp(fractalGraph, commStrategy,
+               numPartitions, explorationSteps)
+         case "motifs2" =>
+            new MotifsApp2(fractalGraph, commStrategy,
                numPartitions, explorationSteps)
          case "motifssampling" =>
             i += 1

@@ -36,20 +36,6 @@ class FractalGraph(
 
    private val confs: Map[String,Any] = Map.empty
 
-   private lazy val mainGraph: MainGraph[String,String] = {
-      import Configuration._
-      val config = new SparkConfiguration
-      config.set ("input_graph_path", path)
-      config.set ("input_graph_local", local)
-      config.set ("input_graph_class", graphClass)
-      config.setMainGraphClass (
-         config.getClass (CONF_MAINGRAPH_CLASS, CONF_MAINGRAPH_CLASS_DEFAULT).
-            asInstanceOf[Class[_ <: MainGraph[_,_]]]
-      )
-      config.createGraph()
-      config.getMainGraph[MainGraph[String,String]]
-   }
-
    def asPattern: Pattern = {
       val computation: Computation[EdgeInducedSubgraph] =
          new EComputationContainer()

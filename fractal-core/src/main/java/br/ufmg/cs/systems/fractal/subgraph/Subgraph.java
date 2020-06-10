@@ -15,54 +15,54 @@ import com.koloboke.collect.map.hash.HashIntObjMap;
 import java.io.Externalizable;
 
 public interface Subgraph extends WritableObject, Externalizable {
-    void init(Configuration configuration);
+   void init(Configuration configuration);
 
-    Configuration getConfig();
+   Configuration getConfig();
 
-    IntArrayList getWords();
+   IntArrayList getWords();
 
-    IntArrayList getVertices();
-    
-    <V> Vertex<V> vertex(int vertexId);
+   IntArrayList getVertices();
 
-    int getNumVertices();
+   <V> Vertex<V> vertex(int vertexId);
 
-    IntArrayList getEdges();
-    
-    <E> Edge<E> edge(int edgeId);
-    
-    <E> LabelledEdge<E> labelledEdge(int edgeId);
-    
-    int getNumEdges();
+   int getNumVertices();
 
-    int getNumWords();
+   IntArrayList getEdges();
 
-    Pattern getPattern();
+   <E> Edge<E> edge(int edgeId);
 
-    int numVerticesAdded();
+   <E> LabelledEdge<E> labelledEdge(int edgeId);
 
-    int numEdgesAdded();
+   int getNumEdges();
 
-    void addWord(int word);
+   int getNumWords();
 
-    void removeLastWord();
+   Pattern quickPattern();
 
-    IntCollection computeExtensions(Computation computation);
+   int numVerticesAdded();
 
-  IntCollection extensions();
+   int numEdgesAdded();
+
+   void addWord(int word);
+
+   void removeLastWord();
+
+   IntCollection computeExtensions(Computation computation);
+
+   IntCollection extensions();
 
    String toOutputString();
-    
-    void nextExtensionLevel();
-    
-    void nextExtensionLevel(Subgraph other);
-    
-    void previousExtensionLevel();
 
-    void applyTagFrom(Computation computation,
-          AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos);
-    
-    void applyTagTo(Computation computation,
-          AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos);
+   void nextExtensionLevel();
+
+   void nextExtensionLevel(Subgraph other);
+
+   void previousExtensionLevel();
+
+   void applyTagFrom(Computation computation,
+                     AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos);
+
+   void applyTagTo(Computation computation,
+                   AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos);
 
 }

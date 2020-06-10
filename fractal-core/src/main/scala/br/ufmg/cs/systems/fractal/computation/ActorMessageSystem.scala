@@ -27,6 +27,11 @@ case object Reset
  */
 case class HelloMaster(partitionId: Int, slaveRef: ActorRef)
 
+/**
+ * Message sent by slaves to the master indicating the end of a step
+ */
+case class ByeMaster(partitionId: Int, slaveRef: ActorRef)
+
 /*
  * Message sent by the master to a slave to inform the references of all other
  * slaves
@@ -105,18 +110,34 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
 
    private val numSlaves = engine.numPartitions
 
-   private var slaves: Array[ActorRef] = new Array[ActorRef](numSlaves)
+   /**
+    * These attributed are reset after each step
+    */
+   private var slaves: Array[ActorRef] = _
+   private var validSubgraphs: Array[Long] = _
+   private var slavesRouter: Router = _
+   private var registeredSlaves: Int = _
+   private var totalValidSubgraphs: Long = _
+   private var maxValidSubgraphs: Long = _
 
-   private var validSubgraphs: Array[Long] = new Array[Long](numSlaves)
+   // initial reset
+   reset()
 
-   private var slavesRouter: Router = new Router(new BroadcastRoutingLogic())
+   private def reset(): Unit = {
+      logInfo(s"ResetingMaster: ${self}")
+      if (slavesRouter != null) {
+         logInfo(s"SendingSlavePoisonPills ${slavesRouter}")
+         slavesRouter.route(PoisonPill, self)
+      }
 
-   private var registeredSlaves: Int = 0
-
-   private var totalValidSubgraphs: Long = 0
-
-   private var maxValidSubgraphs: Long = engine.config.getLong(
-      "max_valid_subgraphs", Long.MaxValue)
+      slavesRouter = new Router(new BroadcastRoutingLogic())
+      slaves = new Array[ActorRef](numSlaves)
+      validSubgraphs = new Array[Long](numSlaves)
+      registeredSlaves = 0
+      totalValidSubgraphs = 0
+      maxValidSubgraphs = engine.config.getLong(
+         "max_valid_subgraphs", Long.MaxValue)
+   }
 
    def receive = {
       case HelloMaster(partitionId, slaveRef) =>
@@ -133,6 +154,19 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
             val helloMsg = HelloSlave(slaves)
             slavesRouter.route(helloMsg, self)
             logInfo(s"Publishing ${numSlaves} slaves.")
+         }
+
+      case ByeMaster(partitionId, slaveRef) =>
+         if (slaves(partitionId) != null) {
+            registeredSlaves -= 1
+         }
+
+         logInfo(s"ByeMaster: ${self} knows ${registeredSlaves} slaves.")
+
+         slaves(partitionId) = null
+
+         if (registeredSlaves == 0) {
+            reset()
          }
 
       case Log(msg) =>
@@ -180,13 +214,7 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
          }
 
       case Reset =>
-         slavesRouter.route(PoisonPill, self)
-         slavesRouter = new Router(new BroadcastRoutingLogic())
-         slaves = new Array[ActorRef](numSlaves)
-         registeredSlaves = 0
-         totalValidSubgraphs = 0
-         maxValidSubgraphs = engine.config.getLong(
-            "max_valid_subgraphs", Long.MaxValue)
+         reset()
 
       case Terminated(p: ActorRef) =>
 
@@ -397,10 +425,11 @@ class SlaveActor [E <: Subgraph](
          logInfo(s"Terminating computation ${computation}")
          var currComp = computation
          while (currComp != null) {
-            var senum = currComp.getSubgraphEnumerator()
+            val senum = currComp.getSubgraphEnumerator()
             if (senum != null) senum.terminate()
             currComp = currComp.nextComputation()
          }
+         masterRef ! ByeMaster(partitionId, self)
    }
 
    private def sendEmptyResponse(ref: ActorRef): Unit = {

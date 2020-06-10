@@ -75,7 +75,7 @@ public class PatternUtils {
 
             // get new quick pattern from subgraph, turn canonical (canonical labeling) and add to the resulting set to
             // remove duplicates
-            Pattern newPattern = subgraph.getPattern();
+            Pattern newPattern = subgraph.quickPattern();
             newPattern.turnCanonical();
             newPatterns.add(newPattern);
 
@@ -138,7 +138,7 @@ public class PatternUtils {
 
             // get new quick pattern from subgraph, turn canonical (canonical labeling) and add to the resulting set to
             // remove duplicates
-            Pattern newPattern = subgraph.getPattern();
+            Pattern newPattern = subgraph.quickPattern();
             Pattern canonicalPattern = newPattern.copy();
             canonicalPattern.turnCanonical();
             if (!quickMap.containsKey(canonicalPattern)) {
@@ -165,7 +165,7 @@ public class PatternUtils {
 
          // get new quick pattern from subgraph, turn canonical (canonical labeling) and add to the resulting set to
          // remove duplicates
-         Pattern newPattern = subgraph.getPattern();
+         Pattern newPattern = subgraph.quickPattern();
          Pattern canonicalPattern = newPattern.copy();
          canonicalPattern.turnCanonical();
          if (!quickMap.containsKey(canonicalPattern)) {
@@ -264,7 +264,7 @@ public class PatternUtils {
       graph.addVertex(0);
       VertexInducedSubgraph subgraph = (VertexInducedSubgraph) config.createSubgraph();
       subgraph.addWord(0);
-      return subgraph.getPattern();
+      return subgraph.quickPattern();
    }
 
    /**
@@ -281,7 +281,7 @@ public class PatternUtils {
       graph.addEdge(0, 1, graph.numEdges());
       EdgeInducedSubgraph subgraph = (EdgeInducedSubgraph) config.createSubgraph();
       subgraph.addWord(0);
-      return subgraph.getPattern();
+      return subgraph.quickPattern();
    }
 
    /**
@@ -340,17 +340,20 @@ public class PatternUtils {
          labeling.putIfAbsent(dst, labeling.size());
       }
 
-      /**
-       * Maps the edges according to the new labeling
-       */
-      for (i = 0; i < pattern.getNumberOfEdges(); ++i) {
-         pedge = pattern.getEdges().get(i);
-         int newSrc = labeling.get(pedge.getSrcPos());
-         int newDst = labeling.get(pedge.getDestPos());
-         pedge.setSrcPos(newSrc);
-         pedge.setDestPos(newDst);
-         if (newSrc > newDst) pedge.invert();
-      }
+      pattern.relabel(labeling);
+      pattern.getEdges().sort();
+
+      ///**
+      // * Maps the edges according to the new labeling
+      // */
+      //for (i = 0; i < pattern.getNumberOfEdges(); ++i) {
+      //   pedge = pattern.getEdges().get(i);
+      //   int newSrc = labeling.get(pedge.getSrcPos());
+      //   int newDst = labeling.get(pedge.getDestPos());
+      //   pedge.setSrcPos(newSrc);
+      //   pedge.setDestPos(newDst);
+      //   if (newSrc > newDst) pedge.invert();
+      //}
 
       /**
        * Pre-compute the symmetry breaking of this pattern
@@ -506,6 +509,6 @@ public class PatternUtils {
       VertexInducedSubgraph subgraph = (VertexInducedSubgraph) config.createSubgraph();
       for (int u = 0; u < graph.numVertices(); ++u) subgraph.addWord(u);
 
-      return subgraph.getPattern();
+      return subgraph.quickPattern();
    }
 }

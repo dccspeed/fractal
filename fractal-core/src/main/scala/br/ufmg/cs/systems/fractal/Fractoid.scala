@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal
 
+import java.io.Serializable
 import java.util.UUID
 
 import br.ufmg.cs.systems.fractal.aggregation._
@@ -35,7 +36,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
    step: Int,
    parentOpt: Option[Fractoid[S]],
    config: SparkConfiguration[S],
-   val aggCallbacks
+   aggCallbacks
    : Map[String,SubgraphCallback[S]]
 ) extends Logging {
 
@@ -80,6 +81,17 @@ case class Fractoid [S <: Subgraph : ClassTag]
       findDepthRec(this, -1)
    }
 
+   private lazy val subgraphAggregationCallback = new SubgraphCallback[S] {
+      private var subgraphAggregation: SubgraphAggregation[S] = _
+      override def apply(s: S, c: Computation[S]): Unit = {
+         subgraphAggregation.aggregate(s)
+      }
+
+      override def init(c: Computation[S]): Unit = {
+         subgraphAggregation = c.getSubgraphAggregation
+      }
+   }
+
    /**
     * Get an array with *all* primitives within this workflow. *All* meaning
     * primitives of this fractoid and parent (recursively)
@@ -103,6 +115,25 @@ case class Fractoid [S <: Subgraph : ClassTag]
     * Lazy evaluation for the results
     */
    private var masterEngineOpt: Option[SparkMasterEngine[S]] = None
+
+   private def masterEngineImmutable: SparkMasterEngine[S] = {
+      val _masterEngine = parentOpt match {
+         case Some(parent) =>
+            SparkMasterEngine [S] (sparkContext, config,
+               parent.masterEngineImmutable)
+
+         case None =>
+            SparkMasterEngine [S] (sparkContext, config)
+      }
+
+      assert (_masterEngine.step == this.step,
+         s"masterEngineNext=${_masterEngine.next}" +
+            s" masterEngineStep=${_masterEngine.step} thisStep=${this.step}")
+
+      logInfo (s"Computing ${this}. Engine: ${_masterEngine}")
+      _masterEngine.config.set("primitives_workflow", primitives)
+      _masterEngine
+   }
 
    private def masterEngine: SparkMasterEngine[S] = synchronized {
       masterEngineOpt match {
@@ -191,8 +222,10 @@ case class Fractoid [S <: Subgraph : ClassTag]
       }
    }
 
+   @Deprecated
    def internalSubgraphs: RDD[S] = internalSubgraphs((_,_) => true)
 
+   @Deprecated
    def internalSubgraphs(
                            shouldOutput: (S,Computation[S]) => Boolean): RDD[S] = {
       if (config.confs.contains(SparkConfiguration.COMPUTATION_CONTAINER)) {
@@ -212,10 +245,12 @@ case class Fractoid [S <: Subgraph : ClassTag]
    /**
     * Registered aggregations
     */
+   @Deprecated
    def registeredAggregations: Array[String] = {
       config.getAggregationsMetadata.map (_._1).toArray
    }
 
+   @Deprecated
    def aggregationMapWithCallback
    [K <: Writable : ClassTag, V <: Writable : ClassTag]
    (name: String, callback: SubgraphCallback[S], reductionFunc: (V,V) => V)
@@ -224,6 +259,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
          .getMapping
    }
 
+   @Deprecated
    def aggregationStorageWithCallback
    [K <: Writable : ClassTag, V <: Writable : ClassTag]
    (name: String, callback: SubgraphCallback[S], reductionFunc: (V,V) => V)
@@ -267,6 +303,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
       aggRes.masterEngine.getAggregatedValue[AggregationStorage[K,V]](name)
    }
 
+   @Deprecated
    def aggregationMap2
    [K <: Writable : ClassTag, V <: Writable : ClassTag]
    (
@@ -277,6 +314,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
       aggregationStorage2[K,V](keyFunc, valueFunc, reductionFunc).getMapping
    }
 
+   @Deprecated
    def aggregationStorage2
    [K <: Writable : ClassTag, V <: Writable : ClassTag]
    (
@@ -313,6 +351,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
    /**
     * Get aggregation mappings defined by the user or empty if it does not exist
     */
+   @Deprecated
    def aggregationMap [K <: Writable, V <: Writable](name: String): Map[K,V] = {
       val aggValue = aggregationStorage[K,V](name)
       if (aggValue == null) Map.empty[K,V]
@@ -322,6 +361,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
    /**
     * Get aggregation mappings defined by the user or empty if it does not exist
     */
+   @Deprecated
    def aggregationStorage [K <: Writable, V <: Writable] (name: String)
    : AggregationStorage[K,V] = {
       withAggregation(name)
@@ -332,12 +372,80 @@ case class Fractoid [S <: Subgraph : ClassTag]
     * Get aggregations defined by the user as an RDD or empty if it does not
     * exist.
     */
+   @Deprecated
    def aggregationRDD [K <: Writable, V <: Writable](name: String)
    : RDD[(SerializableWritable[K],SerializableWritable[V])] = {
       sparkContext.parallelize (aggregationMap[K,V](name).toSeq.
          map {
             case (k,v) => (new SerializableWritable(k), new SerializableWritable(v))
          }, config.numPartitions)
+   }
+
+   /**
+    * Aggregates valid subgraphs into a single long
+    * @param defaultValue initial value for this aggregation
+    * @param value mapping function applied on each valid subgraph
+    * @param reduce reduce function to aggregate the results
+    * @return single final long
+    */
+   def aggregationLong
+   (defaultValue: Long, value: S => Long, reduce: (Long,Long) => Long)
+   : Long = {
+      withInitAggregations(c => subgraphAggregationCallback.init(c))
+         .withProcessInc((s,c) => subgraphAggregationCallback.apply(s,c))
+         .masterEngineImmutable
+         .longRDD(defaultValue, value, reduce)
+         .reduce(_ + _)
+   }
+
+   /**
+    * Aggregates valid subgraphs by mapping each valid subgraph to a
+    * key/value pair and reducing the values by key. Values in this function
+    * are exclusively primitive longs.
+    * @param key mapping function that extracts the key from a subgraph
+    * @param defaultValue the default value (long)
+    * @param value value mapping functions that extracts a value from a subgraph
+    * @param reduce reduce function that aggregates values of the same key
+    * @tparam K key parameter type
+    * @return an RDD of key/value pairs (K,Long)
+    */
+   def aggregationObjLong[K <: Serializable : ClassTag]
+   (key: S => K, defaultValue: Long, value: S => Long,
+    reduce: (Long,Long) => Long)
+   : RDD[(K,Long)] = {
+
+      val objLongRDD = withInitAggregations(c => subgraphAggregationCallback.init(c))
+         .withProcessInc((s,c) => subgraphAggregationCallback.apply(s,c))
+         .masterEngineImmutable
+         .objLongRDD[K](key, defaultValue, value, reduce)
+         .foldByKey(defaultValue)(reduce)
+
+      objLongRDD
+   }
+
+   /**
+    * Aggregates valid subgraphs by mapping each valid subgraph to a
+    * key/value pair and reducing the values by key. Keys and values in this
+    * function are objects.
+    * @param key mapping function that extracts the key from a subgraph
+    * @param value value mapping functions that extracts a value from a subgraph
+    * @param aggregate reduce function that aggregates the value of the
+    *                  second parameter value into the first parameter value
+    * @tparam K key parameter type
+    * @tparam V value parameter type
+    * @return an RDD of key/value pairs (K,V)
+    */
+   def aggregationObjObj
+   [K <: Serializable : ClassTag, V <: Serializable : ClassTag]
+   (key: S => K, value: S => V, aggregate: (V,V) => Unit)
+   : RDD[(K,V)] = {
+      val objObjRDD = withInitAggregations(c => subgraphAggregationCallback.init(c))
+         .withProcessInc((s,c) => subgraphAggregationCallback.apply(s,c))
+         .masterEngineImmutable
+         .objObjRDD[K,V](key, value, aggregate)
+         .reduceByKey{case (v1,v2) => aggregate(v1, v2); v1}
+
+      objObjRDD
    }
 
    /**
@@ -843,6 +951,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
     * @param name aggregation name
     * @return new result
     */
+   @Deprecated
    private def withAggregation [K <: Writable, V <: Writable]
    (name: String): Fractoid[S] = {
 

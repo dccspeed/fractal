@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal.computation
 
+import java.{io, util}
 import java.io.OutputStreamWriter
 
 import br.ufmg.cs.systems.fractal.aggregation.{AggregationStorage, AggregationStorageFactory}
@@ -15,36 +16,37 @@ import org.apache.spark.util.LongAccumulator
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Map
 
-trait SparkEngine [E <: Subgraph]
-   extends CommonExecutionEngine[E] with Serializable with Logging {
+trait SparkEngine[S <: Subgraph]
+   extends CommonExecutionEngine[S] with Serializable with Logging {
 
    var computed = false
 
    // step arguments
    val partitionId: Int
    val step: Int
-   val accums: Map[String,LongAccumulator]
+   val accums: Map[String, LongAccumulator]
    val validSubgraphsAccum: LongAccumulator
    val previousAggregationsBc: Broadcast[_]
+
    def configurationId: Int
 
-   def configuration: SparkConfiguration[E] = {
-      Configuration.get(configurationId).asInstanceOf[SparkConfiguration[E]]
+   def configuration: SparkConfiguration[S] = {
+      Configuration.get(configurationId).asInstanceOf[SparkConfiguration[S]]
    }
 
-   setLogLevel (configuration.getLogLevel)
+   setLogLevel(configuration.getLogLevel)
 
    // computation implements the user algorithm
-   var computation: Computation[E] = _
+   var computation: Computation[S] = _
 
    // aggregation storages
    var aggregationStorageFactory: AggregationStorageFactory = _
 
    lazy val aggregationStorages
-   : Map[String,AggregationStorage[_ <: Writable, _ <: Writable]] = Map.empty
+   : Map[String, AggregationStorage[_ <: Writable, _ <: Writable]] = Map.empty
 
    lazy val aggregationStorageSplits
-   : Map[String,Array[(Int,Array[Byte])]] = Map.empty
+   : Map[String, Array[(Int, Array[Byte])]] = Map.empty
 
    /**
     * We assume the number of requested executor cores as the default number of
@@ -55,7 +57,7 @@ trait SparkEngine [E <: Subgraph]
    var numSubgraphsOutput: Long = _
 
    def init(): Unit = {
-      computation = configuration.createComputation[E]
+      computation = configuration.createComputation[S]
       var currComp = computation
       while (currComp != null) {
          currComp.setExecutionEngine(this)
@@ -67,12 +69,12 @@ trait SparkEngine [E <: Subgraph]
       aggregationStorageFactory = new AggregationStorageFactory(configuration)
 
       if (configuration.getSubgraphClass() == null) {
-         configuration.setSubgraphClass (computation.getSubgraphClass())
+         configuration.setSubgraphClass(computation.getSubgraphClass())
       }
       numSubgraphsOutput = 0
       configuration.getAggregationsMetadata.asScala.keys.foreach { name =>
-         val agg = aggregationStorageFactory.createAggregationStorage (name)
-         aggregationStorages.update (name, agg)
+         val agg = aggregationStorageFactory.createAggregationStorage(name)
+         aggregationStorages.update(name, agg)
       }
 
       currComp = computation
@@ -96,7 +98,7 @@ trait SparkEngine [E <: Subgraph]
       accums(SparkMasterEngine.AGG_SUBGRAPHS_OUTPUT).
          add(numSubgraphsOutput)
       accums.foreach { case (name, accum) =>
-         logInfo (s"Accumulator[${step}][${partitionId}][${name}]:" +
+         logInfo(s"Accumulator[${step}][${partitionId}][${name}]:" +
             s" ${accum.value}")
       }
    }
@@ -112,10 +114,10 @@ trait SparkEngine [E <: Subgraph]
     *
     * @param name name of the aggregation storage
     * @return An iterator of key (destination partition) and serialized
-    * aggregation that belongs to key partition
+    *         aggregation that belongs to key partition
     */
    def flushAggregationsByName[K <: Writable, V <: Writable](
-                                                               name: String): Iterator[(Int,Array[Byte])] = {
+                                                               name: String): Iterator[(Int, Array[Byte])] = {
       aggregationStorageSplits(name).iterator.filter(_ != null)
    }
 
@@ -123,20 +125,20 @@ trait SparkEngine [E <: Subgraph]
     * Aggregates to a single, local storage and then splits again based on the
     * provided keys
     *
-    * @param name name of the aggregation
+    * @param name       name of the aggregation
     * @param aggStorage the actual storage that must be aggregated and splitted
     */
    def aggregateAndSplitFinalAggregation[K <: Writable, V <: Writable](
-                                                                         name: String, aggStorage: AggregationStorage[K,V]): Unit = {
+                                                                         name: String, aggStorage: AggregationStorage[K, V]): Unit = {
 
       // we lose the unserialized version of this aggregation
       aggregationStorages.remove(name)
 
       // the following function does the final local aggregation
       // e.g. for motifs, turns quick patterns into canonical ones
-      def aggregate[K <: Writable, V <: Writable](agg1: AggregationStorage[K,V],
-                                                  agg2: AggregationStorage[_,_]) = {
-         agg1.finalLocalAggregate (agg2.asInstanceOf[AggregationStorage[K,V]])
+      def aggregate[K <: Writable, V <: Writable](agg1: AggregationStorage[K, V],
+                                                  agg2: AggregationStorage[_, _]) = {
+         agg1.finalLocalAggregate(agg2.asInstanceOf[AggregationStorage[K, V]])
       }
 
       val start = System.currentTimeMillis
@@ -144,7 +146,7 @@ trait SparkEngine [E <: Subgraph]
          s" step=${step} partitionId=${partitionId}" +
          s" aggStorage=${aggStorage}")
 
-      aggregate (
+      aggregate(
          configuration.getOrCreateFinalAggStorage(name),
          aggStorage)
 
@@ -153,7 +155,7 @@ trait SparkEngine [E <: Subgraph]
       val (_finalAggStorage, barrier) = configuration.
          maybeReclaimFinalAggStorage(step, name)
 
-      val finalAggStorage = _finalAggStorage.asInstanceOf[AggregationStorage[K,V]]
+      val finalAggStorage = _finalAggStorage.asInstanceOf[AggregationStorage[K, V]]
 
       // wait for the last engine aggregate its content to finalAggStorage
       finalAggStorage.synchronized {
@@ -173,12 +175,12 @@ trait SparkEngine [E <: Subgraph]
 
       // setup splits
       val numPartitions = getNumberPartitions()
-      val aggStorageSplits = new Array[AggregationStorage[K,V]](numPartitions)
+      val aggStorageSplits = new Array[AggregationStorage[K, V]](numPartitions)
       var i = 0
       while (i < aggStorageSplits.length) {
          aggStorageSplits(i) = aggregationStorageFactory.
-            createAggregationStorage (name).
-            asInstanceOf[AggregationStorage[K,V]]
+            createAggregationStorage(name).
+            asInstanceOf[AggregationStorage[K, V]]
          i += 1
       }
 
@@ -198,14 +200,14 @@ trait SparkEngine [E <: Subgraph]
       }
 
       val splitMapStr = aggStorageSplits.map(_.getNumberMappings()).mkString(",")
-      logInfo (s"FinalAggregationSplit step=${step}" +
+      logInfo(s"FinalAggregationSplit step=${step}" +
          s" partitionId=${partitionId}" +
          s" aggregationName=${name}" +
          s" keysConsumerSize=${keysConsumer.size()}" +
          s" aggStorageSplit=${splitMapStr}")
 
       // setup serialized splits
-      val serializedSplits = new Array[(Int,Array[Byte])](numPartitions)
+      val serializedSplits = new Array[(Int, Array[Byte])](numPartitions)
 
       // serialize the splits between the engines
       i = 0
@@ -231,10 +233,10 @@ trait SparkEngine [E <: Subgraph]
     * @return the aggregated value or null if no aggregation was found
     */
    override def getAggregatedValue[A <: Writable](name: String): A = {
-      previousAggregationsBc.value.asInstanceOf[Map[String,A]].get(name) match {
+      previousAggregationsBc.value.asInstanceOf[Map[String, A]].get(name) match {
          case Some(aggStorage) => aggStorage
          case None =>
-            logWarning (s"Previous aggregation storage $name not found")
+            logWarning(s"Previous aggregation storage $name not found")
             null.asInstanceOf[A]
       }
    }
@@ -242,15 +244,15 @@ trait SparkEngine [E <: Subgraph]
    /**
     * Maps (key,value) to the respective local aggregator
     *
-    * @param name identifies the aggregator
-    * @param key key to account for
+    * @param name  identifies the aggregator
+    * @param key   key to account for
     * @param value value to be accounted for key in that aggregator
     *
     */
    override def map[K <: Writable, V <: Writable](name: String,
                                                   key: K, value: V) = {
-      val aggStorage = getAggregationStorage[K,V] (name)
-      aggStorage.aggregateWithReusables (key, value)
+      val aggStorage = getAggregationStorage[K, V](name)
+      aggStorage.aggregateWithReusables(key, value)
    }
 
    /**
@@ -262,14 +264,14 @@ trait SparkEngine [E <: Subgraph]
     * @return an aggregation storage with the specified name
     */
    override def getAggregationStorage[K <: Writable, V <: Writable](name: String)
-   : AggregationStorage[K,V] = {
+   : AggregationStorage[K, V] = {
       try {
-         aggregationStorages(name).asInstanceOf[AggregationStorage[K,V]]
+         aggregationStorages(name).asInstanceOf[AggregationStorage[K, V]]
       } catch {
          case e: java.util.NoSuchElementException =>
-            val agg = aggregationStorageFactory.createAggregationStorage (name)
-            aggregationStorages.update (name, agg)
-            agg.asInstanceOf[AggregationStorage[K,V]]
+            val agg = aggregationStorageFactory.createAggregationStorage(name)
+            aggregationStorages.update(name, agg)
+            agg.asInstanceOf[AggregationStorage[K, V]]
       }
    }
 
@@ -326,8 +328,8 @@ trait SparkEngine [E <: Subgraph]
    private def outputSequenceFile(subgraph: Subgraph) = {
       if (subgraphWriterOpt.isDefined) {
          val SubgraphWriter = subgraphWriterOpt.get
-         val resSubgraph = ResultSubgraph (subgraph, configuration)
-         SubgraphWriter.append (NullWritable.get, resSubgraph)
+         val resSubgraph = ResultSubgraph(subgraph, configuration)
+         SubgraphWriter.append(NullWritable.get, resSubgraph)
          numSubgraphsOutput += 1
       } else {
          // we must decide at runtime the concrete Writable to be used
@@ -344,7 +346,7 @@ trait SparkEngine [E <: Subgraph]
          val stepPath = new Path(outputPath, s"${getStep}")
          val partitionPath = new Path(stepPath, s"${partitionId}")
 
-         logInfo (s"Output stream (sequence-file) created: " +
+         logInfo(s"Output stream (sequence-file) created: " +
             s" step=${getStep} partitionId=${partitionId}" +
             s" partitionPath=${partitionPath}")
 
@@ -355,8 +357,8 @@ trait SparkEngine [E <: Subgraph]
 
          subgraphWriterOpt = Some(SubgraphWriter)
 
-         val resSubgraph = ResultSubgraph (subgraph, configuration)
-         SubgraphWriter.append (NullWritable.get, resSubgraph)
+         val resSubgraph = ResultSubgraph(subgraph, configuration)
+         SubgraphWriter.append(NullWritable.get, resSubgraph)
          numSubgraphsOutput += 1
       }
    }
@@ -374,7 +376,7 @@ trait SparkEngine [E <: Subgraph]
          val stepPath = new Path(outputPath, s"${getStep}")
          val partitionPath = new Path(stepPath, s"${partitionId}")
 
-         logInfo (s"Output stream (text-file) created: " +
+         logInfo(s"Output stream (text-file) created: " +
             s" step=${getStep} partitionId=${partitionId}" +
             s" partitionPath=${partitionPath}")
 
@@ -390,6 +392,19 @@ trait SparkEngine [E <: Subgraph]
 
    override def getStep() = step
 
-   def getConfig: SparkConfiguration[E] = configuration
+   def getConfig: SparkConfiguration[S] = configuration
+
+   def computeAggregationLong
+   (_defaultValue: Long, _value: S => Long, _reduce: (Long, Long) => Long)
+   : Long
+
+   def computeAggregationObjLong[K <: io.Serializable]
+   (_key: S => K, _defaultValue: Long, _value: S => Long,
+    _reduce: (Long, Long) => Long)
+   : util.Iterator[(K, Long)]
+
+   def computeAggregationObjObj[K <: io.Serializable, V <: io.Serializable]
+   (_key: S => K, _value: S => V, _aggregate: (V, V) => Unit)
+   : util.Iterator[(K, V)]
 }
 

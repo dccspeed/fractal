@@ -37,7 +37,6 @@ public class SuccinctMainGraph implements MainGraph {
    protected int numEdges;
    protected int numVertices;
    protected IntArrayList vertexNeighborhoodIdx;
-   protected IntArrayList vertexNeighborhoodIdxDag;
    protected IntArrayList vertexNeighborhoods; // by default, sorted
    protected IntArrayList edgeNeighborhoods; // by default, sorted
    protected IntArrayList edgeSrcs;
@@ -133,7 +132,6 @@ public class SuccinctMainGraph implements MainGraph {
          numEdges = stream.nextInt();
 
          vertexNeighborhoodIdx = new IntArrayList(numVertices + 1);
-         vertexNeighborhoodIdxDag = new IntArrayList(numVertices + 1);
          vertexNeighborhoods = new IntArrayList(numEdges * 2);
          edgeNeighborhoods = new IntArrayList(numEdges * 2);
          edgeSrcs = new IntArrayList(numEdges);
@@ -182,7 +180,6 @@ public class SuccinctMainGraph implements MainGraph {
 
          // for convenience
          vertexNeighborhoodIdx.add(vertexNeighborhoods.size());
-         vertexNeighborhoodIdxDag.add(vertexNeighborhoods.size());
          vertexLabelsIdx.add(vertexLabels.size());
          edgeLabelsIdx.add(edgeLabels.size());
 
@@ -194,7 +191,6 @@ public class SuccinctMainGraph implements MainGraph {
    @Override
    public void addVertex(int u) {
       vertexNeighborhoodIdx.add(vertexNeighborhoods.size());
-      vertexNeighborhoodIdxDag.add(vertexNeighborhoods.size());
    }
 
    @Override
@@ -210,8 +206,8 @@ public class SuccinctMainGraph implements MainGraph {
       if (u < v) {
          edgeSrcs.add(u);
          edgeDsts.add(v);
-      } else vertexNeighborhoodIdxDag.setu(u, vertexNeighborhoodIdxDag.getu(u) + 1);
-}
+      }
+   }
 
    @Override
    public void addEdgeLabel(int e, int label) {

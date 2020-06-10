@@ -267,7 +267,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
          expand(3).
          aggregate [Pattern,LongWritable] (
             "motifs",
-            (e,c,k) => { e.getPattern },
+            (e,c,k) => { e.quickPattern },
             (e,c,v) => { v.set(1); v },
             (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
       val motifsCounts3est = motifs3est.aggregationMap [Pattern,LongWritable] ("motifs")
@@ -299,7 +299,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
          expand(4).
          aggregate [Pattern,LongWritable] (
             "motifs",
-            (e,c,k) => { e.getPattern },
+            (e,c,k) => { e.quickPattern },
             (e,c,v) => { v.set(1); v },
             (v1,v2) => { v1.set(v1.get() + v2.get()); v1 })
       val motifsCounts4est = motifs4est.aggregationMap [Pattern,LongWritable] ("motifs")
@@ -442,7 +442,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
          // pattern-first approach: pattern-matching on every possible pattern
          val frequentPatternsPf = chosenGraph
-            .fsmpf(minSupport, Int.MaxValue)
+            .fsmpf2(minSupport, Int.MaxValue)
             .keySet()
          assert(frequentPatternsPf.size == numPatterns)
          assert(frequentPatterns.equals(frequentPatternsPf))

@@ -210,7 +210,7 @@ public abstract class BasicSubgraph implements Subgraph {
    }
 
    @Override
-   public Pattern getPattern() {
+   public Pattern quickPattern() {
       if (dirtyPattern) {
          if (pattern == null) {
             pattern = configuration.createPattern();

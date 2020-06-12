@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 
+version="SPARK-2.4.3"
+
 printf "Description: Script launcher for Fractal built-in applications\n\n"
 
 gqueryings="gqueryingmcvc|gquerying|gqueryinginduced|gqueryingsampling|gqueryinginducedsampling|gqueryingnaive"
-motifss="motifssampling|motifspf|motifspfmcvc|motifspflabeled|motifs"
+motifss="motifssampling|motifspf|motifspfmcvc|motifspflabeled|motifs|motifs2"
 cliquess="cliques|cliquesopt|maximalcliques|maximalcliquespf"
 fsms="fsm|fsmpf|fsmpflabeled|fsmpfmcvc"
 enumerations="esubgraphs|vsubgraphswithedges|vsubgraphs|vsubgraphssampling|vsubgraphspf|vsubgraphspfmcvc"
@@ -152,13 +154,22 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
-	motifspf)
+	motifs2)
 	required="inputgraph steps"
         appusage="
 
 ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
+	;;
+	motifspf)
+	required="inputgraph steps"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target
+  subgraph has size k, then steps=k-1'"
 	;;
 	motifspfmcvc)
 	required="inputgraph steps"
@@ -301,6 +312,7 @@ comm=${comm:-scratch}
 total_cores=$((num_workers * worker_cores))
 deploy_mode=${deploy_mode:-client}
 log_level=${log_level:-info}
+jars=${jars:-""}
 packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
@@ -312,9 +324,9 @@ cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --executor-cores $worker_cores \\
    --executor-memory $worker_memory \\
    --class br.ufmg.cs.systems.fractal.FractalSparkRunner \\
-   --jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-SPARK-2.2.0.jar \\
+   --jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-$version.jar,$jars \\
    --packages $packages \\
-   $FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-SPARK-2.2.0.jar \\
+   $FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-$version.jar \\
       $input_format $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $fraction $configs"
 
 printf "info: Submitting command:\n$cmd\n\n"

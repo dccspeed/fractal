@@ -304,24 +304,20 @@ public class SuccinctMainGraph implements MainGraph {
 
    public void forEachEdgeId(int u, int v, int startIdx, int endIdx, IntConsumer consumer) {
       int idx = vertexNeighborhoods.binarySearch(v, startIdx, endIdx);
-      int nedges = 0;
 
       if (idx < startIdx || idx >= endIdx) return;
 
       // accept first edge (u,v) found
       consumer.accept(edgeNeighborhoods.getu(idx));
-      nedges++;
 
       // accept all edges (u,v) rightwards
       for (int i = idx - 1; i >= startIdx && vertexNeighborhoods.getu(i) == v; --i) {
          consumer.accept(edgeNeighborhoods.getu(i));
-         nedges++;
       }
 
       // accept all edges (u,v) leftwards
       for (int i = idx + 1; i < endIdx && vertexNeighborhoods.getu(i) == v; ++i) {
          consumer.accept(edgeNeighborhoods.getu(i));
-         nedges++;
       }
    }
 

@@ -1,7 +1,7 @@
 package br.ufmg.cs.systems.fractal
 
 import br.ufmg.cs.systems.fractal.computation.Computation
-import br.ufmg.cs.systems.fractal.gmlib.fsm.DomainSupport
+import br.ufmg.cs.systems.fractal.gmlib.fsm.MinImageSupport
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternUtils}
 import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.{Logging, SubgraphCallback}
@@ -261,12 +261,13 @@ class MotifsApp2(val fractalGraph: FractalGraph,
          .set("comm_strategy", commStrategy)
          .explore(explorationSteps)
 
-      val motifCountRDD = motifsRes.aggregationObjLong[Pattern](
-         s => s.quickPattern,
-         0L,
-         _ => 1L,
-         _ + _
-      )
+      val key: VertexInducedSubgraph => Pattern = s => s.quickPattern()
+      val defaultValue = 0L
+      val value: VertexInducedSubgraph => Long = _ => 1L
+      val reduce: (Long,Long) => Long = _ + _
+
+      val motifCountRDD = motifsRes
+         .aggregationCanonicalPatternLong(key, defaultValue, value, reduce)
 
       val (motifCountMap, elapsed) = FractalSparkRunner.time {
          motifCountRDD.collectAsMap()
@@ -276,7 +277,7 @@ class MotifsApp2(val fractalGraph: FractalGraph,
          logInfo(s"MotifCount ${m} ${c}")
       }
 
-      logInfo(s"MotifsApp2 took ${elapsed} ms")
+      logInfo(s"MotifsAppRuntime ${elapsed} ms")
    }
 }
 
@@ -392,9 +393,10 @@ class FSMApp(val fractalGraph: FractalGraph,
    def execute: Unit = {
       fractalGraph.set ("comm_strategy", commStrategy)
       fractalGraph.set ("num_partitions", numPartitions)
-      val cur = fractalGraph.fsm2(support, explorationSteps).cursor()
-      while (cur.moveNext()) {
-         logInfo(s"FrequentPattern ${cur.key()} ${cur.value()}")
+      val patternSupportMap = fractalGraph.fsm2(support, explorationSteps + 1)
+         .collectAsMap()
+      for ((p,s) <- patternSupportMap) {
+         logInfo(s"FrequentPattern ${p} ${s}")
       }
    }
 }
@@ -409,7 +411,7 @@ class FSMAppPatternFirst(val fractalGraph: FractalGraph,
       var patterns = HashObjSets.newMutableSet[Pattern]()
       var infrequentPatterns = HashObjSets.newMutableSet[Pattern]()
       val frequentPatternsSupports = HashObjObjMaps
-         .newMutableMap[Pattern,DomainSupport]()
+         .newMutableMap[Pattern,MinImageSupport]()
 
       do {
          patterns = PatternUtils.extendByEdge(patterns, 1)
@@ -437,7 +439,7 @@ class FSMAppPatternFirst(val fractalGraph: FractalGraph,
                set("comm_strategy", commStrategy).
                set("num_partitions", numPartitions).
                explore(pattern.getNumberOfVertices - 1).
-               aggregate [NullWritable, DomainSupport] (
+               aggregate [NullWritable, MinImageSupport] (
                   "support",
                   (s,c,k) => {k},
                   (s,c,v) => {v.setSupport(minSupport); v.setSubgraph(s); v},
@@ -448,7 +450,7 @@ class FSMAppPatternFirst(val fractalGraph: FractalGraph,
              * Observation: right now we are being conservative and ignoring the time to fix the domain
              * sets w.r.t. the automorphisms of this pattern (vertex equivalence)
              */
-            val support = gqueryingRes.aggregationMap [NullWritable,DomainSupport] ("support")(NullWritable.get())
+            val support = gqueryingRes.aggregationMap [NullWritable,MinImageSupport] ("support")(NullWritable.get())
             val (_, finalAggregateElapsed) = FractalSparkRunner.time {
                support.handleConversionFromQuickToCanonical(pattern, pattern)
             }
@@ -485,7 +487,7 @@ class FSMAppPatternFirstLabeled(val fractalGraph: FractalGraph,
    def execute: Unit = {
       fractalGraph.set("comm_strategy", commStrategy)
       fractalGraph.set("num_partitions", numPartitions)
-      val cur = fractalGraph.fsmpf2(supportThreshold,
+      val cur = fractalGraph.fsmpf(supportThreshold,
          explorationSteps + 1).cursor()
       while (cur.moveNext()) {
          logInfo(s"FrequentPattern ${cur.key()} ${cur.value()}")
@@ -501,7 +503,7 @@ class FSMAppPatternFirstMCVC(val fractalGraph: FractalGraph,
    def execute: Unit = {
       fractalGraph.set("comm_strategy", commStrategy)
       fractalGraph.set("num_partitions", numPartitions)
-      val cur = fractalGraph.fsmpfmcvc2(supportThreshold,
+      val cur = fractalGraph.fsmpfmcvc(supportThreshold,
          explorationSteps + 1).cursor()
       while (cur.moveNext()) {
          logInfo(s"FrequentPattern ${cur.key()} ${cur.value()}")
@@ -535,6 +537,9 @@ class GQueryingMCVCApp(val fractalGraph: FractalGraph,
                        explorationSteps: Int,
                        subgraphPath: String) extends FractalSparkApp {
    def execute: Unit = {
+      fractalGraph.set("num_partitions", numPartitions)
+      fractalGraph.set("comm_strategy", commStrategy)
+
       val subgraph = new FractalGraph(
          subgraphPath, fractalGraph.fractalContext, "warn")
 
@@ -546,10 +551,9 @@ class GQueryingMCVCApp(val fractalGraph: FractalGraph,
       partialResults.foreach { gquerying =>
 
          val (numValidSubgraphs, elapsed) = FractalSparkRunner.time {
-            gquerying.
-               set("comm_strategy", commStrategy).
-               set("num_partitions", numPartitions).
-               compute()
+            gquerying.aggregationCountWithCallback(
+               (s,c,cb) => s.completeMatch(c, c.getPattern, cb)
+            )
          }
 
          totalElapsed += elapsed

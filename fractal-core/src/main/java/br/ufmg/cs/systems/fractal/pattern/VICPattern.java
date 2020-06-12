@@ -11,7 +11,7 @@ import br.ufmg.cs.systems.fractal.util.collection.IntIntMapAddConsumer;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntSetPool;
-import br.ufmg.cs.systems.fractal.util.pool.Pool;
+import br.ufmg.cs.systems.fractal.util.pool.ThreadSafePool;
 import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.map.IntIntCursor;
 import com.koloboke.collect.map.IntIntMap;
@@ -19,6 +19,7 @@ import com.koloboke.collect.set.IntSet;
 import java.util.function.IntConsumer;
 import org.apache.log4j.Logger;
 
+@Deprecated
 public class VICPattern extends BasicPattern {
     private static final Logger LOG = Logger.getLogger(VICPattern.class);
 
@@ -430,7 +431,7 @@ public class VICPattern extends BasicPattern {
     private void copyTmpToMin() {
         int numVertices = tmpLabelling.size();
 
-        Pool<PatternEdge> patternEdgePool = PatternEdgePool.
+        ThreadSafePool<PatternEdge> patternEdgePool = PatternEdgePool.
            instance(getConfig().isGraphEdgeLabelled());
 
         for (int i = 0; i < numVertices; ++i) {

@@ -167,6 +167,7 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
 
          if (registeredSlaves == 0) {
             reset()
+            engine.reportAccumulators
          }
 
       case Log(msg) =>

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+version="SPARK-2.4.3"
+
 if [ -z $FRACTAL_HOME ]; then
 	echo "FRACTAL_HOME is unset"
 	exit 1
@@ -41,8 +43,8 @@ cmd="$SPARK_HOME/bin/spark-submit --master $spark_master --deploy-mode $deploy_m
 	--executor-cores $worker_cores \\
 	--executor-memory $worker_memory \\
         --class $app_class \\
-	--jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-SPARK-2.2.0.jar \\
-	$FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-SPARK-2.2.0.jar $@"
+	--jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-$version.jar \\
+	$FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-$version.jar $@"
 
 echo $cmd
 bash -c "$cmd"

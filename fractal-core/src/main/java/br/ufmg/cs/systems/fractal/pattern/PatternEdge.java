@@ -35,10 +35,6 @@ public class PatternEdge implements Comparable<PatternEdge>, Writable {
       this.destLabel = destLabel;
    }
 
-   public void reclaim() {
-      PatternEdgePool.instance(false).reclaimObject(this);
-   }
-
    public void setFromOther(PatternEdge edge) {
       // this.mainGraph = edge.mainGraph;
       setSrcPos(edge.getSrcPos());

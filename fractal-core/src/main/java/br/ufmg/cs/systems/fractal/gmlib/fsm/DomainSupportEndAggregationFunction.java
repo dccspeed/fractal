@@ -10,20 +10,20 @@ import java.util.Map;
 import java.util.Set;
 
 public class DomainSupportEndAggregationFunction
-        implements EndAggregationFunction<Pattern, DomainSupport> {
+        implements EndAggregationFunction<Pattern, MinImageSupport> {
     private static final Logger LOG = Logger.getLogger(DomainSupportEndAggregationFunction.class);
     @Override
-    public void endAggregation(AggregationStorage<Pattern, DomainSupport> aggregationStorage) {
+    public void endAggregation(AggregationStorage<Pattern, MinImageSupport> aggregationStorage) {
         Set<Pattern> patternsToRemove = new HashSet<>();
 
-        Map<Pattern, DomainSupport> finalMapping = aggregationStorage.getMapping();
+        Map<Pattern, MinImageSupport> finalMapping = aggregationStorage.getMapping();
 
-        for (Map.Entry<Pattern, DomainSupport> finalMappingEntry : finalMapping.entrySet()) {
+        for (Map.Entry<Pattern, MinImageSupport> finalMappingEntry : finalMapping.entrySet()) {
             Pattern pattern = finalMappingEntry.getKey();
-            DomainSupport domainSupport = finalMappingEntry.getValue();
-            LOG.info(pattern + " " + domainSupport);
+            MinImageSupport minImageSupport = finalMappingEntry.getValue();
+            LOG.info(pattern + " " + minImageSupport);
 
-            if (!domainSupport.hasEnoughSupport()) {
+            if (!minImageSupport.hasEnoughSupport()) {
                 patternsToRemove.add(pattern);
             }
         }

@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal.computation
 
+import java.io
 import java.util.concurrent.ConcurrentLinkedQueue
 
 import akka.actor._
@@ -20,6 +21,7 @@ import scala.collection.JavaConversions._
 import scala.collection.mutable.Map
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.reflect.ClassTag
 import scala.util.{Failure, Success}
 
 /**
@@ -30,11 +32,14 @@ import scala.util.{Failure, Success}
 @Deprecated
 class SparkGraphRedMasterEngine[S <: Subgraph]
 (
+   _step: Int,
    _config: SparkConfiguration[S],
    _parentOpt: Option[SparkMasterEngine[S]]) extends SparkMasterEngine [S] {
 
    import SparkFromScratchMasterEngine._
    import SparkGraphRedMasterEngine._
+
+   def step = _step
 
    def config: SparkConfiguration[S] = _config
 
@@ -42,15 +47,9 @@ class SparkGraphRedMasterEngine[S <: Subgraph]
 
    var masterActorRef: ActorRef = _
 
-   def this(_sc: SparkContext, config: SparkConfiguration[S]) {
-      this (config, None)
-      sc = _sc
-      init()
-   }
-
-   def this(_sc: SparkContext, config: SparkConfiguration[S],
+   def this(_sc: SparkContext, step: Int, config: SparkConfiguration[S],
             parent: SparkMasterEngine[S]) {
-      this (config, Option(parent))
+      this (step, config, Option(parent))
       sc = _sc
       init()
    }
@@ -598,6 +597,14 @@ class SparkGraphRedMasterEngine[S <: Subgraph]
             reductionFunc, endAggregationFunc, false)
       }
    }
+
+   override def longRDD(defaultValue: Long, value: S => Long, reduce: (Long, Long) => Long): RDD[Long] = ???
+
+   override def objLongRDD[K <: io.Serializable : ClassTag](key: S => K, defaultValue: Long, value: S => Long, reduce: (Long, Long) => Long): RDD[(K, Long)] = ???
+
+   override def objObjRDD[K <: io.Serializable, V <: io.Serializable](key: S => K, value: S => V, aggregate: (V, V) => Unit): RDD[(K, V)] = ???
+
+   override def execEnginesRDD: RDD[SparkEngine[S]] = ???
 }
 
 object SparkGraphRedMasterEngine {

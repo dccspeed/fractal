@@ -5,6 +5,7 @@ import com.koloboke.collect.set.hash.HashObjSets;
 
 import java.io.*;
 import java.util.Collection;
+import java.util.Iterator;
 
 // TODO: make this class a java.util.Collection
 public class ObjSet<T> implements Externalizable {
@@ -32,6 +33,10 @@ public class ObjSet<T> implements Externalizable {
 
    public int size() {
       return underlying.size();
+   }
+
+   public Iterator<T> iterator() {
+      return underlying.iterator();
    }
 
    @Override

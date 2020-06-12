@@ -4,9 +4,9 @@ import br.ufmg.cs.systems.fractal.pattern.LabelledPatternEdge;
 import br.ufmg.cs.systems.fractal.pattern.PatternEdge;
 import br.ufmg.cs.systems.fractal.util.BasicFactory;
 import br.ufmg.cs.systems.fractal.util.Factory;
-import br.ufmg.cs.systems.fractal.util.pool.Pool;
+import br.ufmg.cs.systems.fractal.util.pool.ThreadSafePool;
 
-public class PatternEdgePool extends Pool<PatternEdge> {
+public class PatternEdgePool extends ThreadSafePool<PatternEdge> {
 
     public static PatternEdgePool instance(boolean areEdgesLabelled) {
         if (!areEdgesLabelled) {

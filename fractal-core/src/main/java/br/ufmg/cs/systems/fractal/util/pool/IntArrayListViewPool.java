@@ -3,9 +3,8 @@ package br.ufmg.cs.systems.fractal.util.pool;
 import br.ufmg.cs.systems.fractal.util.BasicFactory;
 import br.ufmg.cs.systems.fractal.util.Factory;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
-import org.apache.log4j.Logger;
 
-public class IntArrayListViewPool extends Pool<IntArrayListView> {
+public class IntArrayListViewPool extends ThreadSafePool<IntArrayListView> {
    private static final Factory<IntArrayListView> factory = new BasicFactory<IntArrayListView>() {
       @Override
       public IntArrayListView createObject() {

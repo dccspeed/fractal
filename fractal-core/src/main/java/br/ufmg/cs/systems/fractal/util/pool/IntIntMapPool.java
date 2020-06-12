@@ -5,7 +5,7 @@ import br.ufmg.cs.systems.fractal.util.Factory;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
 
-public class IntIntMapPool extends Pool<IntIntMap> {
+public class IntIntMapPool extends ThreadSafePool<IntIntMap> {
     private static final Factory<IntIntMap> factory = new BasicFactory<IntIntMap>() {
         @Override
         public IntIntMap createObject() {

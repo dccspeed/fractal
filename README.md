@@ -35,8 +35,8 @@ Vertex ids are expected to be sequential integers between 0 and (total number of
 ```
 export JAVA_HOME=<openjdk-8-installation-folder>
 cd <repositories-folder>
-wget https://archive.apache.org/dist/spark/spark-2.2.0/spark-2.2.0-bin-hadoop2.7.tgz
-mv spark-2.2.0-bin-hadoop2.7.tgz spark
+wget https://archive.apache.org/dist/spark/spark-2.4.0/spark-2.2.0-bin-hadoop2.7.tgz
+mv spark-2.4.3-bin-hadoop2.7.tgz spark
 cd spark
 export SPARK_HOME=`pwd` 
 ```

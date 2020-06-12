@@ -4,7 +4,7 @@ import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.graph.Vertex;
-import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgePool;
+import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgeThreadUnsafePool;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
@@ -24,6 +24,7 @@ import java.io.*;
 
 public abstract class BasicPattern implements Pattern {
    private static final Logger LOG = Logger.getLogger(BasicPattern.class);
+   private static final int EDGE_POOL_SIZE = 10;
 
    protected int configurationId;
    protected Configuration configuration;
@@ -63,7 +64,8 @@ public abstract class BasicPattern implements Pattern {
    private ObjArrayList<IntArrayList> vsymmetryBreakerLowerBound;
    private ObjArrayList<IntArrayList> vsymmetryBreakerUpperBound;
    // Others {{
-   private PatternEdgePool patternEdgePool;
+   //private PatternEdgePool patternEdgePool;
+   private PatternEdgeThreadUnsafePool patternEdgePool;
    private PatternExplorationPlan explorationPlan;
    // }}
 
@@ -79,7 +81,9 @@ public abstract class BasicPattern implements Pattern {
 
       edges = createPatternEdgeArrayList(edgeLabeled);
 
-      patternEdgePool = PatternEdgePool.instance(edgeLabeled);
+      //patternEdgePool = PatternEdgePool.instance(edgeLabeled);
+      patternEdgePool = PatternEdgeThreadUnsafePool.instance(edgeLabeled,
+              EDGE_POOL_SIZE);
 
       edges.ensureCapacity(basicPattern.edges.size());
 
@@ -101,7 +105,7 @@ public abstract class BasicPattern implements Pattern {
    }
 
    protected PatternEdgeArrayList createPatternEdgeArrayList(boolean areEdgesLabelled) {
-      return new PatternEdgeArrayList(areEdgesLabelled);
+      return new PatternEdgeArrayList(areEdgesLabelled, patternEdgePool);
    }
 
    protected PatternEdge createPatternEdge(PatternEdge otherEdge) {
@@ -278,7 +282,9 @@ public abstract class BasicPattern implements Pattern {
       }
 
       if (patternEdgePool == null) {
-         patternEdgePool = PatternEdgePool.instance(edgeLabeled);
+         //patternEdgePool = PatternEdgePool.instance(edgeLabeled);
+         patternEdgePool = PatternEdgeThreadUnsafePool.instance(edgeLabeled,
+                 EDGE_POOL_SIZE);
       }
 
       if (explorationPlan != null) {
@@ -974,12 +980,14 @@ public abstract class BasicPattern implements Pattern {
       //configurationId = dataInput.readInt();
       //configuration = Configuration.get(configurationId);
 
-      if (edges == null) {
-         edges = createPatternEdgeArrayList(edgeLabeled);
+      if (patternEdgePool == null) {
+         //patternEdgePool = PatternEdgePool.instance(edgeLabeled);
+         patternEdgePool = PatternEdgeThreadUnsafePool.instance(edgeLabeled,
+                 EDGE_POOL_SIZE);
       }
 
-      if (patternEdgePool == null) {
-         patternEdgePool = PatternEdgePool.instance(edgeLabeled);
+      if (edges == null) {
+         edges = createPatternEdgeArrayList(edgeLabeled);
       }
 
       edges.readFields(dataInput);

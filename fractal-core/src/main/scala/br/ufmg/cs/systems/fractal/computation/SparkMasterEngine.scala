@@ -31,7 +31,7 @@ trait SparkMasterEngine [S <: Subgraph]
     *  The following describe general engine parameters
     */
 
-   lazy val step: Int = parentOpt.map(_.step + 1).getOrElse(0)
+   def step: Int
 
    var sc: SparkContext = _
 
@@ -145,6 +145,15 @@ trait SparkMasterEngine [S <: Subgraph]
    }
 
    /**
+    * Report the accumulators configured in this step
+    */
+   def reportAccumulators: Unit = {
+      aggAccums.toArray.sortBy(_._1).foreach { case (name, accum) =>
+         logInfo (s"FractalStep[${step}][${name}]: ${accum.value}")
+      }
+   }
+
+   /**
     * Computation cleaning. It does nothing by default.
     */
    def finalizeComputation() = {}
@@ -157,36 +166,20 @@ trait SparkMasterEngine [S <: Subgraph]
       this
    }
 
-   /**
-    * Master's computation takes place here, step by step
-    */
-   def compute(): SparkMasterEngine[S] = {
-      logInfo (s"Computing remaining steps of computation ${this}")
-      var currMasterEngine: SparkMasterEngine[S] = this
-      while (currMasterEngine.next) {
-         currMasterEngine = SparkMasterEngine [S] (sc, config, currMasterEngine)
-      }
-      currMasterEngine
-   }
-
    def longRDD
    (defaultValue: Long, value: S => Long, reduce: (Long,Long) => Long)
-   : RDD[Long] = {
-      null
-   }
+   : RDD[Long]
 
-   def objLongRDD[K <: Serializable]
+   def objLongRDD[K <: Serializable : ClassTag]
    (key: S => K, defaultValue: Long, value: S => Long,
     reduce: (Long,Long) => Long)
-   : RDD[(K,Long)] = {
-      null
-   }
+   : RDD[(K,Long)]
 
    def objObjRDD[K <: Serializable, V <: Serializable]
    (key: S => K, value: S => V, aggregate: (V,V) => Unit)
-   : RDD[(K,V)] = {
-      null
-   }
+   : RDD[(K,V)]
+
+   def execEnginesRDD: RDD[SparkEngine[S]]
 
    /**
     * Compute the step referring to this computation
@@ -394,22 +387,19 @@ object SparkMasterEngine {
    // macros for spark accumulators
    val AGG_SUBGRAPHS_OUTPUT = "subgraphs_output"
 
-   def apply[E <: Subgraph] (sc: SparkContext, config: SparkConfiguration[E])
-   : SparkMasterEngine[E] = {
-      apply(sc, config, null)
-   }
-
-   def apply[E <: Subgraph] (sc: SparkContext, config: SparkConfiguration[E],
-                             parent: SparkMasterEngine[E]): SparkMasterEngine[E] =
+   def apply[E <: Subgraph]
+   (sc: SparkContext, step: Int, config: SparkConfiguration[E],
+    parent: SparkMasterEngine[E]): SparkMasterEngine[E] =
       config.getString(CONF_COMM_STRATEGY, CONF_COMM_STRATEGY_DEFAULT) match {
 
          case COMM_FROM_SCRATCH =>
-            new SparkFromScratchMasterEngine [E] (sc, config, parent)
+            new SparkFromScratchMasterEngine [E] (sc, step, config, parent)
 
          case COMM_FROM_SCRATCH_AGG =>
-            new SparkFromScratchMasterEngineAggregation [E] (sc, config, parent)
+            new SparkFromScratchMasterEngineAggregation[E](
+               sc, step, config, parent)
 
          case COMM_GRAPH_RED =>
-            new SparkGraphRedMasterEngine [E] (sc, config, parent)
+            new SparkGraphRedMasterEngine [E] (sc, step, config, parent)
       }
 }

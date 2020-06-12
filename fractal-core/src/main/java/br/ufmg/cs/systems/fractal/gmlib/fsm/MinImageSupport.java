@@ -15,11 +15,13 @@ import com.koloboke.collect.set.IntSet;
 import com.koloboke.collect.set.hash.HashIntSet;
 import com.koloboke.collect.set.hash.HashIntSets;
 import org.apache.hadoop.io.Writable;
+import org.apache.log4j.Logger;
 
 import java.io.*;
 import java.util.Arrays;
 
-public class DomainSupport implements Writable, Externalizable, PatternAggregationAwareValue {
+public class MinImageSupport implements Writable, Externalizable, PatternAggregationAwareValue {
+   private static final Logger LOG = Logger.getLogger(MinImageSupport.class);
    private static final ThreadLocal<ClearSetConsumer> clearSetConsumer =
            new ThreadLocal<ClearSetConsumer>() {
               @Override
@@ -39,7 +41,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
    private boolean setFromSubgraph;
    private Subgraph subgraph;
 
-   public DomainSupport() {
+   public MinImageSupport() {
       this.numberOfDomains = 0;
       this.domainsReachedSupport = HashIntSets.newMutableSet();
       this.enoughSupport = false;
@@ -47,7 +49,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
       this.numSubgraphsAggregated = 1;
    }
 
-   public DomainSupport(int support) {
+   public MinImageSupport(int support) {
       this();
       this.support = support;
    }
@@ -248,24 +250,24 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
    @Override
    public String toString() {
       return "mis{minSupport=" + support +
-              ", enoughSupport=" + enoughSupport +
-              ", numSubgraphs=" + numSubgraphsAggregated + "}";
+              ",enoughSupport=" + enoughSupport +
+              ",numSubgraphsAggregated=" + numSubgraphsAggregated + "}";
       //return toStringDetailed();
    }
 
    public String toStringDetailed() {
       StringBuilder sb = new StringBuilder();
-      sb.append("GspanPatternSupportAggregation{" +
+      sb.append("mis{" +
               "domainsReachedSupport=" + domainsReachedSupport +
-              ", enoughSupport=" + enoughSupport +
-              ", support=" + support +
-              ", currentSupport=" + numSubgraphsAggregated +
-              ", numberOfDomains=" + numberOfDomains +
-              ", domainSets=" + domainSets +
-              ", intWriterConsumer=" + intWriterConsumer +
-              ", intAdderConsumer=" + intAdderConsumer +
-              ", setFromSubgraph=" + setFromSubgraph +
-              ", subgraph=" + subgraph);
+              ",enoughSupport=" + enoughSupport +
+              ",support=" + support +
+              ",numSubgraphsAggregated=" + numSubgraphsAggregated +
+              ",numberOfDomains=" + numberOfDomains +
+              ",domainSets=" + Arrays.toString(domainSets) +
+              ",intWriterConsumer=" + intWriterConsumer +
+              ",intAdderConsumer=" + intAdderConsumer +
+              ",setFromSubgraph=" + setFromSubgraph +
+              ",subgraph=" + subgraph);
 
       if (domainSets != null) {
          for (int i = 0; i < numberOfDomains; i++) {
@@ -276,31 +278,6 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
             }
 
             sb.append(",domain[" + i + "]=" + domainSets[i]);
-         }
-      }
-
-      sb.append('}');
-
-      return sb.toString();
-   }
-
-   public String toStringResume() {
-      StringBuilder sb = new StringBuilder();
-      sb.append("GspanPatternSupportAggregation{" +
-              "domainsReachedSupport=" + domainsReachedSupport +
-              ", enoughSupport=" + enoughSupport +
-              ", support=" + support +
-              ", numberOfDomains=" + numberOfDomains);
-
-      if (domainSets != null) {
-         for (int i = 0; i < numberOfDomains; i++) {
-            HashIntSet domainSet = domainSets[i];
-
-            if (domainSet == null) {
-               continue;
-            }
-
-            sb.append(",domain[" + i + "]=" + domainSet.size());
          }
       }
 
@@ -379,7 +356,7 @@ public class DomainSupport implements Writable, Externalizable, PatternAggregati
       }
    }
 
-   public void aggregate(DomainSupport other) {
+   public void aggregate(MinImageSupport other) {
       if (this == other) {
          return;
       }

@@ -1,9 +1,13 @@
 package br.ufmg.cs.systems.fractal.util;
 
+import br.ufmg.cs.systems.fractal.aggregation.ObjObjSubgraphAggregation;
+import org.apache.log4j.Logger;
+
 import java.io.IOException;
 import java.io.Serializable;
 
 public class ReflectionUtils {
+   private static final Logger LOG = Logger.getLogger(ReflectionUtils.class);
    private static final org.apache.hadoop.conf.Configuration hadoopConf =
            new org.apache.hadoop.conf.Configuration();
 

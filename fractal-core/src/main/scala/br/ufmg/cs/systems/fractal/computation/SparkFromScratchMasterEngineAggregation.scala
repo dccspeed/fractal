@@ -17,6 +17,7 @@ import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel._
 import org.apache.spark.util.{LongAccumulator, SizeEstimator}
+import spire.ClassTag
 
 import scala.collection.JavaConversions._
 import scala.collection.mutable.Map
@@ -29,11 +30,15 @@ import scala.util.{Failure, Success}
  * It interacts directly with the RDD interface in Spark by handling the
  * SparkContext.
  */
-class SparkFromScratchMasterEngineAggregation[S <: Subgraph](
-                                                    _config: SparkConfiguration[S],
-                                                    _parentOpt: Option[SparkMasterEngine[S]]) extends SparkMasterEngine [S] {
+class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
+(
+   _step: Int,
+   _config: SparkConfiguration[S],
+   _parentOpt: Option[SparkMasterEngine[S]]) extends SparkMasterEngine [S] {
 
    import SparkFromScratchMasterEngineAggregation._
+
+   def step = _step
 
    def config: SparkConfiguration[S] = _config
 
@@ -41,17 +46,10 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph](
 
    var masterActorRef: ActorRef = _
 
-   def this(_sc: SparkContext, config: SparkConfiguration[S]) {
-      this (config, None)
-      sc = _sc
-      init()
-   }
-
-   def this(_sc: SparkContext, config: SparkConfiguration[S],
+   def this(_sc: SparkContext, step: Int, config: SparkConfiguration[S],
             parent: SparkMasterEngine[S]) {
-      this (config, Option(parent))
+      this (step, config, Option(parent))
       sc = _sc
-      init()
    }
 
    override def init(): Unit = {
@@ -81,7 +79,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph](
       execEnginesRDD.map(_.computeAggregationLong(defaultValue, value, reduce))
    }
 
-   override def objLongRDD[K <: Serializable]
+   override def objLongRDD[K <: Serializable : ClassTag]
    (key: S => K, defaultValue: Long, value: S => Long,
     reduce: (Long,Long) => Long)
    : RDD[(K,Long)] = {
@@ -96,7 +94,8 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph](
          _.computeAggregationObjObj[K,V](key, value, aggregate))
    }
 
-   private def execEnginesRDD: RDD[SparkEngine[S]] = {
+   override def execEnginesRDD: RDD[SparkEngine[S]] = {
+      init()
 
       logInfo (s"${this} Computation starting from ${stepRDD}," +
          s", StorageLevel=${stepRDD.getStorageLevel}")

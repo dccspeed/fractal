@@ -17,7 +17,7 @@ import br.ufmg.cs.systems.fractal.subgraph.EdgeInducedSubgraph;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph;
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
-import br.ufmg.cs.systems.fractal.util.pool.Pool;
+import br.ufmg.cs.systems.fractal.util.pool.ThreadSafePool;
 import br.ufmg.cs.systems.fractal.util.pool.PoolRegistry;
 import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
 import org.apache.hadoop.fs.Path;
@@ -88,7 +88,7 @@ public class Configuration<O extends Subgraph> implements Serializable {
     public static final String CONF_MASTER_COMPUTATION_CLASS_DEFAULT = "br.ufmg.cs.systems.fractal.computation.MasterComputation";
 
     public static final String CONF_COMM_STRATEGY = "fractal.comm.strategy";
-    public static final String CONF_COMM_STRATEGY_DEFAULT = "scratch";
+    public static final String CONF_COMM_STRATEGY_DEFAULT = "scratchagg";
 
     public static final String CONF_PATTERN_CLASS = "fractal.pattern.class";
     public static final String CONF_PATTERN_CLASS_DEFAULT = "br.ufmg.cs.systems.fractal.pattern.JBlissPattern";
@@ -196,7 +196,7 @@ public class Configuration<O extends Subgraph> implements Serializable {
         // Whenever we set configuration, reset all known pools Since they might
         // have initialized things based on a previous configuration NOTE: This
         // is essential for the unit tests
-        for (Pool pool : PoolRegistry.instance().getPools()) {
+        for (ThreadSafePool pool : PoolRegistry.instance().getPools()) {
             pool.reset();
         }
     }

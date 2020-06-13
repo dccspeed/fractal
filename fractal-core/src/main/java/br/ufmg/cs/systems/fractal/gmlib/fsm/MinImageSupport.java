@@ -2,6 +2,7 @@ package br.ufmg.cs.systems.fractal.gmlib.fsm;
 
 import br.ufmg.cs.systems.fractal.aggregation.PatternAggregationAwareValue;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
+import br.ufmg.cs.systems.fractal.pattern.PatternEdge;
 import br.ufmg.cs.systems.fractal.pattern.VertexPositionEquivalences;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.ClearSetConsumer;
@@ -457,5 +458,16 @@ public class MinImageSupport implements Writable, Externalizable, PatternAggrega
             domainsReachedSupport.add(minDomainIndex);
          }
       }
+   }
+
+   @Override
+   public boolean equals(Object o) {
+      if (this == o) return true;
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+
+      MinImageSupport that = (MinImageSupport) o;
+
+      return enoughSupport == that.enoughSupport;
    }
 }

@@ -393,7 +393,7 @@ class FSMApp(val fractalGraph: FractalGraph,
    def execute: Unit = {
       fractalGraph.set ("comm_strategy", commStrategy)
       fractalGraph.set ("num_partitions", numPartitions)
-      val patternSupportMap = fractalGraph.fsm2(support, explorationSteps + 1)
+      val patternSupportMap = fractalGraph.fsm(support, explorationSteps + 1)
          .collectAsMap()
       for ((p,s) <- patternSupportMap) {
          logInfo(s"FrequentPattern ${p} ${s}")
@@ -487,10 +487,10 @@ class FSMAppPatternFirstLabeled(val fractalGraph: FractalGraph,
    def execute: Unit = {
       fractalGraph.set("comm_strategy", commStrategy)
       fractalGraph.set("num_partitions", numPartitions)
-      val cur = fractalGraph.fsmpf(supportThreshold,
-         explorationSteps + 1).cursor()
-      while (cur.moveNext()) {
-         logInfo(s"FrequentPattern ${cur.key()} ${cur.value()}")
+      val patternSupport = fractalGraph.fsmpf(supportThreshold,
+         explorationSteps + 1).collectAsMap()
+      for ((p,s) <- patternSupport) {
+         logInfo(s"FrequentPattern ${p} ${s}")
       }
    }
 }
@@ -503,10 +503,10 @@ class FSMAppPatternFirstMCVC(val fractalGraph: FractalGraph,
    def execute: Unit = {
       fractalGraph.set("comm_strategy", commStrategy)
       fractalGraph.set("num_partitions", numPartitions)
-      val cur = fractalGraph.fsmpfmcvc(supportThreshold,
-         explorationSteps + 1).cursor()
-      while (cur.moveNext()) {
-         logInfo(s"FrequentPattern ${cur.key()} ${cur.value()}")
+      val patternSupport = fractalGraph.fsmpfmcvc(supportThreshold,
+         explorationSteps + 1).collectAsMap()
+      for ((p,s) <- patternSupport) {
+         logInfo(s"FrequentPattern ${p} ${s}")
       }
    }
 }

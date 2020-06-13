@@ -535,122 +535,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
             "br.ufmg.cs.systems.fractal.gmlib.clique.MaximalCliquesEnumerator")
    }
 
-   /**
-    * Frequent subgraph mining using the "pattern-first" approach and the MNI
-    * (Minimum Node Image) as support metric and using the optimized MCVC
-    * approach for pattern matching
-    * @param supportThreshold Minimum support value
-    * @param maxNumEdges Hard limit on the size of the interesting patterns
-    * @return a map with frequent patterns and their current support
-    */
    def fsmpf(supportThreshold: Int, maxNumEdges: Int)
-   : ObjObjMap[Pattern, MinImageSupport] = {
-      val frequentLabels = HashIntSets.newMutableSet()
-      val lastInfrequentPatterns = HashObjSets.newMutableSet[Pattern]()
-      val lastFrequentPatterns = HashObjObjMaps.newMutableMap[Pattern,MinImageSupport]()
-      val frequentPatterns = HashObjObjMaps.newMutableMap[Pattern,MinImageSupport]()
-      var numEdges = 0
-      val minSupport = supportThreshold
-
-      {
-         val start = System.currentTimeMillis()
-         val singleEdgePattern = PatternUtils.singleEdgePattern()
-         singleEdgePattern.setVertexLabeled(false)
-         val edgesSupports = gquerying(singleEdgePattern)
-            .explore(singleEdgePattern.getNumberOfVertices - 1)
-            .aggregationMap2[Pattern,MinImageSupport](
-               (s,c,k) => s.applyLabels(c.getPattern),
-               (s,c,v) => {v.setSupport(minSupport); v.setSubgraph(s); v},
-               (v1,v2) => {v1.aggregate(v2); v1}
-            )
-
-         for ((p,s) <- edgesSupports) {
-            if (s.hasEnoughSupport) {
-               val pedge = p.getEdges.get(0)
-               frequentLabels.add(pedge.getSrcLabel)
-               frequentLabels.add(pedge.getDestLabel)
-               lastFrequentPatterns.put(p, s)
-               frequentPatterns.put(p, s)
-            } else {
-               lastInfrequentPatterns.add(p)
-            }
-         }
-         val elapsed = System.currentTimeMillis() - start
-         logInfo(s"FrequentLabels ${elapsed}ms ${frequentLabels}")
-      }
-
-      numEdges = 1
-
-      while (!lastFrequentPatterns.isEmpty && numEdges < maxNumEdges) {
-         val candPatterns = HashObjSets.newMutableSet[Pattern]()
-
-         {
-            val start = System.currentTimeMillis()
-            val frequentLabelsCur = frequentLabels.cursor()
-            while (frequentLabelsCur.moveNext()) {
-               candPatterns.addAll(
-                  PatternUtils.extendByEdge(lastFrequentPatterns.keySet(),
-                     frequentLabelsCur.elem()))
-            }
-            lastFrequentPatterns.clear()
-            val elapsed = System.currentTimeMillis() - start
-            logInfo(s"AddingFrequentExtensions ${elapsed}ms" +
-               s" candidatesSize=${candPatterns.size()}")
-         }
-
-         {
-            val start = System.currentTimeMillis()
-            if (!lastInfrequentPatterns.isEmpty) {
-               val frequentLabelsCur = frequentLabels.cursor()
-               while (frequentLabelsCur.moveNext()) {
-                  candPatterns.removeAll(
-                     PatternUtils.extendByEdge(lastInfrequentPatterns,
-                        frequentLabelsCur.elem())
-                  )
-               }
-               lastInfrequentPatterns.clear()
-            }
-            val elapsed = System.currentTimeMillis() - start
-            logInfo(s"RemovingInfrequentExtensions ${elapsed}ms" +
-               s" candidatesSize=${candPatterns.size()}")
-         }
-
-         val patternsCur = candPatterns.cursor()
-         while (patternsCur.moveNext()) {
-            val patternWithoutPlan = patternsCur.elem()
-            patternWithoutPlan.setVertexLabeled(true)
-
-            val newPatterns = PatternExplorationPlan.apply(patternWithoutPlan)
-            val newPatternsCur = newPatterns.cursor()
-
-            while (newPatternsCur.moveNext()) {
-               val pattern = newPatternsCur.elem()
-
-               val patternSupport = gquerying(pattern)
-                  .explore(pattern.getNumberOfVertices - 1)
-                  .aggregationMap2[Pattern,MinImageSupport](
-                     (s,c,k) => s.applyLabels(c.getPattern),
-                     (s,c,v) => {v.setSupport(minSupport); v.setSubgraph(s); v},
-                     (v1,v2) => {v1.aggregate(v2); v1}
-                  )
-
-               for ((p,s) <- patternSupport) {
-                  if (s.hasEnoughSupport) {
-                     lastFrequentPatterns.put(p, s)
-                     frequentPatterns.put(p, s)
-                  } else {
-                     lastInfrequentPatterns.add(p)
-                  }
-               }
-            }
-         }
-         numEdges += 1
-      }
-
-      frequentPatterns
-   }
-
-   def fsmpf2(supportThreshold: Int, maxNumEdges: Int)
    : RDD[(Pattern, MinImageSupport)] = {
       var frequentPatternSupportRDD = self.fractalContext.sparkContext
          .emptyRDD[(Pattern, MinImageSupport)]
@@ -665,7 +550,6 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
       /**
        * Aggregation functions
        */
-      val key: PatternInducedSubgraph => Pattern = s => s.quickPattern()
       val minImageSupport = new MinImageSupport()
       val value: PatternInducedSubgraph => MinImageSupport = s => {
          minImageSupport.setSupport(minSupport)
@@ -679,7 +563,6 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
       /**
        * Auxiliary functions
        */
-
       def canonicalPatternMap(quickPatternRDD: RDD[(Pattern,MinImageSupport)])
       : RDD[(Pattern,MinImageSupport)] = {
          quickPatternRDD
@@ -696,6 +579,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
       {
          val start = System.currentTimeMillis()
          val singleEdgePattern = PatternUtils.singleEdgePattern()
+         val key: PatternInducedSubgraph => Pattern = s => s.applyLabels(singleEdgePattern)
          singleEdgePattern.setVertexLabeled(false)
          val edgesSupportsRDD = gquerying(singleEdgePattern)
             .explore(singleEdgePattern.getNumberOfVertices - 1)
@@ -705,7 +589,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
          val canonicalEdgesSupportsRDD = canonicalPatternMap(edgesSupportsRDD)
                .cache()
 
-         canonicalEdgesSupportsRDD.foreach { case (p,s) =>
+         canonicalEdgesSupportsRDD.collect().foreach { case (p,s) =>
             if (s.hasEnoughSupport) {
                val pedge = p.getEdges.get(0)
                frequentLabels.add(pedge.getSrcLabel)
@@ -772,6 +656,8 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
             while (newPatternsCur.moveNext()) {
                val pattern = newPatternsCur.elem()
 
+               val key: PatternInducedSubgraph => Pattern =
+                  s => s.applyLabels(pattern)
                val patternSupportRDD = gquerying(pattern)
                   .explore(pattern.getNumberOfVertices - 1)
                   .aggregationObjObj[Pattern,MinImageSupport](
@@ -780,7 +666,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
                val canonicalPatternSupportRDD = canonicalPatternMap(patternSupportRDD)
                      .cache()
 
-               canonicalPatternSupportRDD.foreach { case (p,s) =>
+               canonicalPatternSupportRDD.collect().foreach { case (p,s) =>
                   if (s.hasEnoughSupport) {
                      lastFrequentPatterns.put(p, s)
                      frequentPatterns.put(p, s)
@@ -806,66 +692,72 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     * approach for pattern matching
     * @param supportThreshold Minimum support value
     * @param maxNumEdges Hard limit on the size of the interesting patterns
-    * @return a map with frequent patterns and their current support
+    * @return an RDD with frequent patterns and their current support
     */
    def fsmpfmcvc(supportThreshold: Int, maxNumEdges: Int)
-   : ObjObjMap[Pattern, MinImageSupport] = {
+   : RDD[(Pattern, MinImageSupport)] = {
+      var frequentPatternSupportRDD = self.fractalContext.sparkContext
+         .emptyRDD[(Pattern, MinImageSupport)]
+
       val frequentLabels = HashIntSets.newMutableSet()
       val lastInfrequentPatterns = HashObjSets.newMutableSet[Pattern]()
       val lastFrequentPatterns = HashObjObjMaps.newMutableMap[Pattern,MinImageSupport]()
       val frequentPatterns = HashObjObjMaps.newMutableMap[Pattern,MinImageSupport]()
       var numEdges = 0
-      val FSM = "fsm"
       val minSupport = supportThreshold
 
-      val matchCallback = new SubgraphCallback[PatternInducedSubgraph] {
-         private var aggregationStorage: AggregationStorage[Pattern,MinImageSupport] = _
-         private var reusableValue: MinImageSupport = _
+      /**
+       * Aggregation functions
+       */
+      val minImageSupport = new MinImageSupport()
+      val value: PatternInducedSubgraph => MinImageSupport = s => {
+         minImageSupport.setSupport(minSupport)
+         minImageSupport.setSubgraph(s)
+         minImageSupport
+      }
+      val aggregate: (MinImageSupport,MinImageSupport) => Unit = (s1,s2) => {
+         s1.aggregate(s2)
+      }
 
-         override def apply(s: PatternInducedSubgraph, c: Computation[PatternInducedSubgraph])
-         : Unit = {
-            reusableValue.setSupport(minSupport)
-            reusableValue.setSubgraph(s)
-            aggregationStorage.aggregateWithReusables(
-               s.applyLabels(c.getPattern),
-               reusableValue
-            )
-         }
-
-         override def init(computation: Computation[PatternInducedSubgraph]): Unit = {
-            val engine = computation.getExecutionEngine
-            if (engine != null) {
-               aggregationStorage = engine.getAggregationStorage(FSM)
-               reusableValue = aggregationStorage.reusableValue()
+      /**
+       * Auxiliary functions
+       */
+      def canonicalPatternMap(quickPatternRDD: RDD[(Pattern,MinImageSupport)])
+      : RDD[(Pattern,MinImageSupport)] = {
+         quickPatternRDD
+            .map { case (quickPatern,supp) =>
+               val canonicalPattern = quickPatern.copy()
+               canonicalPattern.turnCanonical()
+               supp.handleConversionFromQuickToCanonical(quickPatern, canonicalPattern)
+               (canonicalPattern, supp)
             }
-         }
+            .reduceByKey((s1,s2) => {s1.aggregate(s2); s1})
       }
 
-      val callback = new SubgraphCallback[PatternInducedSubgraph] {
-         val callback = matchCallback
-         override def apply(s: PatternInducedSubgraph,
-                            c: Computation[PatternInducedSubgraph]): Unit = {
-            s.completeMatch(c, c.getPattern, callback)
-         }
-
-         override def init(c: Computation[PatternInducedSubgraph]): Unit = {
-            callback.init(c)
-         }
-      }
 
       {
          val start = System.currentTimeMillis()
          val singleEdgePattern = PatternUtils.singleEdgePattern()
          singleEdgePattern.setVertexLabeled(false)
-         val edgesSupports = gquerying(singleEdgePattern)
-            // not explored because of MCVC partial match: 1 vertex in this case
-            .aggregationMapWithCallback[Pattern,MinImageSupport](
-               FSM,
-               callback,
-               (v1,v2) => {v1.aggregate(v2); v1}
-            )
 
-         for ((p,s) <- edgesSupports) {
+         val key: PatternInducedSubgraph => Pattern =
+            s => s.applyLabels(singleEdgePattern)
+         val callback: (
+            PatternInducedSubgraph,
+               Computation[PatternInducedSubgraph],
+               SubgraphCallback[PatternInducedSubgraph]) => Unit =
+            (s,c,cb) => {
+               s.completeMatch(c, c.getPattern, cb)
+            }
+
+         val edgesSupportsRDD = gquerying(singleEdgePattern)
+            // not explored because of MCVC partial match: 1 vertex in this case
+            .aggregationObjObjWithCallback[Pattern,MinImageSupport](key,
+               value, aggregate, callback)
+
+         val canonicalEdgeSupportsRDD = canonicalPatternMap(edgesSupportsRDD)
+
+         canonicalEdgeSupportsRDD.collect(). foreach {case (p,s) =>
             if (s.hasEnoughSupport) {
                val pedge = p.getEdges.get(0)
                frequentLabels.add(pedge.getSrcLabel)
@@ -876,6 +768,11 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
                lastInfrequentPatterns.add(p)
             }
          }
+
+         frequentPatternSupportRDD = frequentPatternSupportRDD.union(
+            canonicalEdgeSupportsRDD.filter(_._2.hasEnoughSupport)
+         )
+
          val elapsed = System.currentTimeMillis() - start
          logInfo(s"FrequentLabels ${elapsed}ms ${frequentLabels}")
       }
@@ -931,15 +828,24 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
                val explorationPlanMCVC = pattern.explorationPlan()
                val mcvcSize = explorationPlanMCVC.mcvcSize()
 
+               val key: PatternInducedSubgraph => Pattern =
+                  s => s.applyLabels(pattern)
+               val callback: (
+                  PatternInducedSubgraph,
+                     Computation[PatternInducedSubgraph],
+                     SubgraphCallback[PatternInducedSubgraph]) => Unit =
+                  (s,c,cb) => {
+                     s.completeMatch(c, c.getPattern, cb)
+                  }
+
                val patternSupport = gquerying(pattern)
                   .explore(mcvcSize - 1)
-                  .aggregationMapWithCallback[Pattern,MinImageSupport](
-                     FSM,
-                     callback,
-                     (v1,v2) => {v1.aggregate(v2); v1}
-                  )
+                  .aggregationObjObjWithCallback[Pattern,MinImageSupport](
+                     key, value, aggregate, callback)
 
-               for ((p,s) <- patternSupport) {
+               val canonicalPatternSupportRDD = canonicalPatternMap(patternSupport)
+
+               canonicalPatternSupportRDD.collect().foreach { case (p,s) =>
                   if (s.hasEnoughSupport) {
                      lastFrequentPatterns.put(p, s)
                      frequentPatterns.put(p, s)
@@ -947,12 +853,16 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
                      lastInfrequentPatterns.add(p)
                   }
                }
+
+               frequentPatternSupportRDD = frequentPatternSupportRDD.union(
+                  canonicalPatternSupportRDD.filter(_._2.hasEnoughSupport)
+               )
             }
          }
          numEdges += 1
       }
 
-      frequentPatterns
+      frequentPatternSupportRDD
    }
 
    /**
@@ -960,9 +870,9 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
     * @param support threshold to determine what is frequent according to
     *                the (minimum image)
     * @param maxNumEdges
-    * @return Fractoid with the initial state for FSM
+    * @return an RDD with frequent patterns and their support
     */
-   def fsm2(support: Int, maxNumEdges: Int): RDD[(Pattern,MinImageSupport)] = {
+   def fsm(support: Int, maxNumEdges: Int): RDD[(Pattern,MinImageSupport)] = {
       var frequentPatternSupportRDD = self.fractalContext.sparkContext
          .emptyRDD[(Pattern,MinImageSupport)]
 
@@ -998,8 +908,9 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
          val quickPatternsBefore = quickPatterns.size()
          stepFrequentPatternSupportRDD
-            .flatMap(kv => kv._2._1.iterator().asScala)
-            .foreach(quickPatterns.add)
+            .map(kv => kv._2._1)
+            .collect()
+            .foreach(ps => quickPatterns.addAll(ps))
          val quickPatternsAfter = quickPatterns.size()
 
          frequentPatternSupportRDD = frequentPatternSupportRDD.union(

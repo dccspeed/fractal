@@ -197,7 +197,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
       for (k <- 1 to numFreqPatterns.size) {
          fgraph.set("num_partitions", numPartitions)
-         val freqPatterns = fgraph.fsm2(support, k).collectAsMap()
+         val freqPatterns = fgraph.fsm(support, k).collectAsMap()
 
          assert(freqPatterns.size == numFreqPatterns(k - 1))
       }
@@ -407,23 +407,26 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
          // subgraph-first approach: edge by edge
          val frequentPatterns = chosenGraph
-            .fsm2(minSupport, Int.MaxValue)
+            .fsm(minSupport, Int.MaxValue)
             .collectAsMap()
          assert(frequentPatterns.size == numPatterns)
 
          // pattern-first approach: pattern-matching on every possible pattern
          val frequentPatternsPf = chosenGraph
-            .fsmpf2(minSupport, Int.MaxValue)
+            .fsmpf(minSupport, Int.MaxValue)
             .collectAsMap()
          assert(frequentPatternsPf.size == numPatterns)
-         assert(frequentPatterns.equals(frequentPatternsPf))
+         assert(frequentPatterns.equals(frequentPatternsPf),
+            s"${frequentPatterns} ${frequentPatternsPf}")
 
          // pattern-first approach using MCVC optimization
-         //val frequentPatternsPf2 = chosenGraph
-         //   .fsmpfmcvc(minSupport, Int.MaxValue)
-         //   .keySet()
-         //assert(frequentPatternsPf2.size == numPatterns)
-         //assert(frequentPatterns.equals(frequentPatternsPf2))
+         val frequentPatternsPf2 = chosenGraph
+            .fsmpfmcvc(minSupport, Int.MaxValue)
+            .collectAsMap()
+         assert(frequentPatternsPf2.size == numPatterns,
+            s"${frequentPatterns} ${frequentPatternsPf2}")
+         assert(frequentPatterns.equals(frequentPatternsPf2),
+            s"${frequentPatterns} ${frequentPatternsPf2}")
       }
    }
 }

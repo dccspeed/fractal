@@ -677,6 +677,26 @@ class GQueryingInducedApp(val fractalGraph: FractalGraph,
    }
 }
 
+class InducedPeriodicSubgraphsApp(val fractalGraph: FractalGraph,
+                                  commStrategy: String,
+                                  numPartitions: Int,
+                                  explorationSteps: Int,
+                                  periodicThreshold: Int) extends FractalSparkApp {
+   def execute: Unit = {
+      fractalGraph.set("num_partitions", numPartitions)
+      fractalGraph.set("comm_strategy", commStrategy)
+      val frac = fractalGraph.periodicInducedSubgraphs(periodicThreshold)
+         .explore(explorationSteps)
+
+      val (numValidSubgraphs, elapsed) = FractalSparkRunner.time {
+         frac.aggregationCount
+      }
+
+      logInfo(s"InducedPeriodicSubgraphsApp" +
+         s" numValidSubgraphs=${numValidSubgraphs} elapsed=${elapsed}")
+   }
+}
+
 object FractalSparkRunner extends Logging {
    def time[R](block: => R): (R, Long) = {
       val t0 = System.currentTimeMillis()
@@ -837,6 +857,11 @@ object FractalSparkRunner extends Logging {
             val fraction = args(i).toDouble
             new GQueryingInducedAppSampling(fractalGraph, commStrategy,
                numPartitions, explorationSteps, subgraphPath, fraction)
+         case "periodicinduced" =>
+            i += 1
+            val periodicThreshold = args(i).toInt
+            new InducedPeriodicSubgraphsApp(fractalGraph, commStrategy,
+               numPartitions, explorationSteps, periodicThreshold)
          case appName =>
             throw new RuntimeException(s"Unknown app: ${appName}")
       }

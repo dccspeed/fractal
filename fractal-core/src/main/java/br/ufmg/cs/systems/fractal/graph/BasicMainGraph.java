@@ -79,6 +79,11 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    }
 
    @Override
+   public void forEachCommonEdgeLabels(IntArrayList edges, IntConsumer consumer) {
+
+   }
+
+   @Override
    public int getId() {
       return id;
    }
@@ -825,6 +830,26 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       VertexNeighbourhood vertexNeighbourhood = this.vertexNeighborhoods[minv];
 
       vertexNeighbourhood.forEachEdgeId(maxv, consumer);
+   }
+
+   @Override
+   public IntArrayListView edgeLabels(int e) {
+      return null;
+   }
+
+   @Override
+   public void edgeLabels(int e, IntArrayListView view) {
+
+   }
+
+   @Override
+   public IntArrayListView vertexLabels(int u) {
+      return null;
+   }
+
+   @Override
+   public void vertexLabels(int u, IntArrayListView view) {
+
    }
 
    @Override

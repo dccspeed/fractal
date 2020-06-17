@@ -13,6 +13,8 @@ import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 
 public interface MainGraph<V,E> {
+   void forEachCommonEdgeLabels(IntArrayList edges, IntConsumer consumer);
+
    int getId();
 
    void setId(int id);
@@ -75,4 +77,12 @@ public interface MainGraph<V,E> {
 
    void forEachEdge(IntConsumer consumer);
    void forEachEdge(int u, int v, IntConsumer consumer);
+
+   IntArrayListView edgeLabels(int e);
+
+   void edgeLabels(int e, IntArrayListView view);
+
+   IntArrayListView vertexLabels(int u);
+
+   void vertexLabels(int u, IntArrayListView view);
 }

@@ -567,7 +567,6 @@ public class SuccinctMainGraph implements MainGraph {
       }
    }
 
-   /* temporary: single label { */
    @Override
    public int vertexLabel(int u) {
       return vertexLabels.getu(vertexLabelsIdx.getu(u));
@@ -578,7 +577,100 @@ public class SuccinctMainGraph implements MainGraph {
       return edgeLabels.getu(edgeLabelsIdx.getu(e));
    }
 
-   /* } */
+   @Override
+   public IntArrayListView edgeLabels(int e) {
+      int from = edgeLabelsIdx.getu(e);
+      int to = edgeLabelsIdx.getu(e+1);
+      return edgeLabels.view(from, to);
+   }
+
+   @Override
+   public void edgeLabels(int e, IntArrayListView view) {
+      int from = edgeLabelsIdx.getu(e);
+      int to = edgeLabelsIdx.getu(e+1);
+      view.set(edgeLabels, from, to);
+   }
+
+   @Override
+   public IntArrayListView vertexLabels(int u) {
+      int from = vertexLabelsIdx.getu(u);
+      int to = vertexLabelsIdx.getu(u+1);
+      return vertexLabels.view(from, to);
+   }
+
+   @Override
+   public void vertexLabels(int u, IntArrayListView view) {
+      int from = vertexLabelsIdx.getu(u);
+      int to = vertexLabelsIdx.getu(u+1);
+      view.set(vertexLabels, from, to);
+   }
+
+   @Override
+   public void forEachCommonEdgeLabels(IntArrayList edges,
+                                       IntConsumer consumer) {
+      int numEdges = edges.size();
+      if (numEdges == 0) return;
+
+      int e1, e2;
+
+      if (numEdges == 1) {
+         e1 = edges.getu(0);
+         int from = edgeLabelsIdx.getu(e1);
+         int to = edgeLabelsIdx.getu(e1+1);
+         for (int i = from; i < to; ++i) {
+            consumer.accept(edgeLabels.getu(i));
+         }
+         return;
+      }
+
+      if (numEdges == 2) {
+         e1 = edges.get(0);
+         e2 = edges.getu(1);
+         int from1 = edgeLabelsIdx.getu(e1);
+         int to1 = edgeLabelsIdx.getu(e1+1);
+         int from2 = edgeLabelsIdx.getu(e2);
+         int to2 = edgeLabelsIdx.getu(e2+1);
+         Utils.sintersectConsume(edgeLabels, edgeLabels, from1, to1, from2,
+                 to2, consumer);
+
+         return;
+      }
+
+      IntArrayList previous = IntArrayListPool.instance().createObject();
+      IntArrayList result = IntArrayListPool.instance().createObject();
+      IntArrayList aux;
+
+      // first intersection
+      e1 = edges.getu(0);
+      e2 = edges.getu(1);
+      int from1 = edgeLabelsIdx.getu(e1);
+      int to1 = edgeLabelsIdx.getu(e1+1);
+      int from2 = edgeLabelsIdx.getu(e2);
+      int to2 = edgeLabelsIdx.getu(e2+1);
+      Utils.sintersect(edgeLabels, edgeLabels, from1, to1, from2, to2, result);
+
+      for (int i = 2; i < numEdges - 1; ++i) {
+         aux = result;
+         result = previous;
+         previous = aux;
+         e1 = edges.getu(i);
+         from1 = edgeLabelsIdx.getu(e1);
+         to1 = edgeLabelsIdx.getu(e1+1);
+         Utils.sintersect(previous, edgeLabels, 0, previous.size(), from1,
+                 to1, result);
+      }
+
+      // last intersection (consume)
+      e1 = edges.getLast();
+      from1 = edgeLabelsIdx.getu(e1);
+      to1 = edgeLabelsIdx.getu(e1+1);
+      Utils.sintersectConsume(result, edgeLabels, 0, result.size(), from1,
+              to1, consumer);
+
+      IntArrayListPool.instance().reclaimObject(previous);
+      IntArrayListPool.instance().reclaimObject(result);
+
+   }
 
    private class DefaultEdgePredicate extends EdgePredicate {
       @Override

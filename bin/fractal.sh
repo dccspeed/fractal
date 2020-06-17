@@ -9,6 +9,7 @@ motifss="motifssampling|motifspf|motifspfmcvc|motifspflabeled|motifs|motifs2"
 cliquess="cliques|cliquesopt|maximalcliques|maximalcliquespf"
 fsms="fsm|fsmpf|fsmpflabeled|fsmpfmcvc"
 enumerations="esubgraphs|vsubgraphswithedges|vsubgraphs|vsubgraphssampling|vsubgraphspf|vsubgraphspfmcvc"
+temporals="periodicinduced"
 extras="kws"
 apps="${gqueryings}|${motifss}|${cliquess}|${fsms}|${enumerations}|${extras}"
 
@@ -284,6 +285,15 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=\"keyword1 keyword2 ...\"           'Keywords for the query'"
 	;;
+	periodicinduced)
+	required="inputgraph steps periodicthreshold"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   periodicthreshold=2|3|4|...             'Periodic threshold: indicates how many times subgraphs must occur with an arbitrary periodicity'"
+	;;
 	*)
 	echo "Invalid application: ${app}"
 	exit 1
@@ -327,7 +337,9 @@ cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-$version.jar,$jars \\
    --packages $packages \\
    $FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-$version.jar \\
-      $input_format $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $fraction $configs"
+      $input_format $inputgraph $app $comm $total_cores $steps $log_level \\
+      $fsmsupp $keywords $mindensity $query $fraction $periodicthreshold \\
+      $configs"
 
 printf "info: Submitting command:\n$cmd\n\n"
 bash -c "$cmd"

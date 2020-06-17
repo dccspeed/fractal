@@ -7,7 +7,8 @@ import br.ufmg.cs.systems.fractal.aggregation.{AggregationStorage, PatternAggreg
 import br.ufmg.cs.systems.fractal.annotation.Experimental
 import br.ufmg.cs.systems.fractal.computation.{Computation, SubgraphEnumerator}
 import br.ufmg.cs.systems.fractal.gmlib.clique.KClistEnumerator
-import br.ufmg.cs.systems.fractal.gmlib.fsm.{MinImageSupport, DomainSupportEndAggregationFunction}
+import br.ufmg.cs.systems.fractal.gmlib.fsm.{DomainSupportEndAggregationFunction, MinImageSupport}
+import br.ufmg.cs.systems.fractal.gmlib.periodic.InducedPeriodicSubgraphs
 import br.ufmg.cs.systems.fractal.graph.MainGraph
 import br.ufmg.cs.systems.fractal.pattern.{BasicPattern, Pattern, PatternExplorationPlan, PatternExplorationPlanMCVC, PatternExplorationPlanMCVCOrdering, PatternExplorationPlanMCVCVgroups, PatternUtils}
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
@@ -1331,5 +1332,10 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
       }
 
       kws
+   }
+
+   def periodicInducedSubgraphs(periodicThreshold: Int)
+   : Fractoid[VertexInducedSubgraph] = {
+      InducedPeriodicSubgraphs(self, periodicThreshold)
    }
 }

@@ -16,6 +16,7 @@ import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 
 public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMainGraph {
+
     protected MainGraph underlyingMainGraph;
 
     protected IntArrayList[] orderedNeighbours;
@@ -37,7 +38,12 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
         }
     }
 
-    @Override
+   @Override
+   public void forEachCommonEdgeLabels(IntArrayList edges, IntConsumer consumer) {
+
+   }
+
+   @Override
     public int getId() {
        return underlyingMainGraph.getId();
     }
@@ -211,5 +217,25 @@ public class OrderedNeighboursMainGraphDecorator implements OrderedNeighboursMai
     public void forEachEdge(int existingVertexId, int v, IntConsumer consumer) {
         underlyingMainGraph.forEachEdge(existingVertexId, v, consumer);
     }
+
+   @Override
+   public IntArrayListView edgeLabels(int e) {
+      return null;
+   }
+
+   @Override
+   public void edgeLabels(int e, IntArrayListView view) {
+
+   }
+
+   @Override
+   public IntArrayListView vertexLabels(int u) {
+      return null;
+   }
+
+   @Override
+   public void vertexLabels(int u, IntArrayListView view) {
+
+   }
 
 }

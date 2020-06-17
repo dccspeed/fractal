@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal.aggregation;
 
+import br.ufmg.cs.systems.fractal.graph.SuccinctMainGraph;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
 import com.koloboke.collect.map.ObjLongMap;

@@ -11,10 +11,11 @@ public final class IntArrayListView extends IntArrayList{
    public IntArrayListView() {
    }
 
-   public void set(IntArrayList underlying, int from, int to) {
+   public IntArrayListView set(IntArrayList underlying, int from, int to) {
       this.backingArray = underlying.backingArray;
       this.numElements = to - from;
       this.offset = from;
+      return this;
    }
 
    @Override

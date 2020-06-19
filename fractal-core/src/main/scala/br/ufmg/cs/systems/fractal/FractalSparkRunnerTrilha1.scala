@@ -27,7 +27,7 @@ object FractalSparkRunnerTrilha1 {
 
     val uuid = UUID.randomUUID()
 
-    edges.coalesce(1).write.csv(s"/dados01/ufmg.m06dcc/${uuid}")
+    edges.write.csv(s"/dados01/ufmg.m06dcc/${uuid}")
 
     hive.close()
     ss.stop()

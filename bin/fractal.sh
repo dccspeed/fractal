@@ -48,78 +48,78 @@ fi
 
 case "$app" in
 	fsm)
-	required="config steps fsmsupp"
+	required="inputgraph steps fsmsupp"
         appusage="
 
 ALGOPTION for '$app':
-   config=<database-config-path>           'Configuration file path'
+   inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
 	;;
 
 	motifs)
-	required="config steps"
+	required="inputgraph steps"
         appusage="
 
 ALGOPTION for '$app':
-   config=<database-config-path>           'Configuration file path'
+   inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 
 	cliques)
-	required="config steps"
+	required="inputgraph steps"
         appusage="
 
 ALGOPTION for '$app':
-   config=<database-config-path>           'Configuration file path'
+   inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 
 	cliquesopt)
-	required="config steps"
+	required="inputgraph steps"
         appusage="
 
 ALGOPTION for '$app':
-   config=<database-config-path>           'Configuration file path'
+   inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 
 	gquerying)
-	required="config steps query"
+	required="inputgraph steps query"
         appusage="
 
 ALGOPTION for '$app':
-   config=<database-config-path>           'Configuration file path'
+   inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 
 	gqueryingnaive)
-	required="config steps query"
+	required="inputgraph steps query"
         appusage="
 
 ALGOPTION for '$app':
-   config=<database-config-path>           'Configuration file path'
+   inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 
 	kws)
-	required="config steps query"
+	required="inputgraph steps query"
         appusage="
 
 ALGOPTION for '$app':
-   config=<database-config-path>           'Configuration file path'
+   inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
-   query=\"keyword1 keyword2 ...\"         'Keywords for the query'"
+   query=\"keyword1 keyword2 ...\"           'Keywords for the query'"
 	;;
 
 	paths)
-	required="config steps"
+	required="inputgraph steps"
         appusage="
 
 ALGOPTION for '$app':
-   config=<database-config-path>           'Configuration file path'
+   inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 
@@ -151,7 +151,7 @@ comm=${comm:-scratch}
 total_cores=$((num_workers * worker_cores))
 deploy_mode=${deploy_mode:-client}
 log_level=${log_level:-info}
-jars="$FRACTAL_HOME/fractal-core/build/libs/fractal-core-${fractal_version}.jar"
+packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\
@@ -160,9 +160,10 @@ cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --executor-cores $worker_cores \\
    --executor-memory $worker_memory \\
    --class br.ufmg.cs.systems.fractal.FractalSparkRunner \\
-   --jars $jars \\
+   --jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-${fractal_version}.jar \\
+   --packages=$packages \\
    $FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-${fractal_version}.jar \\
-      $config $input_format $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $configs"
+      $input_format $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $configs"
 
 printf "info: Submitting command:\n$cmd\n\n"
 bash -c "$cmd"

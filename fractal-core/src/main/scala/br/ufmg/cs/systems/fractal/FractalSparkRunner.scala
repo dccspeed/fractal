@@ -1,32 +1,25 @@
 package br.ufmg.cs.systems.fractal
 
-import java.io.{BufferedWriter, File, FileWriter}
-
 import br.ufmg.cs.systems.fractal.util.Logging
-import com.hortonworks.spark.sql.hive.llap.HiveWarehouseBuilder
-import org.apache.spark.SparkConf
-import org.apache.spark.sql.SparkSession
-
+import org.apache.spark.{SparkConf, SparkContext}
 
 trait FractalSparkApp extends Logging {
   def fractalGraph: FractalGraph
 
-  def execute: Fractoid[_]
+  def execute: Unit
 }
 
 class VSubgraphsApp(val fractalGraph: FractalGraph,
                     commStrategy: String,
                     numPartitions: Int,
                     explorationSteps: Int) extends FractalSparkApp {
-  def execute = {
+  def execute: Unit = {
     val vsubgraphsRes = fractalGraph.vfractoidAndExpand.
       set("comm_strategy", commStrategy).
       set("num_partitions", numPartitions).
       explore(explorationSteps)
 
     vsubgraphsRes.compute()
-
-    vsubgraphsRes
   }
 }
 
@@ -34,7 +27,7 @@ class MotifsApp(val fractalGraph: FractalGraph,
                 commStrategy: String,
                 numPartitions: Int,
                 explorationSteps: Int) extends FractalSparkApp {
-  def execute = {
+  def execute: Unit = {
     val motifsRes = fractalGraph.motifs.
       set("comm_strategy", commStrategy).
       set("num_partitions", numPartitions).
@@ -49,8 +42,6 @@ class MotifsApp(val fractalGraph: FractalGraph,
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${motifsRes.numValidSubgraphs()} elapsed=${elapsed}"
     )
-
-    motifsRes
   }
 }
 
@@ -58,7 +49,7 @@ class CliquesOptApp(val fractalGraph: FractalGraph,
                     commStrategy: String,
                     numPartitions: Int,
                     explorationSteps: Int) extends FractalSparkApp {
-  def execute = {
+  def execute: Unit = {
     val cliquesRes = fractalGraph.cliquesKClist(explorationSteps + 1).
       set("comm_strategy", commStrategy).
       set("num_partitions", numPartitions).
@@ -73,8 +64,6 @@ class CliquesOptApp(val fractalGraph: FractalGraph,
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${cliquesRes.numValidSubgraphs()} elapsed=${elapsed}"
     )
-
-    cliquesRes
   }
 }
 
@@ -82,7 +71,7 @@ class CliquesApp(val fractalGraph: FractalGraph,
                  commStrategy: String,
                  numPartitions: Int,
                  explorationSteps: Int) extends FractalSparkApp {
-  def execute = {
+  def execute: Unit = {
     val cliquesRes = fractalGraph.cliques.
       set("comm_strategy", commStrategy).
       set("num_partitions", numPartitions).
@@ -98,8 +87,6 @@ class CliquesApp(val fractalGraph: FractalGraph,
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${cliquesRes.numValidSubgraphs()} elapsed=${elapsed}"
     )
-
-    cliquesRes
   }
 }
 
@@ -107,7 +94,7 @@ class MaximalCliquesApp(val fractalGraph: FractalGraph,
                         commStrategy: String,
                         numPartitions: Int,
                         explorationSteps: Int) extends FractalSparkApp {
-  def execute = {
+  def execute: Unit = {
     val maximalcliquesRes = fractalGraph.maximalcliques.
       set("comm_strategy", commStrategy).
       set("num_partitions", numPartitions).
@@ -122,8 +109,6 @@ class MaximalCliquesApp(val fractalGraph: FractalGraph,
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${maximalcliquesRes.numValidSubgraphs()} elapsed=${elapsed}"
     )
-
-    maximalcliquesRes
   }
 }
 
@@ -132,7 +117,7 @@ class QuasiCliquesApp(val fractalGraph: FractalGraph,
                       numPartitions: Int,
                       explorationSteps: Int,
                       minDensity: Double) extends FractalSparkApp {
-  def execute = {
+  def execute: Unit = {
     val quasiCliquesRes = fractalGraph.quasiCliques(explorationSteps, minDensity).
       set("comm_strategy", commStrategy).
       set("num_partitions", numPartitions)
@@ -146,8 +131,6 @@ class QuasiCliquesApp(val fractalGraph: FractalGraph,
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${quasiCliquesRes.numValidSubgraphs()} elapsed=${elapsed}"
     )
-
-    quasiCliquesRes
   }
 }
 
@@ -156,7 +139,7 @@ class FSMApp(val fractalGraph: FractalGraph,
              numPartitions: Int,
              explorationSteps: Int,
              support: Int) extends FractalSparkApp {
-  def execute = {
+  def execute: Unit = {
     fractalGraph.set("comm_strategy", commStrategy)
     fractalGraph.set("num_partitions", numPartitions)
 
@@ -169,8 +152,6 @@ class FSMApp(val fractalGraph: FractalGraph,
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${fsm.numValidSubgraphs()} elapsed=${elapsed}"
     )
-
-    fsm
   }
 }
 
@@ -179,7 +160,7 @@ class KeywordSearchApp(val fractalGraph: FractalGraph,
                        numPartitions: Int,
                        explorationSteps: Int,
                        queryWords: Array[String]) extends FractalSparkApp {
-  def execute = {
+  def execute: Unit = {
     val (kws, elapsed) = FractalSparkRunner.time {
       fractalGraph.keywordSearch(numPartitions, queryWords)
     }
@@ -189,8 +170,6 @@ class KeywordSearchApp(val fractalGraph: FractalGraph,
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${kws.numValidSubgraphs()} elapsed=${elapsed}"
     )
-
-    kws
   }
 }
 
@@ -199,7 +178,7 @@ class GQueryingApp(val fractalGraph: FractalGraph,
                    numPartitions: Int,
                    explorationSteps: Int,
                    subgraphPath: String) extends FractalSparkApp {
-  def execute = {
+  def execute: Unit = {
 
     val subgraph = new FractalGraph(
       subgraphPath, fractalGraph.fractalContext, "warn")
@@ -218,8 +197,6 @@ class GQueryingApp(val fractalGraph: FractalGraph,
       s" graph=${fractalGraph} subgraph=${subgraph}" +
       s" counting=${gquerying.numValidSubgraphs()} elapsed=${elapsed}"
     )
-
-    gquerying
   }
 }
 
@@ -227,7 +204,7 @@ class PathsApp(val fractalGraph: FractalGraph,
                commStrategy: String,
                numPartitions: Int,
                explorationSteps: Int) extends FractalSparkApp {
-  def execute = {
+  def execute: Unit = {
     val pathsRes = fractalGraph.paths.
       set("comm_strategy", commStrategy).
       set("num_partitions", numPartitions).
@@ -242,12 +219,10 @@ class PathsApp(val fractalGraph: FractalGraph,
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${pathsRes.numValidSubgraphs()} elapsed=${elapsed}"
     )
-
-    pathsRes
   }
 }
 
-object FractalSparkRunner extends Logging {
+object FractalSparkRunner {
   def time[R](block: => R): (R, Long) = {
     val t0 = System.currentTimeMillis()
     val result = block // call-by-name
@@ -258,8 +233,6 @@ object FractalSparkRunner extends Logging {
   def main(args: Array[String]) {
     // args
     var i = 0
-    val configPath = args(i)
-    i += 1
     val graphClass = args(i) match {
       case "al" =>
         "br.ufmg.cs.systems.fractal.graph.BasicMainGraph"
@@ -271,6 +244,8 @@ object FractalSparkRunner extends Logging {
         throw new RuntimeException(s"Input graph format '${other}' is invalid")
     }
     i += 1
+    val graphPath = args(i)
+    i += 1
     val algorithm = args(i)
     i += 1
     val commStrategy = args(i)
@@ -281,41 +256,16 @@ object FractalSparkRunner extends Logging {
     i += 1
     val logLevel = args(i)
 
-    val config = ujson.read(scala.reflect.io.File(configPath).slurp)
-
     val conf = new SparkConf()
-      .setAppName(config("app").str)
-      .setMaster(config("master").str)
-      .set(config("driver").str, config("url").str)
+    val sc = new SparkContext(conf)
 
-    val ss = SparkSession.builder.config(conf).getOrCreate()
-
-    if (!ss.sparkContext.isLocal) {
+    if (!sc.isLocal) {
       // TODO: this is ugly but have to make sure all spark executors are up by
-      //  the time we start executing fractal applications
+      // the time we start executing fractal applications
       Thread.sleep(10000)
     }
 
-    val fc = new FractalContext(ss.sparkContext, logLevel)
-
-    val hive = HiveWarehouseBuilder.session(ss).build()
-
-    val edges = hive.execute(config("query").str)
-
-    val graphPath = s"${fc.tmpPath}/graph.edges"
-    var outputBuffer: BufferedWriter = null
-
-    val file = new File(graphPath)
-    new File(fc.tmpPath).mkdirs()
-
-    outputBuffer = new BufferedWriter(new FileWriter(file))
-
-    edges.collect.foreach(edge => {
-      outputBuffer.write(s"${edge.get(0)} ${edge.get(1)}\n")
-    })
-
-    outputBuffer.close()
-
+    val fc = new FractalContext(sc, logLevel)
     val fractalGraph = fc.textFile(graphPath, graphClass = graphClass)
 
     val app = algorithm.toLowerCase match {
@@ -371,22 +321,9 @@ object FractalSparkRunner extends Logging {
       i += 1
     }
 
-    val appRes = app.execute
+    app.execute
 
-    val outputPath = s"${sys.env("HOME")}/fractal-outputs/${fc.tmpPath.split('/')(2)}.csv"
-    outputBuffer = new BufferedWriter(new FileWriter(new File(outputPath)))
-
-    //      TODO: without the collect, a not serializable
-    //       error explodes due to ArrayBuffer mappedWords
-    appRes.mappedSubgraphs.collect.foreach(subgraph => {
-      outputBuffer.write(s"${subgraph.mappedWords.mkString(",")}\n")
-    })
-
-    outputBuffer.close()
-
-    hive.close()
     fc.stop()
-    ss.stop()
+    sc.stop()
   }
-
 }

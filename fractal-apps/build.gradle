@@ -40,6 +40,9 @@ dependencies {
     // framework to be probed
     compile 'org.apache.spark:spark-core_2.11:2.4.5'
 
+    // https://mvnrepository.com/artifact/org.apache.spark/spark-sql
+    compile 'org.apache.spark:spark-sql_2.11:2.4.5'
+
     compile 'org.apache.spark:spark-graphx_2.11:2.4.5'
 
     compile 'com.koloboke:koloboke-api-jdk8:1.0.0'
@@ -51,6 +54,12 @@ dependencies {
     compile 'org.scalatest:scalatest_2.11:2.2.6'
 
     compile 'com.typesafe.akka:akka-remote_2.11:2.5.3'
+
+    // https://mvnrepository.com/artifact/com.lihaoyi/upickle
+    compile 'com.lihaoyi:upickle_2.11:0.7.4'
+
+    // https://mvnrepository.com/artifact/com.hortonworks.hive/hive-warehouse-connector
+    compile 'com.hortonworks.hive:hive-warehouse-connector_2.11:1.0.0.3.1.5.0-152'
 
     compile project(':fractal-core')
 }

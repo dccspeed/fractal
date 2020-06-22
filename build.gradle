@@ -55,7 +55,6 @@ test.dependsOn scalaTest
 
 task assemble(dependsOn: ['shadowJar'], overwrite: true)
 
-
 subprojects {
     apply plugin: 'java-library'
     apply plugin: 'java'

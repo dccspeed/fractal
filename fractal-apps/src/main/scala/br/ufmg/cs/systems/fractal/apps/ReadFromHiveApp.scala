@@ -1,4 +1,4 @@
-package br.ufmg.cs.systems.fractal
+package br.ufmg.cs.systems.fractal.apps
 
 import java.util.UUID
 
@@ -6,12 +6,11 @@ import com.hortonworks.spark.sql.hive.llap.HiveWarehouseBuilder
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 
-object FractalSparkRunnerTrilha1 {
+object ReadFromHiveApp {
 
   def main(args: Array[String]) {
     // args
-    var i = 0
-    val configPath = args(i)
+    val configPath = args(0)
     val config = ujson.read(scala.reflect.io.File(configPath).slurp)
 
     val conf = new SparkConf()
@@ -23,11 +22,9 @@ object FractalSparkRunnerTrilha1 {
     val ss = SparkSession.builder.config(conf).enableHiveSupport().getOrCreate()
     val hive = HiveWarehouseBuilder.session(ss).build()
 
-    val edges = hive.execute(config("query").str)
-
-    val uuid = UUID.randomUUID()
-
-    edges.write.csv(s"/dados01/ufmg.m06dcc/${uuid}")
+    hive.execute(config("query").str)
+      .write
+      .csv(s"/dados01/ufmg.m06dcc/${UUID.randomUUID()}")
 
     hive.close()
     ss.stop()

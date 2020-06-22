@@ -3,6 +3,8 @@ package br.ufmg.cs.systems.fractal
 import org.apache.spark.{SparkConf, SparkContext}
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 
+import scala.collection.mutable.Map
+
 class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
   private val numPartitions: Int = 8
   private val appName: String = "fractal-test"
@@ -24,7 +26,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll {
 
     sc = new SparkContext(conf)
     sc.setLogLevel(logLevel)
-    fc = new FractalContext(sc, logLevel)
+    fc = new FractalContext(sc, logLevel, msgSysMasterPort = 6666)
 
     fgraph = fc.textFile ("../data/cube.graph")
 

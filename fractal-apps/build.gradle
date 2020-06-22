@@ -6,18 +6,18 @@
  * user guide available at https://docs.gradle.org/4.2.1/userguide/java_library_plugin.html
  */
 
-version="SPARK-2.4.5"
+version = "SPARK-2.4.5"
 
 buildscript {
-   repositories {
-      mavenLocal()
-         mavenCentral()
-         jcenter()
-         maven { url "https://plugins.gradle.org/m2/" }
-   }
-   dependencies {
-      classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
-   }
+    repositories {
+        mavenLocal()
+        mavenCentral()
+        jcenter()
+        maven { url "https://plugins.gradle.org/m2/" }
+    }
+    dependencies {
+        classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
+    }
 }
 
 // Apply the java-library plugin to add support for Java Library
@@ -25,35 +25,41 @@ apply plugin: 'java-library'
 apply plugin: 'java'
 apply plugin: 'scala'
 apply plugin: "com.github.johnrengelman.shadow"
- 
+
 // In this section you declare where to find the dependencies of your project
 repositories {
     // Use jcenter for resolving your dependencies.
     // You can declare any Maven/Ivy/file repository here.
     jcenter()
-
     mavenCentral()
-
-    maven {
-       url 'https://jitpack.io'
-    }
+    maven { url 'https://jitpack.io' }
+    maven { url 'https://repo.hortonworks.com/content/repositories/releases/' }
 }
 
 dependencies {
     // framework to be probed
     compile 'org.apache.spark:spark-core_2.11:2.4.5'
-    
+
+    // https://mvnrepository.com/artifact/org.apache.spark/spark-sql
+    compile 'org.apache.spark:spark-sql_2.11:2.4.5'
+
     compile 'org.apache.spark:spark-graphx_2.11:2.4.5'
-    
+
     compile 'com.koloboke:koloboke-api-jdk8:1.0.0'
-    
+
     compile 'com.koloboke:koloboke-impl-jdk8:1.0.0'
-    
+
     compile 'org.scala-lang:scala-library:2.11.8'
 
     compile 'org.scalatest:scalatest_2.11:2.2.6'
 
     compile 'com.typesafe.akka:akka-remote_2.11:2.5.3'
+
+    // https://mvnrepository.com/artifact/com.lihaoyi/upickle
+    compile 'com.lihaoyi:upickle_2.11:0.7.4'
+
+    // https://mvnrepository.com/artifact/com.hortonworks.hive/hive-warehouse-connector
+    compile 'com.hortonworks.hive:hive-warehouse-connector_2.11:1.0.0.3.1.5.0-152'
 
     compile project(':fractal-core')
 }

@@ -3,6 +3,9 @@ package br.ufmg.cs.systems.fractal.subgraph
 import java.io.{DataInput, DataOutput}
 
 import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
+import br.ufmg.cs.systems.fractal.graph.MainGraph
+
+import scala.collection.mutable.ArrayBuffer
 
 /**
   * A vertex induced subgraph
@@ -12,13 +15,21 @@ import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
   *
   * @param words integer array indicating the subgraph vertices
   */
-case class VSubgraph(var words: Array[Int]) extends ResultSubgraph[Int] {
+case class VSubgraph(var words: Array[Int],
+                     var mappedWords: ArrayBuffer[String] = null) extends ResultSubgraph[Int] {
 
   // must have because we are messing around with Writables
   def this() = {
     this(null)
   }
-  
+
+  def toMappedSubgraph(config: SparkConfiguration[_]): ResultSubgraph[_] = {
+    val mainGraph = config.getMainGraph[MainGraph[_,_]]
+    mappedWords = ArrayBuffer.empty
+    words.foreach(mappedWords += mainGraph.getVertex(_).getVertexOriginalId)
+    this
+  }
+
   def toInternalSubgraph[E <: Subgraph](config: SparkConfiguration[E]): E = {
     val subgraph = config.createSubgraph[E]
     var i = 0
@@ -45,7 +56,7 @@ case class VSubgraph(var words: Array[Int]) extends ResultSubgraph[Int] {
   }
 
   override def toString = {
-    s"VSubgraph(${words.mkString (", ")})"
+    s"VSubgraph(${vertices.mkString (", ")})"
   }
 
 }

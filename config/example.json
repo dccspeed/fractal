@@ -1,0 +1,7 @@
+{
+  "driver": "spark.sql.hive.hiveserver2.jdbc.url",
+  "url": "jdbc:hive2://localhost:10000",
+  "query": "SELECT * FROM example",
+  "master": "local[*]",
+  "app": "fractal"
+}

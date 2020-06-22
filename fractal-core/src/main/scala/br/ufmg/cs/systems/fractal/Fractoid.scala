@@ -165,6 +165,23 @@ case class Fractoid [S <: Subgraph : ClassTag](
     }
   }
 
+  def mappedSubgraphs: RDD[ResultSubgraph[_]] = mappedSubgraphs((_,_) => true)
+
+  def mappedSubgraphs(shouldOutput: (S,Computation[S]) => Boolean): RDD[ResultSubgraph[_]] = {
+    if (config.confs.contains(SparkConfiguration.COMPUTATION_CONTAINER)) {
+      val thisWithOutput = withOutput(shouldOutput).set(
+        "output_path",
+        s"${config.getOutputPath}-${step}"
+      )
+      logInfo (s"Output to get internalSubgraphs: ${this} ${thisWithOutput}")
+      val configBc = thisWithOutput.masterEngine.configBc
+      thisWithOutput.masterEngine.getSubgraphs.
+        map (_.toMappedSubgraph(configBc.value))
+    } else {
+      throw new RuntimeException(s"Not supported yet for internal Subgraphs")
+    }
+  }
+
   def internalSubgraphs: RDD[S] = internalSubgraphs((_,_) => true)
 
   def internalSubgraphs(

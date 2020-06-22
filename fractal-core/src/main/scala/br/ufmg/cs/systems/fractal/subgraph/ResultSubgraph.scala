@@ -4,6 +4,9 @@ import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.graph.BasicMainGraph
 import org.apache.hadoop.io.Writable
 
+import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
+
 /**
  *
  */
@@ -11,7 +14,9 @@ trait ResultSubgraph[T] extends Writable {
   def words: Array[T]
   def combinations(k: Int): Iterator[ResultSubgraph[T]]
   def toInternalSubgraph[E <: Subgraph](config: SparkConfiguration[E]): E
-  
+  def toMappedSubgraph(config: SparkConfiguration[_]): ResultSubgraph[_]
+  var mappedWords: ArrayBuffer[String]
+
   override def hashCode(): Int = {
     words.toSet.hashCode()
   }
@@ -26,6 +31,10 @@ trait ResultSubgraph[T] extends Writable {
 
     if (this.words.length != other.words.length) return false
     return this.words.toSet == other.words.toSet
+  }
+
+  def vertices = {
+    if (mappedWords != null) mappedWords.toArray else words
   }
 
 }

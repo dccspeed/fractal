@@ -1,11 +1,11 @@
 package br.ufmg.cs.systems.fractal
 
 import br.ufmg.cs.systems.fractal.util.Logging
-import org.apache.hadoop.io._
 import org.apache.spark.{SparkConf, SparkContext}
 
 trait FractalSparkApp extends Logging {
   def fractalGraph: FractalGraph
+
   def execute: Unit
 }
 
@@ -15,9 +15,9 @@ class VSubgraphsApp(val fractalGraph: FractalGraph,
                     explorationSteps: Int) extends FractalSparkApp {
   def execute: Unit = {
     val vsubgraphsRes = fractalGraph.vfractoidAndExpand.
-      set ("comm_strategy", commStrategy).
-      set ("num_partitions", numPartitions).
-      explore (explorationSteps)
+      set("comm_strategy", commStrategy).
+      set("num_partitions", numPartitions).
+      explore(explorationSteps)
 
     vsubgraphsRes.compute()
   }
@@ -29,15 +29,15 @@ class MotifsApp(val fractalGraph: FractalGraph,
                 explorationSteps: Int) extends FractalSparkApp {
   def execute: Unit = {
     val motifsRes = fractalGraph.motifs.
-      set ("comm_strategy", commStrategy).
-      set ("num_partitions", numPartitions).
+      set("comm_strategy", commStrategy).
+      set("num_partitions", numPartitions).
       explore(explorationSteps)
 
     val (accums, elapsed) = FractalSparkRunner.time {
       motifsRes.compute()
     }
 
-    logInfo (s"MotifsApp comm=${commStrategy}" +
+    logInfo(s"MotifsApp comm=${commStrategy}" +
       s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${motifsRes.numValidSubgraphs()} elapsed=${elapsed}"
@@ -51,19 +51,19 @@ class CliquesOptApp(val fractalGraph: FractalGraph,
                     explorationSteps: Int) extends FractalSparkApp {
   def execute: Unit = {
     val cliquesRes = fractalGraph.cliquesKClist(explorationSteps + 1).
-      set ("comm_strategy", commStrategy).
-      set ("num_partitions", numPartitions).
+      set("comm_strategy", commStrategy).
+      set("num_partitions", numPartitions).
       explore(explorationSteps)
 
     val (accums, elapsed) = FractalSparkRunner.time {
       cliquesRes.compute()
     }
 
-    logInfo (s"CliquesOptApp comm=${commStrategy}" +
+    logInfo(s"CliquesOptApp comm=${commStrategy}" +
       s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${cliquesRes.numValidSubgraphs()} elapsed=${elapsed}"
-      )
+    )
   }
 }
 
@@ -73,20 +73,20 @@ class CliquesApp(val fractalGraph: FractalGraph,
                  explorationSteps: Int) extends FractalSparkApp {
   def execute: Unit = {
     val cliquesRes = fractalGraph.cliques.
-      set ("comm_strategy", commStrategy).
-      set ("num_partitions", numPartitions).
-      set ("fractal.optimizations", "br.ufmg.cs.systems.fractal.optimization.CliqueOptimization").
+      set("comm_strategy", commStrategy).
+      set("num_partitions", numPartitions).
+      set("fractal.optimizations", "br.ufmg.cs.systems.fractal.optimization.CliqueOptimization").
       explore(explorationSteps)
 
     val (accums, elapsed) = FractalSparkRunner.time {
       cliquesRes.compute()
     }
 
-    logInfo (s"CliquesApp comm=${commStrategy}" +
+    logInfo(s"CliquesApp comm=${commStrategy}" +
       s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${cliquesRes.numValidSubgraphs()} elapsed=${elapsed}"
-      )
+    )
   }
 }
 
@@ -96,15 +96,15 @@ class MaximalCliquesApp(val fractalGraph: FractalGraph,
                         explorationSteps: Int) extends FractalSparkApp {
   def execute: Unit = {
     val maximalcliquesRes = fractalGraph.maximalcliques.
-      set ("comm_strategy", commStrategy).
-      set ("num_partitions", numPartitions).
+      set("comm_strategy", commStrategy).
+      set("num_partitions", numPartitions).
       explore(explorationSteps)
 
     val (counting, elapsed) = FractalSparkRunner.time {
       maximalcliquesRes.compute()
     }
 
-    logInfo (s"MaximalCliquesApp comm=${commStrategy}" +
+    logInfo(s"MaximalCliquesApp comm=${commStrategy}" +
       s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${maximalcliquesRes.numValidSubgraphs()} elapsed=${elapsed}"
@@ -119,14 +119,14 @@ class QuasiCliquesApp(val fractalGraph: FractalGraph,
                       minDensity: Double) extends FractalSparkApp {
   def execute: Unit = {
     val quasiCliquesRes = fractalGraph.quasiCliques(explorationSteps, minDensity).
-      set ("comm_strategy", commStrategy).
-      set ("num_partitions", numPartitions)
+      set("comm_strategy", commStrategy).
+      set("num_partitions", numPartitions)
 
     val (counting, elapsed) = FractalSparkRunner.time {
       quasiCliquesRes.compute()
     }
 
-    logInfo (s"QuasiCliquesApp comm=${commStrategy}" +
+    logInfo(s"QuasiCliquesApp comm=${commStrategy}" +
       s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${quasiCliquesRes.numValidSubgraphs()} elapsed=${elapsed}"
@@ -140,14 +140,14 @@ class FSMApp(val fractalGraph: FractalGraph,
              explorationSteps: Int,
              support: Int) extends FractalSparkApp {
   def execute: Unit = {
-    fractalGraph.set ("comm_strategy", commStrategy)
-    fractalGraph.set ("num_partitions", numPartitions)
+    fractalGraph.set("comm_strategy", commStrategy)
+    fractalGraph.set("num_partitions", numPartitions)
 
     val (fsm, elapsed) = FractalSparkRunner.time {
       fractalGraph.fsm(support, explorationSteps)
     }
 
-    logInfo (s"FSMApp comm=${commStrategy}" +
+    logInfo(s"FSMApp comm=${commStrategy}" +
       s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${fsm.numValidSubgraphs()} elapsed=${elapsed}"
@@ -165,7 +165,7 @@ class KeywordSearchApp(val fractalGraph: FractalGraph,
       fractalGraph.keywordSearch(numPartitions, queryWords)
     }
 
-    logInfo (s"KeywordSearchApp comm=${commStrategy}" +
+    logInfo(s"KeywordSearchApp comm=${commStrategy}" +
       s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${kws.numValidSubgraphs()} elapsed=${elapsed}"
@@ -184,37 +184,37 @@ class GQueryingApp(val fractalGraph: FractalGraph,
       subgraphPath, fractalGraph.fractalContext, "warn")
 
     val gquerying = fractalGraph.gquerying(subgraph).
-      set ("comm_strategy", commStrategy).
-      set ("num_partitions", numPartitions).
+      set("comm_strategy", commStrategy).
+      set("num_partitions", numPartitions).
       explore(explorationSteps)
 
     val (accums, elapsed) = FractalSparkRunner.time {
       gquerying.compute()
     }
 
-    println (s"GQueryingApp comm=${commStrategy}" +
+    println(s"GQueryingApp comm=${commStrategy}" +
       s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
       s" graph=${fractalGraph} subgraph=${subgraph}" +
       s" counting=${gquerying.numValidSubgraphs()} elapsed=${elapsed}"
-      )
+    )
   }
 }
 
 class PathsApp(val fractalGraph: FractalGraph,
-                 commStrategy: String,
-                 numPartitions: Int,
-                 explorationSteps: Int) extends FractalSparkApp {
+               commStrategy: String,
+               numPartitions: Int,
+               explorationSteps: Int) extends FractalSparkApp {
   def execute: Unit = {
     val pathsRes = fractalGraph.paths.
-      set ("comm_strategy", commStrategy).
-      set ("num_partitions", numPartitions).
+      set("comm_strategy", commStrategy).
+      set("num_partitions", numPartitions).
       explore(explorationSteps)
 
     val (accums, elapsed) = FractalSparkRunner.time {
       pathsRes.compute()
     }
 
-    logInfo (s"PathsApp comm=${commStrategy}" +
+    logInfo(s"PathsApp comm=${commStrategy}" +
       s" numPartitions=${numPartitions} explorationSteps=${explorationSteps}" +
       s" graph=${fractalGraph} " +
       s" numValidSubgraphs=${pathsRes.numValidSubgraphs()} elapsed=${elapsed}"
@@ -225,7 +225,7 @@ class PathsApp(val fractalGraph: FractalGraph,
 object FractalSparkRunner {
   def time[R](block: => R): (R, Long) = {
     val t0 = System.currentTimeMillis()
-    val result = block    // call-by-name
+    val result = block // call-by-name
     val t1 = System.currentTimeMillis()
     (result, t1 - t0)
   }
@@ -266,7 +266,7 @@ object FractalSparkRunner {
     }
 
     val fc = new FractalContext(sc, logLevel)
-    val fractalGraph = fc.textFile (graphPath, graphClass = graphClass)
+    val fractalGraph = fc.textFile(graphPath, graphClass = graphClass)
 
     val app = algorithm.toLowerCase match {
       case "vsubgraphs" =>
@@ -313,10 +313,10 @@ object FractalSparkRunner {
 
     i += 1
     while (i < args.length) {
-      println (s"Found config=${args(i)}")
+      println(s"Found config=${args(i)}")
       val kv = args(i).split(":")
       if (kv.length == 2) {
-        fractalGraph.set (kv(0), kv(1))
+        fractalGraph.set(kv(0), kv(1))
       }
       i += 1
     }

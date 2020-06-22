@@ -7,10 +7,12 @@ import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.map.IntObjCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.IntObjMap;
+import com.koloboke.collect.map.ObjIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
 import java.util.function.IntConsumer;
 
 import com.koloboke.collect.map.hash.HashIntObjMaps;
+import com.koloboke.collect.map.hash.HashObjIntMaps;
 import com.koloboke.function.IntIntConsumer;
 import com.koloboke.function.IntObjConsumer;
 import org.apache.commons.io.input.BOMInputStream;
@@ -38,8 +40,8 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
    private static final int INITIAL_ARRAY_SIZE = 4096;
    
-   protected IntIntMap vertexIdMap = 
-      HashIntIntMaps.getDefaultFactory().withDefaultValue(-1).newMutableMap();
+   protected ObjIntMap<String> vertexIdMap =
+      HashObjIntMaps.getDefaultFactory().withDefaultValue(-1).newMutableMap();
 
    protected Vertex<V>[] vertexIndexF;
    protected Edge<E>[] edgeIndexF;
@@ -764,10 +766,11 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
             Vertex vertex = parseVertex(tokenizer);
 
-            int vertexId = vertex.getVertexId();
+            int vertexIdx = vertex.getVertexId();
+            parseVertexLabel(tokenizer, vertexIdx);
 
             while (tokenizer.hasMoreTokens()) {
-               parseEdge(tokenizer, vertexId);
+               parseEdge(tokenizer, vertexIdx);
                if (numEdges % 1e7 == 0) {
                   LOG.info("Stats numVertices=" + numVertices +
                         " numEdges=" + numEdges);
@@ -783,24 +786,26 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       }
    }
 
-   protected Edge parseEdge(StringTokenizer tokenizer, int vertexId) {
-      int neighborId = Integer.parseInt(tokenizer.nextToken());
-      int neighborIdx = neighborId;
+   protected Edge parseEdge(StringTokenizer tokenizer, int vertexIdx) {
+      Vertex neighborVertex = parseVertex(tokenizer);
+      int neighborIdx = neighborVertex.getVertexId();
 
-      //int neighborIdx = vertexIdMap.get(neighborId);
-      //if (neighborIdx == -1) {
-      //   neighborIdx = vertexIdMap.size();
-      //   vertexIdMap.put(neighborId, neighborIdx);
-      //   addVertex(createVertex(neighborIdx, neighborId, -1));
-      //}
+      // TODO: Handle this when directed graphs
+      int from, to;
+      if (vertexIdx < neighborIdx) {
+         from = vertexIdx;
+         to = neighborIdx;
+      } else {
+         from = neighborIdx;
+         to = vertexIdx;
+      }
 
       Edge edge;
-
       if (isEdgeLabelled) {
          int edgeLabel = Integer.parseInt(tokenizer.nextToken());
-         edge = createEdge(vertexId, neighborIdx, edgeLabel);
+         edge = createEdge(from, to, edgeLabel);
       } else {
-         edge = createEdge(vertexId, neighborIdx);
+         edge = createEdge(from, to);
       }
 
       addEdge(edge);
@@ -809,30 +814,38 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    }
 
    protected Vertex parseVertex(StringTokenizer tokenizer) {
-      int vertexId = Integer.parseInt(tokenizer.nextToken());
-      int vertexLabel = parseVertexLabel(tokenizer);
+      Vertex vertex;
 
-      int vertexIdx = vertexIdMap.get(vertexId);
+      String vertexId = tokenizer.nextToken().trim();
+      int vertexIdx = vertexIdMap.getInt(vertexId);
       if (vertexIdx == -1) {
-         //vertexIdx = vertexIdMap.size();
-         vertexIdx = vertexId;
-         //vertexIdMap.put(vertexId, vertexIdx);
-         Vertex vertex = createVertex(vertexIdx, vertexId, vertexLabel);
+         vertexIdx = vertexIdMap.size();
+         vertexIdMap.put(vertexId, vertexIdx);
+         vertex = createVertex(vertexIdx, vertexId, -1);
          addVertex(vertex);
-         return vertex;
       } else {
-         Vertex vertex = vertexIndexF[vertexIdx];
-         int currVertexLabel = vertex.getVertexLabel();
-         if (currVertexLabel == -1) {
-            vertex.setVertexLabel(vertexLabel);
-         } else if (currVertexLabel != vertexLabel) {
-            throw new RuntimeException("Invalid state vertexLabel=" +
-                  vertexLabel + " vertexId=" + vertexId +
-                  " vertexIdx=" + vertexIdx + " vertex=" + vertex +
-                  " numVertices=" + numVertices +
-                  " vertexIdMapSize=" + vertexIdMap.size());
+         vertex = vertexIndexF[vertexIdx];
+      }
+      return vertex;
+   }
+
+   protected void parseVertexLabel(StringTokenizer tokenizer, int vertexIdx) {
+      int vertexLabel = parseVertexLabel(tokenizer);
+      Vertex vertex = vertexIndexF[vertexIdx];
+
+      int currVertexLabel = vertex.getVertexLabel();
+      if (currVertexLabel == -1) {
+         vertex.setVertexLabel(vertexLabel);
+
+         if (vertexProperties != null) {
+            vertex.setProperty(vertexProperties[vertexLabel]);
          }
-         return vertex;
+      } else if (currVertexLabel != vertexLabel) {
+         throw new RuntimeException("Invalid state vertexLabel=" +
+                 vertexLabel + " vertexId=" + vertex.getVertexOriginalId() +
+                 " vertexIdx=" + vertexIdx + " vertex=" + vertex +
+                 " numVertices=" + numVertices +
+                 " vertexIdMapSize=" + vertexIdMap.size());
       }
    }
 
@@ -887,12 +900,8 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       return (dest1 == src2 || dest1 == dest2 || src1 == dest2);
    }
 
-   protected Vertex createVertex(int id, int originalId, int label) {
-      Vertex vertex = new Vertex(id, originalId, label);
-      if (vertexProperties != null) {
-         vertex.setProperty(vertexProperties[label]);
-      }
-      return vertex;
+   protected Vertex createVertex(int id, String originalId, int label) {
+      return new Vertex(id, originalId, label);
    }
 
    protected Edge createEdge(int srcId, int destId) {

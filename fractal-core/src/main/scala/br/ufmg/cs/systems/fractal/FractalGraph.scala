@@ -27,13 +27,16 @@ class FractalGraph(
                     graphClass: String,
                     local: Boolean,
                     fc: FractalContext,
-                    logLevel: String) extends Logging {
+                    logLevel: String,
+                    defaultConfs: Map[String,Any]) extends Logging {
 
   private val uuid: UUID = UUID.randomUUID
 
   private val graphId: Int = FractalGraph.newGraphId()
 
-  private val confs: Map[String,Any] = Map.empty
+  private val confs: Map[String,Any] = {
+    Map.empty[String,Any] ++ defaultConfs
+  }
 
   private lazy val mainGraph: MainGraph[String,String] = {
     import Configuration._
@@ -90,25 +93,34 @@ class FractalGraph(
 
   def fractalContext: FractalContext = fc
 
+  /* constructors { */
+
   def this(path: String, arab: FractalContext, logLevel: String) = {
     this (path, Configuration.CONF_MAINGRAPH_CLASS_DEFAULT,
-      false, arab, logLevel)
+      false, arab, logLevel, Map.empty)
   }
 
   def this(path: String, arab: FractalContext) = {
     this (path, Configuration.CONF_MAINGRAPH_CLASS_DEFAULT,
-      false, arab, "warn")
+      false, arab, "warn", Map.empty)
   }
 
   def this(path: String, graphClass: String,
            arab: FractalContext, logLevel: String) = {
-    this (path, graphClass, false, arab, logLevel)
+    this (path, graphClass, false, arab, logLevel, Map.empty)
+  }
+
+  def this(path: String, graphClass: String,
+           arab: FractalContext, logLevel: String, defaultConfs: Map[String,Any]) = {
+    this (path, graphClass, false, arab, logLevel, defaultConfs)
   }
 
   def this(path: String, graphClass: String,
            arab: FractalContext) = {
-    this (path, graphClass, false, arab, "warn")
+    this (path, graphClass, false, arab, "warn", Map.empty)
   }
+
+  /* } */
 
   private def resultHandler [S <: Subgraph : ClassTag] (
       config: SparkConfiguration[S])

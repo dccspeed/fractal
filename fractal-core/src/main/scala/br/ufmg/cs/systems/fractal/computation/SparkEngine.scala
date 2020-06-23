@@ -1,7 +1,7 @@
 package br.ufmg.cs.systems.fractal.computation
 
-import java.{io, util}
 import java.io.OutputStreamWriter
+import java.{io, util}
 
 import br.ufmg.cs.systems.fractal.aggregation.{AggregationStorage, AggregationStorageFactory}
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
@@ -28,11 +28,11 @@ trait SparkEngine[S <: Subgraph]
    val validSubgraphsAccum: LongAccumulator
    val previousAggregationsBc: Broadcast[_]
 
-   def configurationId: Int
+   def configuration: SparkConfiguration[S]
 
-   def configuration: SparkConfiguration[S] = {
-      Configuration.get(configurationId).asInstanceOf[SparkConfiguration[S]]
-   }
+   //def configuration: SparkConfiguration[S] = {
+   //   Configuration.get(configurationId).asInstanceOf[SparkConfiguration[S]]
+   //}
 
    setLogLevel(configuration.getLogLevel)
 
@@ -401,10 +401,10 @@ trait SparkEngine[S <: Subgraph]
    def computeAggregationObjLong[K <: io.Serializable]
    (_key: S => K, _defaultValue: Long, _value: S => Long,
     _reduce: (Long, Long) => Long)
-   : util.Iterator[(K, Long)]
+   : Iterator[(K, Long)]
 
    def computeAggregationObjObj[K <: io.Serializable, V <: io.Serializable]
    (_key: S => K, _value: S => V, _aggregate: (V, V) => Unit)
-   : util.Iterator[(K, V)]
+   : Iterator[(K, V)]
 }
 

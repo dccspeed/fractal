@@ -359,7 +359,7 @@ class SparkGraphRedMasterEngine[S <: Subgraph]
             accums = aggAccums,
             validSugraphsAccum,
             previousAggregationsBc = previousAggregationsBc,
-            configurationId = configBc.value.getId
+            configuration = configBc.value
          )
 
          execEngine.init()

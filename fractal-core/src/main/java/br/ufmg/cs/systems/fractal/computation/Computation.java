@@ -6,7 +6,6 @@ import br.ufmg.cs.systems.fractal.aggregation.SubgraphAggregation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
-import com.koloboke.collect.IntCollection;
 import org.apache.hadoop.io.Writable;
 
 public interface Computation<S extends Subgraph> {

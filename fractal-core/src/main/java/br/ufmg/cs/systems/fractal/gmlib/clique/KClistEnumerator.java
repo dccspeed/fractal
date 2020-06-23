@@ -4,7 +4,6 @@ import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import br.ufmg.cs.systems.fractal.graph.VertexNeighbourhood;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.Utils;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;

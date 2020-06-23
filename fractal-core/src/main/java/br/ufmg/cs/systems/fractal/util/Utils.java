@@ -1,9 +1,7 @@
 package br.ufmg.cs.systems.fractal.util;
 
-import br.ufmg.cs.systems.fractal.pattern.BasicPattern;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import com.koloboke.collect.IntCollection;
-import org.apache.log4j.Logger;
 
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;

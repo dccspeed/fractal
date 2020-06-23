@@ -1,7 +1,7 @@
 package br.ufmg.cs.systems.fractal.computation;
 
-import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph;
+import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 
 public abstract class PatternInducedComputation<E extends PatternInducedSubgraph> extends BasicComputation<E> {
     @Override

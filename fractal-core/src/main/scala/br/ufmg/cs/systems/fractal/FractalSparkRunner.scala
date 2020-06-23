@@ -1,12 +1,17 @@
 package br.ufmg.cs.systems.fractal
 
+import java.util.function.BiPredicate
+
+import akka.japi.Predicate
 import br.ufmg.cs.systems.fractal.computation.Computation
 import br.ufmg.cs.systems.fractal.gmlib.fsm.MinImageSupport
+import br.ufmg.cs.systems.fractal.gmlib.periodic.InducedPeriodicSubgraphsPFMCVC
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternUtils}
 import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph, VertexInducedSubgraph}
-import br.ufmg.cs.systems.fractal.util.{Logging, SubgraphCallback}
+import br.ufmg.cs.systems.fractal.util.{EventTimer, Logging, SubgraphCallback}
 import com.koloboke.collect.map.hash.HashObjObjMaps
 import com.koloboke.collect.set.hash.HashObjSets
+import javax.swing.event.HyperlinkEvent.EventType
 import org.apache.hadoop.io._
 import org.apache.spark.{SparkConf, SparkContext}
 
@@ -255,6 +260,10 @@ class MotifsApp2(val fractalGraph: FractalGraph,
                 numPartitions: Int,
                 explorationSteps: Int) extends FractalSparkApp {
    def execute: Unit = {
+      if (EventTimer.ENABLED) {
+         EventTimer.masterInstance(0).start(EventTimer.INITIALIZATION)
+      }
+
       val motifsRes = fractalGraph.vfractoid
          .expand(1)
          .set("num_partitions", numPartitions)
@@ -271,6 +280,10 @@ class MotifsApp2(val fractalGraph: FractalGraph,
 
       val (motifCountMap, elapsed) = FractalSparkRunner.time {
          motifCountRDD.collectAsMap()
+      }
+
+      if (EventTimer.ENABLED) {
+         EventTimer.masterInstance(0).finish(EventTimer.AGGREGATION)
       }
 
       for ((m,c) <- motifCountMap) {
@@ -677,22 +690,91 @@ class GQueryingInducedApp(val fractalGraph: FractalGraph,
    }
 }
 
-class InducedPeriodicSubgraphsApp(val fractalGraph: FractalGraph,
-                                  commStrategy: String,
-                                  numPartitions: Int,
-                                  explorationSteps: Int,
-                                  periodicThreshold: Int) extends FractalSparkApp {
+class InducedPeriodicSubgraphsPFApp(val fractalGraph: FractalGraph,
+                                    commStrategy: String,
+                                    numPartitions: Int,
+                                    explorationSteps: Int,
+                                    periodicThreshold: Int) extends FractalSparkApp {
+   def execute: Unit = {
+      val callback: (Pattern, Fractoid[PatternInducedSubgraph]) => Unit =
+         (pattern, frac) => {
+            val (numValidSubgraphs, elapsed) = FractalSparkRunner.time {
+               frac.aggregationCount
+            }
+
+            logInfo(s"InducedPeriodicSubgraphsSFApp" +
+               s" pattern=${pattern}" +
+               s" numValidSubgraphs=${numValidSubgraphs} elapsed=${elapsed}")
+         }
+
+      fractalGraph.set("num_partitions", numPartitions)
+      fractalGraph.set("comm_strategy", commStrategy)
+      fractalGraph.periodicInducedSubgraphsPF(
+         periodicThreshold, explorationSteps + 1, callback)
+   }
+}
+
+class InducedPeriodicSubgraphsPFMCVCApp(val fractalGraph: FractalGraph,
+                                    commStrategy: String,
+                                    numPartitions: Int,
+                                    explorationSteps: Int,
+                                    periodicThreshold: Int) extends FractalSparkApp {
    def execute: Unit = {
       fractalGraph.set("num_partitions", numPartitions)
       fractalGraph.set("comm_strategy", commStrategy)
-      val frac = fractalGraph.periodicInducedSubgraphs(periodicThreshold)
+      val callback = (app: InducedPeriodicSubgraphsPFMCVC,
+                      pattern: Pattern,
+                      frac: Fractoid[PatternInducedSubgraph]) => {
+
+         val predicate = new BiPredicate[PatternInducedSubgraph,
+            Computation[PatternInducedSubgraph]] with Serializable {
+            override def test(s: PatternInducedSubgraph,
+                              c: Computation[PatternInducedSubgraph])
+            : Boolean = {
+               app.periodicFilter(s, c)
+            }
+         }
+
+         val aggCallback: (
+            PatternInducedSubgraph,
+               Computation[PatternInducedSubgraph],
+               SubgraphCallback[PatternInducedSubgraph]) => Unit =
+            (s,c,cb) => {
+               s.completeMatch(c, c.getPattern, predicate, cb)
+            }
+
+         val (numSubgraphs, elapsed) = FractalSparkRunner.time {
+            frac.aggregationCountWithCallback(aggCallback)
+         }
+
+         logInfo(s"InducedPeriodicSubgraphsPFMCVCApp" +
+            s" pattern=${pattern}" +
+            s" numValidSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+
+      }
+
+      fractalGraph.periodicInducedSubgraphsPFMCVC(
+         periodicThreshold, explorationSteps + 1, callback)
+
+   }
+}
+
+class InducedPeriodicSubgraphsSFApp(val fractalGraph: FractalGraph,
+                                    commStrategy: String,
+                                    numPartitions: Int,
+                                    explorationSteps: Int,
+                                    periodicThreshold: Int) extends FractalSparkApp {
+   def execute: Unit = {
+      fractalGraph.set("num_partitions", numPartitions)
+      fractalGraph.set("comm_strategy", commStrategy)
+      val frac = fractalGraph.periodicInducedSubgraphsSF(periodicThreshold)
          .explore(explorationSteps)
 
       val (numValidSubgraphs, elapsed) = FractalSparkRunner.time {
          frac.aggregationCount
       }
 
-      logInfo(s"InducedPeriodicSubgraphsApp" +
+      logInfo(s"InducedPeriodicSubgraphsSFApp" +
          s" numValidSubgraphs=${numValidSubgraphs} elapsed=${elapsed}")
    }
 }
@@ -860,7 +942,17 @@ object FractalSparkRunner extends Logging {
          case "periodicinduced" =>
             i += 1
             val periodicThreshold = args(i).toInt
-            new InducedPeriodicSubgraphsApp(fractalGraph, commStrategy,
+            new InducedPeriodicSubgraphsSFApp(fractalGraph, commStrategy,
+               numPartitions, explorationSteps, periodicThreshold)
+         case "periodicinducedpf" =>
+            i += 1
+            val periodicThreshold = args(i).toInt
+            new InducedPeriodicSubgraphsPFApp(fractalGraph, commStrategy,
+               numPartitions, explorationSteps, periodicThreshold)
+         case "periodicinducedpfmcvc" =>
+            i += 1
+            val periodicThreshold = args(i).toInt
+            new InducedPeriodicSubgraphsPFMCVCApp(fractalGraph, commStrategy,
                numPartitions, explorationSteps, periodicThreshold)
          case appName =>
             throw new RuntimeException(s"Unknown app: ${appName}")

@@ -6,12 +6,11 @@ import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.IntCursor;
+import org.apache.log4j.Logger;
 
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
-
-import org.apache.log4j.Logger;
 
 public class SubgraphEnumerator<S extends Subgraph> implements Iterator<S> {
    protected static final Logger LOG = Logger.getLogger(SubgraphEnumerator.class);

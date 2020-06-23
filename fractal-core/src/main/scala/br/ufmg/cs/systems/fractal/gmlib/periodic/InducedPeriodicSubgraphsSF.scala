@@ -3,15 +3,12 @@ package br.ufmg.cs.systems.fractal.gmlib.periodic
 import java.io.Serializable
 import java.util.function.IntConsumer
 
-import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
 import br.ufmg.cs.systems.fractal.computation.Computation
-import br.ufmg.cs.systems.fractal.gmlib.keywordsearch.BuiltInApplication
+import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplication
 import br.ufmg.cs.systems.fractal.graph.MainGraph
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph
-import br.ufmg.cs.systems.fractal.util.Logging
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
-import br.ufmg.cs.systems.fractal.util.pool.IntArrayListViewPool
-import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool
+import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
 
 /**
  * Periodic induced subgraphs assumes each each has a sequence of ordered
@@ -22,14 +19,18 @@ import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool
  * *periodicThreshold* and also the time difference between consecutive
  * timestamps must be the same for the whole (sub)sequence
  */
-object InducedPeriodicSubgraphs extends Logging {
+class InducedPeriodicSubgraphsSF(periodicThreshold: Int)
+   extends BuiltInApplication[Fractoid[VertexInducedSubgraph]] {
+
+   private val periodicTime = new IntArrayList()
+   private val consumer = new PeriodicConsumer
+   private val stack = new IntArrayList()
+   private val indices = new IntArrayList()
 
    /**
     * Consumer used to process common timestamps of a set of edges
     */
    class PeriodicConsumer extends IntConsumer with Serializable {
-      val periodicTime: IntArrayList = new IntArrayList()
-      def clear(): Unit = periodicTime.clear()
       override def accept(timestamp: Int): Unit = periodicTime.add(timestamp)
    }
 
@@ -45,10 +46,11 @@ object InducedPeriodicSubgraphs extends Logging {
 
       if (numTimestamps < periodicThreshold) return false
 
-      val stack = IntArrayListPool.instance().createObject()
-      val indices = IntArrayListPool.instance().createObject()
+      stack.clear()
+      indices.clear()
       var step = -1
 
+      // initialize candidates stack
       stack.add(-1)
       var i = numTimestamps - 1
       while (i >= 0) {
@@ -56,36 +58,44 @@ object InducedPeriodicSubgraphs extends Logging {
          i -= 1
       }
 
-      var continue = stack.size() > 0
+      var continue = !stack.isEmpty
       var foundPeriodicTimestamps = false
 
       while (continue) {
-         val idx = stack.remove(stack.size() - 1)
-         if (idx == -1) {
+         val idx = stack.remove(stack.size() - 1) // next timestamp index
+
+         if (idx == -1) { // depth limit reached, backtrack
             indices.removeLast()
-         } else {
+
+         } else { // consume next timestamp index
             var valid = true
 
             indices.add(idx)
             val indicesSize = indices.size()
-            if (indicesSize > 1) {
-               if (indicesSize == 2) {
-                  step = timestamps.getu(indices.getu(1)) -
-                     timestamps.getu(indices.getu(0))
-               } else if (timestamps.getu(indices.getu(indicesSize - 1)) -
-                  timestamps.getu(indices.getu(indicesSize - 2)) != step) {
-                  indices.removeLast()
-                  valid = false
-               }
+
+            if (indicesSize == 2) { // new period step
+               step = timestamps.getu(indices.getu(1)) -
+                  timestamps.getu(indices.getu(0))
+            } else if (indicesSize > 1
+                  && timestamps.getu(indices.getu(indicesSize - 1)) -
+                  timestamps.getu(indices.getu(indicesSize - 2)) != step
+            ) { // period step exists but next interval is not periodic
+               indices.removeLast()
+               valid = false
             }
 
-            if (valid) {
+            if (valid) { // current sequence is valid
                if (indicesSize == periodicThreshold) {
-                  // periodic condition holds
+                  /**
+                   * periodic condition holds, finish searching
+                   */
                   continue = false
                   foundPeriodicTimestamps = true
-               } else {
-                  indices.add(-1)
+               } else { // valid sequence has not reached min size yet
+                  /**
+                   * add new index candidates for next level
+                   */
+                  stack.add(-1)
                   i = idx + 1
                   while (i < numTimestamps) {
                      stack.add(i)
@@ -94,12 +104,9 @@ object InducedPeriodicSubgraphs extends Logging {
                }
             }
          }
+
+         continue = continue && !stack.isEmpty
       }
-
-      IntArrayListPool.instance().reclaimObject(stack)
-      IntArrayListPool.instance().reclaimObject(indices)
-
-      logInfo(s"PeriodicTimestamp ${indices} ${foundPeriodicTimestamps}")
 
       foundPeriodicTimestamps
    }
@@ -108,31 +115,26 @@ object InducedPeriodicSubgraphs extends Logging {
     * Periodic filter function to be used on each subgraph
     * @param s subgraph
     * @param c computation
-    * @param periodicThreshold subgraph must be periodic at this rate
-    * @param consumer to consumer common edge labels in the input graph
     * @return
     */
    private def periodicFilter
-   (s: VertexInducedSubgraph, c: Computation[VertexInducedSubgraph],
-    periodicThreshold: Int, consumer: PeriodicConsumer): Boolean = {
+   (s: VertexInducedSubgraph, c: Computation[VertexInducedSubgraph])
+   : Boolean = {
       if (s.getNumVertices == 1) return true
       val graph = c.getConfig.getMainGraph[MainGraph[_,_]]
-      consumer.clear()
+      periodicTime.clear()
       graph.forEachCommonEdgeLabels(s.getEdges, consumer)
-      isPeriodic(consumer.periodicTime, periodicThreshold)
+      isPeriodic(periodicTime, periodicThreshold)
    }
 
    /**
     * Main entry for this built-in application
     * @param fgraph
-    * @param periodicThreshold
     * @return fractoid that can be explored an arbitrary number of times
     */
-   def apply(fgraph: FractalGraph, periodicThreshold: Int)
-   : Fractoid[VertexInducedSubgraph] = {
-      val consumer = new PeriodicConsumer
+   override def apply(fgraph: FractalGraph): Fractoid[VertexInducedSubgraph] = {
       fgraph.vfractoid.expand(1).filter(
-         (s,c) => periodicFilter(s, c, periodicThreshold, consumer)
+         (s,c) => periodicFilter(s, c)
       )
    }
 }

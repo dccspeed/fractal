@@ -6,8 +6,9 @@ import java.util.concurrent.atomic._
 
 import akka.actor._
 import br.ufmg.cs.systems.fractal.aggregation._
+import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
-import br.ufmg.cs.systems.fractal.util.Logging
+import br.ufmg.cs.systems.fractal.util.{EventTimer, Logging}
 import com.koloboke.collect.map.{ObjLongCursor, ObjObjCursor}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.util.LongAccumulator
@@ -18,13 +19,14 @@ import scala.concurrent.Future
 
 /**
  */
-case class SparkFromScratchEngine[S <: Subgraph](
-                                                   partitionId: Int,
-                                                   step: Int,
-                                                   accums: Map[String,LongAccumulator],
-                                                   validSubgraphsAccum: LongAccumulator,
-                                                   previousAggregationsBc: Broadcast[_],
-                                                   configurationId: Int) extends SparkEngine[S] {
+case class SparkFromScratchEngine[S <: Subgraph]
+(
+   partitionId: Int,
+   step: Int,
+   accums: Map[String,LongAccumulator],
+   validSubgraphsAccum: LongAccumulator,
+   previousAggregationsBc: Broadcast[_],
+   configuration: SparkConfiguration[S]) extends SparkEngine[S] {
 
    @transient var slaveActorRef: ActorRef = _
 
@@ -83,9 +85,20 @@ case class SparkFromScratchEngine[S <: Subgraph](
    override def getSubgraphAggregation() = subgraphAggregation
 
    private def run(): Unit = {
+      if (EventTimer.ENABLED) {
+         EventTimer.workerInstance(partitionId).finishAndStart(
+            EventTimer.INITIALIZATION,
+            EventTimer.ENUMERATION_FILTERING)
+      }
+
       val subgraph: S = configuration.createSubgraph()
       computation.getSubgraphEnumerator.set(computation, subgraph, null)
       computation.compute(subgraph)
+
+      if (EventTimer.ENABLED) {
+         EventTimer.workerInstance(partitionId)
+            .finish(EventTimer.ENUMERATION_FILTERING)
+      }
    }
 
    /**
@@ -136,7 +149,7 @@ case class SparkFromScratchEngine[S <: Subgraph](
    override def computeAggregationObjLong[K <: Serializable]
    (_key: S => K, _defaultValue: Long, _value: S => Long,
     _reduce: (Long,Long) => Long)
-   : java.util.Iterator[(K,Long)] = {
+   : Iterator[(K,Long)] = {
       val start = System.currentTimeMillis
 
       /**
@@ -174,7 +187,7 @@ case class SparkFromScratchEngine[S <: Subgraph](
        * subgraphAggregation works -> iterator works -> subgraphAggregation
        * works -> iterator works -> ...
        */
-      val keyValueIterator = new java.util.Iterator[(K,Long)] {
+      val keyValueIterator = new Iterator[(K,Long)] {
 
          private val computationFinished = new AtomicBoolean(false)
          private val finished = new AtomicBoolean(false)
@@ -268,7 +281,7 @@ case class SparkFromScratchEngine[S <: Subgraph](
     */
    override def computeAggregationObjObj[K <: Serializable, V <: Serializable]
    (_key: S => K, _value: S => V, _aggregate: (V,V) => Unit)
-   : java.util.Iterator[(K,V)] = {
+   : Iterator[(K,V)] = {
       val start = System.currentTimeMillis
 
       // build a subgraph aggregation where keys and values are objects,
@@ -300,7 +313,7 @@ case class SparkFromScratchEngine[S <: Subgraph](
        * subgraphAggregation works -> iterator works -> subgraphAggregation
        * works -> iterator works -> ...
        */
-      val keyValueIterator = new java.util.Iterator[(K,V)] {
+      val keyValueIterator = new Iterator[(K,V)] {
 
          private val computationFinished = new AtomicBoolean(false)
          private val finished = new AtomicBoolean(false)

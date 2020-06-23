@@ -4,7 +4,6 @@ import br.ufmg.cs.systems.fractal.Primitive;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 
-import java.util.Arrays;
 import java.util.concurrent.ThreadLocalRandom;
 
 /*

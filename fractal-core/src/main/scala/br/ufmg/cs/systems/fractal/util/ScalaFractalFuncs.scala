@@ -1,10 +1,10 @@
 package br.ufmg.cs.systems.fractal.util
 
+import java.util.function.Predicate
+
 import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.graph._
 import br.ufmg.cs.systems.fractal.subgraph._
-
-import java.util.function.Predicate
 
 trait ProcessComputeFunc [S <: Subgraph]
     extends Function2[SubgraphEnumerator[S], Computation[S], Long]

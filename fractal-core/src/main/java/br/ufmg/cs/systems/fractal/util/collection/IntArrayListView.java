@@ -1,7 +1,6 @@
 package br.ufmg.cs.systems.fractal.util.collection;
 
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListViewPool;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.util.Arrays;
 

@@ -1,6 +1,5 @@
 package br.ufmg.cs.systems.fractal.util;
 
-import br.ufmg.cs.systems.fractal.aggregation.ObjObjSubgraphAggregation;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;

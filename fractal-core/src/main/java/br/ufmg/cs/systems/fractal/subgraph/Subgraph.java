@@ -10,7 +10,6 @@ import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import com.koloboke.collect.IntCollection;
-import com.koloboke.collect.map.hash.HashIntObjMap;
 
 import java.io.Externalizable;
 

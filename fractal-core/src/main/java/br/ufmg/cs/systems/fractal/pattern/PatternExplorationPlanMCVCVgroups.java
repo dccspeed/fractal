@@ -9,7 +9,9 @@ import com.koloboke.collect.map.ObjObjMap;
 import com.koloboke.collect.map.hash.HashObjObjMaps;
 import org.apache.log4j.Logger;
 
-import java.io.*;
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
 import java.util.Iterator;
 
 public class PatternExplorationPlanMCVCVgroups extends PatternExplorationPlan {

@@ -14,6 +14,7 @@ import com.koloboke.collect.map.hash.HashObjObjMaps;
 import com.koloboke.collect.set.hash.HashObjSet;
 import com.koloboke.collect.set.hash.HashObjSets;
 import org.apache.log4j.Logger;
+import org.apache.spark.rdd.RDD;
 
 import java.util.Iterator;
 
@@ -262,6 +263,21 @@ public class PatternUtils {
       Configuration config = createConfig();
       MainGraph graph = createGraph(config);
       graph.addVertex(0);
+      VertexInducedSubgraph subgraph = (VertexInducedSubgraph) config.createSubgraph();
+      subgraph.addWord(0);
+      return subgraph.quickPattern();
+   }
+
+   /**
+    * Generates a single vertex labeled pattern
+    *
+    * @return new pattern
+    */
+   public static Pattern singleVertexPattern(int vertexLabel) {
+      Configuration config = createConfig();
+      MainGraph graph = createGraph(config);
+      graph.addVertex(0);
+      graph.addVertexLabel(0, vertexLabel);
       VertexInducedSubgraph subgraph = (VertexInducedSubgraph) config.createSubgraph();
       subgraph.addWord(0);
       return subgraph.quickPattern();

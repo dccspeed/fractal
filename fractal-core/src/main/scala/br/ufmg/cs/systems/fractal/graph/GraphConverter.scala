@@ -3,11 +3,10 @@ package br.ufmg.cs.systems.fractal.graph
 import java.util.StringTokenizer
 
 import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjArrayList}
+import org.apache.spark.graphx.{Graph, VertexId, Edge => GraphXEdge}
 import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.graphx.{EdgeTriplet, Graph, PartitionID, TripletFields, VertexId, VertexRDD, Edge => GraphXEdge}
 
 import scala.collection.JavaConverters._
-import scala.reflect.ClassTag
 
 object GraphConverter {
 

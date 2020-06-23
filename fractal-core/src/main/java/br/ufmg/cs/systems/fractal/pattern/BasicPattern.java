@@ -543,7 +543,7 @@ public abstract class BasicPattern implements Pattern {
 
    @Override
    public void updateSymmetryBreaker() {
-      int[][] symmetryBreaker = vsymmetryBreakerMatrix();
+      int[][] symmetryBreaker = vsymmetryBreakerMatrix(vertexLabeled);
       vsymmetryBreakerLowerBound = computeVsymmetryBreakerLowerBound(symmetryBreaker);
       vsymmetryBreakerUpperBound = computeVsymmetryBreakerUpperBound(symmetryBreaker);
    }
@@ -692,9 +692,10 @@ public abstract class BasicPattern implements Pattern {
       if (getNumberOfEdges() > 0) {
          return StringUtils.join(edges, ",");
       } else if (getNumberOfVertices() == 1) {
-         Vertex vertex = getMainGraph().getVertex(vertices.getu(0));
-
-         return "0(" + vertex.getVertexLabel() + ")";
+         //int vertexLabel = getMainGraph().getVertex(vertices.getu(0))
+         //        .getVertexLabel();
+         //return "0(" + vertex.getVertexLabel() + ")";
+         return "O(" + firstVertexLabel + ")";
       } else {
          return "";
       }

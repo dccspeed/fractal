@@ -9,12 +9,10 @@ import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.IntCursor;
-import com.koloboke.collect.map.IntObjCursor;
 import com.koloboke.collect.map.IntIntMap;
+import com.koloboke.collect.map.IntObjCursor;
 import com.koloboke.collect.map.IntObjMap;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
-import java.util.function.IntConsumer;
-
 import com.koloboke.collect.map.hash.HashIntObjMaps;
 import com.koloboke.function.IntIntConsumer;
 import com.koloboke.function.IntObjConsumer;
@@ -31,6 +29,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.StringTokenizer;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntConsumer;
 import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 
@@ -95,9 +94,9 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
    @Override
    public int undoVertexFilter() {
-      //LOG.info("removedVertices " + removedVertices);
+      //LOG.debug("removedVertices " + removedVertices);
       removedVertices.forEach(vertexReset);
-      //LOG.info("removedNeighborhoods " + removedNeighborhoods);
+      //LOG.debug("removedNeighborhoods " + removedNeighborhoods);
       removedNeighborhoods.forEach(neighborhoodReset);
       removedVertices.clear();
       removedNeighborhoods.clear();
@@ -267,7 +266,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
 
       if (LOG.isInfoEnabled()) {
          start = System.currentTimeMillis();
-         LOG.info("Initializing graph," +
+         LOG.debug("Initializing graph," +
                " id=" + id +
                " name=" + name +
                " isEdgeLabelled=" + isEdgeLabelled +
@@ -289,7 +288,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       this.isMultiGraph = isMultiGraph;
 
       if (LOG.isInfoEnabled()) {
-         LOG.info("Done initializing graph," +
+         LOG.debug("Done initializing graph," +
                " id=" + id +
                " name=" + name +
                " isEdgeLabelled=" + isEdgeLabelled +
@@ -326,7 +325,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       afterGraphUpdate();
 
       if (LOG.isInfoEnabled()) {
-         LOG.info("Done reading graph," +
+         LOG.debug("Done reading graph," +
                " id=" + id +
                " name=" + name +
                " path=" + path +
@@ -641,7 +640,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       long start = 0;
 
       if (LOG.isInfoEnabled()) {
-         LOG.info("Reading graph properties");
+         LOG.debug("Reading graph properties");
          start = System.currentTimeMillis();
       }
 
@@ -656,7 +655,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       }
 
       if (LOG.isInfoEnabled()) {
-         LOG.info("Properties read done in " +
+         LOG.debug("Properties read done in " +
                (System.currentTimeMillis() - start) +
                " numVertexProperties=" + numVertexLabels +
                " numEdgeProperties=" + numEdgeLabels);
@@ -993,15 +992,16 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
                firstLine = false;
 
                if (line.startsWith("#")) {
-                  LOG.info("Found hints regarding number of vertices and edges");
+                  LOG.debug("Found hints regarding number of vertices and " +
+                          "edges");
                   // Skip #
                   tokenizer.nextToken();
 
                   int numVertices = Integer.parseInt(tokenizer.nextToken());
                   int numEdges = Integer.parseInt(tokenizer.nextToken());
 
-                  LOG.info("Hinted numVertices=" + numVertices);
-                  LOG.info("Hinted numEdges=" + numEdges);
+                  LOG.debug("Hinted numVertices=" + numVertices);
+                  LOG.debug("Hinted numEdges=" + numEdges);
 
                   prepareStructures(numVertices, numEdges);
 
@@ -1017,7 +1017,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
             while (tokenizer.hasMoreTokens()) {
                parseEdge(tokenizer, vertexId);
                if (numEdges % 1e7 == 0) {
-                  LOG.info("Stats numVertices=" + numVertices +
+                  LOG.debug("Stats numVertices=" + numVertices +
                         " numEdges=" + numEdges);
                }
             }

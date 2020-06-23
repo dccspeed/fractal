@@ -6,6 +6,7 @@ import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.map.IntObjMap;
 import com.koloboke.collect.map.hash.HashIntObjMaps;
+
 import java.util.function.IntConsumer;
 import java.util.function.IntFunction;
 

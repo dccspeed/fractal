@@ -103,6 +103,18 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
          }
       }
 
+
+      // set vertex to edges mapping
+      PatternEdgeArrayList pedges = pattern.getEdges();
+      for (int u = 1; u < numVertices; ++u) {
+         for (i = 0; i < pedges.size(); ++i) {
+            PatternEdge pedge = pedges.get(i);
+            if (pedge.getDestPos() == u) {
+               explorationPlan.vertexToEdges.get(u).add(i);
+            }
+         }
+      }
+
       return numCoverEdges;
    }
 

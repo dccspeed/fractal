@@ -2,8 +2,10 @@ package br.ufmg.cs.systems.fractal.aggregation;
 
 import br.ufmg.cs.systems.fractal.aggregation.reductions.ReductionFunction;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.io.WritableUtils;
-import org.apache.hadoop.io.*;
 
 import java.io.*;
 import java.lang.reflect.Constructor;
@@ -168,15 +170,7 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
 
     @Override
     public void write(DataOutput dataOutput) throws IOException {
-        dataOutput.writeUTF(name);
-
-        dataOutput.writeInt(keyValueMap.size());
-
-        for (Map.Entry<K, V> entry : keyValueMap.entrySet()) {
-            entry.getKey().write(dataOutput);
-            entry.getValue().write(dataOutput);
-        }
-
+       throw new UnsupportedOperationException();
     }
 
     @Override
@@ -256,35 +250,7 @@ public class AggregationStorage<K extends Writable, V extends Writable> implemen
 
     @Override
     public void readFields(DataInput dataInput) throws IOException {
-        reset();
-
-        name = dataInput.readUTF();
-
-        AggregationStorageMetadata<K,V> metadata =
-           Configuration.get().getAggregationMetadata(name);
-        init(name, metadata);
-
-        try {
-            Constructor<K> keyClassConstructor = keyClass.getConstructor();
-            Constructor<V> valueClassConstructor = valueClass.getConstructor();
-
-            int numEntries = dataInput.readInt();
-
-            for (int i = 0; i < numEntries; ++i) {
-                K key = keyClassConstructor.newInstance();
-
-                key.readFields(dataInput);
-
-                V value = valueClassConstructor.newInstance();
-
-                value.readFields(dataInput);
-
-                keyValueMap.put(key, value);
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Error reading aggregation storage", e);
-        }
-
+       throw new UnsupportedOperationException();
     }
 
     public void endedAggregation() {

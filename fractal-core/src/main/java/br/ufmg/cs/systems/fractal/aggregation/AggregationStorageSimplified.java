@@ -1,18 +1,18 @@
 package br.ufmg.cs.systems.fractal.aggregation;
 
 import br.ufmg.cs.systems.fractal.aggregation.reductions.ReductionFunction;
-import br.ufmg.cs.systems.fractal.conf.Configuration;
 import com.koloboke.collect.map.ObjObjCursor;
 import com.koloboke.collect.map.hash.HashObjObjMap;
 import com.koloboke.collect.map.hash.HashObjObjMaps;
-import org.apache.hadoop.io.*;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.Writable;
+import org.apache.hadoop.io.WritableUtils;
 
 import java.io.*;
 import java.lang.reflect.Constructor;
-import java.util.*;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
 
 public class AggregationStorageSimplified<K extends Writable,
         V extends Writable> extends AggregationStorage<K,V> {

@@ -4,7 +4,6 @@ import br.ufmg.cs.systems.fractal.util.EdgePredicates;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
-import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.function.IntIntConsumer;
 

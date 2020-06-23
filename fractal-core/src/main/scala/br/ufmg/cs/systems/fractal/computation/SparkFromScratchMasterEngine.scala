@@ -2,7 +2,6 @@ package br.ufmg.cs.systems.fractal.computation
 
 import java.io
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicLong
 import java.util.function.IntConsumer
 
 import akka.actor._
@@ -361,7 +360,7 @@ class SparkFromScratchMasterEngine[S <: Subgraph]
             accums = aggAccums,
             validSubgraphsAccum = validSubgraphsAccum,
             previousAggregationsBc = previousAggregationsBc,
-            configurationId = configBc.value.getId
+            configuration = configBc.value
          )
 
          execEngine.init()

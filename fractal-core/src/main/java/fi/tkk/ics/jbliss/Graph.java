@@ -7,7 +7,6 @@
 
 package fi.tkk.ics.jbliss;
 
-import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.JBlissPattern;
 import br.ufmg.cs.systems.fractal.pattern.PatternEdge;
 import br.ufmg.cs.systems.fractal.pattern.PatternEdgeArrayList;

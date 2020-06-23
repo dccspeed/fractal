@@ -1,7 +1,6 @@
 package br.ufmg.cs.systems.fractal.pattern;
 
 import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgeArrayListPool;
-import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgeThreadUnsafePool;
 import br.ufmg.cs.systems.fractal.util.WritableObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.ThreadUnsafePool;
 

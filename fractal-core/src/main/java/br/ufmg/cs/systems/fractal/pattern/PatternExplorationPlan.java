@@ -1,20 +1,16 @@
 package br.ufmg.cs.systems.fractal.pattern;
 
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import br.ufmg.cs.systems.fractal.graph.Vertex;
 import br.ufmg.cs.systems.fractal.util.EdgePredicate;
 import br.ufmg.cs.systems.fractal.util.EdgePredicates;
 import br.ufmg.cs.systems.fractal.util.VertexPredicate;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
-import br.ufmg.cs.systems.fractal.util.pool.IntIntMapPool;
-import com.koloboke.collect.map.IntIntMap;
 import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
 
 import java.io.*;
-import java.util.Arrays;
 
 public class PatternExplorationPlan implements Externalizable, Writable {
    private static final Logger LOG = Logger.getLogger(PatternExplorationPlan.class);
@@ -23,12 +19,14 @@ public class PatternExplorationPlan implements Externalizable, Writable {
    protected ObjArrayList<IntArrayList> differenceIdxs;
    protected ObjArrayList<VertexPredicate> vertexPredicates;
    protected ObjArrayList<EdgePredicates> edgePredicates;
+   protected ObjArrayList<IntArrayList> vertexToEdges;
 
    public PatternExplorationPlan() {
       this.intersectionIdxs = new ObjArrayList<>();
       this.differenceIdxs = new ObjArrayList<>();
       this.vertexPredicates = new ObjArrayList<>();
       this.edgePredicates = new ObjArrayList<>();
+      this.vertexToEdges = new ObjArrayList<>();
    }
 
    public void init(Pattern pattern) {
@@ -50,11 +48,13 @@ public class PatternExplorationPlan implements Externalizable, Writable {
       boolean vertexLabeled = pattern.vertexLabeled();
       intersectionIdxs.clear();
       differenceIdxs.clear();
+      vertexToEdges.clear();
       for (int i = 0; i < numVertices; ++i) {
          intersectionIdxs.add(IntArrayListPool.instance().createObject());
          differenceIdxs.add(IntArrayListPool.instance().createObject());
          vertexPredicates.add(vertexLabeled ? new VertexPredicate() : VertexPredicate.trueVertexPredicate);
          edgePredicates.add(new EdgePredicates());
+         vertexToEdges.add(new IntArrayList());
       }
    }
 
@@ -64,6 +64,10 @@ public class PatternExplorationPlan implements Externalizable, Writable {
 
    public IntArrayList difference(int i) {
       return differenceIdxs.get(i);
+   }
+
+   public IntArrayList vertexEdges(int i) {
+      return vertexToEdges.getu(i);
    }
 
    public VertexPredicate vertexPredicate(int i) {
@@ -98,6 +102,17 @@ public class PatternExplorationPlan implements Externalizable, Writable {
                if (!intersectionIdxs.get(dst).contains(src)) {
                   differenceIdxs.get(dst).add(src);
                }
+            }
+         }
+      }
+
+      // set vertex to edges mapping
+      PatternEdgeArrayList pedges = pattern.getEdges();
+      for (int u = 1; u < numVertices; ++u) {
+         for (int i = 0; i < pedges.size(); ++i) {
+            PatternEdge pedge = pedges.get(i);
+            if (pedge.getDestPos() == u) {
+               vertexToEdges.get(u).add(i);
             }
          }
       }
@@ -151,6 +166,7 @@ public class PatternExplorationPlan implements Externalizable, Writable {
             vertexPredicates.get(i).write(out);
          }
          edgePredicates.get(i).write(out);
+         vertexToEdges.get(i).write(out);
       }
    }
 
@@ -179,6 +195,10 @@ public class PatternExplorationPlan implements Externalizable, Writable {
          vertexEdgePredicates.readFields(in);
          edgePredicates.add(vertexEdgePredicates);
 
+         // vertex to edge mapping
+         IntArrayList vertexEdges = new IntArrayList();
+         vertexEdges.readFields(in);
+         vertexToEdges.add(vertexEdges);
       }
 
    }

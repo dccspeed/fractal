@@ -10,7 +10,7 @@ import akka.dispatch.MessageDispatcher
 import akka.routing._
 import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph
-import br.ufmg.cs.systems.fractal.util.Logging
+import br.ufmg.cs.systems.fractal.util.{EventTimer, Logging}
 import com.koloboke.collect.set.hash.HashIntSets
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -146,6 +146,12 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
             slavesRouter = slavesRouter.addRoutee(ActorRefRoutee(slaveRef))
          }
 
+         if (EventTimer.ENABLED) {
+            if (registeredSlaves == 1) {
+               EventTimer.masterInstance(0).finish(EventTimer.INITIALIZATION)
+            }
+         }
+
          logInfo(s"${self} knows ${registeredSlaves} slaves.")
 
          slaves(partitionId) = slaveRef
@@ -159,6 +165,12 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
       case ByeMaster(partitionId, slaveRef) =>
          if (slaves(partitionId) != null) {
             registeredSlaves -= 1
+         }
+
+         if (EventTimer.ENABLED) {
+            if (registeredSlaves == numSlaves - 1) {
+               EventTimer.masterInstance(0).start(EventTimer.AGGREGATION)
+            }
          }
 
          logInfo(s"ByeMaster: ${self} knows ${registeredSlaves} slaves.")

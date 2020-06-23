@@ -8,22 +8,16 @@ import br.ufmg.cs.systems.fractal.aggregation._
 import br.ufmg.cs.systems.fractal.aggregation.reductions._
 import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
-import br.ufmg.cs.systems.fractal.gmlib.fsm.MinImageSupport
-import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.graph.{Edge, Vertex}
+import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util._
-import com.koloboke.collect.IntCollection
-import com.koloboke.collect.map.ObjObjMap
-import com.koloboke.collect.map.hash.HashObjObjMaps
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.Writable
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.apache.spark.storage.StorageLevel
 
 import scala.collection.JavaConversions._
-import scala.collection.JavaConverters._
 import scala.collection.mutable.Map
 import scala.reflect.{ClassTag, classTag}
 
@@ -47,7 +41,9 @@ case class Fractoid [S <: Subgraph : ClassTag]
          Map.empty[String,SubgraphCallback[S]])
    }
 
-   def sparkContext: SparkContext = fractalGraph.fractalContext.sparkContext
+   def fractalContext: FractalContext = fractalGraph.fractalContext
+
+   def sparkContext: SparkContext = fractalContext.sparkContext
 
    if (!config.isInitialized) {
       config.initialize(isMaster = true)
@@ -86,7 +82,17 @@ case class Fractoid [S <: Subgraph : ClassTag]
    private def subgraphAggregationCallback = new SubgraphCallback[S] {
       private var subgraphAggregation: SubgraphAggregation[S] = _
       override def apply(s: S, c: Computation[S]): Unit = {
+         if (EventTimer.ENABLED) {
+            EventTimer.workerInstance(c.getPartitionId).finishAndStart(
+               EventTimer.ENUMERATION_FILTERING, EventTimer.AGGREGATION)
+         }
+
          subgraphAggregation.aggregate(s)
+
+         if (EventTimer.ENABLED) {
+            EventTimer.workerInstance(c.getPartitionId).finishAndStart(
+               EventTimer.AGGREGATION, EventTimer.ENUMERATION_FILTERING)
+         }
       }
 
       override def init(c: Computation[S]): Unit = {

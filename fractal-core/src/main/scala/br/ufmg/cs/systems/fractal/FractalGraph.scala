@@ -6,11 +6,11 @@ import java.util.function.IntConsumer
 
 import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
-import br.ufmg.cs.systems.fractal.graph.{BasicMainGraph, MainGraph}
+import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplications
+import br.ufmg.cs.systems.fractal.graph.BasicMainGraph
 import br.ufmg.cs.systems.fractal.pattern._
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util._
-import br.ufmg.cs.systems.fractal.util.collection._
 
 import scala.collection.mutable.Map
 import scala.reflect.ClassTag
@@ -341,7 +341,7 @@ object FractalGraph {
    val nextGraphId: AtomicInteger = new AtomicInteger(0)
    def newGraphId(): Int = nextGraphId.getAndIncrement()
 
-   implicit def fgraphWithBuiltInAlgorithms(fgraph: FractalGraph): BuiltInAlgorithms = {
-      new BuiltInAlgorithms(fgraph)
+   implicit def fgraphWithBuiltInAlgorithms(fgraph: FractalGraph): BuiltInApplications = {
+      new BuiltInApplications(fgraph)
    }
 }

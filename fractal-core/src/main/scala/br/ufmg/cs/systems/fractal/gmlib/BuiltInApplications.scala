@@ -1,29 +1,26 @@
-package br.ufmg.cs.systems.fractal
+package br.ufmg.cs.systems.fractal.gmlib
 
-import java.util.Map
-import java.util.function.Predicate
-
-import br.ufmg.cs.systems.fractal.aggregation.{AggregationStorage, PatternAggregationStorage}
+import br.ufmg.cs.systems.fractal.aggregation.AggregationStorage
 import br.ufmg.cs.systems.fractal.annotation.Experimental
-import br.ufmg.cs.systems.fractal.computation.{Computation, SubgraphEnumerator}
-import br.ufmg.cs.systems.fractal.gmlib.clique.KClistEnumerator
-import br.ufmg.cs.systems.fractal.gmlib.fsm.{DomainSupportEndAggregationFunction, MinImageSupport}
-import br.ufmg.cs.systems.fractal.gmlib.periodic.InducedPeriodicSubgraphs
+import br.ufmg.cs.systems.fractal.computation.Computation
+import br.ufmg.cs.systems.fractal.gmlib.fsm.MinImageSupport
+import br.ufmg.cs.systems.fractal.gmlib.periodic.{InducedPeriodicSubgraphsPF, InducedPeriodicSubgraphsPFMCVC, InducedPeriodicSubgraphsSF}
 import br.ufmg.cs.systems.fractal.graph.MainGraph
-import br.ufmg.cs.systems.fractal.pattern.{BasicPattern, Pattern, PatternExplorationPlan, PatternExplorationPlanMCVC, PatternExplorationPlanMCVCOrdering, PatternExplorationPlanMCVCVgroups, PatternUtils}
+import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternExplorationPlanMCVC, PatternUtils}
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
-import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjArrayList, ObjSet}
-import br.ufmg.cs.systems.fractal.util.{Logging, SubgraphCallback, Utils, VertexPredicate}
+import br.ufmg.cs.systems.fractal.util.collection.{ObjArrayList, ObjSet}
 import br.ufmg.cs.systems.fractal.util.pool.{IntArrayListPool, IntArrayListViewPool}
+import br.ufmg.cs.systems.fractal.util.{Logging, SubgraphCallback, Utils}
+import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
 import com.koloboke.collect.map.ObjObjMap
 import com.koloboke.collect.map.hash.HashObjObjMaps
-import com.koloboke.collect.set.hash.{HashIntSet, HashIntSets, HashObjSet, HashObjSets}
-import org.apache.hadoop.io.{IntWritable, LongWritable, NullWritable}
+import com.koloboke.collect.set.hash.{HashIntSets, HashObjSets}
+import org.apache.hadoop.io.LongWritable
 import org.apache.spark.rdd.RDD
 
 import scala.collection.JavaConverters._
 
-class BuiltInAlgorithms(self: FractalGraph) extends Logging {
+class BuiltInApplications(self: FractalGraph) extends Logging {
 
    /**
     * Induced subgraphs using the pattern-first approach and the MCVC pattern
@@ -65,7 +62,7 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
 
          while (newPatternsCur.moveNext()) {
             val pattern = newPatternsCur.elem()
-            val mcvcSize = pattern.explorationPlan().mcvcSize()
+            val mcvcSize = pattern.explorationPlan.mcvcSize()
             val partialResult = gquerying(pattern).explore(mcvcSize - 1)
             fractoids.add(partialResult)
          }
@@ -1334,8 +1331,23 @@ class BuiltInAlgorithms(self: FractalGraph) extends Logging {
       kws
    }
 
-   def periodicInducedSubgraphs(periodicThreshold: Int)
+   def periodicInducedSubgraphsSF(periodicThreshold: Int)
    : Fractoid[VertexInducedSubgraph] = {
-      InducedPeriodicSubgraphs(self, periodicThreshold)
+      new InducedPeriodicSubgraphsSF(periodicThreshold).apply(self)
+   }
+
+   def periodicInducedSubgraphsPF
+   (periodicThreshold: Int, numVertices: Int,
+    callback: (Pattern, Fractoid[PatternInducedSubgraph]) => Unit): Unit = {
+      new InducedPeriodicSubgraphsPF(periodicThreshold, numVertices, callback)
+         .apply(self)
+   }
+
+   def periodicInducedSubgraphsPFMCVC
+   (periodicThreshold: Int, numVertices: Int,
+    callback: (InducedPeriodicSubgraphsPFMCVC, Pattern,
+       Fractoid[PatternInducedSubgraph]) => Unit): Unit = {
+      new InducedPeriodicSubgraphsPFMCVC(periodicThreshold, numVertices, callback)
+         .apply(self)
    }
 }

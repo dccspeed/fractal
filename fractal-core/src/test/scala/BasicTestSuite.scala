@@ -1,12 +1,6 @@
 package br.ufmg.cs.systems.fractal
 
-import br.ufmg.cs.systems.fractal.gmlib.fsm.MinImageSupport
-import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.util.Logging
-import com.koloboke.collect.map.hash.HashObjObjMaps
-import com.koloboke.collect.set.{IntSet, LongSet}
-import com.koloboke.collect.set.hash.{HashIntSets, HashLongSets, HashObjSets}
-import org.apache.hadoop.io.LongWritable
 import org.apache.spark.{SparkConf, SparkContext}
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 

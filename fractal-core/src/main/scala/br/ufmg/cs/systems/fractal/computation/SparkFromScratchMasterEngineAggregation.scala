@@ -2,28 +2,16 @@ package br.ufmg.cs.systems.fractal.computation
 
 import java.io.Serializable
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.function.IntConsumer
 
 import akka.actor._
 import br.ufmg.cs.systems.fractal.Primitive
-import br.ufmg.cs.systems.fractal.aggregation.AggregationStorageFactory
-import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
-import br.ufmg.cs.systems.fractal.pattern.Pattern
+import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
-import br.ufmg.cs.systems.fractal.util.{Logging, ProcessComputeFunc, SerializableWritable}
-import org.apache.hadoop.io.{LongWritable, Writable}
+import br.ufmg.cs.systems.fractal.util.{EventTimer, Logging, ProcessComputeFunc}
 import org.apache.spark.SparkContext
-import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
-import org.apache.spark.storage.StorageLevel._
 import org.apache.spark.util.{LongAccumulator, SizeEstimator}
 import spire.ClassTag
-
-import scala.collection.JavaConversions._
-import scala.collection.mutable.Map
-import scala.concurrent.Await
-import scala.concurrent.duration._
-import scala.util.{Failure, Success}
 
 /**
  * Underlying engine that runs the fractal master.
@@ -242,12 +230,20 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
       validSubgraphsAccum = sc.longAccumulator
       aggAccums.update("valid_subgraphs", validSubgraphsAccum)
 
+      /**
+       * Local vars for clean serialization
+       */
       val _step = step
       val _accums = aggAccums
       val _validSubgraphsAccum = validSubgraphsAccum
       val _previousAggregationsBc = previousAggregationsBc
       val _configBc = configBc
+
       stepRDD.mapPartitionsWithIndex { (idx, _) =>
+         if (EventTimer.ENABLED) {
+            EventTimer.workerInstance(idx).start(EventTimer.INITIALIZATION)
+         }
+
          _configBc.value.initializeWithTag(isMaster = false)
          val execEngine = new SparkFromScratchEngine [S] (
             partitionId = idx,
@@ -255,7 +251,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
             accums = _accums,
             validSubgraphsAccum = _validSubgraphsAccum,
             previousAggregationsBc = _previousAggregationsBc,
-            configurationId = _configBc.value.getId
+            configuration = _configBc.value
          )
          Iterator[SparkEngine[S]](execEngine)
       }

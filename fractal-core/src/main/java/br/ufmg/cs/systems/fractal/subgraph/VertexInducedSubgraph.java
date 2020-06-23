@@ -7,14 +7,13 @@ import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import com.koloboke.collect.set.hash.HashIntSet;
-import java.util.function.IntConsumer;
-
 import com.koloboke.function.IntIntConsumer;
 import org.apache.log4j.Logger;
 
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.ObjectInput;
+import java.util.function.IntConsumer;
 
 public class VertexInducedSubgraph extends BasicSubgraph {
    private static final Logger LOG = Logger.getLogger(VertexInducedSubgraph.class);
@@ -137,7 +136,7 @@ public class VertexInducedSubgraph extends BasicSubgraph {
    public void readFields(DataInput in) throws IOException {
       reset();
 
-      init(Configuration.get(in.readInt()));
+      //init(Configuration.get(in.readInt()));
 
       vertices.readFields(in);
 

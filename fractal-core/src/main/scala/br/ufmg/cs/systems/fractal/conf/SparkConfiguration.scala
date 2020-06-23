@@ -9,7 +9,7 @@ import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.conf.Configuration._
 import br.ufmg.cs.systems.fractal.graph._
 import br.ufmg.cs.systems.fractal.optimization.OptimizationSetDescriptor
-import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan}
+import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray
 import br.ufmg.cs.systems.fractal.util.{JVMProfiler, Logging, SerializableConfiguration}
@@ -417,10 +417,14 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
    override def initialize(isMaster: Boolean = false): Unit = synchronized {
       logDebug(s"Initializing config, id=${id} config=${this}" +
          s" mainGraph=${getMainGraph()} isMainGraphRead=${isMainGraphRead()}" +
-         s" isMaster=${isMaster} activeConfigs=${Configuration.activeConfigs}")
-      if (Configuration.isUnset(id)) {
-         initializeInstance(!isMaster)
-      } else if (!isInitialized) {
+         s" isMaster=${isMaster}")
+      //if (Configuration.isUnset(id)) {
+      //   initializeInstance(!isMaster)
+      //} else if (!isInitialized) {
+      //   initializeInstance(!isMaster)
+      //}
+
+      if (!isInitialized) {
          initializeInstance(!isMaster)
       }
 
@@ -437,8 +441,6 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
          logInfo(s"Graph read, configId=${id} graph=${getMainGraph()}" +
             s" optimizationSet= ${optimizationSet}")
       }
-
-      Configuration.add(this)
    }
 
    /**

@@ -14,11 +14,9 @@ import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.pattern.PatternExplorationPlan;
 import br.ufmg.cs.systems.fractal.pattern.VICPattern;
 import br.ufmg.cs.systems.fractal.subgraph.EdgeInducedSubgraph;
-import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph;
+import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
-import br.ufmg.cs.systems.fractal.util.pool.ThreadSafePool;
-import br.ufmg.cs.systems.fractal.util.pool.PoolRegistry;
 import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Writable;
@@ -129,18 +127,13 @@ public class Configuration<O extends Subgraph> implements Serializable {
        }
     }
 
-    protected static Configuration instance = null;
-    protected static ConcurrentHashMap<Integer,Configuration> activeConfigs =
-       new ConcurrentHashMap<Integer,Configuration>();
-
     protected long infoPeriod;
 
     private Class<? extends MainGraph> mainGraphClass;
     private Class<? extends OptimizationSetDescriptor>
        optimizationSetDescriptorClass;
     private Class<? extends Pattern> patternClass;
-    private Class<? extends PatternExplorationPlan> explorationPlanClass;
-    private Class<? extends Computation> computationClass;
+   private Class<? extends Computation> computationClass;
     private Class<? extends MasterComputation> masterComputationClass;
     private Class<? extends Subgraph> subgraphClass;
     private Class<? extends SubgraphEnumerator> subgraphEnumClass;
@@ -163,61 +156,7 @@ public class Configuration<O extends Subgraph> implements Serializable {
        return id;
     }
 
-    public static boolean isUnset() {
-       return instance == null;
-    }
-
-    public static <C extends Configuration> C get() {
-        if (instance == null) {
-           LOG.error ("instance is null");
-            throw new RuntimeException("Oh-oh, Null configuration");
-        }
-
-        if (!instance.isInitialized()) {
-           instance.initialize();
-        }
-
-        return (C) instance;
-    }
-
-    public static void unset() {
-       instance = null;
-    }
-
-    public synchronized static void setIfUnset(Configuration configuration) {
-        if (isUnset()) {
-            set(configuration);
-        }
-    }
-
-    public static void set(Configuration configuration) {
-        instance = configuration;
-
-        // Whenever we set configuration, reset all known pools Since they might
-        // have initialized things based on a previous configuration NOTE: This
-        // is essential for the unit tests
-        for (ThreadSafePool pool : PoolRegistry.instance().getPools()) {
-            pool.reset();
-        }
-    }
-
-    public static void add(Configuration configuration) {
-       activeConfigs.put(configuration.getId(), configuration);
-    }
-
-    public static void remove(int id) {
-       activeConfigs.remove(id);
-    }
-
-    public static Configuration get(int id) {
-       return activeConfigs.get(id);
-    }
-
-    public static boolean isUnset(int id) {
-       return !activeConfigs.containsKey(id);
-    }
-    
-    public static String NEIGHBORHOOD_LOOKUPS(int i) {
+   public static String NEIGHBORHOOD_LOOKUPS(int i) {
        return NEIGHBORHOOD_LOOKUPS_ARR[i];
     }
 
@@ -464,16 +403,6 @@ public class Configuration<O extends Subgraph> implements Serializable {
     }
 
     public MainGraph createGraph() {
-        for (Map.Entry<Integer,Configuration> entry: activeConfigs.entrySet()) {
-            if (entry.getValue().mainGraphId == mainGraphId &&
-                  entry.getValue().isMainGraphRead()) {
-                MainGraph graph = entry.getValue().getMainGraph();
-                if (graph != null) {
-                   return graph;
-                }
-            }
-        }
-
         try {
             Constructor<? extends MainGraph> constructor;
             constructor = mainGraphClass.getConstructor(String.class,

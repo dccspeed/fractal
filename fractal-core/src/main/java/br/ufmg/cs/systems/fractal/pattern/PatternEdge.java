@@ -3,7 +3,6 @@ package br.ufmg.cs.systems.fractal.pattern;
 import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.graph.Vertex;
-import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgePool;
 import org.apache.hadoop.io.Writable;
 
 import java.io.DataInput;

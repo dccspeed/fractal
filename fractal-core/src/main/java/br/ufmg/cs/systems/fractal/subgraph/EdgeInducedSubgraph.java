@@ -229,7 +229,7 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
    public void readFields(DataInput in) throws IOException {
       reset();
 
-      init(Configuration.get(in.readInt()));
+      //init(Configuration.get(in.readInt()));
 
       edges.readFields(in);
 

@@ -2,16 +2,11 @@ package br.ufmg.cs.systems.fractal.aggregation;
 
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
-import com.koloboke.collect.map.ObjLongMap;
 import com.koloboke.collect.map.ObjObjMap;
-import com.koloboke.collect.map.hash.HashObjLongMap;
-import com.koloboke.collect.map.hash.HashObjLongMaps;
 import com.koloboke.collect.map.hash.HashObjObjMaps;
-import com.koloboke.function.ObjLongToLongFunction;
 import org.apache.log4j.Logger;
 
 import java.io.Serializable;
-import java.util.function.BiFunction;
 
 public abstract class ObjObjSubgraphAggregation
         <S extends Subgraph, K extends Serializable, V extends Serializable>

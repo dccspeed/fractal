@@ -1,9 +1,8 @@
 package br.ufmg.cs.systems.fractal.util;
 
-import java.io.InputStream;
 import java.io.DataInputStream;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 
 public class TextFileParser {
    final private int BUFFER_SIZE = 1 << 16;

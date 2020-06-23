@@ -4,7 +4,10 @@ import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import br.ufmg.cs.systems.fractal.pattern.*;
+import br.ufmg.cs.systems.fractal.pattern.Pattern;
+import br.ufmg.cs.systems.fractal.pattern.PatternEdge;
+import br.ufmg.cs.systems.fractal.pattern.PatternEdgeArrayList;
+import br.ufmg.cs.systems.fractal.pattern.PatternExplorationPlan;
 import br.ufmg.cs.systems.fractal.util.EdgePredicates;
 import br.ufmg.cs.systems.fractal.util.SubgraphCallback;
 import br.ufmg.cs.systems.fractal.util.Utils;
@@ -21,11 +24,16 @@ import org.apache.log4j.Logger;
 import java.io.DataInput;
 import java.io.IOException;
 import java.io.ObjectInput;
-import java.util.BitSet;
+import java.util.function.BiPredicate;
 import java.util.function.IntConsumer;
+import java.util.function.Predicate;
 
 public class PatternInducedSubgraph extends BasicSubgraph {
    private static final Logger LOG = Logger.getLogger(PatternInducedSubgraph.class);
+
+   private static final BiPredicate<PatternInducedSubgraph,
+           Computation<PatternInducedSubgraph>> truePredicate =
+           (s,c) -> true;
 
    // Consumers and Predicates {{
    private UpdateEdgesConsumer updateEdgesConsumer;
@@ -139,7 +147,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    @Override
    public int numEdgesAdded() {
       // TODO: get this information via pattern edges
-      return 0;
+      throw new UnsupportedOperationException();
    }
 
    /**
@@ -182,28 +190,38 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       numVerticesAddedWithWord.add(numVerticesAdded);
    }
 
-   /**
-    * Updates the list of edges of this subgraph based on the addition of a
-    * new vertex.
-    *
-    * @param newVertexId The id of the new vertex that was just added.
-    */
-   private void updateEdges(int newVertexId, int positionAdded) {
-      IntArrayList vertices = getVertices();
+   @Override
+   public IntArrayList getEdges() {
+      throw new UnsupportedOperationException("Use getEdges(pattern) instead");
+   }
 
-      int addedEdges = 0;
+   public IntArrayList getEdges(Pattern pattern) {
+      ensureEdges(pattern);
+      return edges;
+   }
 
-      // For each vertex (except the last one added)
-      for (int i = 0; i < positionAdded; ++i) {
-         int existingVertexId = vertices.getu(i);
+   private void ensureEdges(Pattern pattern) {
+      int numVertices = getNumVertices();
 
-         updateEdgesConsumer.reset();
-         configuration.getMainGraph().forEachEdge(existingVertexId,
-                 newVertexId, updateEdgesConsumer);
-         addedEdges += updateEdgesConsumer.getNumAdded();
+      PatternExplorationPlan explorationPlan = pattern.explorationPlan();
+      int edgeIdx = 0;
+      for (int u = 1; u < numVertices; ++u) {
+         IntArrayList edgesIdxs = explorationPlan.vertexEdges(u);
+         edgeIdx += edgesIdxs.size();
+         if (edgeIdx > edges.size()) {
+            // add edges
+            for (int i = 0; i < edgesIdxs.size(); ++i) {
+               PatternEdge pedge = pattern.getEdges().getu(edgesIdxs.getu(i));
+               configuration.getMainGraph().forEachEdge(
+                       vertices.getu(pedge.getSrcPos()),
+                       vertices.getu(pedge.getDestPos()),
+                       updateEdgesConsumer);
+            }
+         }
       }
 
-      numEdgesAddedWithWord.add(addedEdges);
+      // remove old edges, if any
+      edges.removeLast(edges.size() - edgeIdx);
    }
 
    @Override
@@ -346,6 +364,13 @@ public class PatternInducedSubgraph extends BasicSubgraph {
 
    public long completeMatch(Computation computation, Pattern pattern,
                              SubgraphCallback callback) {
+     return completeMatch(computation, pattern, truePredicate, callback);
+   }
+
+   public long completeMatch
+           (Computation computation, Pattern pattern,
+            BiPredicate<PatternInducedSubgraph,Computation<PatternInducedSubgraph>> predicate,
+            SubgraphCallback callback) {
       PatternExplorationPlan explorationPlan = pattern.explorationPlan();
       int numOrderings = explorationPlan.numOrderings();
 
@@ -355,7 +380,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       }
 
       long validSubgraphs = completeMatch(computation, pattern,
-              callback, explorationPlan,
+              predicate, callback, explorationPlan,
               numOrderings, 0);
 
       if (numOrderings > 1) {
@@ -368,10 +393,13 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       return validSubgraphs;
    }
 
-   private long completeMatch(Computation computation, Pattern pattern,
-                              SubgraphCallback callback,
-                              PatternExplorationPlan explorationPlan,
-                              int numOrderings, int nextOrdering) {
+   private long completeMatch
+           (Computation computation, Pattern pattern,
+            BiPredicate<PatternInducedSubgraph,
+                    Computation<PatternInducedSubgraph>> predicate,
+            SubgraphCallback callback,
+            PatternExplorationPlan explorationPlan,
+            int numOrderings, int nextOrdering) {
       int numVertices = pattern.getNumberOfVertices();
       int nextVertexPos = getNumVertices();
       MainGraph graph = pattern.getConfig().getMainGraph();
@@ -416,12 +444,14 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       /**
        * Effectively match this ordering
        */
-      long validSubgraphs = completeMatchRec(computation, pattern, callback);
+      long validSubgraphs = completeMatchRec(computation, pattern,
+              predicate, callback);
 
       if (nextOrdering >= numOrderings - 1) { // reached last ordering
          return validSubgraphs;
       } else { // accumulate with other orderings
          return validSubgraphs + completeMatch(computation, pattern,
+                 predicate,
                  callback,
                  explorationPlan,
                  numOrderings,
@@ -429,8 +459,11 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       }
    }
 
-   private long completeMatchRec(Computation computation, Pattern pattern,
-                                 SubgraphCallback callback) {
+   private long completeMatchRec
+           (Computation computation, Pattern pattern,
+            BiPredicate<PatternInducedSubgraph,
+                    Computation<PatternInducedSubgraph>> predicate,
+            SubgraphCallback callback) {
       long validSubgraphs = 0;
       int numVertices = getNumVertices();
       IntArrayList validExtensions = neighborhoods.getu(numVertices);
@@ -473,7 +506,9 @@ public class PatternInducedSubgraph extends BasicSubgraph {
             int u = validExtensions.getu(startIdx);
             if (!vertexPredicate.test(u) || vertices.contains(u)) continue;
             addWord(u);
-            validSubgraphs += completeMatchRec(computation, pattern, callback);
+            if (predicate.test(this, computation)) {
+               validSubgraphs += completeMatchRec(computation, pattern, predicate, callback);
+            }
             removeLastWord();
          }
       } else {
@@ -482,7 +517,9 @@ public class PatternInducedSubgraph extends BasicSubgraph {
             if (!vertexPredicate.test(u) || vertices.contains(u)) continue;
             addWord(u);
             validSubgraphs += 1;
-            callback.apply(this, computation);
+            if (predicate.test(this, computation)) {
+               callback.apply(this, computation);
+            }
             removeLastWord();
          }
       }
@@ -498,7 +535,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    public void readFields(DataInput in) throws IOException {
       reset();
 
-      init(Configuration.get(in.readInt()));
+      //init(Configuration.get(in.readInt()));
 
       edges.readFields(in);
 
@@ -577,20 +614,9 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    }
 
    private class UpdateEdgesConsumer implements IntConsumer {
-      private int numAdded;
-
-      public void reset() {
-         numAdded = 0;
-      }
-
-      public int getNumAdded() {
-         return numAdded;
-      }
-
       @Override
       public void accept(int i) {
          edges.add(i);
-         ++numAdded;
       }
    }
 

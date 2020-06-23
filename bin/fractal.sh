@@ -9,7 +9,7 @@ motifss="motifssampling|motifspf|motifspfmcvc|motifspflabeled|motifs|motifs2"
 cliquess="cliques|cliquesopt|maximalcliques|maximalcliquespf"
 fsms="fsm|fsmpf|fsmpflabeled|fsmpfmcvc"
 enumerations="esubgraphs|vsubgraphswithedges|vsubgraphs|vsubgraphssampling|vsubgraphspf|vsubgraphspfmcvc"
-temporals="periodicinduced"
+temporals="periodicinduced|periodicinducedpf|periodicinducedpfmcvc"
 extras="kws"
 apps="${gqueryings}|${motifss}|${cliquess}|${fsms}|${enumerations}|${extras}"
 
@@ -286,6 +286,24 @@ ALGOPTION for '$app':
    query=\"keyword1 keyword2 ...\"           'Keywords for the query'"
 	;;
 	periodicinduced)
+	required="inputgraph steps periodicthreshold"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   periodicthreshold=2|3|4|...             'Periodic threshold: indicates how many times subgraphs must occur with an arbitrary periodicity'"
+	;;
+	periodicinducedpf)
+	required="inputgraph steps periodicthreshold"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   periodicthreshold=2|3|4|...             'Periodic threshold: indicates how many times subgraphs must occur with an arbitrary periodicity'"
+	;;
+	periodicinducedpfmcvc)
 	required="inputgraph steps periodicthreshold"
         appusage="
 

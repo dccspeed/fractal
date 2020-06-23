@@ -8,7 +8,7 @@ import com.koloboke.collect.map.hash.HashObjLongMaps;
 import com.koloboke.function.ObjLongToLongFunction;
 import org.apache.log4j.Logger;
 
-import java.io.*;
+import java.io.Serializable;
 
 public abstract class ObjLongSubgraphAggregation
         <S extends Subgraph, K extends Serializable>

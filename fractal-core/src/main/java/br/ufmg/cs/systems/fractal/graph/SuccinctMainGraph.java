@@ -1,6 +1,9 @@
 package br.ufmg.cs.systems.fractal.graph;
 
-import br.ufmg.cs.systems.fractal.util.*;
+import br.ufmg.cs.systems.fractal.util.EdgePredicate;
+import br.ufmg.cs.systems.fractal.util.EdgePredicates;
+import br.ufmg.cs.systems.fractal.util.TextFileParser;
+import br.ufmg.cs.systems.fractal.util.Utils;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
@@ -10,7 +13,8 @@ import com.koloboke.function.IntIntConsumer;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.Logger;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -147,6 +151,7 @@ public class SuccinctMainGraph implements MainGraph {
             addVertex(u);
 
             // read labels of vertex u
+            vertexLabelsIdx.add(vertexLabels.size());
             do {
                ulabel = stream.nextInt();
                addVertexLabel(u, ulabel);
@@ -163,6 +168,9 @@ public class SuccinctMainGraph implements MainGraph {
                addEdge(u, v, e);
 
                // read labels of edge (u,v)
+               if (u < v) {
+                  edgeLabelsIdx.add(edgeLabels.size());
+               }
                edgeHasLabel = false;
                while (stream.read() == ',') {
                   elabel = stream.nextInt();
@@ -195,7 +203,6 @@ public class SuccinctMainGraph implements MainGraph {
 
    @Override
    public void addVertexLabel(int u, int label) {
-      vertexLabelsIdx.add(vertexLabels.size());
       vertexLabels.add(label);
    }
 
@@ -211,7 +218,6 @@ public class SuccinctMainGraph implements MainGraph {
 
    @Override
    public void addEdgeLabel(int e, int label) {
-      edgeLabelsIdx.add(edgeLabels.size());
       edgeLabels.add(label);
    }
 

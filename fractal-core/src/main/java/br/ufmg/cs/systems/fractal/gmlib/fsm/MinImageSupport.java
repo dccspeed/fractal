@@ -2,7 +2,6 @@ package br.ufmg.cs.systems.fractal.gmlib.fsm;
 
 import br.ufmg.cs.systems.fractal.aggregation.PatternAggregationAwareValue;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
-import br.ufmg.cs.systems.fractal.pattern.PatternEdge;
 import br.ufmg.cs.systems.fractal.pattern.VertexPositionEquivalences;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.ClearSetConsumer;
@@ -24,12 +23,7 @@ import java.util.Arrays;
 public class MinImageSupport implements Writable, Externalizable, PatternAggregationAwareValue {
    private static final Logger LOG = Logger.getLogger(MinImageSupport.class);
    private static final ThreadLocal<ClearSetConsumer> clearSetConsumer =
-           new ThreadLocal<ClearSetConsumer>() {
-              @Override
-              protected ClearSetConsumer initialValue() {
-                 return new ClearSetConsumer();
-              }
-           };
+           ThreadLocal.withInitial(ClearSetConsumer::new);
 
    private HashIntSet[] domainSets;
    private HashIntSet domainsReachedSupport;

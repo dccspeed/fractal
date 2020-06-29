@@ -26,6 +26,6 @@
   "algorithm": {
     "steps": 5,
     "app": "cliques",
-    "output_path": "/dados01/ufmg.m06dcc/fractal/cliquesApp.csv"
+    "output_path": "/dados-fractal/cliquesApp.csv"
   }
 }

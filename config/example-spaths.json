@@ -1,0 +1,31 @@
+{
+  "spark": [
+    {
+      "name": "spark.app.name",
+      "value": "fractal-MPMGSparkRunner"
+    },
+    {
+      "name": "spark.master",
+      "value": "local[*]"
+    },
+    {
+      "name": "spark.sql.hive.hiveserver2.jdbc.url",
+      "value": "jdbc:hive2://localhost:10000"
+    },
+    {
+      "name": "spark.datasource.hive.warehouse.exec.results.max",
+      "value": "2147483647"
+    }
+  ],
+  "database": {
+    "temporary_tables": [],
+    "query": "select * from citeseer",
+    "input_graph": "",
+    "output_table": "citeseer_spaths"
+  },
+  "algorithm": {
+    "steps": 5,
+    "app": "spaths",
+    "output_path": "/dados-fractal/spaths.csv"
+  }
+}

@@ -78,7 +78,9 @@ class HiveApp(val configPath: String) extends Logging {
     logInfo(s"\tReading data from: ${outputPath}")
     val table = databaseConfigs("output_table").str
     val query = new StringBuilder(s"INSERT INTO TABLE ${table} VALUES")
-    for (line <- Source.fromFile(outputPath).getLines()) {
+    val linesIterator = Source.fromFile(outputPath).getLines
+    linesIterator.next
+    for (line <- linesIterator) {
       query.append(s" (${line}),")
     }
     query.deleteCharAt(query.length - 1)
@@ -90,7 +92,7 @@ class HiveApp(val configPath: String) extends Logging {
 }
 
 trait MPMGApp extends Logging {
-  def writeResults(outputPath: String, mapv : Map[IntWritable, Text]): Unit
+  def writeResults(outputPath: String, vertexMap: Map[IntWritable, Text]): Unit
 }
 
 class CliquesApp(
@@ -116,7 +118,7 @@ class CliquesApp(
     app = cliquesRes
   }
 
-  def writeResults(outputPath: String, mapv : Map[IntWritable, Text]): Unit = {
+  def writeResults(outputPath: String, vertexMap: Map[IntWritable, Text]): Unit = {
     val outputBuffer = new BufferedWriter(new FileWriter(new File(outputPath)))
     outputBuffer.write("Identificador da clique,Identificador do vértice participante\n")
 
@@ -151,19 +153,17 @@ class ShortestPathsApp(
     app = pathsf
   }
 
-  override def writeResults(outputPath: String, mapv : Map[IntWritable, Text]): Unit = {
+  override def writeResults(outputPath: String, vertexMap: Map[IntWritable, Text]): Unit = {
     val outputBuffer = new BufferedWriter(new FileWriter(new File(outputPath)))
     outputBuffer.write("Identificador do caminho,Identificador do vértice participante,Vértice origem,Vértice destino\n")
 
     var i = 1
     app.aggregationMap[PairWritable[IntWritable, IntWritable], IntArrayList]("sps").foreach {
       case (pair, path) => {
-        //val map = c.getConfig().getMainGraph[MainGraph[_, _]]();
         val it = path.iterator
-        while (it.hasNext()) {
+        while (it.hasNext) {
           val id = new IntWritable(it.next())
-          //outputBuffer.write(s"${i},${it.next()}\n")
-          outputBuffer.write(s"${i},${mapv(id)}\n")
+          outputBuffer.write(s"${i},${vertexMap(id)},${pair.getLeft},${pair.getRight}\n")
         }
         i += 1 // todo: validate if is don't collide
       }
@@ -172,21 +172,19 @@ class ShortestPathsApp(
   }
 }
 
-class MapVerticesApp( val fractalGraph: FractalGraph,
-                        algs: FractalAlgorithms) extends FractalSparkApp with MPMGApp {
+class MapVerticesApp(val fractalGraph: FractalGraph,
+                     algs: FractalAlgorithms) extends FractalSparkApp {
   var app: Map[IntWritable, Text] = _
+
   def execute: Unit = {
     val (mapf, elapsed) = FractalSparkRunner.time {
-      algs.mapvertices(fractalGraph)
+      algs.mapVertices(fractalGraph)
     }
     logInfo(s"MapVerticesApp" +
       s" graph=${fractalGraph} elapsed=${elapsed}"
     )
 
     app = mapf
-  }
-  override def writeResults(outputPath: String, mapv : Map[IntWritable, Text]): Unit = {
-
   }
 }
 
@@ -221,8 +219,7 @@ object MPMGSparkRunner {
     //running fractal application
     val fractalGraph = fc.textFile(graphPath, "br.ufmg.cs.systems.fractal.graph.EdgeListGraph")
     val algs = new FractalAlgorithms
-    
-    
+
     val app = hiveApp.algorithmConfigs("app").str.toLowerCase match {
       case "cliques" =>
         new CliquesApp(fractalGraph, algs, hiveApp.algorithmConfigs("steps").num.toInt)
@@ -235,11 +232,11 @@ object MPMGSparkRunner {
     app.execute
 
     //Create vertex mapping
-    val mapv = new MapVerticesApp(fractalGraph, algs)
-    mapv.execute
+    val vertexMap = new MapVerticesApp(fractalGraph, algs)
+    vertexMap.execute
 
     //write output results
-    app.writeResults(outputPath, mapv.app)
+    app.writeResults(outputPath, vertexMap.app)
 
     hiveApp.readWriteOutput(outputPath)
 

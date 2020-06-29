@@ -10,6 +10,8 @@ import com.hortonworks.spark.sql.hive.llap.{HiveWarehouseBuilder, HiveWarehouseS
 import org.apache.hadoop.io.IntWritable
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
+import org.apache.hadoop.io.Text
+import scala.collection.mutable.Map
 
 import scala.io.Source
 
@@ -88,7 +90,7 @@ class HiveApp(val configPath: String) extends Logging {
 }
 
 trait MPMGApp extends Logging {
-  def writeResults(outputPath: String): Unit
+  def writeResults(outputPath: String, mapv : Map[IntWritable, Text]): Unit
 }
 
 class CliquesApp(
@@ -114,7 +116,7 @@ class CliquesApp(
     app = cliquesRes
   }
 
-  def writeResults(outputPath: String): Unit = {
+  def writeResults(outputPath: String, mapv : Map[IntWritable, Text]): Unit = {
     val outputBuffer = new BufferedWriter(new FileWriter(new File(outputPath)))
     outputBuffer.write("Identificador da clique,Identificador do vértice participante\n")
 
@@ -149,7 +151,7 @@ class ShortestPathsApp(
     app = pathsf
   }
 
-  override def writeResults(outputPath: String): Unit = {
+  override def writeResults(outputPath: String, mapv : Map[IntWritable, Text]): Unit = {
     val outputBuffer = new BufferedWriter(new FileWriter(new File(outputPath)))
     outputBuffer.write("Identificador do caminho,Identificador do vértice participante,Vértice origem,Vértice destino\n")
 
@@ -159,13 +161,32 @@ class ShortestPathsApp(
         //val map = c.getConfig().getMainGraph[MainGraph[_, _]]();
         val it = path.iterator
         while (it.hasNext()) {
-          //	val originalId = map.getVertex(vertex).getVertexOriginalId
-          outputBuffer.write(s"${i},${it.next()}\n")
+          val id = new IntWritable(it.next())
+          //outputBuffer.write(s"${i},${it.next()}\n")
+          outputBuffer.write(s"${i},${mapv(id)}\n")
         }
         i += 1 // todo: validate if is don't collide
       }
     }
     outputBuffer.close()
+  }
+}
+
+class MapVerticesApp( val fractalGraph: FractalGraph,
+                        algs: FractalAlgorithms) extends FractalSparkApp with MPMGApp {
+  var app: Map[IntWritable, Text] = _
+  def execute: Unit = {
+    val (mapf, elapsed) = FractalSparkRunner.time {
+      algs.mapvertices(fractalGraph)
+    }
+    logInfo(s"MapVerticesApp" +
+      s" graph=${fractalGraph} elapsed=${elapsed}"
+    )
+
+    app = mapf
+  }
+  override def writeResults(outputPath: String, mapv : Map[IntWritable, Text]): Unit = {
+
   }
 }
 
@@ -200,7 +221,8 @@ object MPMGSparkRunner {
     //running fractal application
     val fractalGraph = fc.textFile(graphPath, "br.ufmg.cs.systems.fractal.graph.EdgeListGraph")
     val algs = new FractalAlgorithms
-
+    
+    
     val app = hiveApp.algorithmConfigs("app").str.toLowerCase match {
       case "cliques" =>
         new CliquesApp(fractalGraph, algs, hiveApp.algorithmConfigs("steps").num.toInt)
@@ -212,8 +234,12 @@ object MPMGSparkRunner {
 
     app.execute
 
+    //Create vertex mapping
+    val mapv = new MapVerticesApp(fractalGraph, algs)
+    mapv.execute
+
     //write output results
-    app.writeResults(outputPath)
+    app.writeResults(outputPath, mapv.app)
 
     hiveApp.readWriteOutput(outputPath)
 

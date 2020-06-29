@@ -6,9 +6,29 @@ import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, VertexInducedSu
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
 import br.ufmg.cs.systems.fractal.util.{Logging, PairWritable}
 import org.apache.hadoop.io.IntWritable
-
+import org.apache.hadoop.io.Text
+import scala.collection.mutable.Map
 
 class FractalAlgorithms extends Logging {
+   
+  def mapvertices(fgraph: FractalGraph) : Map[IntWritable, Text] = {
+    fgraph.vfractoid.
+      expand(1).
+      aggregate[IntWritable, Text]("mapv",
+	     (subg, comp, value) => {
+            val v = subg.getVertices;
+            val n = new IntWritable(v.get(0));
+            n
+          },
+          (subg, comp, value) => {
+            val v = subg.getVertices;
+	    val vertex = v.get(0)
+            new Text(comp.getConfig().getMainGraph[MainGraph[_, _]]().getVertex(vertex).getVertexOriginalId)
+          },
+          (value1, value2) => {
+            value1
+          }).aggregationMap[IntWritable, Text]("mapv")
+  }
 
   /**
    * All-cliques listing implementing the efficient DAG structure from

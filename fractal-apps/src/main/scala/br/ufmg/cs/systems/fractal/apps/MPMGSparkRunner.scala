@@ -84,7 +84,6 @@ class HiveApp(val configPath: String) extends Logging {
       query.append(s" (${line}),")
     }
     query.deleteCharAt(query.length - 1)
-    query.append(";")
 
     logInfo(s"\tWriting data to table ${table} with query ${query}")
     hiveSession.execute(query.toString())

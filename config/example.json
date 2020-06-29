@@ -1,6 +1,10 @@
 {
   "spark": [
     {
+      "name": "spark.app.name",
+      "value": "fractal-MPMGSparkRunner"
+    },
+    {
       "name": "spark.master",
       "value": "local[*]"
     },

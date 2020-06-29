@@ -62,9 +62,9 @@ class FractalAlgorithms extends Logging {
     while (continue) {
       val previous_size = spaths.size
       logInfo(s"Path iteration=${iteration} ${previous_size}")
-      spaths.foreach { case (pair, path) =>
-        logInfo(s"Path iteration=${iteration} ${pair} ${path}")
-      }
+      //spaths.foreach { case (pair, path) =>
+      //  logInfo(s"Path iteration=${iteration} ${pair} ${path}")
+      //}
 
       fpaths = fpaths.
         expand(1).

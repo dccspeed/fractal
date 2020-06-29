@@ -3,9 +3,12 @@ package br.ufmg.cs.systems.fractal.mpmg
 import java.io.{BufferedWriter, File, FileWriter}
 
 import br.ufmg.cs.systems.fractal._
-import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph
+import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.Logging
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
+import br.ufmg.cs.systems.fractal.util.{Logging, PairWritable}
 import com.hortonworks.spark.sql.hive.llap.HiveWarehouseBuilder
+import org.apache.hadoop.io.IntWritable
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 
@@ -70,11 +73,11 @@ class HiveApp(val configPath: String) extends Logging {
   //  todo: read from spark csv folder
 }
 
-trait MPMGApp {
+trait MPMGApp extends Logging{
   def writeResults(outputPath: String): Unit
 }
 
-class CliquesApp(
+class CliquesApp (
                   val fractalGraph: FractalGraph,
                   algs: FractalAlgorithms,
                   explorationSteps: Int) extends FractalSparkApp with MPMGApp {
@@ -113,22 +116,43 @@ class CliquesApp(
   }
 }
 
-class ShortestPathsApp(
+class ShortestPathsApp (
                         val fractalGraph: FractalGraph,
                         algs: FractalAlgorithms,
                         explorationSteps: Int) extends FractalSparkApp with MPMGApp {
+  var app: Fractoid[EdgeInducedSubgraph] = _
+  
   def execute: Unit = {
-    val (sps, elapsed) = FractalSparkRunner.time {
+    val (pathsf, elapsed) = FractalSparkRunner.time {
       algs.spaths(fractalGraph, explorationSteps)
     }
     logInfo(s"ShortestPathsApp" +
       s" explorationSteps=${explorationSteps}" +
       s" graph=${fractalGraph} " +
-      s" numValidSubgraphs=${sps.numValidSubgraphs()} elapsed=${elapsed}"
+      s" numValidSubgraphs=${pathsf.numValidSubgraphs()} elapsed=${elapsed}"
     )
+
+    app = pathsf
   }
 
-  override def writeResults(outputPath: String): Unit = {}
+  override def writeResults(outputPath: String): Unit = {
+    val outputBuffer = new BufferedWriter(new FileWriter(new File(outputPath)))
+    outputBuffer.write("Identificador do caminho,Identificador do vértice participante, Vértice origem, Vértice destino\n")
+
+    var i = 1
+    app.aggregationMap[PairWritable[IntWritable, IntWritable], IntArrayList]("sps").foreach{ case (pair, path) =>
+      { 
+        //val map = c.getConfig().getMainGraph[MainGraph[_, _]]();
+	val it = path.iterator
+	while(it.hasNext() ) {
+	//	val originalId = map.getVertex(vertex).getVertexOriginalId
+        	outputBuffer.write(s"${i},${it.next()}\n")
+	}
+        i += 1 // todo: validate if is don't collide
+     }
+    }
+    outputBuffer.close()
+  }
 }
 
 object MPMGSparkRunner {

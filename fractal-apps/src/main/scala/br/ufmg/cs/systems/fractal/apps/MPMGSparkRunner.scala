@@ -57,7 +57,7 @@ class HiveApp(val configPath: String) extends Logging {
     //    edges.write.csv(outputPath)
 
     outputBuffer.close()
-    hive.close()
+    //    hive.close()
   }
 
   /**
@@ -99,7 +99,7 @@ class CliquesApp(
 
   def writeResults(outputPath: String): Unit = {
     val outputBuffer = new BufferedWriter(new FileWriter(new File(outputPath)))
-    outputBuffer.write("Identificador da clique,Identificador do vértice participante")
+    outputBuffer.write("Identificador da clique,Identificador do vértice participante\n")
 
     var i = 1
     app.mappedSubgraphs.collect.foreach(subgraph => {
@@ -153,9 +153,10 @@ object MPMGSparkRunner {
       Thread.sleep(10000)
     }
 
+    val outputPath = hiveApp.algorithmConfigs("output_path").str
+
     //query the input graph if is the case and write it in graphPath.
-    val graphPath = s"${fc.tmpPath}/graph.edges"
-    new File(fc.tmpPath).mkdirs()
+    val graphPath = s"${outputPath}.edges"
     hiveApp.readWriteInput(graphPath)
 
     //running fractal application
@@ -174,7 +175,7 @@ object MPMGSparkRunner {
     app.execute
 
     //write output results
-    app.writeResults(hiveApp.algorithmConfigs("output_path").str)
+    app.writeResults(outputPath)
 
     fc.stop()
     ss.stop()

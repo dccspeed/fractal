@@ -24,8 +24,8 @@
     "output_table": ""
   },
   "algorithm": {
-    "steps": 10,
+    "steps": 5,
     "app": "cliques",
-    "output_path": "~/fractal-outputs/cliquesApp.csv"
+    "output_path": "/dados01/ufmg.m06dcc/fractal/cliquesApp.csv"
   }
 }

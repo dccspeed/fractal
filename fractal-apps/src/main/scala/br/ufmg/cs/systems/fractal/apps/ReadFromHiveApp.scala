@@ -12,7 +12,7 @@ object ReadFromHiveApp extends Logging {
     // args
     val hiveApp = new HiveApp(args(0))
 
-    val ss = hiveApp.updateSparkSession
+    val ss = hiveApp.sparkSession
     val hive = HiveWarehouseBuilder.session(ss).build()
 
     hiveApp.databaseConfigs("temporary_tables").arr.foreach(table => {

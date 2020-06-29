@@ -5,14 +5,19 @@ import java.io.{BufferedWriter, File, FileWriter}
 import br.ufmg.cs.systems.fractal._
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph
 import br.ufmg.cs.systems.fractal.util.Logging
-import com.hortonworks.spark.sql.hive.llap.HiveWarehouseBuilder
+import com.hortonworks.spark.sql.hive.llap.{HiveWarehouseBuilder, HiveWarehouseSessionImpl}
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
+
+import scala.io.Source
 
 class HiveApp(val configPath: String) extends Logging {
   var sparkConfigs: ujson.Value = _
   var databaseConfigs: ujson.Value = _
   var algorithmConfigs: ujson.Value = _
+  var sparkSession: SparkSession = _
+  var hiveSession: HiveWarehouseSessionImpl = _
+
 
   def initConfigs: Unit = {
     val config = ujson.read(scala.reflect.io.File(configPath).slurp)
@@ -21,31 +26,34 @@ class HiveApp(val configPath: String) extends Logging {
     algorithmConfigs = config("algorithm")
   }
 
-  initConfigs
-
-  def updateSparkSession: SparkSession = {
+  def initSparkSession: Unit = {
     var conf = new SparkConf()
     sparkConfigs.arr.foreach(setting => {
       conf = conf.set(setting("name").str, setting("value").str)
     })
 
-    SparkSession.builder.config(conf).enableHiveSupport().getOrCreate()
+    sparkSession = SparkSession.builder.config(conf).enableHiveSupport().getOrCreate()
   }
+
+  def initHiveConnector {
+    hiveSession = HiveWarehouseBuilder.session(sparkSession).build()
+  }
+
+  initConfigs
+  initSparkSession
+  initHiveConnector
 
   /**
    * Read from hive/database write in disk
    */
   def readWriteInput(outputPath: String): Unit = {
-    val sparkSession = updateSparkSession
-    val hive = HiveWarehouseBuilder.session(sparkSession).build()
-
     databaseConfigs("temporary_tables").arr.foreach(table => {
       logInfo(s"\tLoading temporary table ${table("name").str} with query ${table("value").str}")
-      hive.execute(table("value").str).createOrReplaceTempView(table("name").str)
+      hiveSession.execute(table("value").str).createOrReplaceTempView(table("name").str)
     })
 
     logInfo(s"\tLoading edges with query: ${databaseConfigs("query").str}")
-    val edges = hive.execute(databaseConfigs("query").str)
+    val edges = hiveSession.execute(databaseConfigs("query").str)
 
     //    todo: write using spark
     logInfo(s"\tWriting data to CSV at: ${outputPath}")
@@ -57,17 +65,24 @@ class HiveApp(val configPath: String) extends Logging {
     //    edges.write.csv(outputPath)
 
     outputBuffer.close()
-    //    hive.close()
   }
 
   /**
    * Read from disk write in hive/database
    */
-  def readWriteOutput(outputPath: String) {
+  def readWriteOutput(outputPath: String): Unit = {
+    logInfo(s"\tReading data from: ${outputPath}")
+    val table = databaseConfigs("output_table").str
+    val query = new StringBuilder(s"INSERT INTO TABLE ${table} VALUES")
+    for (line <- Source.fromFile(outputPath).getLines()) {
+      query.append(s" (${line}),")
+    }
+    query.deleteCharAt(query.length - 1)
+    query.append(";")
 
+    logInfo(s"\tWriting data to table ${table} with query ${query}")
+    hiveSession.execute(query.toString())
   }
-
-  //  todo: read from spark csv folder
 }
 
 trait MPMGApp {
@@ -144,7 +159,7 @@ object MPMGSparkRunner {
     val hiveApp = new HiveApp(args(0))
 
     //Create Session
-    val ss = hiveApp.updateSparkSession
+    val ss = hiveApp.sparkSession
     val fc = new FractalContext(ss.sparkContext)
 
     if (!ss.sparkContext.isLocal) {
@@ -176,6 +191,8 @@ object MPMGSparkRunner {
 
     //write output results
     app.writeResults(outputPath)
+
+    hiveApp.readWriteOutput(outputPath)
 
     fc.stop()
     ss.stop()

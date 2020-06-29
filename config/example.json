@@ -21,7 +21,7 @@
     "temporary_tables": [],
     "query": "select * from citeseer",
     "input_graph": "",
-    "output_table": ""
+    "output_table": "citeseer_cliques"
   },
   "algorithm": {
     "steps": 5,

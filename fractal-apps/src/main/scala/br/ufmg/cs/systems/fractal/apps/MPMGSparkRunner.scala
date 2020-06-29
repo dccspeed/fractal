@@ -87,11 +87,11 @@ class HiveApp(val configPath: String) extends Logging {
   }
 }
 
-trait MPMGApp extends Logging{
+trait MPMGApp extends Logging {
   def writeResults(outputPath: String): Unit
 }
 
-class CliquesApp (
+class CliquesApp(
                   val fractalGraph: FractalGraph,
                   algs: FractalAlgorithms,
                   explorationSteps: Int) extends FractalSparkApp with MPMGApp {
@@ -130,12 +130,12 @@ class CliquesApp (
   }
 }
 
-class ShortestPathsApp (
+class ShortestPathsApp(
                         val fractalGraph: FractalGraph,
                         algs: FractalAlgorithms,
                         explorationSteps: Int) extends FractalSparkApp with MPMGApp {
   var app: Fractoid[EdgeInducedSubgraph] = _
-  
+
   def execute: Unit = {
     val (pathsf, elapsed) = FractalSparkRunner.time {
       algs.spaths(fractalGraph, explorationSteps)
@@ -151,19 +151,19 @@ class ShortestPathsApp (
 
   override def writeResults(outputPath: String): Unit = {
     val outputBuffer = new BufferedWriter(new FileWriter(new File(outputPath)))
-    outputBuffer.write("Identificador do caminho,Identificador do vértice participante, Vértice origem, Vértice destino\n")
+    outputBuffer.write("Identificador do caminho,Identificador do vértice participante,Vértice origem,Vértice destino\n")
 
     var i = 1
-    app.aggregationMap[PairWritable[IntWritable, IntWritable], IntArrayList]("sps").foreach{ case (pair, path) =>
-      { 
+    app.aggregationMap[PairWritable[IntWritable, IntWritable], IntArrayList]("sps").foreach {
+      case (pair, path) => {
         //val map = c.getConfig().getMainGraph[MainGraph[_, _]]();
-	val it = path.iterator
-	while(it.hasNext() ) {
-	//	val originalId = map.getVertex(vertex).getVertexOriginalId
-        	outputBuffer.write(s"${i},${it.next()}\n")
-	}
+        val it = path.iterator
+        while (it.hasNext()) {
+          //	val originalId = map.getVertex(vertex).getVertexOriginalId
+          outputBuffer.write(s"${i},${it.next()}\n")
+        }
         i += 1 // todo: validate if is don't collide
-     }
+      }
     }
     outputBuffer.close()
   }

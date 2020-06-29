@@ -86,7 +86,7 @@ class HiveApp(val configPath: String) extends Logging {
     query.deleteCharAt(query.length - 1)
 
     logInfo(s"\tWriting data to table ${table} with query ${query}")
-    hiveSession.execute(query.toString())
+    hiveSession.executeUpdate(query.toString())
   }
 }
 

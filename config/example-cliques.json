@@ -21,7 +21,7 @@
   ],
   "database": {
     "temporary_tables": [],
-    "query": "select * from citeseer",
+    "input_query": "select * from citeseer",
     "output_table": "citeseer_cliques",
     "input_graph_path": "",
     "output_query_path": "/dados-fractal/cliques.csv"

@@ -61,8 +61,8 @@ class HiveApp(val configPath: String) extends Logging {
       hiveSession.execute(table("value").str).createOrReplaceTempView(table("name").str)
     })
 
-    logInfo(s"\tLoading edges with query: ${databaseConfigs("query").str}")
-    val edges = hiveSession.execute(databaseConfigs("query").str)
+    logInfo(s"\tLoading edges with query: ${databaseConfigs("input_query").str}")
+    val edges = hiveSession.execute(databaseConfigs("input_query").str)
 
     //    todo: write using spark
     logInfo(s"\tWriting data to CSV at: ${outputPath}")

@@ -22,9 +22,9 @@
   "database": {
     "temporary_tables": [],
     "input_query": "select * from citeseer",
-    "output_table": "citeseer_cliques",
+    "output_query_path": "citeseer_cliques",
     "input_graph_path": "",
-    "output_query_path": "/dados-fractal/cliques.csv"
+    "output_fractal_path": "/dados-fractal/cliques.csv"
   },
   "fractal": {
     "steps": 5,

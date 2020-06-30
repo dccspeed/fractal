@@ -81,7 +81,7 @@ class HiveApp(val configPath: String) extends Logging {
    */
   def readWriteOutput(outputPath: String): Unit = {
     logInfo(s"\tReading data from: ${outputPath}")
-    val table = databaseConfigs("output_table").str
+    val table = databaseConfigs("output_query_path").str
     val query = new StringBuilder(s"INSERT INTO TABLE ${table} VALUES")
     val linesIterator = Source.fromFile(outputPath).getLines
     linesIterator.next
@@ -219,7 +219,7 @@ object MPMGSparkRunner {
     val fc = new FractalContext(ss.sparkContext)
     val hiveApp = new HiveApp(configPath)
 
-    val outputPath = hiveApp.databaseConfigs("output_query_path").str
+    val outputPath = hiveApp.databaseConfigs("output_fractal_path").str
 
     //query the input graph if is the case and write it in graphPath.
     var graphPath = hiveApp.databaseConfigs("input_graph_path").str

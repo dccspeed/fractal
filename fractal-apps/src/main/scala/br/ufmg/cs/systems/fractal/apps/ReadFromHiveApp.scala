@@ -2,18 +2,19 @@ package br.ufmg.cs.systems.fractal.apps
 
 import java.util.UUID
 
-import br.ufmg.cs.systems.fractal.mpmg.HiveApp
+import br.ufmg.cs.systems.fractal.mpmg.{HiveApp, UtilApp}
 import br.ufmg.cs.systems.fractal.util.Logging
-import com.hortonworks.spark.sql.hive.llap.HiveWarehouseBuilder
 
 object ReadFromHiveApp extends Logging {
 
   def main(args: Array[String]) {
-    // args
-    val hiveApp = new HiveApp(args(0))
+    val configPath = args(0)
+    val utilApp = new UtilApp
+    val config = utilApp.readConfig(configPath)
+    val ss = utilApp.getCreateSparkSession(config, null, "spark_fractal")
 
-    val ss = hiveApp.sparkSession
-    val hive = HiveWarehouseBuilder.session(ss).build()
+    val hiveApp = new HiveApp(configPath)
+    val hive = hiveApp.hiveSession
 
     hiveApp.databaseConfigs("temporary_tables").arr.foreach(table => {
       logInfo(s"\tLoading temporary table ${table("name").str} with query ${table("value").str}")
@@ -27,7 +28,6 @@ object ReadFromHiveApp extends Logging {
     logInfo(s"\tWriting data to CSV at: ${outputPath}")
     edges.write.csv(outputPath)
 
-    hive.close()
     ss.stop()
   }
 }

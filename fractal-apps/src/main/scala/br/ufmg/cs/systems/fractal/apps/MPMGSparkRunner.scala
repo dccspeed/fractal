@@ -15,36 +15,41 @@ import scala.collection.mutable.Map
 
 import scala.io.Source
 
-class HiveApp(val configPath: String) extends Logging {
-  var sparkConfigs: ujson.Value = _
-  var databaseConfigs: ujson.Value = _
-  var algorithmConfigs: ujson.Value = _
-  var sparkSession: SparkSession = _
-  var hiveSession: HiveWarehouseSessionImpl = _
-
-
-  def initConfigs: Unit = {
-    val config = ujson.read(scala.reflect.io.File(configPath).slurp)
-    sparkConfigs = config("spark")
-    databaseConfigs = config("database")
-    algorithmConfigs = config("algorithm")
+class UtilApp() extends Logging {
+  def readConfig(configPath: String): ujson.Value = {
+    logInfo(s"Reading config file from ${configPath}")
+    ujson.read(scala.reflect.io.File(configPath).slurp)
   }
 
-  def initSparkSession: Unit = {
+  def getCreateSparkSession(config: ujson.Value = null, configPath: String, configName: String): SparkSession = {
+    logInfo("Creating Spark Session")
+    val useConfig = if (config == null) readConfig(configPath) else config
     var conf = new SparkConf()
-    sparkConfigs.arr.foreach(setting => {
+    useConfig(configName).arr.foreach(setting => {
       conf = conf.set(setting("name").str, setting("value").str)
     })
 
-    sparkSession = SparkSession.builder.config(conf).enableHiveSupport().getOrCreate()
+    SparkSession.builder.config(conf).enableHiveSupport().getOrCreate()
+  }
+}
+
+class HiveApp(val configPath: String) extends Logging {
+  val utilApp = new UtilApp
+  var databaseConfigs: ujson.Value = _
+  var currentConfig: ujson.Value = _
+  var hiveSession: HiveWarehouseSessionImpl = _
+
+  def initConfigs: Unit = {
+    currentConfig = utilApp.readConfig(configPath)
+    databaseConfigs = currentConfig("database")
   }
 
   def initHiveConnector {
+    val sparkSession = utilApp.getCreateSparkSession(currentConfig, null, "spark_database")
     hiveSession = HiveWarehouseBuilder.session(sparkSession).build()
   }
 
   initConfigs
-  initSparkSession
   initHiveConnector
 
   /**
@@ -197,11 +202,13 @@ object MPMGSparkRunner {
 
   def main(args: Array[String]) {
     //args
-    val hiveApp = new HiveApp(args(0))
+    val configPath = args(0)
+    val utilApp = new UtilApp
+    val config = utilApp.readConfig(configPath)
 
-    //Create Session
-    val ss = hiveApp.sparkSession
-    val fc = new FractalContext(ss.sparkContext)
+    val fractalConfig = config("fractal")
+
+    val ss = utilApp.getCreateSparkSession(config, null, "spark_fractal")
 
     if (!ss.sparkContext.isLocal) {
       // TODO: this is ugly but have to make sure all spark executors are up by
@@ -209,30 +216,35 @@ object MPMGSparkRunner {
       Thread.sleep(10000)
     }
 
-    val outputPath = hiveApp.algorithmConfigs("output_path").str
+    val fc = new FractalContext(ss.sparkContext)
+    val hiveApp = new HiveApp(configPath)
+
+    val outputPath = hiveApp.databaseConfigs("output_query_path").str
 
     //query the input graph if is the case and write it in graphPath.
-    val graphPath = s"${outputPath}.edges"
-    hiveApp.readWriteInput(graphPath)
+    var graphPath = hiveApp.databaseConfigs("input_graph_path").str
+    if (graphPath.isEmpty) {
+      graphPath = s"${outputPath}.edges"
+      hiveApp.readWriteInput(graphPath)
+    }
 
     //running fractal application
     val fractalGraph = fc.textFile(graphPath, "br.ufmg.cs.systems.fractal.graph.EdgeListGraph")
     val algs = new FractalAlgorithms
+    val vertexMap = new MapVerticesApp(fractalGraph, algs)
 
-    val app = hiveApp.algorithmConfigs("app").str.toLowerCase match {
+    val app = fractalConfig("app").str.toLowerCase match {
       case "cliques" =>
-        new CliquesApp(fractalGraph, algs, hiveApp.algorithmConfigs("steps").num.toInt)
-      case "spaths" =>
-        new ShortestPathsApp(fractalGraph, algs, hiveApp.algorithmConfigs("steps").num.toInt)
+        new CliquesApp(fractalGraph, algs, fractalConfig("steps").num.toInt)
+      case "spaths" => {
+        vertexMap.execute
+        new ShortestPathsApp(fractalGraph, algs, fractalConfig("steps").num.toInt)
+      }
       case appName =>
         throw new RuntimeException(s"Unknown app: ${appName}")
     }
 
     app.execute
-
-    //Create vertex mapping
-    val vertexMap = new MapVerticesApp(fractalGraph, algs)
-    vertexMap.execute
 
     //write output results
     app.writeResults(outputPath, vertexMap.app)

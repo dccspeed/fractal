@@ -1,13 +1,15 @@
 {
-  "spark": [
+  "spark_fractal": [
     {
       "name": "spark.app.name",
-      "value": "fractal-MPMGSparkRunner"
+      "value": "fractal-CliquesApp"
     },
     {
       "name": "spark.master",
       "value": "local[*]"
-    },
+    }
+  ],
+  "spark_database": [
     {
       "name": "spark.sql.hive.hiveserver2.jdbc.url",
       "value": "jdbc:hive2://localhost:10000"
@@ -20,12 +22,12 @@
   "database": {
     "temporary_tables": [],
     "query": "select * from citeseer",
-    "input_graph": "",
-    "output_table": "citeseer_cliques"
+    "output_table": "citeseer_cliques",
+    "input_graph_path": "",
+    "output_query_path": "/dados-fractal/cliques.csv"
   },
-  "algorithm": {
+  "fractal": {
     "steps": 5,
-    "app": "cliques",
-    "output_path": "/dados-fractal/cliquesApp.csv"
+    "app": "cliques"
   }
 }

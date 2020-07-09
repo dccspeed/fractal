@@ -56,13 +56,15 @@ class HiveApp(val configPath: String) extends Logging {
    * Read from hive/database write in disk
    */
   def readWriteInput(outputPath: String): Unit = {
+    if (outputPath.isEmpty) return
+
     databaseConfigs("temporary_tables").arr.foreach(table => {
       logInfo(s"\tLoading temporary table ${table("name").str} with query ${table("value").str}")
       hiveSession.execute(table("value").str).createOrReplaceTempView(table("name").str)
     })
 
     logInfo(s"\tLoading edges with query: ${databaseConfigs("input_query").str}")
-    val edges = hiveSession.execute(databaseConfigs("input_query").str)
+    val edges = hiveSession.executeQuery(databaseConfigs("input_query").str)
 
     //    todo: write using spark
     logInfo(s"\tWriting data to CSV at: ${outputPath}")
@@ -80,6 +82,8 @@ class HiveApp(val configPath: String) extends Logging {
    * Read from disk write in hive/database
    */
   def readWriteOutput(outputPath: String): Unit = {
+    if (outputPath.isEmpty) return
+
     logInfo(s"\tReading data from: ${outputPath}")
     val table = databaseConfigs("output_query_path").str
     val query = new StringBuilder(s"INSERT INTO TABLE ${table} VALUES")
@@ -192,6 +196,16 @@ class MapVerticesApp(val fractalGraph: FractalGraph,
   }
 }
 
+class ReadDatabaseApp(val fractalGraph: FractalGraph,
+                      algs: FractalAlgorithms) extends FractalSparkApp with MPMGApp {
+  def execute: Unit = {
+    val filesize = Source.fromFile(fractalGraph.vfractoid.config.getMainGraphPath).size
+    logInfo(s"-------- ReadDatabaseApp FILE SIZE : ${filesize} --------")
+  }
+
+  def writeResults(outputPath: String, vertexMap: Map[IntWritable, Text]): Unit = {}
+}
+
 object MPMGSparkRunner {
   def time[R](block: => R): (R, Long) = {
     val t0 = System.currentTimeMillis()
@@ -239,6 +253,9 @@ object MPMGSparkRunner {
       case "spaths" => {
         vertexMap.execute
         new ShortestPathsApp(fractalGraph, algs, fractalConfig("steps").num.toInt)
+      }
+      case "read_database" => {
+        new ReadDatabaseApp(fractalGraph, algs)
       }
       case appName =>
         throw new RuntimeException(s"Unknown app: ${appName}")

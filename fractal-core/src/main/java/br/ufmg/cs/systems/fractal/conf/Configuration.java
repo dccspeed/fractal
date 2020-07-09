@@ -8,10 +8,10 @@ import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.computation.MasterComputation;
 import br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
+import br.ufmg.cs.systems.fractal.graph.MainGraphStore;
 import br.ufmg.cs.systems.fractal.optimization.OptimizationSet;
 import br.ufmg.cs.systems.fractal.optimization.OptimizationSetDescriptor;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
-import br.ufmg.cs.systems.fractal.pattern.PatternExplorationPlan;
 import br.ufmg.cs.systems.fractal.pattern.VICPattern;
 import br.ufmg.cs.systems.fractal.subgraph.EdgeInducedSubgraph;
 import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph;
@@ -21,6 +21,7 @@ import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
+import sun.applet.Main;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -31,7 +32,6 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Configuration<O extends Subgraph> implements Serializable {
@@ -57,7 +57,7 @@ public class Configuration<O extends Subgraph> implements Serializable {
     public static final String CONF_MAINGRAPH_CLASS_DEFAULT = "br.ufmg.cs.systems.fractal.graph.BasicMainGraph";
 
     public static final String CONF_MAINGRAPH_PATH = "fractal.graph.location";
-    public static final String CONF_MAINGRAPH_PATH_DEFAULT = "main.graph";
+    public static final String CONF_MAINGRAPH_PATH_DEFAULT = null;
 
     public static final String CONF_MAINGRAPH_LOCAL = "fractal.graph.local";
     public static final boolean CONF_MAINGRAPH_LOCAL_DEFAULT = false;
@@ -86,7 +86,7 @@ public class Configuration<O extends Subgraph> implements Serializable {
     public static final String CONF_MASTER_COMPUTATION_CLASS_DEFAULT = "br.ufmg.cs.systems.fractal.computation.MasterComputation";
 
     public static final String CONF_COMM_STRATEGY = "fractal.comm.strategy";
-    public static final String CONF_COMM_STRATEGY_DEFAULT = "scratchagg";
+    public static final String CONF_COMM_STRATEGY_DEFAULT = "scratch";
 
     public static final String CONF_PATTERN_CLASS = "fractal.pattern.class";
     public static final String CONF_PATTERN_CLASS_DEFAULT = "br.ufmg.cs.systems.fractal.pattern.JBlissPattern";
@@ -205,7 +205,7 @@ public class Configuration<O extends Subgraph> implements Serializable {
               CONF_PATTERN_CLASS_DEFAULT);
 
         // create (empty) graph
-        setMainGraph(createGraph());
+        setMainGraph(getOrCreateMainGraph());
 
         // TODO: Make this more flexible
         if (isGraphEdgeLabelled || isGraphMulti) {
@@ -402,24 +402,47 @@ public class Configuration<O extends Subgraph> implements Serializable {
           mainGraph.numEdges() > 0);
     }
 
-    public MainGraph createGraph() {
-        try {
-            Constructor<? extends MainGraph> constructor;
-            constructor = mainGraphClass.getConstructor(String.class,
-                  boolean.class, boolean.class);
-            MainGraph graph = constructor.newInstance(getMainGraphPath(),
-                  isGraphEdgeLabelled, isGraphMulti);
-            if (this.mainGraphId > -1) {
-               graph.setId(mainGraphId);
-            }
-            return graph;
-        } catch (NoSuchMethodException | IllegalAccessException |
-              InstantiationException | InvocationTargetException e) {
-            throw new RuntimeException("Could not create main graph", e);
-        }
-    }
+   public MainGraph getOrCreateMainGraph() {
+      String path = getMainGraphPath();
+      MainGraph graph;
 
-    protected void readMainGraph() {
+      if (path == null) {
+         LOG.debug("Creating main graph (not loaded from a path)");
+         graph = createMainGraph();
+      } else {
+         graph = MainGraphStore.get(path);
+         if (graph == null) {
+            LOG.debug("Creating main graph (not found in store)");
+            graph = createMainGraph();
+            MainGraphStore.put(path, graph);
+         } else {
+            LOG.debug("Found main graph in store: " + path + " " + graph);
+         }
+      }
+
+      return graph;
+   }
+
+   private MainGraph createMainGraph() {
+      String path = getMainGraphPath();
+      MainGraph graph;
+      try {
+         Constructor<? extends MainGraph> constructor;
+         constructor = mainGraphClass.getConstructor(String.class, boolean.class, boolean.class);
+         graph = constructor.newInstance(path, isGraphEdgeLabelled, isGraphMulti);
+      } catch (NoSuchMethodException | IllegalAccessException |
+              InstantiationException | InvocationTargetException e) {
+         throw new RuntimeException("Could not create main graph", e);
+      }
+
+      if (this.mainGraphId > -1) {
+         graph.setId(mainGraphId);
+      }
+
+      return graph;
+   }
+
+   protected void readMainGraph() {
         boolean useLocalGraph = getBoolean(CONF_MAINGRAPH_LOCAL,
               CONF_MAINGRAPH_LOCAL_DEFAULT);
         
@@ -439,7 +462,7 @@ public class Configuration<O extends Subgraph> implements Serializable {
             throw new RuntimeException("Could not read graph properties", e);
         } catch (InvocationTargetException e) {
            if (e.getTargetException() instanceof IOException) {
-              LOG.warn("Graph properties file not found: " +
+              LOG.info("Graph properties file not found: " +
                     getMainGraphPropertiesPath());
            } else {
               throw new RuntimeException("Could not read graph properties", e);

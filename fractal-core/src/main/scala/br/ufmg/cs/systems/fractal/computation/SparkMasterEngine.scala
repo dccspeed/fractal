@@ -54,13 +54,6 @@ trait SparkMasterEngine [S <: Subgraph]
 
    /* */
 
-   /** Computation State
-    *  The following fields are set by specialized engines as an output state
-    *  w.r.t a step
-    */
-
-   var storageLevel: StorageLevel = StorageLevel.NONE
-
    var stepRDD: RDD[Unit] = _
 
    var aggAccums: Map[String,LongAccumulator] = _
@@ -128,7 +121,7 @@ trait SparkMasterEngine [S <: Subgraph]
             // step rdd
             stepRDD = sc.makeRDD(
                Seq.empty[Unit], numPartitions
-            ).persist(storageLevel)
+            )
 
             // previous aggregation
             previousAggregationsBc = sc.broadcast (
@@ -157,14 +150,6 @@ trait SparkMasterEngine [S <: Subgraph]
     * Computation cleaning. It does nothing by default.
     */
    def finalizeComputation() = {}
-
-   /**
-    * Select a storage level for this computation
-    */
-   def persist(sl: StorageLevel): this.type = {
-      storageLevel = sl
-      this
-   }
 
    def longRDD
    (defaultValue: Long, value: S => Long, reduce: (Long,Long) => Long)

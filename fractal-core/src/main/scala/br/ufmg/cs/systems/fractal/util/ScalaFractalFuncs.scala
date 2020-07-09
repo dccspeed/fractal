@@ -13,3 +13,9 @@ trait ProcessComputeFunc [S <: Subgraph]
 trait VertexFilterFunc [V] extends Predicate[Vertex[V]] with Serializable
 
 trait EdgeFilterFunc [E] extends Predicate[Edge[E]] with Serializable
+
+object ScalaFractalFuncs {
+   type CustomSubgraphCallback[S <: Subgraph] =
+      (S, Computation[S], SubgraphCallback[S]) => Unit
+}
+

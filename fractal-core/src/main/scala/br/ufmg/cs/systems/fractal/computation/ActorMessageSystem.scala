@@ -1,7 +1,7 @@
 package br.ufmg.cs.systems.fractal.computation
 
 import java.io._
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{ConcurrentLinkedQueue, ThreadLocalRandom}
 import java.util.{Arrays, Comparator, Properties}
 
@@ -11,11 +11,20 @@ import akka.routing._
 import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph
 import br.ufmg.cs.systems.fractal.util.{EventTimer, Logging}
+import com.koloboke.collect.map.LongObjMap
+import com.koloboke.collect.map.hash.HashLongObjMaps
 import com.koloboke.collect.set.hash.HashIntSets
 import com.typesafe.config.{Config, ConfigFactory}
+import io.netty.util.collection.LongObjectMap
 
 import scala.collection.mutable.Map
 import scala.concurrent.duration._
+
+sealed trait SeqNum {
+   def seqNum: Long
+}
+
+case class Retry(msg: SeqNum, dest: ActorRef)
 
 /**
  * Message sent by the master at the end of each superstep
@@ -47,7 +56,7 @@ case object StealWork
  * Message sent by a slave to other slaves to indicate a ready state for
  * termination
  */
-case object ReadyToFinish
+case class ReadyToFinish(partitionId: Int)
 
 /**
  * This message is sent externally to the slave, providing a shared queue for
@@ -59,13 +68,15 @@ case class WorkQueue(q: ConcurrentLinkedQueue[StealWorkResponse])
  * Message passed between the actors participating in a work-stealing event.
  * This message is forwarded until some work could be stealed.
  */
-case class StealWorkRequest(thief: ActorRef, nextPivot: Int, lastPivot: Int)
+case class StealWorkRequest(thief: ActorRef, nextPivot: Int, lastPivot: Int,
+                            seqNum: Long) extends SeqNum
 
 /**
  * Response message to the sender of a 'StealWork'. If available, the work will
  * be serialized as an array of bytes.
  */
-case class StealWorkResponse(workOpt: Option[Array[Byte]], numPeers: Int)
+case class StealWorkResponse(workOpt: Option[Array[Byte]], numPeers: Int,
+                             seqNum: Long) extends SeqNum
 
 /**
  * Log message
@@ -238,12 +249,14 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
 /**
  * Slave actor
  */
-class SlaveActor [E <: Subgraph](
-                                   partitionId: Int,
-                                   computation: Computation[E],
-                                   masterPath: String) extends MSActor(masterPath) {
+class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
+   extends MSActor(masterPath) {
 
-   private val config: Configuration[E] = computation.getConfig()
+   private val computation: Computation[S] = engine.computation
+
+   private val partitionId: Int = engine.getPartitionId()
+
+   private val config: Configuration[S] = computation.getConfig()
 
    private var _masterRef: ActorRef = _
 
@@ -261,21 +274,34 @@ class SlaveActor [E <: Subgraph](
 
    private var readyToFinishCount: Int = 0
 
-   private val emptyResponse = StealWorkResponse(None, 0)
+   private val unackMessages: LongObjMap[(Retry,Cancellable)] =
+      HashLongObjMaps.newMutableMap()
+
+   private var lastSeqNum: Long = -1
+
+   private def nextSeqNum: Long = {
+      lastSeqNum += 1
+      lastSeqNum
+   }
+
+   private def newSlaveReadyToFinish: Unit = {
+      readyToFinishCount += 1
+   }
+
+   private def getReadyToFinishCount: Int = {
+      maybeCheckReadyToFinishSlaves()
+      readyToFinishCount
+   }
+
+   private var readyToFinishSlaves: Array[Boolean] = _
+
+   private def emptyResponse = StealWorkResponse(None, 0, nextSeqNum)
+
+   private def emptyResponse(seqNum: Long) = StealWorkResponse(None, 0, seqNum)
 
    private val infoPeriod = computation.getConfig().getInfoPeriod()
 
    private val externalWsEnabled = computation.getConfig().externalWsEnabled()
-
-   val prefix: String = {
-      val ExecutorPrefix = """slave-actor-(\d+)-(\d+)-(\d+)-(\d+)""".r
-      self.path.name match {
-         case ExecutorPrefix(configId, step, partitionId, actorId) =>
-            s"slave-actor-${configId}-${step}"
-         case other =>
-            throw new RuntimeException(s"Invalid path for executor actor: ${other}")
-      }
-   }
 
    // register with master
    sendIdentifyRequest()
@@ -295,19 +321,41 @@ class SlaveActor [E <: Subgraph](
 
       case WorkQueue(_outbox) =>
          outbox = _outbox
-         slavesRouter.route(ReadyToFinish, self)
 
-      case ReadyToFinish =>
-         readyToFinishCount += 1
+      case ReadyToFinish(slaveId) =>
+         if (readyToFinishSlaves != null) {
+            if (!readyToFinishSlaves(slaveId)) {
+               readyToFinishSlaves(slaveId) = true
+               newSlaveReadyToFinish
+            }
+            sender() ! ReadyToFinish(partitionId)
+         }
 
       case StealWork =>
-         sendEmptyResponse(self)
+         sendMsgReliable(emptyResponse, self)
+         //sendEmptyResponse(self)
+
+      case inMsg: StealWorkResponse =>
+         val seqNum = inMsg.seqNum
+         if (unackMessages.containsKey(seqNum)) {
+            outbox.add(inMsg)
+            outbox.synchronized {
+               outbox.notify()
+            }
+            unackMessages.remove(seqNum)
+         }
 
       case ActorIdentity(`masterPath`, None) =>
          logDebug(s"Remote actor not available: $masterPath")
 
       case ReceiveTimeout =>
          sendIdentifyRequest()
+
+      case inMsg @ Retry(msg, dest) =>
+         if (unackMessages.containsKey(msg.seqNum)) {
+            sendMsgReliable(msg, dest)
+            logInfo(s"Retrying message ${msg}")
+         }
 
       case other =>
          logDebug(s"${self} is not ready. Ignoring message: ${other}.")
@@ -343,6 +391,8 @@ class SlaveActor [E <: Subgraph](
                j += 1
             }
 
+            readyToFinishSlaves = new Array[Boolean](slaves.length)
+
             computation.getConfig().taskCheckIn(0, numLocalPeers)
             logInfo(s"${self} knows ${slaves.length} slaves" +
                s" (${pivots.length} pivots)" +
@@ -355,10 +405,15 @@ class SlaveActor [E <: Subgraph](
 
       case WorkQueue(_outbox) =>
          outbox = _outbox
-         slavesRouter.route(ReadyToFinish, self)
 
-      case ReadyToFinish =>
-         readyToFinishCount += 1
+      case ReadyToFinish(slaveId) =>
+         if (readyToFinishSlaves != null) {
+            if (!readyToFinishSlaves(slaveId)) {
+               readyToFinishSlaves(slaveId) = true
+               newSlaveReadyToFinish
+            }
+            sender() ! ReadyToFinish(partitionId)
+         }
 
       case ReportStats =>
          reportStats()
@@ -369,58 +424,73 @@ class SlaveActor [E <: Subgraph](
                val numPivots = pivots.length
                val nextPivot = (localPivotIdx + 1) % numPivots
                val lastPivot = (localPivotIdx + numPivots - 1) % numPivots
-               //val nextPivot = ThreadLocalRandom.current().nextInt(numPivots)
-               //val lastPivot = (nextPivot + numPivots - 1) % numPivots
-               val msg = StealWorkRequest(self, nextPivot, lastPivot)
+
+               // this message must be reliable
+               val msg = StealWorkRequest(self, nextPivot, lastPivot, nextSeqNum)
                val aRef = pivots(nextPivot)
-               aRef ! msg
+               sendMsgReliable(msg, aRef)
+
+               //aRef ! msg
+
                logDebug(s"${inMsg}: ${self} sending ${msg} to ${aRef}")
             } else {
-               val msg = StealWorkResponse(None, readyToFinishCount)
-               self ! msg
+               val msg = StealWorkResponse(None, getReadyToFinishCount, nextSeqNum)
+               sendMsgReliable(msg, self)
+               //self ! msg
                logDebug(s"${inMsg}: ${self} sending ${msg} to ${self}")
             }
          } else {
-            sendEmptyResponse(self)
+            sendMsgReliable(emptyResponse, self)
+            //sendEmptyResponse(self)
          }
 
       case inMsg @ StealWorkRequest(
-      thief, nextPivot, lastPivot) if nextPivot == lastPivot =>
+      thief, nextPivot, lastPivot, seqNum) if nextPivot == lastPivot =>
          if (slaves != null) {
             val workOpt = ActorMessageSystem.tryStealFromLocal(computation)
+
+            val readyToFinish = getReadyToFinishCount == slaves.length
+
             if (workOpt != null &&
-               (workOpt.isDefined || readyToFinishCount == slaves.length)) {
-               val msg = StealWorkResponse(workOpt, slaves.length)
+               (workOpt.isDefined || readyToFinish)) {
+               val msg = StealWorkResponse(workOpt, slaves.length, seqNum)
                thief ! msg
                logDebug(s"${inMsg}: ${self} sending ${msg} to ${thief}")
             } else {
-               sendEmptyResponse(thief)
+               sendEmptyResponseWithSeqNum(thief, seqNum)
             }
          } else {
-            sendEmptyResponse(thief)
+            sendEmptyResponseWithSeqNum(thief, seqNum)
          }
 
-      case inMsg @ StealWorkRequest(thief, thisPivot, lastPivot) =>
+      case inMsg @ StealWorkRequest(thief, thisPivot, lastPivot, seqNum) =>
          if (slaves != null) {
             val workOpt = ActorMessageSystem.tryStealFromLocal(computation)
             if (workOpt != null && workOpt.isDefined) {
-               val msg = StealWorkResponse(workOpt, slaves.length)
+               val msg = StealWorkResponse(workOpt, slaves.length, seqNum)
                thief ! msg
                logDebug(s"${inMsg}: ${self} sending ${msg} to ${thief}")
             } else {
                val numPivots = pivots.length
                val nextPivot = (thisPivot + 1) % numPivots
-               val msg = StealWorkRequest(thief, nextPivot, lastPivot)
+               val msg = StealWorkRequest(thief, nextPivot, lastPivot, seqNum)
                val p = pivots(nextPivot)
                p ! msg
                logDebug(s"${inMsg}: ${self} forwarded ${msg} to ${p}")
             }
          } else {
-            sendEmptyResponse(thief)
+            sendEmptyResponseWithSeqNum(thief, seqNum)
          }
 
       case inMsg: StealWorkResponse =>
-         outbox.add(inMsg)
+         val seqNum = inMsg.seqNum
+         if (unackMessages.containsKey(seqNum)) {
+            outbox.add(inMsg)
+            outbox.synchronized {
+               outbox.notify()
+            }
+            unackMessages.remove(seqNum)
+         }
 
       case inMsg @ Log(msg) =>
          masterRef ! inMsg
@@ -443,6 +513,43 @@ class SlaveActor [E <: Subgraph](
             currComp = currComp.nextComputation()
          }
          masterRef ! ByeMaster(partitionId, self)
+
+      case inMsg @ Retry(msg, dest) =>
+         if (unackMessages.containsKey(msg.seqNum)) {
+            sendMsgReliable(msg, dest)
+            logInfo(s"Retrying message ${inMsg}")
+         }
+   }
+
+   private def sendMsgReliable(msg: SeqNum, dest: ActorRef): Unit = {
+      // send first time
+      dest ! msg
+
+      // get or create retry message
+      val retryMsgCancellable = unackMessages.get(msg.seqNum)
+      val retryMsg = {
+         if (retryMsgCancellable != null) retryMsgCancellable._1
+         else Retry(msg, dest)
+      }
+
+      // schedule timeout for this message
+      import context.dispatcher
+      val cancellable = context.system.scheduler.scheduleOnce(
+         500 millis, self, retryMsg)
+
+      // mark as not acknowledged
+      unackMessages.put(msg.seqNum, (retryMsg, cancellable))
+   }
+
+   private def sendEmptyResponseWithSeqNum(ref: ActorRef, seqNum: Long)
+   : Unit = {
+      //if (ThreadLocalRandom.current().nextBoolean()) {
+         val msg = emptyResponse(seqNum)
+         ref ! msg
+         logDebug(s"Sending empty response ${msg} to ${ref}.")
+      //} else {
+      //   logWarning(s"Loosing message ${seqNum}")
+      //}
    }
 
    private def sendEmptyResponse(ref: ActorRef): Unit = {
@@ -463,9 +570,20 @@ class SlaveActor [E <: Subgraph](
          infoPeriod millis, infoPeriod millis, self, ReportStats)
    }
 
+   private def maybeCheckReadyToFinishSlaves(): Unit = {
+      if (outbox != null && slaves != null && readyToFinishCount != slaves.length) {
+         val msg = ReadyToFinish(partitionId)
+         var i = 0
+         while (i < slaves.length) {
+            if (!readyToFinishSlaves(i)) slaves(i) ! msg
+            i += 1
+         }
+      }
+   }
+
    private def reportStats(): Unit = {
       val engine = computation.getExecutionEngine().
-         asInstanceOf[SparkFromScratchEngine[E]]
+         asInstanceOf[SparkFromScratchEngine[S]]
 
       masterRef ! Log(
          s"StatsReport{" +
@@ -498,10 +616,13 @@ class SlaveActor [E <: Subgraph](
    }
 
    override def postStop(): Unit = {
+      //if (!unackMessages.isEmpty) {
+      //   throw new RuntimeException(s"Unacknowledge messages: ${unackMessages}")
+      //}
       logInfo(s"SlaveActor stopped step=${computation.getStep}" +
          s" partitionId=${partitionId} actor=${self}")
       computation.getConfig().taskCheckOut()
-      SparkFromScratchEngine.unregisterComputation(computation)
+      SparkFromScratchEngine.unregisterComputation(engine)
    }
 }
 
@@ -606,23 +727,23 @@ object ActorMessageSystem extends Logging {
          s"/user/master-actor-${engine.configuration.getId}" +
          s"-${engine.step}"
       val slaveActorRef = akkaSys(engine).actorOf(
-         Props(classOf[SlaveActor[E]],
-            engine.partitionId, engine.computation, remotePath).
+         Props(classOf[SlaveActor[E]], remotePath, engine).
             withDispatcher("akka.actor.default-dispatcher"),
          s"slave-actor" +
             s"-${engine.configuration.getId}-${engine.step}" +
             s"-${engine.partitionId}-${getNextActorId}")
 
       // wait for this slave to know the all other slaves before proceed
-      slaveActorRef.synchronized {
-         while (engine.configuration.taskCounter() == 0) {
-            slaveActorRef.wait()
-         }
-      }
+      //slaveActorRef.synchronized {
+      //   while (engine.configuration.taskCounter() == 0) {
+      //      slaveActorRef.wait()
+      //   }
+      //}
 
       // ensure that local computation structures are properly created
-      SparkFromScratchEngine.createComputationsMap(
-         engine.step, engine.configuration.taskCounter())
+      //SparkFromScratchEngine.createComputationsMap(
+      //   engine.step, engine.configuration.taskCounter())
+      SparkFromScratchEngine.createComputationsMap(engine)
 
       slaveActorRef
    }
@@ -632,7 +753,7 @@ object ActorMessageSystem extends Logging {
    def tryStealFromLocal [E <: Subgraph] (
                                             c: Computation[E]): Option[Array[Byte]] = {
       val computations = SparkFromScratchEngine.localComputations[E](c.getStep())
-      val numComputations = computations.length
+      val numComputations = computations.size()
 
       val gtagBatchLow = c.getConfig().getWsBatchSizeLow()
       val gtagBatchHigh = c.getConfig().getWsBatchSizeHigh()
@@ -644,7 +765,7 @@ object ActorMessageSystem extends Logging {
       var i = ThreadLocalRandom.current().nextInt(numComputations)
       val offset = i + numComputations
       while (i < offset) {
-         val currComp = computations(i % numComputations)
+         val currComp = computations.get(i % numComputations)
          if (currComp != null) {
             val consumer = currComp.forkEnumerator(c)
             if (consumer != null) {
@@ -766,12 +887,122 @@ object ActorMessageSystem extends Logging {
 
 class WorkStealingSystem [S <: Subgraph] (
                                             processCompute: (SubgraphEnumerator[S],Computation[S]) => Long,
-                                            gtagExecutorActor: ActorRef,
+                                            slaveActor: ActorRef,
                                             remoteWorkQueue: ConcurrentLinkedQueue[StealWorkResponse],
                                             callback: (SubgraphEnumerator[S], Long) => Unit =
                                             (e: SubgraphEnumerator[S], ret: Long) => {}) extends Logging {
 
+   private var newExternalRequestsAllowed = true
+   private var requestsOnTheFly = 0L
+   private val maxRequestsOnTheFly = 10 // TODO
+
+   def workStealingComputeExternal(c: Computation[S]): Long = {
+      val numPartitions = c.getNumberPartitions
+      var externalSteals = 0L
+      var response = remoteWorkQueue.poll()
+
+      while (response != null) {
+         requestsOnTheFly -= 1
+         response.workOpt match {
+            case Some(subgraphBatchBytes) =>
+               val consumer = ActorMessageSystem.
+                  deserializeSubgraphBatch(subgraphBatchBytes, c)
+               val computation = consumer.getComputation()
+
+               val ret = processCompute(consumer, computation)
+               callback(consumer, ret)
+               externalSteals += 1
+
+            case None if response.numPeers == numPartitions =>
+               // stop sending steal requests
+               newExternalRequestsAllowed = false
+
+            case _ =>
+            // continue
+         }
+
+         response = remoteWorkQueue.poll()
+      }
+
+      externalSteals
+   }
+
    def workStealingCompute(c: Computation[S]): Unit = {
+      val internalWsEnabled = c.getConfig().internalWsEnabled()
+      val externalWsEnabled = c.getConfig().externalWsEnabled()
+      val numPartitions = c.getNumberPartitions
+      var internalSteals = 0L
+      var externalSteals = 0L
+      var wsIterations = 0L
+
+      slaveActor ! WorkQueue(remoteWorkQueue)
+
+      // case 1: internal work stealing only
+      if (internalWsEnabled && !externalWsEnabled) {
+         internalSteals += workStealingComputeLocal(c)
+         wsIterations += 1
+      }
+
+      // case 2: internal and external work stealing
+      else if (internalWsEnabled && externalWsEnabled) {
+
+         // step 1: internal and external work stealing allowed
+         while (newExternalRequestsAllowed) {
+            // internal work stealing while still possible
+            internalSteals += workStealingComputeLocal(c)
+
+            // maybe send external work stealing request
+            if (requestsOnTheFly < maxRequestsOnTheFly) {
+               slaveActor ! StealWork
+               requestsOnTheFly += 1
+            }
+
+            // wait for response (with timeout)
+            remoteWorkQueue.synchronized {
+               remoteWorkQueue.wait(100)
+            }
+
+            // check response and external work stealing
+            externalSteals += workStealingComputeExternal(c)
+
+            wsIterations += 1
+         }
+
+         // step 2: ensure all sent requests got responses
+         while (requestsOnTheFly > 0) {
+            externalSteals += workStealingComputeExternal(c)
+            remoteWorkQueue.synchronized {
+               remoteWorkQueue.wait(100)
+            }
+            wsIterations += 1
+         }
+
+         // step 3: only internal work stealing allowed (final)
+         internalSteals += workStealingComputeLocal(c)
+      }
+
+      // case 3: only external work stealing allowed
+      else if (!internalWsEnabled && externalWsEnabled) {
+         throw new UnsupportedOperationException
+      }
+
+      // case 4: neither internal nor external work stealing allowed
+      else {
+         // do nothing
+      }
+
+      logInfo(s"FinishingExecutor" +
+         s" step=${c.getStep}" +
+         s" partitionId=${c.getPartitionId}" +
+         s" internalSteals=${internalSteals}" +
+         s" externalSteals=${externalSteals}" +
+         s" requestsOnTheFly=${requestsOnTheFly}" +
+         s" wsIterations=${wsIterations}" +
+         s" maxRequestsOnTheFly=${maxRequestsOnTheFly}" +
+         s" numPartitionsTotal=${numPartitions}")
+   }
+
+   def workStealingCompute2(c: Computation[S]): Unit = {
       implicit val executionContext = ActorMessageSystem.akkaExecutorContext
       var workStealed = true
       @volatile var remoteRequestSent = false
@@ -779,13 +1010,14 @@ class WorkStealingSystem [S <: Subgraph] (
       var remoteCancellable = null.asInstanceOf[Cancellable]
       val internalWsEnabled = c.getConfig().internalWsEnabled()
       val externalWsEnabled = c.getConfig().externalWsEnabled()
+      val numPartitions = c.getNumberPartitions
       var internalSteals = 0L
       var externalSteals = 0L
 
       // the local communication slave must know where to produce request
       // responses, this is a shared work queue to be consumed by this and
       // produced by the local slave
-      gtagExecutorActor ! WorkQueue(remoteWorkQueue)
+      slaveActor ! WorkQueue(remoteWorkQueue)
 
       /**
        * This callback is scheduled right after a remote stealing request, as
@@ -812,7 +1044,7 @@ class WorkStealingSystem [S <: Subgraph] (
 
             // send steal work request, at some point the local work queue should be
             // populated with the response to this request
-            gtagExecutorActor ! StealWork
+            slaveActor ! StealWork
             requestsBalance += 1
             remoteRequestSent = true
 
@@ -881,13 +1113,14 @@ class WorkStealingSystem [S <: Subgraph] (
 
                      remoteRequestSent = false
 
-                     if (response.numPeers == c.getNumberPartitions) {
-                        gtagExecutorActor ! Log(s"AttemptFinishingExecutor" +
+                     if (response.numPeers == numPartitions) {
+                        val msg = Log(s"AttemptFinishingExecutor" +
                            s" step=${c.getStep}" +
                            s" partitionId=${c.getPartitionId}" +
                            s" responseNumPeers=${response.numPeers}" +
-                           s" numPartitionsTotal=${c.getNumberPartitions}" +
+                           s" numPartitionsTotal=${numPartitions}" +
                            s" requestsBalance=${requestsBalance}")
+                        slaveActor ! msg
                         workStealed = false
 
                         // we setup a timeout to prevent this slave hanging undefinitely
@@ -902,6 +1135,7 @@ class WorkStealingSystem [S <: Subgraph] (
             } else {
                if (_internalSteals == 0) wastedIterations += 1
             }
+
          } while (workStealed || !remoteWorkQueue.isEmpty || requestsBalance > 0)
 
          if (remoteCancellable != null) {
@@ -909,13 +1143,13 @@ class WorkStealingSystem [S <: Subgraph] (
          }
       }
 
-      gtagExecutorActor ! Log(s"FinishingExecutor" +
+      slaveActor ! Log(s"FinishingExecutor" +
          s" step=${c.getStep}" +
          s" partitionId=${c.getPartitionId}" +
          s" internalSteals=${internalSteals}" +
          s" externalSteals=${externalSteals}" +
          s" requestsBalance=${requestsBalance}" +
-         s" numPartitionsTotal=${c.getNumberPartitions}" +
+         s" numPartitionsTotal=${numPartitions}" +
          s" wastedIterations=${wastedIterations}")
 
    }
@@ -925,11 +1159,12 @@ class WorkStealingSystem [S <: Subgraph] (
 
       var internalSteals = 0L
       var _internalSteals = 0L
-      do {
+      var continue = remoteWorkQueue.isEmpty
+      while (continue) {
          _internalSteals = 0L
          var i = 0
-         while (i < computations.length) {
-            val currComp = computations(i)
+         while (i < computations.size() && continue) {
+            val currComp = computations.get(i)
             if (currComp != null) {
                val consumer = currComp.forkEnumerator(c)
                if (consumer != null) {
@@ -962,10 +1197,12 @@ class WorkStealingSystem [S <: Subgraph] (
                   //  s" elapsed=${(end - start)}ms")
                }
             }
+            continue = continue && remoteWorkQueue.isEmpty
             i += 1
          }
          internalSteals += _internalSteals
-      } while (_internalSteals > 0)
+         continue = continue && _internalSteals > 0 && remoteWorkQueue.isEmpty
+      }
 
       internalSteals
    }

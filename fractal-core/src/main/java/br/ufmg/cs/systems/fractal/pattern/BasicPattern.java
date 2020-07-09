@@ -623,11 +623,13 @@ public abstract class BasicPattern implements Pattern {
          for (PatternEdge pedge : edges) {
             if (ord1 == pedge.getSrcPos()) {
                if (visited.contains(pedge.getDestPos())) {
+                  visited.add(ord1);
                   valid = true;
                   break;
                }
             } else if (ord1 == pedge.getDestPos()) {
                if (visited.contains(pedge.getSrcPos())) {
+                  visited.add(ord1);
                   valid = true;
                   break;
                }
@@ -885,22 +887,40 @@ public abstract class BasicPattern implements Pattern {
       return vsymmetryBreakerMatrix(true);
    }
 
+   private IntArrayList getVertexLabels(boolean shouldConsiderVertexLabels) {
+      int numVertices = getNumberOfVertices();
+      IntArrayList vertexLabels = new IntArrayList(numVertices);
+
+      for (int i = 0; i < numVertices; ++i) vertexLabels.add(1);
+
+      if (shouldConsiderVertexLabels) {
+         for (PatternEdge pedge : edges) {
+            vertexLabels.set(pedge.getSrcPos(), pedge.getSrcLabel());
+            vertexLabels.set(pedge.getDestPos(), pedge.getDestLabel());
+         }
+      }
+
+      return vertexLabels;
+   }
+
    private int[][] vsymmetryBreakerMatrix(boolean shouldConsiderVertexLabels) {
       int numVertices = getNumberOfVertices();
       int[][] symmetryBreaker = new int[numVertices][numVertices];
-      IntArrayList vertexLabels = new IntArrayList(numVertices);
 
-      IntCursor vertexCursor = vertices.cursor();
-      if (shouldConsiderVertexLabels) {
-         while (vertexCursor.moveNext()) {
-            vertexLabels.add(getConfig().getMainGraph().
-                    getVertex(vertexCursor.elem()).getVertexLabel());
-         }
-      } else {
-         while (vertexCursor.moveNext()) {
-            vertexLabels.add(1);
-         }
-      }
+      IntArrayList vertexLabels = getVertexLabels(shouldConsiderVertexLabels);
+
+      //IntArrayList vertexLabels = new IntArrayList(numVertices);
+      //IntCursor vertexCursor = vertices.cursor();
+      //if (shouldConsiderVertexLabels) {
+      //   while (vertexCursor.moveNext()) {
+      //      vertexLabels.add(getConfig().getMainGraph().
+      //              getVertex(vertexCursor.elem()).getVertexLabel());
+      //   }
+      //} else {
+      //   while (vertexCursor.moveNext()) {
+      //      vertexLabels.add(1);
+      //   }
+      //}
 
       vsymmetryBreakerRec(this.copy(), symmetryBreaker, vertexLabels, -1);
 

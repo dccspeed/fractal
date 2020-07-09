@@ -188,19 +188,6 @@ case class Fractoid [S <: Subgraph : ClassTag]
       }
    }
 
-   def compute(): Map[String,Long] = {
-      masterEngine.aggAccums.map{case (k,v) => (k, v.value.longValue)}
-   }
-
-   def compute(callback: (S,Computation[S]) => Unit): Map[String,Long] = {
-      withProcessInc(callback).masterEngine.aggAccums
-         .map{case (k,v) => (k, v.value.longValue)}
-   }
-
-   def numValidSubgraphs(): Long = {
-      compute()(SparkFromScratchMasterEngine.VALID_SUBGRAPHS)
-   }
-
    /**
     * Output: subgraphs
     */
@@ -262,112 +249,6 @@ case class Fractoid [S <: Subgraph : ClassTag]
    }
 
    /**
-    * Registered aggregations
-    */
-   @Deprecated
-   def registeredAggregations: Array[String] = {
-      config.getAggregationsMetadata.map (_._1).toArray
-   }
-
-   @Deprecated
-   def aggregationMapWithCallback
-   [K <: Writable : ClassTag, V <: Writable : ClassTag]
-   (name: String, callback: SubgraphCallback[S], reductionFunc: (V,V) => V)
-   : Map[K,V] = {
-      aggregationStorageWithCallback[K,V](name, callback, reductionFunc)
-         .getMapping
-   }
-
-   @Deprecated
-   def aggregationStorageWithCallback
-   [K <: Writable : ClassTag, V <: Writable : ClassTag]
-   (name: String, callback: SubgraphCallback[S], reductionFunc: (V,V) => V)
-   : AggregationStorage[K,V] = {
-      val aggStorageClass = classOf[AggregationStorage[K,V]]
-      val persistent = false
-      val endAggregationFunction = null
-      val isIncremental = false
-      val reductionFunction = new ReductionFunctionContainer[V](reductionFunc)
-
-      // if the user specifies *Pattern* as the key, we must find the concrete
-      // implementation within the Configuration before registering the
-      // aggregation
-      val _keyClass = implicitly[ClassTag[K]].runtimeClass
-      val keyClass = if (_keyClass == classOf[Pattern]) {
-         config.getPatternClass().asInstanceOf[Class[K]]
-      } else {
-         _keyClass.asInstanceOf[Class[K]]
-      }
-      val valueClass = implicitly[ClassTag[V]].runtimeClass.asInstanceOf[Class[V]]
-
-      // get the old init aggregations function in order to compose it
-      val oldInitAggregation = getComputationContainer[S].
-         initAggregationsOpt match {
-         case Some(initAggregations) => initAggregations
-         case None => (c: Computation[S]) => {}
-      }
-
-      // construct an incremental init aggregations function
-      val initAggregations = (c: Computation[S]) => {
-         oldInitAggregation (c) // init aggregations so far
-         c.getConfig().registerAggregation (name, aggStorageClass, keyClass,
-            valueClass, persistent, reductionFunction, endAggregationFunction,
-            isIncremental)
-         callback.init(c)
-      }
-
-      val aggRes = withInitAggregations (initAggregations)
-         .withProcessInc((s,c) => callback.apply(s,c))
-
-      aggRes.masterEngine.getAggregatedValue[AggregationStorage[K,V]](name)
-   }
-
-   @Deprecated
-   def aggregationMap2
-   [K <: Writable : ClassTag, V <: Writable : ClassTag]
-   (
-      keyFunc: (S, Computation[S], K) => K,
-      valueFunc: (S, Computation[S], V) => V,
-      reductionFunc: (V,V) => V)
-   : Map[K,V] = {
-      aggregationStorage2[K,V](keyFunc, valueFunc, reductionFunc).getMapping
-   }
-
-   @Deprecated
-   def aggregationStorage2
-   [K <: Writable : ClassTag, V <: Writable : ClassTag]
-   (
-      keyFunc: (S, Computation[S], K) => K,
-      valueFunc: (S, Computation[S], V) => V,
-      reductionFunc: (V,V) => V)
-   : AggregationStorage[K,V] = {
-      val name = UUID.randomUUID().toString
-      val callback = new SubgraphCallback[S] {
-         private var aggregationStorage: AggregationStorage[K,V] = _
-         private var reusableKey: K = _
-         private var reusableValue: V = _
-
-         override def apply(s: S, c: Computation[S]): Unit = {
-            aggregationStorage.aggregateWithReusables(
-               keyFunc(s, c, reusableKey),
-               valueFunc(s, c, reusableValue)
-            )
-         }
-
-         override def init(computation: Computation[S]): Unit = {
-            val engine = computation.getExecutionEngine
-            if (engine != null) {
-               aggregationStorage = engine.getAggregationStorage(name)
-               reusableKey = aggregationStorage.reusableKey()
-               reusableValue = aggregationStorage.reusableValue()
-            }
-         }
-      }
-
-      aggregationStorageWithCallback(name, callback, reductionFunc)
-   }
-
-   /**
     * Get aggregation mappings defined by the user or empty if it does not exist
     */
    @Deprecated
@@ -385,19 +266,6 @@ case class Fractoid [S <: Subgraph : ClassTag]
    : AggregationStorage[K,V] = {
       withAggregation(name)
          .masterEngine.getAggregatedValue[AggregationStorage[K,V]](name)
-   }
-
-   /*
-    * Get aggregations defined by the user as an RDD or empty if it does not
-    * exist.
-    */
-   @Deprecated
-   def aggregationRDD [K <: Writable, V <: Writable](name: String)
-   : RDD[(SerializableWritable[K],SerializableWritable[V])] = {
-      sparkContext.parallelize (aggregationMap[K,V](name).toSeq.
-         map {
-            case (k,v) => (new SerializableWritable(k), new SerializableWritable(v))
-         }, config.numPartitions)
    }
 
    /**
@@ -564,8 +432,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
    : RDD[(K,V)] = {
       val callback = subgraphAggregationCallback
       val objObjRDD = withNextStepId
-         .withInitAggregations(c => callback
-            .init(c))
+         .withInitAggregations(c => callback.init(c))
          .withProcessInc((s,c) => callback.apply(s,c))
          .masterEngineImmutable
          .objObjRDD[K,V](key, value, aggregate)
@@ -774,17 +641,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
     */
    private def getComputationContainer [S <: Subgraph]
    : ComputationContainer[S] = {
-      try {
-         var container: Computation[S] = config.computationContainer[S]
-         container.asInstanceOf[ComputationContainer[S]]
-      } catch {
-         case e: RuntimeException =>
-            logWarning (s"No computation container was set." +
-               s" Please start with 'vfractoid' or" +
-               s" 'efractoid' or 'pfractoid' from fractalGraph." +
-               s" Exception message: ${e.getMessage}")
-            return null
-      }
+      config.computationContainerOpt[S].orNull
    }
 
    /**

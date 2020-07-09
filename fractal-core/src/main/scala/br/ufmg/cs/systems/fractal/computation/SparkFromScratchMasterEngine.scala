@@ -300,8 +300,6 @@ class SparkFromScratchMasterEngine[S <: Subgraph]
 
       execEngines.unpersist()
 
-      logInfo (s"StorageLevel = ${storageLevel}")
-
       // whether the user chose to customize master computation, executed every
       // superstep
       masterComputation.compute()

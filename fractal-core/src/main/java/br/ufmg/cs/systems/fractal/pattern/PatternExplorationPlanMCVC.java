@@ -126,7 +126,7 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
     */
    public static ObjArrayList<IntArrayList> minimumConnectedVertexCover(Pattern pattern) {
       ObjArrayList<IntArrayList> minCovers = new ObjArrayList<>();
-      for (int numCoverVertices = 1; numCoverVertices < pattern.getNumberOfVertices(); numCoverVertices++) {
+      for (int numCoverVertices = 1; numCoverVertices <= pattern.getNumberOfVertices(); numCoverVertices++) {
          Iterator<IntArrayList> covers = pattern.getVertices().combinations(numCoverVertices);
          while (covers.hasNext()) {
             IntArrayList coverCandidate = covers.next();

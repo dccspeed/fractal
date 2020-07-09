@@ -1,21 +1,22 @@
 package br.ufmg.cs.systems.fractal.computation
 
 import java.io.Serializable
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, ThreadFactory}
 import java.util.concurrent.atomic._
 
 import akka.actor._
 import br.ufmg.cs.systems.fractal.aggregation._
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
+import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList
 import br.ufmg.cs.systems.fractal.util.{EventTimer, Logging}
-import com.koloboke.collect.map.{ObjLongCursor, ObjObjCursor}
+import com.koloboke.collect.map.hash.HashIntIntMaps
+import com.koloboke.collect.map.{IntIntMap, ObjLongCursor, ObjObjCursor}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.util.LongAccumulator
 
 import scala.collection.mutable.Map
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
  */
@@ -32,10 +33,22 @@ case class SparkFromScratchEngine[S <: Subgraph]
 
    private var subgraphAggregation: SubgraphAggregation[S] = _
 
+   private var executorContext: ExecutionContext = _
+
    override def init() = {
       val start = System.currentTimeMillis
 
       super.init()
+
+      // executor service
+      val threadName = Thread.currentThread().getName
+      val threadFactory = new ThreadFactory {
+         override def newThread(runnable: Runnable): Thread = {
+            new Thread(runnable, s"FractalWorkerThread(${threadName})")
+         }
+      }
+      executorContext = ExecutionContext.fromExecutor(Executors
+         .newSingleThreadExecutor(threadFactory))
 
       // accumulators
       numSubgraphsOutput = 0
@@ -175,7 +188,7 @@ case class SparkFromScratchEngine[S <: Subgraph]
       /**
        * start enumeration work asynchronously using a future
        */
-      val computeFuture = Future(run())
+      val computeFuture = Future(run())(executorContext)
 
       /**
        * Build a special iterator to work together with the subgraph
@@ -261,7 +274,7 @@ case class SparkFromScratchEngine[S <: Subgraph]
             s",partitionId=${partitionId} took ${elapsed} ms to compute.")
 
          finalize()
-      }
+      }(executorContext)
 
       // note that this makes sense because the enumeration work is
       // dispatched asynchronously
@@ -301,7 +314,7 @@ case class SparkFromScratchEngine[S <: Subgraph]
       init()
 
       // starts the enumeration work asynchronously
-      val computeFuture = Future(run())
+      val computeFuture = Future(run())(executorContext)
 
       /**
        * Build a special iterator to work together with the subgraph
@@ -384,7 +397,7 @@ case class SparkFromScratchEngine[S <: Subgraph]
             s",partitionId=${partitionId} took ${elapsed} ms to compute.")
 
          finalize()
-      }
+      }(executorContext)
 
       // note that this makes sense because the enumeration work is
       // dispatched asynchronously
@@ -400,10 +413,12 @@ object SparkFromScratchEngine extends Logging {
    : ConcurrentHashMap[Int, ConcurrentHashMap[Int,Int]] = new ConcurrentHashMap()
 
    private val activeComputations
-   : ConcurrentHashMap[Int, Array[Computation[_]]] = new ConcurrentHashMap()
+   : ConcurrentHashMap[Int, ObjArrayList[Computation[_]]] = new ConcurrentHashMap()
 
-   def localComputations [E <: Subgraph] (step: Int): Array[Computation[E]] = {
-      activeComputations.get(step).asInstanceOf[Array[Computation[E]]]
+   private val stepToStage: IntIntMap = HashIntIntMaps.newMutableMap()
+
+   def localComputations [E <: Subgraph] (step: Int): ObjArrayList[Computation[E]] = {
+      activeComputations.get(step).asInstanceOf[ObjArrayList[Computation[E]]]
    }
 
    def localComputation [E <: Subgraph] (
@@ -414,29 +429,73 @@ object SparkFromScratchEngine extends Logging {
       val computationIdx = stepIdxs.getOrDefault(partitionId, -1)
       if (computationIdx == -1) return null
 
-      activeComputations.get(step)(computationIdx).asInstanceOf[Computation[E]]
+      activeComputations.get(step).get(computationIdx)
+         .asInstanceOf[Computation[E]]
    }
 
-   def createComputationsMap(step: Int, numComputations: Int): Unit = {
+   private def stepStageStart(step: Int, engineStageId: Int)
+   : Unit = {
+      var existingStageId = stepToStage.getOrDefault(step, -1)
+
+      while (existingStageId != engineStageId) {
+         if (existingStageId == -1) { // empty, just set
+            stepToStage.synchronized {
+               existingStageId = stepToStage.getOrDefault(step, -1)
+               if (existingStageId == -1) {
+                  existingStageId = engineStageId
+                  stepToStage.put(step, existingStageId)
+               }
+            }
+         } else {
+            logDebug(s"StepStageConflict step=${step} " +
+               s"expectedStageId=${engineStageId} foundStageId=${existingStageId}")
+            Thread.sleep(100)
+            existingStageId = stepToStage.getOrDefault(step, -1)
+         }
+      }
+
+      logDebug(s"StepStageStart step=${step} " +
+         s"expectedStageId=${engineStageId}")
+   }
+
+   private def stepStageFinish(step: Int, engineStageId: Int)
+   : Unit = {
+      val existingStageId = stepToStage.getOrDefault(step, -1)
+
+      if (existingStageId != engineStageId) {
+         throw new RuntimeException("Unexpected stage ID for step")
+      }
+
+      stepToStage.synchronized {
+         stepToStage.remove(step)
+      }
+
+      logDebug(s"StepStageFinish step=${step} stageId=${engineStageId}")
+   }
+
+   def createComputationsMap(engine: SparkEngine[_]): Unit = {
+      val step = engine.step
       activeComputations.synchronized {
          if (!activeComputations.containsKey(step)) {
-            logInfo (s"Registering computation map step=${step}" +
-               s" numComputations=${numComputations}")
+            logInfo (s"Registering computation map step=${step}")
 
-            val newArr = new Array[Computation[_]](numComputations)
+            //val newArr = new Array[Computation[_]](numComputations)
+            val newArr = new ObjArrayList[Computation[_]]()
             activeComputations.put(step, newArr)
             nextIdxs.put(step, new AtomicInteger(0))
-            activeComputationsIdx.put(step, new ConcurrentHashMap(numComputations))
+            activeComputationsIdx.put(step, new ConcurrentHashMap())
 
-         } else {
-            val _numComputations = activeComputations.get(step).length
-
-            if (_numComputations != numComputations) {
-               throw new RuntimeException(
-                  s"NumberOfComputations current: ${_numComputations}" +
-                     s", expected: ${numComputations}")
-            }
+            stepStageStart(step, engine.stageId)
          }
+         //else {
+         //   val _numComputations = activeComputations.get(step).size()
+
+         //   if (_numComputations != numComputations) {
+         //      throw new RuntimeException(
+         //         s"NumberOfComputations current: ${_numComputations}" +
+         //            s", expected: ${numComputations}")
+         //   }
+         //}
       }
    }
 
@@ -445,30 +504,41 @@ object SparkFromScratchEngine extends Logging {
       val partitionId = computation.getPartitionId
       val computations = activeComputations.get(step)
       val computationIdx = nextIdxs.get(step).getAndIncrement()
+      val minNumComputations = computationIdx + 1
       activeComputationsIdx.get(step).put(partitionId, computationIdx)
-      computations(computationIdx) = computation
 
-      logInfo (s"Registered computation step=${step} partitionId=${partitionId}" +
-         s" computations=${computations.filter(_ != null).size}" +
+      computations.synchronized {
+         while (computations.size() < minNumComputations) computations.add(null)
+      }
+
+      computations.set(computationIdx, computation)
+
+      logInfo (s"Registered computation step=${step} " +
+         s"partitionId=${partitionId}" +
+         //s" computations=${computations.filter(_ != null).size}" +
          s" computationsIdx=${activeComputationsIdx.get(step)}" +
+         s" computations=${computations}" +
          s" nextIdxs=${nextIdxs.get(step)}")
    }
 
-   def unregisterComputation(computation: Computation[_]): Unit = {
-      val step = computation.getStep
-      val partitionId = computation.getPartitionId
+   def unregisterComputation(engine: SparkEngine[_]): Unit = {
+      val step = engine.step
+      val partitionId = engine.getStep()
       if (nextIdxs.get(step).decrementAndGet() == 0) {
-         logInfo (s"Unregistering last computation step=${step} partitionId=${partitionId}")
+         logInfo(s"Unregistering last computation step=${step} " +
+            s"partitionId=${partitionId}")
          activeComputations.remove(step)
          nextIdxs.remove(step)
          activeComputationsIdx.remove(step)
+         stepStageFinish(step, engine.stageId)
       } else {
-         logInfo (s"Unregistering computation step=${step} partitionId=${partitionId}")
+         logInfo (s"Unregistering computation step=${step} " +
+            s"partitionId=${partitionId}")
          val computations = activeComputations.get(step)
          val computationStep = activeComputationsIdx.get(step)
          if (computationStep != null) {
             val computationIdx = computationStep.get(partitionId)
-            computations(computationIdx) = null
+            computations.set(computationIdx, null)
          }
       }
    }

@@ -154,7 +154,7 @@ class InducedPeriodicSubgraphsPFMCVC
       patternsRDD.cache()
 
       // iterate over the canonical patterns
-      val iter = patternsRDD.toLocalIterator
+      val iter = PatternUtilsRDD.localIterator(patternsRDD)
       while (iter.hasNext) {
          // prepare induced pattern for execution
          val pattern = iter.next()
@@ -167,7 +167,7 @@ class InducedPeriodicSubgraphsPFMCVC
             val mcvcSize = patternWithPlan.explorationPlan().mcvcSize()
 
             // fractoid including the periodic filter
-            val frac = fgraph.gquerying(patternWithPlan)
+            val frac = fgraph.patternMatchingPF(patternWithPlan)
                .filter((s, c) => periodicFilter(s, c))
                .explore(mcvcSize - 1)
 

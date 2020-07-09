@@ -4,18 +4,46 @@ version="SPARK-2.4.3"
 
 printf "Description: Script launcher for Fractal built-in applications\n\n"
 
-gqueryings="gqueryingmcvc|gquerying|gqueryinginduced|gqueryingsampling|gqueryinginducedsampling|gqueryingnaive"
-motifss="motifssampling|motifspf|motifspfmcvc|motifspflabeled|motifs|motifs2"
-cliquess="cliques|cliquesopt|maximalcliques|maximalcliquespf"
-fsms="fsm|fsmpf|fsmpflabeled|fsmpfmcvc"
-enumerations="esubgraphs|vsubgraphswithedges|vsubgraphs|vsubgraphssampling|vsubgraphspf|vsubgraphspfmcvc"
-temporals="periodicinduced|periodicinducedpf|periodicinducedpfmcvc"
-extras="kws"
-apps="${gqueryings}|${motifss}|${cliquess}|${fsms}|${enumerations}|${extras}"
+subgraphlisting="subgraphs_listing_sf"
+subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_sf"
+subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_pf"
+subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_pf_mcvc"
+subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_sample_sf"
+
+motifss="motifs_pf"
+motifss="${motifss}|motifs_pf_mcvc"
+motifss="${motifss}|motifs_sample_sf"
+motifss="${motifss}|motifs_sf"
+
+cliquess="cliques_kclist_sf"
+cliquess="${cliquess}|cliques_sf"
+cliquess="${cliquess}|maximal_cliques_quick_sf"
+cliquess="${cliquess}|maximal_cliques_pf"
+
+fsms="fsm_sf"
+fsms="${fsms}|fsm_pf"
+fsms="${fsms}|fsm_pf_mcvc"
+
+extras="keywordsearch_sf"
+
+gqueryings="pattern_matching_pf_mcvc"
+gqueryings="${gqueryings}|pattern_matching_pf"
+gqueryings="${gqueryings}|pattern_matching_induced_pf"
+gqueryings="${gqueryings}|pattern_matching_sample_pf"
+gqueryings="${gqueryings}|pattern_matching_induced_sample_pf"
+
+temporals="periodic_subgraphs_induced_sf"
+temporals="${temporals}|periodic_subgraphs_induced_pf"
+temporals="${temporals}|periodic_subgraphs_induced_pf_mcvc"
+
+apps="${gqueryings}|${motifss}|${cliquess}|${fsms}|${subgraphlisting}|${extras}"
 
 usage="
+APPS_AVAILABLE
+$(echo $apps | tr '|' '\n' | sort | awk '{print "\t"$0}')
+
 Usage:
-app=$apps [OPTION]... [ALGOPTION]... $(basename "$0")
+app=<choose one from APPS_AVAILABLE> [OPTION]... [ALGOPTION]... $(basename "$0")
 
 OPTION:
    master_memory=512m|1g|2g|...            'Master memory'                                         Default: 2g
@@ -53,7 +81,7 @@ else
 fi
 
 case "$app" in
-	fsm)
+	fsm_sf)
 	required="inputgraph steps fsmsupp"
         appusage="
 
@@ -62,7 +90,8 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
 	;;
-	fsmpf)
+
+	fsm_pf)
 	required="inputgraph steps fsmsupp"
         appusage="
 
@@ -71,7 +100,8 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
 	;;
-	fsmpflabeled)
+
+	fsm_pf_mcvc)
 	required="inputgraph steps fsmsupp"
         appusage="
 
@@ -80,16 +110,8 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
 	;;
-	fsmpfmcvc)
-	required="inputgraph steps fsmsupp"
-        appusage="
 
-ALGOPTION for '$app':
-   inputgraph=<file-path>                  'Input graph file path'
-   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
-   fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
-	;;
-	esubgraphs)
+	subgraphs_listing_sf)
 	required="inputgraph steps"
         appusage="
 
@@ -97,7 +119,8 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
-	vsubgraphswithedges)
+
+	induced_subgraphs_listing_sf)
 	required="inputgraph steps"
         appusage="
 
@@ -105,7 +128,8 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
-	vsubgraphs)
+
+	induced_subgraphs_listing_pf)
 	required="inputgraph steps"
         appusage="
 
@@ -113,7 +137,8 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
-	vsubgraphspf)
+
+	induced_subgraphs_listing_pf_mcvc)
 	required="inputgraph steps"
         appusage="
 
@@ -121,15 +146,8 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
-	vsubgraphspfmcvc)
-	required="inputgraph steps"
-        appusage="
 
-ALGOPTION for '$app':
-   inputgraph=<file-path>                  'Input graph file path'
-   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
-	;;
-	vsubgraphssampling)
+	induced_subgraphs_listing_sample_sf)
 	required="inputgraph steps fraction"
         appusage="
 
@@ -138,7 +156,8 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    fraction=<fraction between 0 and 1>     'Fraction of subgraphs to be sampled uniformly at random'"
 	;;
-	motifssampling)
+
+	motifs_sample_sf)
 	required="inputgraph steps fraction"
         appusage="
 
@@ -147,7 +166,8 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    fraction=<fraction between 0 and 1>     'Fraction of subgraphs to be sampled uniformly at random'"
 	;;
-	motifs)
+
+	motifs_sf)
 	required="inputgraph steps"
         appusage="
 
@@ -155,15 +175,8 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
-	motifs2)
-	required="inputgraph steps"
-        appusage="
 
-ALGOPTION for '$app':
-   inputgraph=<file-path>                  'Input graph file path'
-   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
-	;;
-	motifspf)
+	motifs_pf)
 	required="inputgraph steps"
         appusage="
 
@@ -172,7 +185,8 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target
   subgraph has size k, then steps=k-1'"
 	;;
-	motifspfmcvc)
+
+	motifs_pf_mcvc)
 	required="inputgraph steps"
         appusage="
 
@@ -180,7 +194,8 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
-	motifspflabeled)
+
+	cliques_sf)
 	required="inputgraph steps"
         appusage="
 
@@ -188,7 +203,8 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
-	cliques)
+
+	cliques_kclist_sf)
 	required="inputgraph steps"
         appusage="
 
@@ -196,7 +212,8 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
-	cliquesopt)
+
+	maximal_cliques_quick_sf)
 	required="inputgraph steps"
         appusage="
 
@@ -204,7 +221,8 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
-	maximalcliques)
+
+	maximal_cliques_pf)
 	required="inputgraph steps"
         appusage="
 
@@ -212,15 +230,8 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
-	maximalcliquespf)
-	required="inputgraph steps"
-        appusage="
 
-ALGOPTION for '$app':
-   inputgraph=<file-path>                  'Input graph file path'
-   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
-	;;
-	gqueryingmcvc)
+	pattern_matching_pf_mcvc)
 	required="inputgraph steps query"
         appusage="
 
@@ -229,7 +240,8 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
-	gquerying)
+
+	pattern_matching_pf)
 	required="inputgraph steps query"
         appusage="
 
@@ -238,7 +250,8 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
-	gqueryinginduced)
+
+	pattern_matching_induced_pf)
 	required="inputgraph steps query"
         appusage="
 
@@ -247,7 +260,8 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
-	gqueryingsampling)
+
+	pattern_matching_sample_pf)
 	required="inputgraph steps query fraction"
         appusage="
 
@@ -257,7 +271,8 @@ ALGOPTION for '$app':
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'
    fraction=<fraction between 0 and 1>     'Fraction of subgraphs to be sampled uniformly at random'"
 	;;
-	gqueryinginducedsampling)
+
+	pattern_matching_induced_sample_pf)
 	required="inputgraph steps query fraction"
         appusage="
 
@@ -267,16 +282,8 @@ ALGOPTION for '$app':
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'
    fraction=<fraction between 0 and 1>     'Fraction of subgraphs to be sampled uniformly at random'"
 	;;
-	gqueryingnaive)
-	required="inputgraph steps query"
-        appusage="
 
-ALGOPTION for '$app':
-   inputgraph=<file-path>                  'Input graph file path'
-   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
-   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
-	;;
-	kws)
+	keywordsearch_sf)
 	required="inputgraph steps query"
         appusage="
 
@@ -285,7 +292,8 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=\"keyword1 keyword2 ...\"           'Keywords for the query'"
 	;;
-	periodicinduced)
+
+	periodic_subgraphs_induced_sf)
 	required="inputgraph steps periodicthreshold"
         appusage="
 
@@ -294,7 +302,8 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    periodicthreshold=2|3|4|...             'Periodic threshold: indicates how many times subgraphs must occur with an arbitrary periodicity'"
 	;;
-	periodicinducedpf)
+
+	periodic_subgraphs_induced_pf)
 	required="inputgraph steps periodicthreshold"
         appusage="
 
@@ -303,7 +312,8 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    periodicthreshold=2|3|4|...             'Periodic threshold: indicates how many times subgraphs must occur with an arbitrary periodicity'"
 	;;
-	periodicinducedpfmcvc)
+
+	periodic_subgraphs_induced_pf_mcvc)
 	required="inputgraph steps periodicthreshold"
         appusage="
 
@@ -312,10 +322,12 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    periodicthreshold=2|3|4|...             'Periodic threshold: indicates how many times subgraphs must occur with an arbitrary periodicity'"
 	;;
+
 	*)
 	echo "Invalid application: ${app}"
 	exit 1
 	;;
+
 esac
 
 wholeusage="$usage $appusage"

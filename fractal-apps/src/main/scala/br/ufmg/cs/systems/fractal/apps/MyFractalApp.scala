@@ -15,20 +15,20 @@ object MyMotifsApp extends Logging {
     val graphPath = args(0) // input graph
     val fgraph = fc.textFile (graphPath)
 
-    val AGG_MOTIFS = "motifs"
-    val motifs = fgraph.vfractoid.
-      expand(1).
-      aggregate [Pattern,LongWritable] (
-        AGG_MOTIFS,
-        (e,c,k) => { e.quickPattern },
-        (e,c,v) => { v.set(1); v },
-        (v1,v2) => { v1.set(v1.get() + v2.get()); v1 }).
-      explore(2)
+    val motifs = fgraph.vfractoid.expand(3)
 
-    val motifsMap = motifs.aggregationMap[Pattern,LongWritable](AGG_MOTIFS)
-    for ((motif,count) <- motifsMap) {
+    val motifsCountsRDD = motifs.aggregationCanonicalPatternLong(
+      s => s.quickPattern(), 0L, _ => 1L, _ + _
+    )
+
+    motifsCountsRDD.cache()
+    val iter = motifsCountsRDD.toLocalIterator
+    while (iter.hasNext) {
+      val (motif, count) = iter.next()
       logInfo(s"motif=${motif} count=${count}")
     }
+
+    motifsCountsRDD.unpersist()
     
     // environment cleaning
     fc.stop()

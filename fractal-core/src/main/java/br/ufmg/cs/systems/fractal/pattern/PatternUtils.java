@@ -14,7 +14,6 @@ import com.koloboke.collect.map.hash.HashObjObjMaps;
 import com.koloboke.collect.set.hash.HashObjSet;
 import com.koloboke.collect.set.hash.HashObjSets;
 import org.apache.log4j.Logger;
-import org.apache.spark.rdd.RDD;
 
 import java.util.Iterator;
 
@@ -111,7 +110,7 @@ public class PatternUtils {
       HashObjObjMap<Pattern,Pattern> quickMap = HashObjObjMaps.newMutableMap();
       HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
 
-      LOG.info("ExtendingByEdge " + pattern + " numVertices=" + pattern.getNumberOfVertices());
+      LOG.debug("ExtendingByEdge " + pattern + " numVertices=" + pattern.getNumberOfVertices());
 
       // patterns with internal edges
       for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
@@ -176,7 +175,7 @@ public class PatternUtils {
          }
       }
 
-      LOG.info("ExtendingByEdge newPatterns=" + newPatterns);
+      LOG.debug("ExtendingByEdge newPatterns=" + newPatterns);
 
       return newPatterns;
    }
@@ -238,7 +237,7 @@ public class PatternUtils {
     * @return new graph
     */
    private static MainGraph createGraph(Configuration config) {
-      MainGraph graph = config.createGraph();
+      MainGraph graph = config.getOrCreateMainGraph();
       config.setMainGraph(graph);
       return graph;
    }
@@ -374,7 +373,7 @@ public class PatternUtils {
       /**
        * Pre-compute the symmetry breaking of this pattern
        */
-      LOG.info("AfterReordering pattern=" + pattern + " labeling=" + labeling);
+      LOG.debug("AfterReordering pattern=" + pattern + " labeling=" + labeling);
 
       IntIntMapPool.instance().reclaimObject(labeling);
    }

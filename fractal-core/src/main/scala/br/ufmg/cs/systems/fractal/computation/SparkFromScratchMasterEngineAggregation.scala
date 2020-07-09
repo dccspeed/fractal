@@ -8,7 +8,7 @@ import br.ufmg.cs.systems.fractal.Primitive
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.{EventTimer, Logging, ProcessComputeFunc}
-import org.apache.spark.SparkContext
+import org.apache.spark.{SparkContext, TaskContext}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.util.{LongAccumulator, SizeEstimator}
 import spire.ClassTag
@@ -253,6 +253,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
             previousAggregationsBc = _previousAggregationsBc,
             configuration = _configBc.value
          )
+
          Iterator[SparkEngine[S]](execEngine)
       }
    }

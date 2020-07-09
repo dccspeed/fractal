@@ -10,6 +10,7 @@ import br.ufmg.cs.systems.fractal.util.Logging
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.io.SequenceFile.{Writer => SeqWriter}
 import org.apache.hadoop.io.{LongWritable, NullWritable, SequenceFile, Writable}
+import org.apache.spark.TaskContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.util.LongAccumulator
 
@@ -18,6 +19,8 @@ import scala.collection.mutable.Map
 
 trait SparkEngine[S <: Subgraph]
    extends CommonExecutionEngine[S] with Serializable with Logging {
+
+   val stageId: Int = TaskContext.get().stageId()
 
    var computed = false
 
@@ -98,7 +101,7 @@ trait SparkEngine[S <: Subgraph]
       accums(SparkMasterEngine.AGG_SUBGRAPHS_OUTPUT).
          add(numSubgraphsOutput)
       accums.foreach { case (name, accum) =>
-         logInfo(s"Accumulator[${step}][${partitionId}][${name}]:" +
+         logDebug(s"Accumulator[${step}][${partitionId}][${name}]:" +
             s" ${accum.value}")
       }
    }

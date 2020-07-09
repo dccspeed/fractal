@@ -4,6 +4,7 @@ import java.util.UUID
 
 import br.ufmg.cs.systems.fractal.computation.ActorMessageSystem
 import br.ufmg.cs.systems.fractal.conf.Configuration
+import br.ufmg.cs.systems.fractal.graph.MainGraphStore
 import br.ufmg.cs.systems.fractal.util.Logging
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.SparkContext
@@ -17,6 +18,16 @@ import org.apache.spark.SparkContext
 class FractalContext(sc: SparkContext, logLevel: String = "info",
                      tmpDir: String = Configuration.CONF_TMP_DIR_DEFAULT)
    extends Logging {
+
+   {
+      val schedulerMode = sc.getConf.get("spark.scheduler.mode", "FIFO")
+      if (schedulerMode != "FIFO") {
+         throw new RuntimeException(s"Fractal only supports Spark's FIFO Job" +
+            s" Scheduling. Found: spark.scheduler.mode=${schedulerMode}." +
+            s" " +
+            s"Require: spark.scheduler.mode=FIFO")
+      }
+   }
 
    setLogLevel(logLevel)
    sc.setLogLevel(logLevel.toUpperCase())
@@ -47,6 +58,7 @@ class FractalContext(sc: SparkContext, logLevel: String = "info",
       val fs = FileSystem.get (sc.hadoopConfiguration)
       val res = fs.delete (new Path(tmpPath), true)
       ActorMessageSystem.shutdown()
+      MainGraphStore.shutdown()
       logInfo (s"Removing fractal temp directory: ${tmpPath} (exists=${res})")
    }
 }

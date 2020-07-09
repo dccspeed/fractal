@@ -13,7 +13,9 @@ public class EventTimer {
     * be instrumented by this timer. We leverage a JVM behavior that tests on
     * final static variables can be optimized at compile time.
     */
-   public static final boolean ENABLED = true;
+   public static final boolean ENABLED = false;
+
+   private static final long LOAD_TIME = System.nanoTime();
 
    /**
     * This private class is used for lazy initialization of static fields for
@@ -25,7 +27,7 @@ public class EventTimer {
       static {
          for (int i = 0; i < CAPACITY; ++i) {
             INSTANCES[i] = new EventTimer(
-                    "EventTimerMaster[" + i + "]");
+                    "MasterEventTimer[" + i + "]");
          }
       }
    }
@@ -39,7 +41,7 @@ public class EventTimer {
       static {
          for (int i = 0; i < CAPACITY; ++i) {
             INSTANCES[i] = new EventTimer(
-                    "EventTimerWorker[" + i + "]");
+                    "WorkerEventTimer[" + i + "]");
          }
       }
    }
@@ -62,7 +64,7 @@ public class EventTimer {
     * Auxiliary fields for controlling the state of this timer
     */
    private int ongoingEvents;
-   private long creationTime;
+   private long startTime;
 
    /**
     * let it fail: indicates whether this timer is being used correctly
@@ -80,7 +82,7 @@ public class EventTimer {
       this.eventElapsedTimes = new long[numEvents];
       this.eventLastTimes = new long[numEvents];
       this.ongoingEvents = 0;
-      this.creationTime = System.nanoTime();
+      this.startTime = System.nanoTime();
       this.inconsistent = false;
 
       // start 'none' event
@@ -101,7 +103,8 @@ public class EventTimer {
          // iterate over real events (not none), printing stats if they are
          // non-empty
          boolean nonEmptyEvent = false;
-         long totalElapsedFromCreationTime = System.nanoTime() - creationTime;
+         long finishTime = System.nanoTime();
+         long totalElapsedFromCreationTime = finishTime - startTime;
          long totalElapsedFromEvents = 0;
          for (int event = 0; event < numEvents; ++event) {
             if (event == NONE) continue;
@@ -126,6 +129,18 @@ public class EventTimer {
             long timeMs = (long) (timeNano * 1e-6);
             System.out.printf("%s %s %d (ms)\n",
                     timerName, EVENT_NAMES[NONE], timeMs);
+
+            // start time
+            long relativeStartTimeMs =
+                    (long) ((startTime - LOAD_TIME) * 1e-6);
+            System.out.printf("%s relativestarttime %d (ms)\n",
+                    timerName, relativeStartTimeMs);
+
+            // finish time
+            long relativeFinishTimeMs =
+                    (long) ((finishTime - LOAD_TIME) * 1e-6);
+            System.out.printf("%s relativefinishtime %d (ms)\n",
+                    timerName, relativeFinishTimeMs);
 
             long elapsed1 = (long) (totalElapsedFromCreationTime * 1e-6);
             long elapsed2 = (long) (totalElapsedFromEvents * 1e-6);
@@ -165,11 +180,15 @@ public class EventTimer {
    /**
     * Used by this class to indicate the end of a 'none' event
     */
-   public void finishNoneEvent() {
+   private void finishNoneEvent() {
       long lastEventTime = eventLastTimes[NONE];
       inconsistent = inconsistent || lastEventTime == 0;
       eventElapsedTimes[NONE] += System.nanoTime() - lastEventTime;
       eventLastTimes[NONE] = 0;
+   }
+
+   public boolean eventIsActive(int event) {
+      return eventLastTimes[event] != 0;
    }
 
    /**

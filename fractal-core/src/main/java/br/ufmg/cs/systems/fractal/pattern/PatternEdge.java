@@ -175,8 +175,6 @@ public class PatternEdge implements Comparable<PatternEdge>, Writable {
       if (destPos != that.destPos) return false;
       if (destLabel != that.destLabel) return false;
       return true;
-      //return isForward == that.isForward;
-
    }
 
    @Override

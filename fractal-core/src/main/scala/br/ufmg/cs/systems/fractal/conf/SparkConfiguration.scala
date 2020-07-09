@@ -429,7 +429,7 @@ case class SparkConfiguration[E <: Subgraph](confs: Map[String,Any])
       }
 
       if (getMainGraph == null || !isMainGraphRead()) {
-         val graph = createGraph()
+         val graph = getOrCreateMainGraph()
          setMainGraph(graph)
          logInfo(s"Graph created, configId=${id} graph=${graph}")
       }
@@ -612,9 +612,9 @@ object SparkConfiguration extends Logging {
    /** odag flush methods */
 
    // re-enumerates from scratch every superstep
-   val COMM_FROM_SCRATCH = "scratch"
+   val COMM_FROM_SCRATCH = "scratchold"
    // re-enumerates from scratch every superstep (aggregation based)
-   val COMM_FROM_SCRATCH_AGG = "scratchagg"
+   val COMM_FROM_SCRATCH_AGG = "scratch"
    // transparently reducing input graph each fractal step
    val COMM_GRAPH_RED = "graphred"
 

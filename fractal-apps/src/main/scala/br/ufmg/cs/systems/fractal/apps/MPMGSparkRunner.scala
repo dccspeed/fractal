@@ -6,13 +6,13 @@ import br.ufmg.cs.systems.fractal._
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
 import br.ufmg.cs.systems.fractal.util.{Logging, PairWritable}
-import com.hortonworks.spark.sql.hive.llap.{HiveWarehouseBuilder, HiveWarehouseSessionImpl}
+import com.hortonworks.hwc.HiveWarehouseSession
 import org.apache.hadoop.io.IntWritable
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 import org.apache.hadoop.io.Text
-import scala.collection.mutable.Map
 
+import scala.collection.mutable.Map
 import scala.io.Source
 
 class UtilApp() extends Logging {
@@ -37,7 +37,7 @@ class HiveApp(val configPath: String) extends Logging {
   val utilApp = new UtilApp
   var databaseConfigs: ujson.Value = _
   var currentConfig: ujson.Value = _
-  var hiveSession: HiveWarehouseSessionImpl = _
+  var hiveSession: HiveWarehouseSession = _
 
   def initConfigs: Unit = {
     currentConfig = utilApp.readConfig(configPath)
@@ -46,7 +46,7 @@ class HiveApp(val configPath: String) extends Logging {
 
   def initHiveConnector {
     val sparkSession = utilApp.getCreateSparkSession(currentConfig, null, "spark_database")
-    hiveSession = HiveWarehouseBuilder.session(sparkSession).build()
+    hiveSession = HiveWarehouseSession.session(sparkSession).build()
   }
 
   initConfigs

@@ -10,7 +10,7 @@ import org.apache.hadoop.io.Writable
 trait ResultSubgraph[T] extends Writable {
   def words: Array[T]
   def combinations(k: Int): Iterator[ResultSubgraph[T]]
-  def toInternalSubgraph[E <: Subgraph](config: SparkConfiguration[E]): E
+  def toInternalSubgraph[E <: Subgraph](config: SparkConfiguration): E
   
   override def hashCode(): Int = {
     words.toSet.hashCode()
@@ -39,7 +39,7 @@ object ResultSubgraph {
       VSubgraph (strSubgraph)
   }
 
-  def apply(subgraph: Subgraph, config: Configuration[_]) = {
+  def apply(subgraph: Subgraph, config: Configuration) = {
     if (subgraph.isInstanceOf[EdgeInducedSubgraph]) {
       val mainGraph = config.getMainGraph[BasicMainGraph[_,_]]
       val edges = new Array [(Int,Int)] (subgraph.getNumEdges)

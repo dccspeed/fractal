@@ -26,7 +26,7 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
    private IntArrayListView neighborhood;
 
    @Override
-   public void init(Configuration<S> config, Computation<S> computation) {
+   public void init(Configuration config, Computation<S> computation) {
       dag = HashIntObjMaps.newMutableMap();
       dagCleaner = new DagCleaner();
       neighborhood = new IntArrayListView();

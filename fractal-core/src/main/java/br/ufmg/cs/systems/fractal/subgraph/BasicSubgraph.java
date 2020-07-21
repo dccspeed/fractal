@@ -29,7 +29,7 @@ public abstract class BasicSubgraph implements Subgraph {
    protected boolean dirtyExtensionWordIds;
 
    // Active extensions
-   protected ObjArrayList<HashIntSet> extensionLevels;
+   private ObjArrayList<HashIntSet> extensionLevels;
    // }}
 
    // Pattern {{
@@ -68,6 +68,7 @@ public abstract class BasicSubgraph implements Subgraph {
       return configuration;
    }
 
+   @Override
    public void reset() {
       vertices.clear();
       edges.clear();
@@ -206,6 +207,7 @@ public abstract class BasicSubgraph implements Subgraph {
       return "subgraph{" +
               "vertices=" + vertices + ", " +
               "edges=" + edges +
+              "extensionLevels=" + extensionLevels +
               "} " + super.toString();
    }
 

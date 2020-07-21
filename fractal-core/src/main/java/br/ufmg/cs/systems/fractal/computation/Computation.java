@@ -8,39 +8,35 @@ import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import org.apache.hadoop.io.Writable;
 
-public interface Computation<S extends Subgraph> {
+import java.io.Serializable;
+
+public interface Computation<S extends Subgraph> extends Serializable {
 
     // {{{ initialization
-    void init(Configuration<S> config);
-    void initAggregations(Configuration<S> config);
+    void init(Configuration config);
+
+   void init(CommonExecutionEngine<S> engine, Configuration config);
+
+   void initAggregations(Configuration config);
     long compute(S Subgraph);
-    Computation<S> nextComputation();
-    void finish();
-    // }}}
+
+   void processExtensions();
+
+   Computation<S> nextComputation();
+   // }}}
 
     // {{{ runtime
     Primitive primitive();
-    SubgraphEnumerator<S> expandCompute(S Subgraph);
+    Primitive[] primitives();
 
    long processCompute(SubgraphEnumerator<S> expansions);
     boolean filter(S Subgraph);
     void process(S Subgraph);
     // }}}
 
-    // {{{ Output
-    void output(S Subgraph);
-    // }}}
+   // }}}
 
-    // {{{ Aggregation-related stuff
-    <K extends Writable, V extends Writable>
-       AggregationStorage<K, V> readAggregation(String name);
-    
-    <K extends Writable, V extends Writable> 
-       AggregationStorage<K, V> getAggregationStorage(String name);
-
-    <K extends Writable, V extends Writable>
-       void map(String name, K key, V value);
-    // }}}
+   // }}}
 
     // {{{ Misc
     int getStep();
@@ -51,7 +47,7 @@ public interface Computation<S extends Subgraph> {
 
     int getNumberPartitions();
 
-    Configuration<S> getConfig();
+    Configuration getConfig();
 
     boolean shouldBypass();
     // }}}
@@ -67,9 +63,8 @@ public interface Computation<S extends Subgraph> {
     int getDepth();
 
     SubgraphEnumerator<S> getSubgraphEnumerator();
-    SubgraphEnumerator<S> forkEnumerator(Computation<S> computation);
 
-    Class<? extends Subgraph> getSubgraphClass();
+   Class<? extends Subgraph> getSubgraphClass();
     
     int getInitialNumWords();
 

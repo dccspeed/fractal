@@ -3,20 +3,24 @@ package br.ufmg.cs.systems.fractal.computation
 import java.io.Serializable
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, ThreadFactory}
 import java.util.concurrent.atomic._
+import java.util.function.BiConsumer
 
 import akka.actor._
+import br.ufmg.cs.systems.fractal.Primitive
 import br.ufmg.cs.systems.fractal.aggregation._
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
-import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList
+import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjArrayList}
 import br.ufmg.cs.systems.fractal.util.{EventTimer, Logging}
-import com.koloboke.collect.map.hash.HashIntIntMaps
-import com.koloboke.collect.map.{IntIntMap, ObjLongCursor, ObjObjCursor}
+import com.koloboke.collect.map.hash.{HashIntIntMaps, HashIntObjMaps}
+import com.koloboke.collect.map.{IntIntMap, IntObjMap, ObjLongCursor, ObjObjCursor}
+import com.koloboke.function.IntObjPredicate
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.util.LongAccumulator
 
 import scala.collection.mutable.Map
 import scala.concurrent.{ExecutionContext, Future}
+import scala.reflect.ClassTag
 
 /**
  */
@@ -26,8 +30,8 @@ case class SparkFromScratchEngine[S <: Subgraph]
    step: Int,
    accums: Map[String,LongAccumulator],
    validSubgraphsAccum: LongAccumulator,
-   previousAggregationsBc: Broadcast[_],
-   configuration: SparkConfiguration[S]) extends SparkEngine[S] {
+   computation: Computation[S],
+   configuration: SparkConfiguration) extends SparkEngine[S] {
 
    @transient var slaveActorRef: ActorRef = _
 
@@ -35,9 +39,19 @@ case class SparkFromScratchEngine[S <: Subgraph]
 
    private var executorContext: ExecutionContext = _
 
+   override def slaveActor(): ActorRef = slaveActorRef
+
+   val computationCopy: Computation[S] = {
+      val comp = SparkConfiguration.clone(computation)
+      if (configuration.getSubgraphClass() == null) {
+         configuration.setSubgraphClass(comp.getSubgraphClass())
+      }
+      comp.init(this, configuration)
+      comp
+   }
+
    override def init() = {
       val start = System.currentTimeMillis
-
       super.init()
 
       // executor service
@@ -54,7 +68,11 @@ case class SparkFromScratchEngine[S <: Subgraph]
       numSubgraphsOutput = 0
 
       // actor
-      slaveActorRef = ActorMessageSystem.createActor(this)
+      if (configuration.externalWsEnabled()) {
+         slaveActorRef = ActorMessageSystem.createActor(this)
+      }
+
+      SparkFromScratchEngine.createComputationsMap(this)
 
       // register computation
       SparkFromScratchEngine.registerComputation(computation)
@@ -71,28 +89,14 @@ case class SparkFromScratchEngine[S <: Subgraph]
    /**
     * Releases resources allocated for this instance
     */
-   override def finalize() = {
+   override def finalize(): Unit = {
       super.finalize()
-      slaveActorRef ! Terminate
-      slaveActorRef = null
-      // make sure we close writers
-      if (outputStreamOpt.isDefined) outputStreamOpt.get.close
-      if (subgraphWriterOpt.isDefined) subgraphWriterOpt.get.close
-   }
-
-   def compute(): Unit = {
-      val start = System.currentTimeMillis
-      val subgraph: S = configuration.createSubgraph()
-      computation.getSubgraphEnumerator.set(computation, subgraph, null)
-      val ret = computation.compute (subgraph)
-      aggregationStorages.foreach {
-         case (name, agg) =>
-            aggregateAndSplitFinalAggregation(name, agg)
+      if (slaveActorRef != null) {
+         slaveActorRef ! Terminate
+         slaveActorRef = null
+      } else {
+         SparkFromScratchEngine.unregisterComputation(this)
       }
-      flushStatsAccumulators
-      val elapsed = System.currentTimeMillis - start
-      logInfo(s"SparkFromScratchEngine(step=${step},partitionId=${partitionId}" +
-         s" took ${elapsed} ms to compute.")
    }
 
    override def getSubgraphAggregation() = subgraphAggregation
@@ -104,9 +108,7 @@ case class SparkFromScratchEngine[S <: Subgraph]
             EventTimer.ENUMERATION_FILTERING)
       }
 
-      val subgraph: S = configuration.createSubgraph()
-      computation.getSubgraphEnumerator.set(computation, subgraph, null)
-      computation.compute(subgraph)
+      computation.compute(computation.getSubgraphEnumerator.getSubgraph)
 
       if (EventTimer.ENABLED) {
          EventTimer.workerInstance(partitionId)
@@ -406,6 +408,83 @@ case class SparkFromScratchEngine[S <: Subgraph]
 }
 
 object SparkFromScratchEngine extends Logging {
+   private val lastStageId: AtomicInteger = new AtomicInteger()
+
+   //private val stepIdToStageId: IntIntMap =
+   //   HashIntIntMaps.newMutableMap()
+
+   private val activeComputations
+      : IntObjMap[ObjArrayList[Computation[_]]] = HashIntObjMaps.newMutableMap()
+
+   private def maybeUpdateLastStageId(engine: SparkEngine[_]): Unit = {
+      val existing = lastStageId.get()
+      //val existingStageId = stepIdToStageId.getOrDefault(engine.step, -1)
+      //if (existingStageId != -1 && existingStageId != engine.stageId) {
+      //   throw new RuntimeException(s"Invalid ${stepIdToStageId}")
+      //}
+
+      //stepIdToStageId.put(engine.step, engine.stageId)
+
+
+      if (existing < engine.stageId) {
+         lastStageId.compareAndSet(existing, engine.stageId)
+      }
+   }
+
+   private def cleanOldComputations(): Unit = {
+      val existing = lastStageId.get()
+
+      activeComputations.synchronized {
+         val cur = activeComputations.cursor()
+         while (cur.moveNext()) {
+            if (cur.key() < existing) {
+               logInfo(s"Cleaning stage ${cur.key()}:" +
+                  s" computations=${cur.value().size()}" +
+                  s" activeStages=${activeComputations.size()}")
+               cur.remove()
+            }
+         }
+      }
+   }
+
+
+   def localComputations [S <: Subgraph] (stageId: Int)
+   : ObjArrayList[Computation[S]] = {
+      activeComputations.get(stageId).asInstanceOf[ObjArrayList[Computation[S]]]
+   }
+
+   def createComputationsMap(engine: SparkEngine[_]): Unit = {
+      val stageId = engine.stageId
+      maybeUpdateLastStageId(engine)
+      val computations = activeComputations.get(stageId)
+      if (computations == null) {
+         activeComputations.synchronized {
+            val computations = activeComputations.get(stageId)
+            if (computations == null) {
+               activeComputations.put(
+                  stageId, new ObjArrayList[Computation[_]]())
+            }
+         }
+      }
+   }
+
+   def registerComputation(computation: Computation[_]): Unit = {
+      val stageId = computation.getExecutionEngine.getStageId
+      val computations = activeComputations.get(stageId)
+
+      computations.synchronized {
+         computations.add(computation)
+      }
+   }
+
+   def unregisterComputation(engine: SparkEngine[_]): Unit = {
+      if (engine.getPartitionId() == 0) {
+         cleanOldComputations
+      }
+   }
+}
+
+object SparkFromScratchEngine2 extends Logging {
    private val nextIdxs
    : ConcurrentHashMap[Int, AtomicInteger] = new ConcurrentHashMap()
 
@@ -417,20 +496,8 @@ object SparkFromScratchEngine extends Logging {
 
    private val stepToStage: IntIntMap = HashIntIntMaps.newMutableMap()
 
-   def localComputations [E <: Subgraph] (step: Int): ObjArrayList[Computation[E]] = {
-      activeComputations.get(step).asInstanceOf[ObjArrayList[Computation[E]]]
-   }
-
-   def localComputation [E <: Subgraph] (
-                                           step: Int, partitionId: Int): Computation[E] = {
-      val stepIdxs = activeComputationsIdx.getOrDefault(step, null)
-      if (stepIdxs == null) return null
-
-      val computationIdx = stepIdxs.getOrDefault(partitionId, -1)
-      if (computationIdx == -1) return null
-
-      activeComputations.get(step).get(computationIdx)
-         .asInstanceOf[Computation[E]]
+   def localComputations [S <: Subgraph] (step: Int): ObjArrayList[Computation[S]] = {
+      activeComputations.get(step).asInstanceOf[ObjArrayList[Computation[S]]]
    }
 
    private def stepStageStart(step: Int, engineStageId: Int)

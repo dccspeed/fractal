@@ -1,10 +1,12 @@
 package br.ufmg.cs.systems.fractal
 
+import java.net.InetAddress
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.IntConsumer
 
 import br.ufmg.cs.systems.fractal.computation._
+import br.ufmg.cs.systems.fractal.conf.Configuration.CONF_MASTER_HOSTNAME
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplications
 import br.ufmg.cs.systems.fractal.graph.BasicMainGraph
@@ -12,7 +14,7 @@ import br.ufmg.cs.systems.fractal.pattern._
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util._
 
-import scala.collection.mutable.Map
+//import scala.collection.mutable.Map
 import scala.reflect.ClassTag
 
 /**
@@ -23,23 +25,52 @@ import scala.reflect.ClassTag
  * @param fc fractal context
  * @param logLevel logging verbosity
  */
-class FractalGraph(
-                     path: String,
-                     graphClass: String,
-                     local: Boolean,
-                     fc: FractalContext,
-                     logLevel: String) extends Logging {
+case class FractalGraph
+(path: String,
+ graphClass: String,
+ local: Boolean,
+ fc: FractalContext,
+ confs: Map[String, Any],
+ logLevel: String) extends Logging {
 
    private val uuid: UUID = UUID.randomUUID
 
    private val graphId: Int = FractalGraph.newGraphId()
 
-   private val confs: Map[String,Any] = Map.empty
+   private val config: SparkConfiguration = {
+      val _config = new SparkConfiguration
+      confs.foreach { case (k,v) =>
+         _config.set(k, v)
+         logInfo(s"Setting (${k},${v}) from graph")
+      }
+
+      _config.set ("input_graph_path", path)
+      _config.set ("input_graph_local", local)
+      _config.set ("input_graph_class", graphClass)
+      _config.set ("log_level", logLevel)
+      _config.setMainGraphId (graphId)
+
+      val numPartitions = _config.getInteger("num_partitions",
+         fractalContext.sparkContext.defaultParallelism).intValue()
+
+      _config.set("num_partitions", numPartitions)
+
+      _config
+   }
+
+   private val vfractoidRoot: Fractoid[VertexInducedSubgraph] =
+      newFractoid[VertexInducedSubgraph]
+
+   private val efractoidRoot: Fractoid[EdgeInducedSubgraph] =
+      newFractoid[EdgeInducedSubgraph]
+
+   private val pfractoidRoot: Fractoid[PatternInducedSubgraph] =
+      newFractoid[PatternInducedSubgraph]
 
    def asPattern: Pattern = {
       val computation: Computation[EdgeInducedSubgraph] =
-         new EComputationContainer()
-      val config = new SparkConfiguration[EdgeInducedSubgraph]
+          new EComputationContainer()
+      val config = new SparkConfiguration
       config.set ("input_graph_path", path)
       config.set ("input_graph_local", local)
       //config.set ("edge_labelled", true)
@@ -63,91 +94,33 @@ class FractalGraph(
 
    def fractalContext: FractalContext = fc
 
-   def this(path: String, arab: FractalContext, logLevel: String) = {
+   def this(path: String, fc: FractalContext) = {
       this (path, Configuration.CONF_MAINGRAPH_CLASS_DEFAULT,
-         false, arab, logLevel)
-   }
-
-   def this(path: String, arab: FractalContext) = {
-      this (path, Configuration.CONF_MAINGRAPH_CLASS_DEFAULT,
-         false, arab, "warn")
+         false, fc, Map.empty, "warn")
    }
 
    def this(path: String, graphClass: String,
-            arab: FractalContext, logLevel: String) = {
-      this (path, graphClass, false, arab, logLevel)
+            fc: FractalContext, logLevel: String) = {
+      this (path, graphClass, false, fc, Map.empty, logLevel)
    }
 
-   def this(path: String, graphClass: String,
-            arab: FractalContext) = {
-      this (path, graphClass, false, arab, "warn")
-   }
-
-   private def resultHandler [S <: Subgraph : ClassTag] (
-                                                           config: SparkConfiguration[S])
-   : Fractoid[S] = {
-      config.set ("log_level", logLevel)
-      confs.foreach { case (k,v) =>
-         config.set(k, v)
-         logInfo(s"Setting (${k},${v}) from graph")
-      }
-      config.setMainGraphId (graphId)
-      new Fractoid [S] (this, config)
+   private def newFractoid[S <: Subgraph : ClassTag]: Fractoid[S] = {
+      //val newConfig = config
+      //newConfig.setSubgraphClass(
+      //   scala.reflect.classTag[S].runtimeClass.asInstanceOf[Class[S]]
+      //)
+      new Fractoid[S](this, config)
    }
 
    /** api for custom computations **/
 
    /**
     * Creates an edge-induced Fractoid with a process function
-    * @param process function executed on every valid subgraph
     * @return Fractoid with the initial state of edge-induced computation
     */
-   def efractoid(
-                   process: (EdgeInducedSubgraph,
-                      Computation[EdgeInducedSubgraph]) => Unit)
-   : Fractoid[EdgeInducedSubgraph] = {
-      val config = new SparkConfiguration[EdgeInducedSubgraph]
-      config.set ("input_graph_path", path)
-      config.set ("input_graph_local", local)
-      config.set ("input_graph_class", graphClass)
-      config.set ("output_path", s"${tmpPath}/edge-computation-${config.getId}")
-      customComputation [EdgeInducedSubgraph] (config)
+   def efractoid: Fractoid[EdgeInducedSubgraph] = {
+      efractoidRoot
    }
-
-   /**
-    * Edge-induced fractoid without a process function
-    * @return Fractoid with the initial state of edge-induced computation
-    */
-   def efractoid: Fractoid[EdgeInducedSubgraph] =
-      efractoid (null)
-
-   /**
-    * Creates an edge-induced Fractoid with a process function
-    * @param process function executed on every valid subgraph
-    * @return Fractoid with the initial state of edge-induced computation
-    */
-   def efractoidAndExpand(
-                            process: (EdgeInducedSubgraph,
-                               Computation[EdgeInducedSubgraph]) => Unit)
-   : Fractoid[EdgeInducedSubgraph] = {
-      val computation: Computation[EdgeInducedSubgraph] =
-         new EComputationContainer(processOpt = Option(process),
-            primitiveOpt = Option(Primitive.E))
-      val config = new SparkConfiguration[EdgeInducedSubgraph].
-         withNewComputation (computation)
-      config.set ("input_graph_path", path)
-      config.set ("input_graph_local", local)
-      config.set ("input_graph_class", graphClass)
-      config.set ("output_path", s"${tmpPath}/edge-computation-${config.getId}")
-      customComputation [EdgeInducedSubgraph] (config)
-   }
-
-   /**
-    * Edge-induced fractoid without a process function
-    * @return Fractoid with the initial state of edge-induced computation
-    */
-   def efractoidAndExpand: Fractoid[EdgeInducedSubgraph] =
-      efractoidAndExpand (null)
 
    /**
     * Edge-induced fractoid without a process function and with sampling
@@ -155,67 +128,25 @@ class FractalGraph(
     */
    def sefractoid(fraction: Double): Fractoid[EdgeInducedSubgraph] = {
       val FRACTION_KEY = "sampling_fraction"
+      val enumeratorKey = "subgraph_enumerator"
+      val enumeratorClass =
+         "br.ufmg.cs.systems.fractal.computation.SamplingEnumerator"
 
       logInfo(s"Sampling fractoid uniformly at random: fraction=${fraction}" +
          s" fractoid=${this}")
 
-      efractoid.
-         set("subgraph_enumerator",
-            "br.ufmg.cs.systems.fractal.computation.SamplingEnumerator").
-         set(FRACTION_KEY, fraction)
+      set(enumeratorKey, enumeratorClass)
+         .set(FRACTION_KEY, fraction)
+         .efractoid
    }
 
    /**
     * Creates a vertex-induced Fractoid with a process function
-    * @param process
     * @return Fractoid with the initial state of vertex-induced computation
     */
-   def vfractoid(
-                   process: (VertexInducedSubgraph,
-                      Computation[VertexInducedSubgraph]) => Unit)
-   : Fractoid[VertexInducedSubgraph] = {
-      val config = new SparkConfiguration[VertexInducedSubgraph]
-      config.set ("input_graph_path", path)
-      config.set ("input_graph_local", local)
-      config.set ("input_graph_class", graphClass)
-      config.set ("output_path", s"${tmpPath}/vertex-computation-${config.getId}")
-      customComputation [VertexInducedSubgraph] (config)
+   def vfractoid: Fractoid[VertexInducedSubgraph] = {
+      vfractoidRoot
    }
-
-   /**
-    * Vertex-induced fractoid without a process function
-    * @return Fractoid with the initial state of vertex-induced computation
-    */
-   def vfractoid: Fractoid[VertexInducedSubgraph] =
-      vfractoid(null)
-
-   /**
-    * Creates a vertex-induced Fractoid with a process function
-    * @param process
-    * @return Fractoid with the initial state of vertex-induced computation
-    */
-   def vfractoidAndExpand(
-                            process: (VertexInducedSubgraph,
-                               Computation[VertexInducedSubgraph]) => Unit)
-   : Fractoid[VertexInducedSubgraph] = {
-      val computation: Computation[VertexInducedSubgraph] =
-         new VComputationContainer(processOpt = Option(process),
-            primitiveOpt = Option(Primitive.E))
-      val config = new SparkConfiguration[VertexInducedSubgraph].
-         withNewComputation (computation)
-      config.set ("input_graph_path", path)
-      config.set ("input_graph_local", local)
-      config.set ("input_graph_class", graphClass)
-      config.set ("output_path", s"${tmpPath}/vertex-computation-${config.getId}")
-      customComputation [VertexInducedSubgraph] (config)
-   }
-
-   /**
-    * Vertex-induced fractoid without a process function
-    * @return Fractoid with the initial state of vertex-induced computation
-    */
-   def vfractoidAndExpand: Fractoid[VertexInducedSubgraph] =
-      vfractoidAndExpand (null)
 
    /**
     * Vertex-induced fractoid without a process function and with sampling
@@ -223,26 +154,24 @@ class FractalGraph(
     */
    def svfractoid(fraction: Double): Fractoid[VertexInducedSubgraph] = {
       val FRACTION_KEY = "sampling_fraction"
+      val enumeratorKey = "subgraph_enumerator"
+      val enumeratorClass =
+         "br.ufmg.cs.systems.fractal.computation.SamplingEnumerator"
 
       logInfo(s"Sampling fractoid uniformly at random: fraction=${fraction}" +
          s" fractoid=${this}")
 
-      vfractoid.
-         set("subgraph_enumerator",
-            "br.ufmg.cs.systems.fractal.computation.SamplingEnumerator").
-         set(FRACTION_KEY, fraction)
+      set(enumeratorKey, enumeratorClass)
+         .set(FRACTION_KEY, fraction)
+         .vfractoid
    }
 
    /**
     * Creates a pattern-induced Fractoid with a process function from a pattern
-    * @param process
     * @param pattern pattern to guide enumeration
     * @return Fractoid with the initial state of pattern-induced computation
     */
-   def pfractoid(
-                   process: (PatternInducedSubgraph,
-                      Computation[PatternInducedSubgraph]) => Unit,
-                   pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
+   def pfractoid(pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
       val patternWithPlan = if (pattern.explorationPlan() == null) {
          PatternExplorationPlan.apply(pattern).get(0)
       } else {
@@ -250,63 +179,11 @@ class FractalGraph(
       }
       logInfo(s"PatternWithPlan ${patternWithPlan} plan=${patternWithPlan.explorationPlan()}" +
          s" lowerBound=${patternWithPlan.vsymmetryBreakerLowerBound()} upperBound=${patternWithPlan.vsymmetryBreakerUpperBound()}")
-      val config = new SparkConfiguration[PatternInducedSubgraph]
-      config.set ("pattern", patternWithPlan)
-      config.set ("input_graph_path", path)
-      config.set ("input_graph_local", local)
-      config.set ("input_graph_class", graphClass)
-      config.set ("output_path",
-         s"${tmpPath}/pattern-computation-${config.getId}")
-      customComputation [PatternInducedSubgraph] (config)
+
+      pfractoidRoot.copy(
+         pattern = patternWithPlan
+      )
    }
-
-   /**
-    * Pattern-induced fractoid from a pattern template
-    * @param pattern
-    * @return Fractoid with the initial state of pattern-induced computation
-    */
-   def pfractoid(
-                   pattern: Pattern): Fractoid[PatternInducedSubgraph] =
-      pfractoid (null, pattern)
-
-   /**
-    * Creates a pattern-induced Fractoid with a process function from a pattern
-    * @param process
-    * @param pattern pattern to guide enumeration
-    * @return Fractoid with the initial state of pattern-induced computation
-    */
-   def pfractoidAndExpand(
-                            process: (PatternInducedSubgraph,
-                               Computation[PatternInducedSubgraph]) => Unit,
-                            pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
-      val patternWithPlan = if (pattern.explorationPlan() == null) {
-         PatternExplorationPlan.apply(pattern).get(0)
-      } else {
-         pattern
-      }
-      logInfo(s"PatternWithPlan ${patternWithPlan} plan=${patternWithPlan.explorationPlan()}" +
-         s" lowerBound=${patternWithPlan.vsymmetryBreakerLowerBound()} upperBound=${patternWithPlan.vsymmetryBreakerUpperBound()}")
-      val computation: Computation[PatternInducedSubgraph] =
-         new VEComputationContainer(processOpt = Option(process),
-            patternOpt = Option(patternWithPlan), primitiveOpt = Option(Primitive.E))
-      val config = new SparkConfiguration[PatternInducedSubgraph].
-         withNewComputation (computation)
-      config.set ("input_graph_path", path)
-      config.set ("input_graph_local", local)
-      config.set ("input_graph_class", graphClass)
-      config.set ("output_path",
-         s"${tmpPath}/pattern-computation-${config.getId}")
-      customComputation [PatternInducedSubgraph] (config)
-   }
-
-   /**
-    * Pattern-induced fractoid from a pattern template
-    * @param pattern
-    * @return Fractoid with the initial state of pattern-induced computation
-    */
-   def pfractoidAndExpand(
-                            pattern: Pattern): Fractoid[PatternInducedSubgraph] =
-      pfractoidAndExpand (null, pattern)
 
    /**
     * Pattern-induced fractoid without a process function and with sampling
@@ -315,23 +192,21 @@ class FractalGraph(
    def spfractoid(pattern: Pattern,
                   fraction: Double): Fractoid[PatternInducedSubgraph] = {
       val FRACTION_KEY = "sampling_fraction"
+      val enumeratorKey = "subgraph_enumerator"
+      val enumeratorClass =
+         "br.ufmg.cs.systems.fractal.computation.SamplingEnumerator"
 
       logInfo(s"Sampling fractoid uniformly at random: fraction=${fraction}" +
          s" fractoid=${this}")
 
-      pfractoid(pattern).
-         set("subgraph_enumerator",
-            "br.ufmg.cs.systems.fractal.computation.SamplingEnumerator").
-         set(FRACTION_KEY, fraction)
+      set(enumeratorKey, enumeratorClass)
+         .set(FRACTION_KEY, fraction)
+         .pfractoid(pattern)
    }
 
-   def customComputation[S <: Subgraph : ClassTag]
-   (config: SparkConfiguration[S]): Fractoid[S] = {
-      resultHandler [S](config)
-   }
-
-   def set(key: String, value: Any): Unit = {
-      confs.update (key, value)
+   def set(key: String, value: Any): FractalGraph = {
+      //confs.update (key, value)
+      this.copy(confs = confs.updated(key, value))
    }
 
    override def toString(): String = s"FractalGraph(${path})"

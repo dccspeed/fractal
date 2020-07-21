@@ -18,19 +18,6 @@ public class MasterComputation {
         return (int) executionEngine.getStep();
     }
 
-    public void haltComputation() {
-        executionEngine.haltComputation();
-    }
-
-    public <K extends Writable, V extends Writable> AggregationStorage<K, V> readAggregation(String name) {
-        return executionEngine.getAggregatedValue(name);
-    }
-
-
-    public <K extends Writable, V extends Writable> void setAggregation(String name, AggregationStorage<K, V> aggregation) {
-        executionEngine.setAggregatedValue(name, aggregation);
-    }
-
     public void setUnderlyingExecutionEngine(CommonMasterExecutionEngine executionEngine) {
         this.executionEngine = executionEngine;
     }

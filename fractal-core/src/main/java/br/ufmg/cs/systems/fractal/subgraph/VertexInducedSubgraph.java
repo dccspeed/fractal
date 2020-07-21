@@ -26,13 +26,14 @@ public class VertexInducedSubgraph extends BasicSubgraph {
    private IntArrayList numEdgesAddedWithWord;
    // }}
 
-   private int lastPositionAdded = -1;
+   private int lastPositionAdded;
 
    public VertexInducedSubgraph() {
       super();
       updateEdgesConsumer = new UpdateEdgesConsumer();
       updateExtensionsConsumer = new UpdateExtensionsConsumer();
       numEdgesAddedWithWord = new IntArrayList();
+      lastPositionAdded = -1;
    }
 
    @Override
@@ -44,6 +45,7 @@ public class VertexInducedSubgraph extends BasicSubgraph {
    public void reset() {
       super.reset();
       numEdgesAddedWithWord.clear();
+      lastPositionAdded = -1;
    }
 
    @Override

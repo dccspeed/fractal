@@ -47,23 +47,13 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    private IntArrayList verticesBackup;
    private ObjArrayList<IntArrayList> neighborhoods;
    private ObjArrayList<IntArrayList> neighborhoodsToReclaim;
-   private IntSet verticesSet;
-   // }}
-
-   // Edge tracking for incremental modifications {{
-   private IntArrayList numEdgesAddedWithWord;
-   private IntArrayList numVerticesAddedWithWord;
    // }}
 
    public PatternInducedSubgraph() {
       super();
-      numVerticesAddedWithWord = new IntArrayList();
-      numEdgesAddedWithWord = new IntArrayList();
       updateEdgesConsumer = new UpdateEdgesConsumer();
       edgeTagger = new EdgeTaggerConsumer();
       updateExtensionsConsumer = new UpdateExtensionsConsumer();
-      vertexPredicate = new VertexPredicate();
-      edgePredicates = new EdgePredicates();
       intersection = new IntArrayList();
       difference = new IntArrayList();
       neighborhoods = new ObjArrayList<>();
@@ -73,14 +63,22 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    }
 
    @Override
-   public void init(Configuration config) {
-      super.init(config);
+   public void reset() {
+      super.reset();
+      intersection.clear();
+      difference.clear();
+      neighborhoods.clear();
+      for (int i = 0; i < neighborhoodsToReclaim.size(); ++i) {
+         neighborhoodsToReclaim.getu(i).reclaim();
+      }
+      neighborhoodsToReclaim.clear();
+      originalVertices.clear();
+      verticesBackup.clear();
    }
 
    @Override
-   public void reset() {
-      super.reset();
-      numVerticesAddedWithWord.clear();
+   public void init(Configuration config) {
+      super.init(config);
    }
 
    public Pattern applyLabels(Pattern unlabeledPattern) {
@@ -186,8 +184,6 @@ public class PatternInducedSubgraph extends BasicSubgraph {
          vertices.add(edge.getDestinationId());
          ++numVerticesAdded;
       }
-
-      numVerticesAddedWithWord.add(numVerticesAdded);
    }
 
    @Override

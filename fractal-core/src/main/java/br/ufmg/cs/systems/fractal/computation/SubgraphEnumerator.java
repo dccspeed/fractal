@@ -15,37 +15,43 @@ import java.util.concurrent.locks.ReentrantLock;
 public class SubgraphEnumerator<S extends Subgraph> implements Iterator<S> {
    protected static final Logger LOG = Logger.getLogger(SubgraphEnumerator.class);
 
-   protected ReentrantLock rlock;
+   // original fields for reset
+   private ReentrantLock rlockDefault;
+
+   private ReentrantLock rlock;
 
    protected Computation<S> computation;
 
-   protected IntArrayList prefix;
+   private IntArrayList prefix;
    
    protected S subgraph;
 
-   protected boolean lastHasNext;
+   private boolean lastHasNext;
 
-   protected int currElem;
+   private int currElem;
+
+   private int currElemWorkStealing;
 
    protected IntCollection wordIds;
 
    protected IntCursor cur;
 
-   protected boolean shouldRemoveLastWord;
+   private boolean shouldRemoveLastWord;
    
    protected AtomicBoolean active;
-
-   public String computationLabel() {
-      return computation.computationLabel();
-   }
 
    public boolean isActive() {
       return active != null && active.get();
    }
 
    public SubgraphEnumerator() {
-      this.rlock = new ReentrantLock();
+      this.rlockDefault = new ReentrantLock();
+      this.rlock = rlockDefault;
       this.prefix = IntArrayListPool.instance().createObject();
+   }
+
+   public synchronized void reset() {
+      this.rlock = rlockDefault;
    }
 
    public synchronized void terminate() {
@@ -64,15 +70,7 @@ public class SubgraphEnumerator<S extends Subgraph> implements Iterator<S> {
     * structures the custom implementation may need.
     * @param config current configuration
     */
-   public void init(Configuration<S> config, Computation<S> computation) {
-      // empty by default
-   }
-
-   /**
-    * Called after a internal/external work-stealing to reconstruct this
-    * enumerator state for an alternative execution thread.
-    */
-   public void rebuildState(SubgraphEnumerator<S> that) {
+   public void init(Configuration config, Computation<S> computation) {
       // empty by default
    }
 
@@ -104,14 +102,13 @@ public class SubgraphEnumerator<S extends Subgraph> implements Iterator<S> {
       S subgraph = next();
       Computation<S> nextComp = computation.nextComputation();
       SubgraphEnumerator<S> nextEnum = nextComp.getSubgraphEnumerator();
-      nextEnum.set(nextComp, subgraph, this);
+      nextEnum.set(nextComp, subgraph);
       return nextEnum;
-      //return this;
+      //next();
+      //return computation.nextComputation().getSubgraphEnumerator();
    }
 
-   public synchronized SubgraphEnumerator<S> set(
-           Computation<S> computation, S subgraph,
-           SubgraphEnumerator<S> previous) {
+   public synchronized SubgraphEnumerator<S> set(Computation<S> computation, S subgraph) {
       this.computation = computation;
       this.subgraph = subgraph;
       return this;
@@ -127,48 +124,73 @@ public class SubgraphEnumerator<S extends Subgraph> implements Iterator<S> {
       this.cur = wordIds.cursor();
       this.shouldRemoveLastWord = false;
       this.active = new AtomicBoolean(true);
+      this.rlock = rlockDefault;
       return this;
    }
 
-   public synchronized SubgraphEnumerator<S> forkEnumerator(Computation<S> computation) {
-      // create new consumer, adding just enough to verify if there is still
-      // work in it
-      SubgraphEnumerator<S> iter = computation.
-              getConfig().createSubgraphEnumerator(computation);
-      iter.subgraph = computation.getConfig().createSubgraph();
-      iter.rlock = this.rlock;
-      iter.computation = computation;
-      iter.lastHasNext = false;
-      iter.cur = this.cur;
-      iter.wordIds = this.wordIds;
-      iter.shouldRemoveLastWord = false;
-      iter.active = this.active;
-
-      // expensive operations, only do if iterator is not empty
-      if (iter.hasNext()) {
-         iter.prefix.clear();
-         iter.prefix.addAll(this.prefix);
-
-         if (prefix.size() > 0) {
-            iter.subgraph.addWord(prefix.getu(0));
-         }
-
-         for (int i = 1; i < prefix.size(); ++i) {
-            iter.subgraph.nextExtensionLevel(subgraph);
-            iter.subgraph.addWord(prefix.getu(i));
-         }
-
-         //iter.rebuildState(this);
-         iter.rebuildState();
+   public synchronized boolean forkEnumerator(Computation<S> computation) {
+      if (this.computation.nextComputation() == null || !isActive()) {
+         return false;
       }
 
-      return iter;
+      int firstWordStealed = consumeNextWord();
+
+      if (firstWordStealed != -1) {
+         SubgraphEnumerator<S> iter = computation.getSubgraphEnumerator();
+         synchronized (iter) {
+            iter.subgraph.reset();
+            iter.rlock = this.rlock;
+            iter.computation = computation;
+            iter.lastHasNext = true;
+            //iter.currElem = currElemWorkStealing;
+            iter.currElem = firstWordStealed;
+            iter.cur = this.cur;
+            iter.wordIds = this.wordIds;
+            iter.shouldRemoveLastWord = false;
+            iter.active = this.active;
+
+            iter.prefix.clear();
+            iter.prefix.addAll(this.prefix);
+
+            if (prefix.size() > 0) {
+               iter.subgraph.addWord(prefix.getu(0));
+            }
+
+            for (int i = 1; i < prefix.size(); ++i) {
+               iter.subgraph.nextExtensionLevel(subgraph);
+               iter.subgraph.addWord(prefix.getu(i));
+            }
+
+            iter.rebuildState();
+         }
+
+         return true;
+      } else {
+         return false;
+      }
    }
 
    private void maybeRemoveLastWord() {
       if (shouldRemoveLastWord) {
          subgraph.removeLastWord();
          shouldRemoveLastWord = false;
+      }
+   }
+
+   private int consumeNextWord() {
+      try {
+         rlock.lock();
+         if (isActive()) {
+            if (cur.moveNext()) {
+               //currElemWorkStealing = cur.elem();
+               return cur.elem();
+            } else {
+               active.set(false);
+            }
+         }
+         return -1;
+      } finally {
+         rlock.unlock();
       }
    }
 
@@ -186,13 +208,13 @@ public class SubgraphEnumerator<S extends Subgraph> implements Iterator<S> {
       try {
          rlock.lock();
          if (isActive()) {
-            // skip extensions that turn the subgraph not canonical
-            while (cur.moveNext()) {
+            if (cur.moveNext()) {
                currElem = cur.elem();
                lastHasNext = true;
                return true;
+            } else {
+               active.set(false);
             }
-            active.set(false);
          } else {
             maybeRemoveLastWord();
          }

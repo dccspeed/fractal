@@ -58,10 +58,10 @@ object PatternUtilsRDD {
       extends Iterator[Pattern] {
 
       // initial caching for local iterator
-      //patternsRDD.cache()
-      //patternsRDD.foreachPartition(_ => {})
-      //private val localIterator = patternsRDD.toLocalIterator
-      private val localIterator = patternsRDD.collect().iterator
+      patternsRDD.cache()
+      patternsRDD.foreachPartition(_ => {})
+      private val localIterator = patternsRDD.toLocalIterator
+      //private val localIterator = patternsRDD.collect().iterator
 
       override def hasNext: Boolean = {
          val iterHasNext = localIterator.hasNext

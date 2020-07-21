@@ -48,6 +48,8 @@ public interface Subgraph extends WritableObject, Externalizable {
 
    IntCollection computeExtensions(Computation computation);
 
+   void reset();
+
    IntCollection extensions();
 
    String toOutputString();

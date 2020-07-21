@@ -17,7 +17,7 @@ case class ESubgraph(var words: Array[(Int,Int)])
     this(null.asInstanceOf[Array[(Int,Int)]])
   }
 
-  def toInternalSubgraph[E <: Subgraph](config: SparkConfiguration[E]): E = {
+  def toInternalSubgraph[E <: Subgraph](config: SparkConfiguration): E = {
     val mainGraph = config.getMainGraph[BasicMainGraph[_,_]]
     val subgraph = config.createSubgraph[E]
     var i = 0

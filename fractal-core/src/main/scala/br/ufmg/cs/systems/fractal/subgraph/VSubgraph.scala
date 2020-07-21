@@ -19,7 +19,7 @@ case class VSubgraph(var words: Array[Int]) extends ResultSubgraph[Int] {
     this(null)
   }
   
-  def toInternalSubgraph[E <: Subgraph](config: SparkConfiguration[E]): E = {
+  def toInternalSubgraph[E <: Subgraph](config: SparkConfiguration): E = {
     val subgraph = config.createSubgraph[E]
     var i = 0
     while (i < words.length) {

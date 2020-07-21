@@ -21,7 +21,6 @@ import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
-import sun.applet.Main;
 
 import java.io.IOException;
 import java.io.Serializable;
@@ -34,16 +33,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class Configuration<O extends Subgraph> implements Serializable {
+public class Configuration implements Serializable {
     private static final Logger LOG = Logger.getLogger(Configuration.class);
 
     // we keep a local (per JVM) pool of configurations potentially
     // representing several active fractal applications
     private static AtomicInteger nextConfId = new AtomicInteger(0);
 
-    protected final int id = newConfId();
-
-    protected AtomicInteger taskCounter = new AtomicInteger(0);
 
     public static final String CONF_MASTER_HOSTNAME = "fractal.master.hostname";
     public static final String CONF_MASTER_HOSTNAME_DEFAULT = "localhost";
@@ -118,7 +114,6 @@ public class Configuration<O extends Subgraph> implements Serializable {
     
     public static final String CONF_JVMPROF_CMD = "fractal.jvmprof.cmd";
     public static final String CONF_JVMPROF_CMD_DEFAULT = null;
-    // }}
 
     private static final String[] NEIGHBORHOOD_LOOKUPS_ARR = new String[16];
     static {
@@ -127,26 +122,31 @@ public class Configuration<O extends Subgraph> implements Serializable {
        }
     }
 
-    protected long infoPeriod;
+    // }}
 
-    private Class<? extends MainGraph> mainGraphClass;
-    private Class<? extends OptimizationSetDescriptor>
+   protected final int id = newConfId();
+   protected transient AtomicInteger taskCounter = new AtomicInteger(0);
+
+   protected transient long infoPeriod;
+
+    private transient Class<? extends MainGraph> mainGraphClass;
+    private transient Class<? extends OptimizationSetDescriptor>
        optimizationSetDescriptorClass;
-    private Class<? extends Pattern> patternClass;
-   private Class<? extends Computation> computationClass;
-    private Class<? extends MasterComputation> masterComputationClass;
-    private Class<? extends Subgraph> subgraphClass;
-    private Class<? extends SubgraphEnumerator> subgraphEnumClass;
+    private transient Class<? extends Pattern> patternClass;
+   private transient Class<? extends Computation> computationClass;
+    private transient Class<? extends MasterComputation> masterComputationClass;
+    private transient Class<? extends Subgraph> subgraphClass;
+    private transient Class<? extends SubgraphEnumerator> subgraphEnumClass;
 
-    private String outputPath;
+    private transient String outputPath;
 
     private transient Map<String, AggregationStorageMetadata>
        aggregationsMetadata;
     protected transient MainGraph mainGraph;
     protected int mainGraphId = -1;
-    private boolean isGraphEdgeLabelled;
+    private transient boolean isGraphEdgeLabelled;
     protected transient boolean initialized = false;
-    protected boolean isGraphMulti;
+    protected transient boolean isGraphMulti;
 
     private static int newConfId() {
        return nextConfId.getAndIncrement();
@@ -225,7 +225,7 @@ public class Configuration<O extends Subgraph> implements Serializable {
         outputPath = getString(CONF_OUTPUT_PATH, CONF_OUTPUT_PATH_DEFAULT + "_"
               + computationClass.getName());
 
-        Computation<O> computation = createComputation();
+        Computation computation = createComputation();
         computation.initAggregations(this);
 
         OptimizationSetDescriptor optimizationSetDescriptor =
@@ -351,13 +351,19 @@ public class Configuration<O extends Subgraph> implements Serializable {
         return infoPeriod;
     }
 
-    public <E extends Subgraph> E createSubgraph() {
-        E subgraph = (E) ReflectionUtils.newInstance(subgraphClass);
+    public <S extends Subgraph> S createSubgraph() {
+        S subgraph = (S) ReflectionUtils.newInstance(subgraphClass);
         subgraph.init(this);
         return subgraph;
     }
 
-    public Class<? extends Subgraph> getSubgraphClass() {
+    public <S extends Subgraph> S createSubgraph(Class<S> subgraphClass) {
+      S subgraph = (S) ReflectionUtils.newInstance(subgraphClass);
+      subgraph.init(this);
+      return subgraph;
+   }
+
+   public Class<? extends Subgraph> getSubgraphClass() {
         return subgraphClass;
     }
 
@@ -365,7 +371,7 @@ public class Configuration<O extends Subgraph> implements Serializable {
         this.subgraphClass = SubgraphClass;
     }
 
-    public SubgraphEnumerator<O> createSubgraphEnumerator(Computation<O> computation) {
+    public <O extends Subgraph> SubgraphEnumerator<O> createSubgraphEnumerator(Computation<O> computation) {
        boolean bypass = computation.shouldBypass();
        SubgraphEnumerator<O> senum;
        if (!bypass) {

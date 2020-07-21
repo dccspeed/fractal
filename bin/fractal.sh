@@ -36,7 +36,7 @@ temporals="periodic_subgraphs_induced_sf"
 temporals="${temporals}|periodic_subgraphs_induced_pf"
 temporals="${temporals}|periodic_subgraphs_induced_pf_mcvc"
 
-apps="${gqueryings}|${motifss}|${cliquess}|${fsms}|${subgraphlisting}|${extras}"
+apps="${gqueryings}|${motifss}|${cliquess}|${fsms}|${subgraphlisting}|${temporals}${extras}"
 
 usage="
 APPS_AVAILABLE
@@ -325,6 +325,7 @@ ALGOPTION for '$app':
 
 	*)
 	echo "Invalid application: ${app}"
+  printf "$usage\n"
 	exit 1
 	;;
 

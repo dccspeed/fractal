@@ -7,9 +7,7 @@ public class BypassSubgraphEnumerator<S extends Subgraph> extends SubgraphEnumer
    private boolean hasNext;
 
    @Override
-   public synchronized SubgraphEnumerator<S> set(
-           Computation<S> computation, S subgraph,
-           SubgraphEnumerator<S> previous) {
+   public synchronized SubgraphEnumerator<S> set(Computation<S> computation, S subgraph) {
       this.computation = computation;
       this.subgraph = subgraph;
       this.hasNext = true;
@@ -28,8 +26,8 @@ public class BypassSubgraphEnumerator<S extends Subgraph> extends SubgraphEnumer
    }
 
    @Override
-   public synchronized SubgraphEnumerator<S> forkEnumerator(Computation<S> computation) {
-      return this;
+   public synchronized boolean forkEnumerator(Computation<S> computation) {
+      return false;
    }
 
    @Override

@@ -153,7 +153,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     */
    def cliquesKClistSF(numVertices: Int): Fractoid[VertexInducedSubgraph] = {
       val enumClass = "br.ufmg.cs.systems.fractal.gmlib.clique.KClistEnumerator"
-      self.vfractoid.set("subgraph_enumerator", enumClass).expand(numVertices)
+      self.set("subgraph_enumerator", enumClass).vfractoid.expand(numVertices)
    }
 
    /**
@@ -242,7 +242,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
    def maximalCliquesQuickSF(maxNumVertices: Int)
    : Fractoid[VertexInducedSubgraph] = {
       val enumClass = "br.ufmg.cs.systems.fractal.gmlib.clique.MaximalCliquesEnumerator"
-      self.vfractoid.set("subgraph_enumerator", enumClass)
+      self.set("subgraph_enumerator", enumClass).vfractoid
          // explore one step further to ensure that *maxNumVertices* sized
          // cliques are considered
          .expand(maxNumVertices + 1)
@@ -382,6 +382,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
          explore(numSteps)
    }
 
+   /*
    @Experimental
    def keywordSearch(
                        numPartitions: Int,
@@ -654,6 +655,8 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
 
       kws
    }
+
+    */
 
    /**
     * Lists periodic induced subgraphs using the subgraph-first approach: visit

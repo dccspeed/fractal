@@ -28,7 +28,7 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
    private IntArrayList aux;
 
    @Override
-   public void init(Configuration<S> config, Computation<S> computation) {
+   public void init(Configuration config, Computation<S> computation) {
       this.cand = new IntArrayList();
       this.fini = new IntArrayList();
       this.exts = new IntArrayList();

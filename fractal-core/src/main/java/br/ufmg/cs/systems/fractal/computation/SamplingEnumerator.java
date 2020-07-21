@@ -15,14 +15,15 @@ public class SamplingEnumerator<S extends Subgraph> extends SubgraphEnumerator<S
    protected double depthProb;
 
    @Override
-   public void init(Configuration<S> config, Computation<S> computation) {
+   public void init(Configuration config, Computation<S> computation) {
       fraction = config.getDouble("sampling_fraction", -1.0); 
       if (fraction <= 0) {
          throw new RuntimeException("Invalid/missing sampling fraction (" +
                "sampling_fraction=" + fraction + ")");
       }
 
-      Primitive[] primitives = config.getObject("primitives_workflow", null);
+      //Primitive[] primitives = config.getObject("primitives_workflow", null);
+      Primitive[] primitives = computation.getExecutionEngine().primitives();
       depth = 0;
       for (int i = 0; i < primitives.length; ++i) {
          if (primitives[i] == Primitive.E) {

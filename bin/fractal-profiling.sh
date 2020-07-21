@@ -27,6 +27,6 @@ done
 
 OLD_JAVA_TOOL_OPTIONS=$JAVA_TOOL_OPTIONS
 #export JAVA_TOOL_OPTIONS="-javaagent:$FRACTAL_HOME/lib/aspectjweaver-1.8.10 .jar"
-export JAVA_TOOL_OPTIONS="-agentpath:$JVM_PROFILER_HOME/build/libasyncProfiler.so=start,file=${file},event=${event},interval=${interval},framebuf=5000000,threads,sig,flat=5000"
+export JAVA_TOOL_OPTIONS="-agentpath:$JVM_PROFILER_HOME/build/libasyncProfiler.so=start,file=${file},event=${event},interval=${interval},framebuf=5000000,threads,sig,summary,traces=5000,flat=5000"
 $FRACTAL_HOME/bin/fractal.sh "$@"
 export JAVA_TOOL_OPTIONS=$OLD_JAVA_TOOL_OPTIONS

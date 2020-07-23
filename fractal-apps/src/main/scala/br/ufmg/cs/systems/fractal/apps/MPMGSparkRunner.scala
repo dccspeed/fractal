@@ -65,16 +65,18 @@ class HiveApp(val configPath: String) extends Logging {
     logInfo(s"\tLoading edges with query: ${databaseConfigs("input_query").str}")
     val edges = hiveSession.executeQuery(databaseConfigs("input_query").str)
 
-    //    todo: write using spark
-    logInfo(s"\tWriting data to CSV at: ${outputPath}")
-    val outputBuffer = new BufferedWriter(new FileWriter(new File(outputPath)))
-    edges.collect.foreach(edge => {
-      outputBuffer.write(s"${edge.get(0)} ${edge.get(1)}\n")
-    })
+    logInfo(s"\tEdges loaded sample of 10: ${edges.take(10)}")
+
+    //    //    todo: write using spark
+    //    logInfo(s"\tWriting data to CSV at: ${outputPath}")
+    //    val outputBuffer = new BufferedWriter(new FileWriter(new File(outputPath)))
+    //    edges.collect.foreach(edge => {
+    //      outputBuffer.write(s"${edge.get(0)} ${edge.get(1)}\n")
+    //    })
 
     //    edges.write.csv(outputPath)
 
-    outputBuffer.close()
+    //    outputBuffer.close()
   }
 
   /**

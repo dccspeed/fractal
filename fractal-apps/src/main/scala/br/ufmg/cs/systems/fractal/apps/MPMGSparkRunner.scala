@@ -6,7 +6,6 @@ import br.ufmg.cs.systems.fractal._
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
 import br.ufmg.cs.systems.fractal.util.{Logging, PairWritable}
-import com.hortonworks.hwc.HiveWarehouseSession
 import org.apache.hadoop.io.IntWritable
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
@@ -37,7 +36,7 @@ class HiveApp(val configPath: String) extends Logging {
   val utilApp = new UtilApp
   var databaseConfigs: ujson.Value = _
   var currentConfig: ujson.Value = _
-  var hiveSession: HiveWarehouseSession = _
+  var hiveSession: com.hortonworks.hwc.HiveWarehouseSession = _
 
   def initConfigs: Unit = {
     currentConfig = utilApp.readConfig(configPath)
@@ -46,7 +45,7 @@ class HiveApp(val configPath: String) extends Logging {
 
   def initHiveConnector {
     val sparkSession = utilApp.getCreateSparkSession(currentConfig, null, "spark_database")
-    hiveSession = HiveWarehouseSession.session(sparkSession).build()
+    hiveSession = com.hortonworks.spark.sql.hive.llap.HiveWarehouseBuilder.session(sparkSession).build()
   }
 
   initConfigs
@@ -60,7 +59,7 @@ class HiveApp(val configPath: String) extends Logging {
 
     databaseConfigs("temporary_tables").arr.foreach(table => {
       logInfo(s"\tLoading temporary table ${table("name").str} with query ${table("value").str}")
-      hiveSession.execute(table("value").str).createOrReplaceTempView(table("name").str)
+      hiveSession.executeQuery(table("value").str).createOrReplaceTempView(table("name").str)
     })
 
     logInfo(s"\tLoading edges with query: ${databaseConfigs("input_query").str}")

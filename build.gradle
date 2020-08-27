@@ -6,7 +6,7 @@
  * user guide available at https://docs.gradle.org/4.2.1/userguide/java_library_plugin.html
  */
 
-version = "SPARK-2.4.5"
+version = "SPARK-2.3.2"
 
 buildscript {
     repositories {

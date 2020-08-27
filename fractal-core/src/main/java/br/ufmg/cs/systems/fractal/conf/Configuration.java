@@ -475,9 +475,11 @@ public class Configuration<O extends Subgraph> implements Serializable {
     protected void readMainGraph() {
         boolean useLocalGraph = getBoolean(CONF_MAINGRAPH_LOCAL,
               CONF_MAINGRAPH_LOCAL_DEFAULT);
-        
+       	    	
         // maybe read properties
         try {
+       	    LOG.info("Trying to read properties: " + getMainGraphPropertiesPath());
+            LOG.info("Using local graph: " + useLocalGraph);
             Method initProperties = mainGraphClass.getMethod(
                   "initProperties", Object.class);
 
@@ -500,6 +502,7 @@ public class Configuration<O extends Subgraph> implements Serializable {
         }
 
         try {
+       	    LOG.info("Trying to read graph: " + getMainGraphPath());
             Method init = mainGraphClass.getMethod("init", Object.class);
 
             if (useLocalGraph) {

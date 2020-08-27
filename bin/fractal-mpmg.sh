@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # IMPORTANT: this version must match the "build.gradle" one
-fractal_version="SPARK-2.4.5"
+fractal_version="SPARK-2.3.2"
 
 printf "Description: Script launcher for Fractal MPMG applications\n\n"
 
@@ -37,9 +37,11 @@ for argname in $required; do
 	fi
 done
 
+packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 cmd="$SPARK_HOME/bin/spark-submit \\
    --class br.ufmg.cs.systems.fractal.mpmg.MPMGSparkRunner \\
    --jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-${fractal_version}.jar \\
+   --packages=$packages \\
    $FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-${fractal_version}.jar \\
    $config"
 

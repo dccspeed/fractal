@@ -17,11 +17,13 @@ import com.koloboke.function.IntIntConsumer;
 import com.koloboke.function.IntObjConsumer;
 import org.apache.commons.io.input.BOMInputStream;
 import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.log4j.Logger;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.SequenceInputStream;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,6 +31,8 @@ import java.util.Arrays;
 import java.util.StringTokenizer;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
+import java.util.Vector;
+import java.util.Enumeration;
 
 public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    private static final Logger LOG = Logger.getLogger(BasicMainGraph.class);
@@ -669,23 +673,72 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    }
 
    protected void readFromHdfs(org.apache.hadoop.fs.Path hdfsPath) throws IOException {
-      FileSystem fs = FileSystem.get(new org.apache.hadoop.conf.Configuration());
-      InputStream is = fs.open(hdfsPath);
-      readFromInputStream(is);
-      is.close();
+      LOG.info("Loading from HDFS");
+      //FileSystem fs = FileSystem.get(new org.apache.hadoop.conf.Configuration());
+	
+      org.apache.hadoop.conf.Configuration conf = new org.apache.hadoop.conf.Configuration();
+      FileSystem fs = hdfsPath.getFileSystem(conf);
+
+      FileStatus inputStatus = fs.getFileStatus(hdfsPath);
+      if (inputStatus.isDirectory()) { //is dir
+        LOG.info("Loading dir : " + hdfsPath);
+        Vector<InputStream> inputStreams = new Vector<InputStream>();
+	for (FileStatus stat : fs.listStatus(hdfsPath)) {
+            inputStreams.add(fs.open(stat.getPath()));
+        }
+
+        Enumeration<InputStream> enu = inputStreams.elements();
+        SequenceInputStream sequenceStream = new SequenceInputStream(enu);
+        readFromInputStream(sequenceStream);
+ 
+        sequenceStream.close();
+      }
+	else {      
+         LOG.info("Loading file : " + hdfsPath);
+         InputStream is = fs.open(hdfsPath);
+         readFromInputStream(is);
+         is.close();
+	}
    }
 
    protected void readFromFile(Path filePath) throws IOException {
+      LOG.info("Loading file: " + filePath);
       InputStream is = Files.newInputStream(filePath);
       readFromInputStream(is);
       is.close();
    }
 
    protected void readPropertiesFromHdfs(org.apache.hadoop.fs.Path hdfsPath) throws IOException {
-      FileSystem fs = FileSystem.get(new org.apache.hadoop.conf.Configuration());
-      InputStream is = fs.open(hdfsPath);
-      readPropertiesFromInputStream(is);
-      is.close();
+	org.apache.hadoop.conf.Configuration conf = new org.apache.hadoop.conf.Configuration();
+	//conf.set("fs.file.impl",  org.apache.hadoop.fs.LocalFileSystem.class.getName() );
+	//conf.set("fs.hdfs.impl", org.apache.hadoop.hdfs.DistributedFileSystem.class.getName() );
+	//conf.set("fs.defaultFS", "file:///");
+ 	//FileSystem fs = FileSystem.newInstance(conf);
+
+      
+	FileSystem fs = hdfsPath.getFileSystem(conf);
+
+      //FileSystem fs = FileSystem.get(new org.apache.hadoop.conf.Configuration());
+      FileStatus inputStatus = fs.getFileStatus(hdfsPath);
+
+      if (inputStatus.isDirectory()) { //is dir
+        Vector<InputStream> inputStreams = new Vector<InputStream>();
+	for (FileStatus stat : fs.listStatus(hdfsPath)) {
+            inputStreams.add(fs.open(stat.getPath()));
+        }
+
+        Enumeration<InputStream> enu = inputStreams.elements();
+        SequenceInputStream sequenceStream = new SequenceInputStream(enu);
+
+        readPropertiesFromInputStream(sequenceStream);
+ 
+        sequenceStream.close(); 
+      }
+      else {
+	      InputStream is = fs.open(hdfsPath);
+	      readPropertiesFromInputStream(is);
+	      is.close();
+      }
    }
 
    protected void readPropertiesFromFile(Path filePath) throws IOException {

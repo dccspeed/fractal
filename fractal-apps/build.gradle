@@ -33,7 +33,6 @@ repositories {
     jcenter()
     mavenCentral()
     maven { url 'https://jitpack.io' }
-    maven { url 'https://repo.hortonworks.com/content/repositories/releases/' }
 }
 
 dependencies {
@@ -54,12 +53,6 @@ dependencies {
     compile 'org.scalatest:scalatest_2.11:2.2.6'
 
     compile 'com.typesafe.akka:akka-remote_2.11:2.5.3'
-
-    // https://mvnrepository.com/artifact/com.lihaoyi/upickle
-    compile 'com.lihaoyi:upickle_2.11:0.7.4'
-
-    // https://mvnrepository.com/artifact/com.hortonworks.hive/hive-warehouse-connector
-    compile 'com.hortonworks.hive:hive-warehouse-connector_2.11:1.0.0.3.1.5.0-152'
 
     compile project(':fractal-core')
 }

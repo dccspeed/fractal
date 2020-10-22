@@ -50,6 +50,19 @@ object PatternUtilsRDD {
       patterns
    }
 
+   def edgePatternsRDD(sc: SparkContext, numEdges: Int): RDD[Pattern] = {
+      if (numEdges <= 0) return sc.emptyRDD
+
+      var patterns = singleEdgeRDD(sc, 1)
+      var remainingEdges = numEdges - 1
+      while (remainingEdges > 0) {
+         patterns = extendByEdgeRDD(patterns, 1)
+         remainingEdges -= 1
+      }
+
+      patterns
+   }
+
    def localIterator(patternsRDD: RDD[Pattern]): Iterator[Pattern] = {
       new PatternIteratorRDD(patternsRDD)
    }

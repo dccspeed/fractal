@@ -10,7 +10,8 @@ import br.ufmg.cs.systems.fractal.util.ScalaFractalFuncs.CustomSubgraphCallback
 import br.ufmg.cs.systems.fractal.util.{Logging, SubgraphCallback}
 import org.apache.spark.{SparkConf, SparkContext}
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
 trait ApplicationRunner extends Logging
@@ -19,7 +20,7 @@ object SubgraphsListingSF extends ApplicationRunner {
    val appid: String = "subgraphs_listing_sf"
 
    def apply(fractalGraph: FractalGraph, commStrategy: String,
-                      numPartitions: Int, explorationSteps: Int): Unit = {
+             numPartitions: Int, explorationSteps: Int): Unit = {
       val frac = fractalGraph
          .set("num_partitions", numPartitions)
          .set("comm_strategy", commStrategy)
@@ -27,6 +28,30 @@ object SubgraphsListingSF extends ApplicationRunner {
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
          frac.aggregationCount
+      }
+
+      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+   }
+}
+
+object SubgraphsListingPF extends ApplicationRunner {
+   val appid: String = "subgraphs_listing_pf"
+
+   def apply(fractalGraph: FractalGraph, commStrategy: String,
+             numPartitions: Int, explorationSteps: Int): Unit = {
+      var numSubgraphs = 0L
+      val callback: Fractoid[PatternInducedSubgraph] => Unit = frac =>
+         synchronized {
+            val count = frac.aggregationCount
+            logInfo(s"PatternCount ${frac.pattern} ${count}")
+            numSubgraphs += count
+         }
+
+      val (_, elapsed) = FractalSparkRunner.time {
+         fractalGraph
+            .set("num_partitions", numPartitions)
+            .set("comm_strategy", commStrategy)
+            .subgraphsMaxEdgesPF(explorationSteps + 1, callback)
       }
 
       logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
@@ -88,8 +113,7 @@ object InducedSubgraphsListingSF extends ApplicationRunner {
          .vfractoid.expand(1).explore(explorationSteps)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac
-            .aggregationCount
+         frac.aggregationCount
       }
 
       logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
@@ -454,28 +478,6 @@ object FSMPFMCVC extends ApplicationRunner {
    }
 }
 
-/*
-object KeywordSearchSF extends ApplicationRunner {
-   val appid: String = "keywordsearch_sf"
-
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int,
-             queryWords: Array[String]): Unit = {
-      fractalGraph.set("num_partitions", numPartitions)
-      fractalGraph.set("comm_strategy", commStrategy)
-      val frac = fractalGraph.keywordSearch(numPartitions, queryWords)
-
-      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount
-      }
-
-      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
-
-   }
-}
-
- */
-
 object PatternMatchingPFMCVC extends ApplicationRunner {
    val appid: String = "pattern_matching_pf_mcvc"
 
@@ -772,6 +774,11 @@ object FractalSparkRunner extends Logging {
          case SubgraphsListingSF.appid =>
             setRemainingConfigs()
             SubgraphsListingSF(fractalGraph, commStrategy,
+               numPartitions, explorationSteps)
+
+         case SubgraphsListingPF.appid =>
+            setRemainingConfigs()
+            SubgraphsListingPF(fractalGraph, commStrategy,
                numPartitions, explorationSteps)
 
          case InducedSubgraphsListingPFMCVC.appid =>

@@ -1,16 +1,15 @@
-package br.ufmg.cs.systems.fractal.computation;
+package br.ufmg.cs.systems.fractal.computation.vertexinduced;
 
-import akka.actor.ActorRef;
 import br.ufmg.cs.systems.fractal.Primitive;
-import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
+import br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator;
+import br.ufmg.cs.systems.fractal.computation.WorkStealingSystem2;
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.IntConsumer;
 
-public class VertexInducedComputationEFL<S extends VertexInducedSubgraph>
+public class VertexInducedComputationEnumerationFL<S extends VertexInducedSubgraph>
         extends VertexInducedComputation<S> {
-   transient private LastStepConsumer lastStepConsumer = new LastStepConsumer();
 
    @Override
    public Primitive primitive() {
@@ -28,7 +27,7 @@ public class VertexInducedComputationEFL<S extends VertexInducedSubgraph>
    }
 
    @Override
-   public long compute(S subgraph) {
+   public void computeAndProcessExtensions() {
       // compute extensions
       subgraphEnumerator.computeExtensions();
 
@@ -38,29 +37,26 @@ public class VertexInducedComputationEFL<S extends VertexInducedSubgraph>
       // work stealing computation
       if (configuration.wsEnabled()) {
          // create work stealing system
-
+         WorkStealingSystem2<S> wsSys = new WorkStealingSystem2<>(this);
+         wsSys.workStealingCompute();
          // work stealing computation
       }
-
-      return 0;
    }
 
    @Override
    public void processExtensions() {
-      subgraphEnumerator.getWordIds().forEach(lastStepConsumer);
-   }
-
-   private class LastStepConsumer implements IntConsumer {
-      private VertexInducedComputationEFL<S> computation =
-              VertexInducedComputationEFL.this;
-
-      private S subgraph = computation.subgraphEnumerator.getSubgraph();
-
-      @Override
-      public void accept(int u) {
-         subgraph.addWord(u);
-         computation.process(subgraph);
+      IntArrayList extensions = subgraphEnumerator.getExtensions();
+      int extensionsSize  = extensions.size();
+      for (int i = 0; i < extensionsSize; ++i) {
+         subgraph.addWord(extensions.getu(i));
+         process(subgraph);
          subgraph.removeLastWord();
       }
    }
+
+   @Override
+   public String toString() {
+      return "Efl";
+   }
+
 }

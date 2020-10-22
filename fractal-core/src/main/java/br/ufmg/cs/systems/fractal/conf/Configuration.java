@@ -40,6 +40,10 @@ public class Configuration implements Serializable {
     // representing several active fractal applications
     private static AtomicInteger nextConfId = new AtomicInteger(0);
 
+    // static immutable parameters {
+    public static final boolean OPCOUNTER_ENABLED = true;
+    public static final int MAX_VERTICES_IN_SUBGRAPHS = 10;
+    // }
 
     public static final String CONF_MASTER_HOSTNAME = "fractal.master.hostname";
     public static final String CONF_MASTER_HOSTNAME_DEFAULT = "localhost";
@@ -115,14 +119,7 @@ public class Configuration implements Serializable {
     public static final String CONF_JVMPROF_CMD = "fractal.jvmprof.cmd";
     public static final String CONF_JVMPROF_CMD_DEFAULT = null;
 
-    private static final String[] NEIGHBORHOOD_LOOKUPS_ARR = new String[16];
-    static {
-       for (int i = 0; i < NEIGHBORHOOD_LOOKUPS_ARR.length; ++i) {
-          NEIGHBORHOOD_LOOKUPS_ARR[i] = "neighborhood_lookups_" + i;
-       }
-    }
-
-    // }}
+   // }}
 
    protected final int id = newConfId();
    protected transient AtomicInteger taskCounter = new AtomicInteger(0);
@@ -156,11 +153,7 @@ public class Configuration implements Serializable {
        return id;
     }
 
-   public static String NEIGHBORHOOD_LOOKUPS(int i) {
-       return NEIGHBORHOOD_LOOKUPS_ARR[i];
-    }
-
-    public boolean taskCheckIn(int expect, int ntasks) {
+   public boolean taskCheckIn(int expect, int ntasks) {
        return taskCounter.compareAndSet(expect, ntasks);
     }
 

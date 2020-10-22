@@ -6,12 +6,13 @@ import akka.actor._
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph
 import br.ufmg.cs.systems.fractal.util.Logging
 import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjArrayList}
-import br.ufmg.cs.systems.fractal.util.pool.HashIntSetPool
 
-class WorkStealingSystem [S <: Subgraph]
-(processCompute: (SubgraphEnumerator[S],Computation[S]) => Long,
- slaveActor: ActorRef,
- remoteWorkQueue: ConcurrentLinkedQueue[StealWorkResponse]) extends Logging {
+class WorkStealingSystem2 [S <: Subgraph]
+(rootComputation: Computation[S]) extends Logging {
+
+   private val slaveActor = rootComputation.getExecutionEngine.slaveActor()
+
+   private val remoteWorkQueue = new ConcurrentLinkedQueue[StealWorkResponse]()
 
    // indicates whether this thread is allowed to keep sending new remote
    // requests or work -- this is flagged out uppon receiving an empty
@@ -50,7 +51,7 @@ class WorkStealingSystem [S <: Subgraph]
          if (workUnit != null) {
             val consumer = deserializeSubgraphBatch(workUnit, c)
             val computation = consumer.getComputation()
-            val ret = processCompute(consumer, computation)
+            computation.processExtensions()
             externalSteals += 1
 
          } else if (response.numPeers == numPartitions) {
@@ -63,10 +64,10 @@ class WorkStealingSystem [S <: Subgraph]
       externalSteals
    }
 
-   def workStealingCompute(c: Computation[S]): Unit = {
-      val internalWsEnabled = c.getConfig().internalWsEnabled()
-      val externalWsEnabled = c.getConfig().externalWsEnabled()
-      val numPartitions = c.getNumberPartitions
+   def workStealingCompute(): Unit = {
+      val internalWsEnabled = rootComputation.getConfig().internalWsEnabled()
+      val externalWsEnabled = rootComputation.getConfig().externalWsEnabled()
+      val numPartitions = rootComputation.getNumberPartitions
       var internalSteals = 0L
       var externalSteals = 0L
       var wsIterations = 0L
@@ -77,7 +78,7 @@ class WorkStealingSystem [S <: Subgraph]
 
       // case 1: internal work stealing only
       if (internalWsEnabled && !externalWsEnabled) {
-         internalSteals += workStealingComputeLocal(c)
+         internalSteals += workStealingComputeLocal(rootComputation)
          wsIterations += 1
       }
 
@@ -88,7 +89,7 @@ class WorkStealingSystem [S <: Subgraph]
          var wsIterationsStep1 = 0L
          while (newExternalRequestsAllowed) {
             // internal work stealing while still possible
-            internalSteals += workStealingComputeLocal(c)
+            internalSteals += workStealingComputeLocal(rootComputation)
 
             // maybe send external work stealing request
             if (requestsOnTheFly < maxRequestsOnTheFly) {
@@ -98,7 +99,7 @@ class WorkStealingSystem [S <: Subgraph]
             }
 
             // check response and external work stealing
-            externalSteals += consumeExternalWork(c)
+            externalSteals += consumeExternalWork(rootComputation)
             if (requestsOnTheFly > 0) {
                // wait for response (with timeout)
                remoteWorkQueue.synchronized {
@@ -111,12 +112,12 @@ class WorkStealingSystem [S <: Subgraph]
 
          // step 2: ensure all sent requests got responses
          var wsIterationsStep2 = 0L
-         externalSteals += consumeExternalWork(c)
+         externalSteals += consumeExternalWork(rootComputation)
          while (requestsOnTheFly > 0) {
             remoteWorkQueue.synchronized {
                remoteWorkQueue.wait(workQueueTimeoutMs)
             }
-            externalSteals += consumeExternalWork(c)
+            externalSteals += consumeExternalWork(rootComputation)
             wsIterationsStep2 += 1
          }
 
@@ -126,22 +127,22 @@ class WorkStealingSystem [S <: Subgraph]
          slaveActor ! DrainRejectedWork
          requestsOnTheFly += 1
          while (requestsOnTheFly > 0) {
-            externalSteals += consumeExternalWork(c)
+            externalSteals += consumeExternalWork(rootComputation)
             wsIterationsStep3 += 1
          }
          while (!remoteWorkQueue.isEmpty) {
-            externalSteals += consumeExternalWork(c)
+            externalSteals += consumeExternalWork(rootComputation)
             wsIterationsStep3 += 1
          }
 
          // step 4: only internal work stealing allowed (final)
-         internalSteals += workStealingComputeLocal(c)
+         internalSteals += workStealingComputeLocal(rootComputation)
 
          wsIterations += wsIterationsStep1 + wsIterationsStep2 + wsIterationsStep3
 
          logInfo(s"FinishingExecutor" +
-            s" step=${c.getStep}" +
-            s" partitionId=${c.getPartitionId}" +
+            s" step=${rootComputation.getStep}" +
+            s" partitionId=${rootComputation.getPartitionId}" +
             s" internalSteals=${internalSteals}" +
             s" externalSteals=${externalSteals}" +
             s" requestsOnTheFly=${requestsOnTheFly}" +
@@ -166,14 +167,15 @@ class WorkStealingSystem [S <: Subgraph]
 
    }
 
+
    private def workStealingComputeLocal(c: Computation[S]): Long = {
       var internalSteals = 0L
       var lastInternalSteals = 0L
       var continue = remoteWorkQueueIsEmpty
+      val computations = SparkFromScratchEngine.localComputations[S](
+         c.getExecutionEngine.getStageId)
 
       while (continue) {
-         val computations = SparkFromScratchEngine.localComputations[S](
-            c.getExecutionEngine.getStageId)
          lastInternalSteals = workStealingComputeLocalIter(c, computations)
          internalSteals += lastInternalSteals
          continue = lastInternalSteals > 0 && remoteWorkQueueIsEmpty
@@ -184,8 +186,7 @@ class WorkStealingSystem [S <: Subgraph]
 
    private def workStealingComputeLocalIter
    (c: Computation[S], computations: ObjArrayList[Computation[S]]): Long = {
-      var thisComp = c
-      var thisSubgraphEnumerator = thisComp.getSubgraphEnumerator
+      var currComp = c
       var continue = remoteWorkQueueIsEmpty
       val numComputations = computations.size()
       var internalSteals = 0L
@@ -194,17 +195,17 @@ class WorkStealingSystem [S <: Subgraph]
       // first level: root computations (fill visited array)
       var i = 0
       while (continue && i < numComputations) {
-         val thatComp = computations.getu(i)
-         if (thatComp != null) {
-            val thatSubgraphEnumerator = thatComp.getSubgraphEnumerator
-            if (thatSubgraphEnumerator.forkEnumerator(thisComp)) {
-               processCompute(thisSubgraphEnumerator, thisComp)
+         val nextComp = computations.getu(i)
+         if (nextComp != null) {
+            val subgraphEnumerator = currComp.getSubgraphEnumerator
+            if (subgraphEnumerator.forkEnumerator(currComp)) {
+               currComp.processExtensions()
                internalSteals += 1
             }
 
-            val nextCompNext = thatComp.nextComputation()
+            val nextCompNext = nextComp.nextComputation()
             if (nextCompNext != null) {
-               unvisitedComputations.add(thatComp.nextComputation())
+               unvisitedComputations.add(nextComp.nextComputation())
             }
 
          }
@@ -216,20 +217,17 @@ class WorkStealingSystem [S <: Subgraph]
       // remaining levels
       i = 0
       var numUnvisitedComputations = unvisitedComputations.size()
-      continue = continue && i < numUnvisitedComputations &&
-         remoteWorkQueueIsEmpty
       while (continue) {
-         thisComp = thisComp.nextComputation()
-         thisSubgraphEnumerator = thisComp.getSubgraphEnumerator
+         currComp = currComp.nextComputation()
          while (continue && i < numUnvisitedComputations) {
-            val thatComp = unvisitedComputations.getu(i)
-            val thatSubgraphEnumerator = thatComp.getSubgraphEnumerator
-            if (thatSubgraphEnumerator.forkEnumerator(thisComp)) {
-               processCompute(thisSubgraphEnumerator, thisComp)
+            val nextComp = unvisitedComputations.getu(i)
+            val subgraphEnumerator = currComp.getSubgraphEnumerator
+            if (subgraphEnumerator.forkEnumerator(currComp)) {
+               currComp.processExtensions()
                internalSteals += 1
             }
 
-            val nextCompNext = thatComp.nextComputation()
+            val nextCompNext = nextComp.nextComputation()
             if (nextCompNext != null) {
                unvisitedComputations.add(nextCompNext)
             }
@@ -251,7 +249,7 @@ class WorkStealingSystem [S <: Subgraph]
    (workUnit: IntArrayList, c: Computation[S]): SubgraphEnumerator[S] = {
 
       var i = 0
-      val depth = workUnit.getu(i)
+      val depth = workUnit.get(i)
       i += 1
 
       // find computation given depth
@@ -260,28 +258,28 @@ class WorkStealingSystem [S <: Subgraph]
 
       // fill subgraph according to prefix
       val subgraphEnum = currComp.getSubgraphEnumerator
-      val subgraph = subgraphEnum.getSubgraph
-      subgraph.reset()
+      //val subgraph = subgraphEnum.getSubgraph
+      val subgraph = c.getConfig().createSubgraph(
+         c.getSubgraphClass.asInstanceOf[Class[S]]
+      )
 
-      val prefixSize = workUnit.getu(i)
+      if (subgraph.getNumWords > 0) throw new RuntimeException
+
+      val prefixSize = workUnit.get(i)
       i += 1
 
       // add prefix into subgraph
       var j = 0
       while (j < prefixSize) {
-         subgraph.addWord(workUnit.getu(i))
+         subgraph.addWord(workUnit.get(i))
          j += 1
          i += 1
       }
 
       // set subgraph enumerator and rebuild its state
-      subgraphEnum.extensions.clear()
-      while (i < workUnit.size()) {
-         subgraphEnum.extensions.add(workUnit.getu(i))
-         i += 1
-      }
-      //subgraphEnum.newExtensions(workUnit.view(i, workUnit.size()))
-      subgraphEnum.newExtensions(subgraphEnum.extensions)
+      // TODO: fix this
+      //subgraphEnum.set(currComp, subgraph)
+      subgraphEnum.newExtensions(workUnit.view(i, workUnit.size()))
       subgraphEnum.rebuildState()
 
       subgraphEnum

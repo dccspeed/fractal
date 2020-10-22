@@ -110,6 +110,16 @@ public final class IntArrayListView extends IntArrayList{
    }
 
    @Override
+   public void arrayCopy(IntArrayList src, int srcPos, int destPos, int length) {
+      throw new UnsupportedOperationException();
+   }
+
+   @Override
+   public int getIdx(int idx) {
+      return idx + offset;
+   }
+
+   @Override
    public String toString() {
       return "view" + super.toString();
    }

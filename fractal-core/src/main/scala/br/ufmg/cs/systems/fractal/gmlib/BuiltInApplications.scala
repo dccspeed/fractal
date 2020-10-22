@@ -14,6 +14,10 @@ import br.ufmg.cs.systems.fractal.util.{Logging, SubgraphCallback, Utils}
 import br.ufmg.cs.systems.fractal.{FSMSF, FractalGraph, Fractoid}
 import org.apache.spark.rdd.RDD
 
+import scala.concurrent.{Await, Future}
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.Duration
+
 /**
  * Built-in algorithms with the following alternative implementations:
  *
@@ -26,6 +30,72 @@ import org.apache.spark.rdd.RDD
  * @param self fractal graph
  */
 class BuiltInApplications(self: FractalGraph) extends Logging {
+
+   /**
+    * Generated all subgraphs using the PF approach
+    * @param numEdges number of edges in the subgraphs
+    * @param callback to be applied to each partial result of this computation
+    */
+   def subgraphsMaxEdgesPF
+   (numEdges: Int, callback: Fractoid[PatternInducedSubgraph] => Unit)
+   : Unit = {
+
+      var futures = List[Future[Unit]]()
+
+      val canonicalPatternsRDD = PatternUtilsRDD.edgePatternsRDD(
+         self.fractalContext.sparkContext, numEdges)
+
+      // local iterator for better memory footprint
+      val iter = PatternUtilsRDD.localIterator(canonicalPatternsRDD)
+      while (iter.hasNext) {
+         val patternWithoutPlan = iter.next()
+         // ignore label
+         patternWithoutPlan.setVertexLabeled(false)
+
+         // naive exploration plan
+         val pattern = PatternExplorationPlan
+            .apply(patternWithoutPlan).get(0)
+         pattern.updateSymmetryBreakerVertexUnlabeled()
+
+         // callback
+         val partialResult = patternMatchingPF(pattern)
+            .explore(pattern.getNumberOfVertices - 1)
+         val future = Future(callback(partialResult))
+         futures = future :: futures
+      }
+
+      Await.result(Future.sequence(futures), Duration.Inf)
+   }
+
+   /**
+    * Generated all subgraphs using the PF approach
+    * @param numVertices number of vertices in the subgraphs
+    * @param callback to be applied to each partial result of this computation
+    */
+   def subgraphsPF
+   (numVertices: Int, callback: Fractoid[PatternInducedSubgraph] => Unit)
+   : Unit = {
+
+      val canonicalPatternsRDD = PatternUtilsRDD.vertexPatternsRDD(
+         self.fractalContext.sparkContext, numVertices)
+
+      // local iterator for better memory footprint
+      val iter = PatternUtilsRDD.localIterator(canonicalPatternsRDD)
+      while (iter.hasNext) {
+         val patternWithoutPlan = iter.next()
+
+         // ignore label
+         patternWithoutPlan.setVertexLabeled(false)
+
+         // naive exploration plan
+         val pattern = PatternExplorationPlan.apply(patternWithoutPlan).get(0)
+         pattern.updateSymmetryBreakerVertexUnlabeled()
+
+         // callback
+         val partialResult = patternMatchingPF(pattern).explore(numVertices - 1)
+         callback(partialResult)
+      }
+   }
 
    /**
     * Generated all induced subgraphs using the PFMCVC approach
@@ -381,282 +451,6 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
             cummDensities(e.getNumVertices() - 1) >= minDensity).
          explore(numSteps)
    }
-
-   /*
-   @Experimental
-   def keywordSearch(
-                       numPartitions: Int,
-                       keywords: Array[String]): Fractoid[EdgeInducedSubgraph] = {
-      import java.util.function.IntConsumer
-
-      import br.ufmg.cs.systems.fractal.util.collection._
-      import com.koloboke.collect.ObjCursor
-      import com.koloboke.collect.set.hash.HashObjSet
-      import org.apache.hadoop.io._
-
-      import scala.collection.mutable.Map
-
-      logInfo (s"KeywordSearch keywords=${keywords.mkString(",")}")
-
-      val INVERTED_INDEX = "inverted_index"
-      val PREDICATE_INDEX = "predicate_index"
-      val VALID_VERTICES = "valid_vertices"
-
-      var start = 0L
-      var elapsed = 0L
-
-      /**
-       * KeywordSearchFirstPass: construct intermediate structures from triples,
-       * i.e. from edges
-       */
-
-      start = System.currentTimeMillis()
-
-      val docIterator = (e: EdgeInducedSubgraph,
-                         c: Computation[EdgeInducedSubgraph]) => {
-         val vertices = e.getVertices()
-         val edges = e.getEdges()
-         new Iterator[String] {
-            private var index = 0
-            private var cur: ObjCursor[String] = _
-            private val curs: Array[ObjCursor[String]] = {
-               val _curs = new Array[ObjCursor[String]](
-                  vertices.size() + edges.size())
-
-               // get vertex properties
-               var i = 0
-               while (i < vertices.size()) {
-                  val prop = e.vertex[HashObjSet[String]](
-                     vertices.getu(i)).getProperty()
-                  if (prop != null) {
-                     _curs(i) = prop.cursor()
-                  }
-                  i += 1
-               }
-
-               // get edge properties
-               var j = 0
-               while (i < _curs.length) {
-                  val prop = e.edge[HashObjSet[String]](
-                     edges.getu(j)).getProperty()
-                  if (prop != null) {
-                     _curs(i) = prop.cursor()
-                  }
-                  j += 1
-                  i += 1
-               }
-
-               _curs
-            }
-
-            def hasNext(): Boolean = {
-               while (index < curs.length) {
-                  cur = curs(index)
-                  if (cur != null && cur.moveNext()) {
-                     return true
-                  }
-                  index += 1
-               }
-               false
-            }
-
-            def next(): String = {
-               cur.elem()
-            }
-         }
-      }
-
-      val idxRes = self.efractoid.
-         expand(1).
-         set ("num_partitions", numPartitions).
-         set ("input_graph_class", "br.ufmg.cs.systems.fractal.gmlib.keywordsearch.KeywordSearchGraph").
-         set ("edge_labelled", true).
-         aggregateAll [Text,InvertedIndexMap] (
-            INVERTED_INDEX,
-            (e: EdgeInducedSubgraph, c: Computation[EdgeInducedSubgraph]) => {
-               val reusableTuple = (new Text(), new InvertedIndexMap())
-               val singleEdge = e.getEdges().getu(0)
-               docIterator(e,c).filter (w => keywords.contains(w)).map { word =>
-                  reusableTuple._1.set(word)
-                  reusableTuple._2.clear()
-                  reusableTuple._2.appendDoc(singleEdge, 1)
-                  reusableTuple
-               }
-            },
-            (ii1: InvertedIndexMap, ii2: InvertedIndexMap) => {ii1.merge(ii2); ii1}
-         ).
-         aggregateAll [Text,InvertedIndexMap] (
-            PREDICATE_INDEX,
-            (e: EdgeInducedSubgraph, c: Computation[EdgeInducedSubgraph]) => {
-               val reusableTuple = (new Text(), new InvertedIndexMap())
-               val singleEdge = e.getEdges().getu(0)
-               val predicate = e.labelledEdge(singleEdge).getEdgeLabel()
-               docIterator(e,c).map { word =>
-                  reusableTuple._1.set(word)
-                  reusableTuple._2.clear()
-                  reusableTuple._2.appendDoc(predicate, 1)
-                  reusableTuple
-               }
-            },
-            (ii1: InvertedIndexMap, ii2: InvertedIndexMap) => {ii1.merge(ii2); ii1}
-         ).
-         aggregateAll [Text,IntSet] (
-            VALID_VERTICES,
-            (e: EdgeInducedSubgraph, c: Computation[EdgeInducedSubgraph]) => {
-               if (!docIterator(e,c).filter (w => keywords.contains(w)).isEmpty) {
-                  val reusableTuple = (new Text(VALID_VERTICES), new IntSet())
-                  val edgeId = e.getEdges().getu(0)
-                  val edge = e.labelledEdge(edgeId)
-                  val vertices = Iterator(edge.getSourceId(), edge.getDestinationId())
-                  vertices.map { v =>
-                     reusableTuple._2.clear()
-                     reusableTuple._2.add(v)
-                     reusableTuple
-                  }
-               } else {
-                  Iterator.empty
-               }
-            },
-            (s1: IntSet, s2: IntSet) => {s1.union(s2); s1}
-         )
-
-      // mapping from words to their respective inverted indexes
-      val wordToIdx = idxRes.
-         aggregationMap[Text,InvertedIndexMap](INVERTED_INDEX).toArray
-
-      // mapping from words to their respective predicate
-      val wordToPredicate = idxRes.
-         aggregationMap[Text,InvertedIndexMap](PREDICATE_INDEX).toArray
-
-      // valid vertices
-      val validVertexIds = idxRes.aggregationMap[Text,IntSet](
-         VALID_VERTICES)(new Text(VALID_VERTICES))
-
-      elapsed = System.currentTimeMillis() - start
-
-      logInfo (s"KeywordSearchFirstPass" +
-         s" distinctWords=${wordToPredicate.length} took ${elapsed} ms")
-
-      /**
-       * Local aggregations
-       */
-
-      start = System.currentTimeMillis()
-
-      // consumer to select only relevant edge ids
-      val validEdgeIds = new IntSet()
-      val consumerIdx = new IntConsumer {
-         def accept(e: Int): Unit = {
-            validEdgeIds.add(e)
-         }
-      }
-
-      // consumer to select only relevant edge labels
-      val validEdgeLabels = new IntSet()
-      val consumerLabel = new IntConsumer {
-         def accept(e: Int): Unit = {
-            validEdgeLabels.add(e)
-         }
-      }
-
-      var totalFreq = 0L
-      val keywordToIndex = Map.empty[String,Int]
-      val totalInvPredicate = new InvertedIndexMap()
-      val invPredicates = new Array[InvertedIndexMap](wordToPredicate.length)
-      var i = 0
-      while (i < wordToPredicate.length) {
-         val (pword, invPredicate) = wordToPredicate(i)
-         val wordStr = pword.toString()
-         if (keywords.contains(wordStr)) {
-            keywordToIndex.update (wordStr, i)
-         }
-         invPredicate.forEachDoc(consumerLabel)
-         totalInvPredicate.merge(invPredicate)
-         invPredicates(i) = invPredicate
-         totalFreq += invPredicate.getTotalFreq()
-         i += 1
-      }
-
-      val keywordIndex = new Array[Int](wordToIdx.length)
-      val totalInvIdx = new InvertedIndexMap()
-      val invIdxs = new Array[InvertedIndexMap](wordToIdx.length)
-      val invPredicates2 = new Array[InvertedIndexMap](wordToIdx.length)
-      i = 0
-      while (i < wordToIdx.length) {
-         val (word, invIdx) = wordToIdx(i)
-         val idx = keywordToIndex(word.toString())
-         keywordIndex(i) = idx
-         invPredicates2(i) = invPredicates(idx)
-         invIdx.forEachDoc(consumerIdx)
-         totalInvIdx.merge(invIdx)
-         invIdxs(i) = invIdx
-         i += 1
-      }
-
-      elapsed = System.currentTimeMillis() - start
-
-      logInfo (s"KeywordSearchLocalAggregation validEdgeIds=${validEdgeIds}" +
-         s" validVertexIds=${validVertexIds}" +
-         s" totalFreq=${totalFreq} totalInvIdx=${totalInvIdx}" +
-         s" totalInvPredicate=${totalInvPredicate}" +
-         s" took ${elapsed} ms")
-
-      /**
-       * KeywordSearchSecondPass: actual enumeration of subgraphs
-       */
-
-      start = System.currentTimeMillis()
-
-      val fc = self.fractalContext
-      val validEdgeIdsBc = fc.sparkContext.broadcast(validEdgeIds)
-      val validVertexIdsBc = fc.sparkContext.broadcast(validVertexIds)
-      val invIdxsBc = fc.sparkContext.broadcast(invIdxs)
-
-      val lastWordIsValid = (e: EdgeInducedSubgraph,
-                             c: Computation[EdgeInducedSubgraph]) => {
-         val words = e.getWords()
-         val numWords = words.size()
-         val lastWord = words.getLast()
-         val invIdxs = invIdxsBc.value
-         var valid = false
-
-         if (validEdgeIdsBc.value.contains(lastWord)) {
-            var i = 0
-            while (i < invIdxs.length) {
-               val ii = invIdxs(i)
-               if (ii.containsDoc(lastWord)) {
-                  var j = 0
-                  while (j < numWords - 1 && !ii.containsDoc(words.get(j))) {
-                     j += 1
-                  }
-                  if (j == numWords - 1) {
-                     valid = true
-                     i = invIdxs.length - 1
-                  }
-               }
-               i += 1
-            }
-         }
-
-         valid
-      }
-
-      // filtered input graph
-      var kws = self.efractoid.
-         efilter [HashObjSet[String]] (e => validEdgeIdsBc.value.contains(e.getEdgeId())).
-         set ("num_partitions", numPartitions).
-         set ("input_graph_class", "br.ufmg.cs.systems.fractal.gmlib.keywordsearch.KeywordSearchGraph").
-         set ("edge_labelled", true).
-         set ("keep_maximal", true)
-
-      for (i <- 0 until keywords.size) {
-         kws = kws.expand(1).filter(lastWordIsValid)
-      }
-
-      kws
-   }
-
-    */
 
    /**
     * Lists periodic induced subgraphs using the subgraph-first approach: visit

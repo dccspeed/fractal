@@ -3,6 +3,7 @@ package br.ufmg.cs.systems.fractal.computation
 import java.util.concurrent.atomic.AtomicInteger
 
 import br.ufmg.cs.systems.fractal.Primitive
+import br.ufmg.cs.systems.fractal.computation.vertexinduced.VertexInducedComputation
 import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.subgraph._

@@ -14,6 +14,8 @@ import com.koloboke.collect.IntCollection;
 import java.io.Externalizable;
 
 public interface Subgraph extends WritableObject, Externalizable {
+   long computeExtensionCost(IntArrayList extensionCandidates);
+
    void init(Configuration configuration);
 
    Configuration getConfig();
@@ -42,7 +44,11 @@ public interface Subgraph extends WritableObject, Externalizable {
 
    int numEdgesAdded();
 
+   int numVerticesAdded(int wordIdx);
+
    void addWord(int word);
+
+   void setWordAndTruncate(int word, int index);
 
    void removeLastWord();
 
@@ -50,20 +56,6 @@ public interface Subgraph extends WritableObject, Externalizable {
 
    void reset();
 
-   IntCollection extensions();
-
    String toOutputString();
-
-   void nextExtensionLevel();
-
-   void nextExtensionLevel(Subgraph other);
-
-   void previousExtensionLevel();
-
-   void applyTagFrom(Computation computation,
-                     AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos);
-
-   void applyTagTo(Computation computation,
-                   AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos);
 
 }

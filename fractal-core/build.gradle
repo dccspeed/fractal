@@ -55,3 +55,14 @@ dependencies {
 
     compile 'com.typesafe.akka:akka-remote_2.11:2.5.3'
 }
+
+sourceSets {
+    main {
+        scala {
+            srcDirs = ['src/main/scala', 'src/main/java']
+        }
+        java {
+            srcDirs = []
+        }
+    }
+}

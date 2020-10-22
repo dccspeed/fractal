@@ -3,6 +3,7 @@ package br.ufmg.cs.systems.fractal.gmlib.motifs
 import br.ufmg.cs.systems.fractal.FractalGraph
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplication
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternUtilsRDD}
+import br.ufmg.cs.systems.fractal.util.Logging
 import org.apache.spark.rdd.RDD
 
 class MotifsPF(numVertices: Int)
@@ -41,7 +42,9 @@ class MotifsPF(numVertices: Int)
              */
             val mappingRDD = fg.pfractoid(pattern).expand(numVertices)
                .aggregationCanonicalPatternLong(
-                  s => s.applyLabels(pattern),0L, _ => 1L, _ + _)
+                  s => {
+                     s.applyLabels(pattern)
+                  },0L, _ => 1L, _ + _)
 
             motifCountRDDs = mappingRDD :: motifCountRDDs
          }

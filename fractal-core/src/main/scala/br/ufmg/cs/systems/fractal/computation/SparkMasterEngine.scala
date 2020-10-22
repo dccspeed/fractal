@@ -95,7 +95,7 @@ trait SparkMasterEngine [S <: Subgraph]
     */
    def reportAccumulators: Unit = {
       aggAccums.toArray.sortBy(_._1).foreach { case (name, accum) =>
-         logInfo (s"FractalStep[${step}][${name}]: ${accum.value}")
+         logInfo (s"FractalStep[${step}][${name}][${accum}]: ${accum.value}")
       }
    }
 

@@ -3,7 +3,9 @@ package br.ufmg.cs.systems.fractal.computation;
 import br.ufmg.cs.systems.fractal.Primitive;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 
+import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
 
 /*
@@ -13,9 +15,13 @@ public class SamplingEnumerator<S extends Subgraph> extends SubgraphEnumerator<S
    protected double fraction;
    protected double depth;
    protected double depthProb;
+   protected IntArrayList sampledExtensions;
+   private Random rand;
 
    @Override
    public void init(Configuration config, Computation<S> computation) {
+      rand = new Random();
+      sampledExtensions = new IntArrayList();
       fraction = config.getDouble("sampling_fraction", -1.0); 
       if (fraction <= 0) {
          throw new RuntimeException("Invalid/missing sampling fraction (" +
@@ -37,25 +43,24 @@ public class SamplingEnumerator<S extends Subgraph> extends SubgraphEnumerator<S
                "sampling_depth=" + depth + ")");
       }
 
-      // this is the probability used for each depth but the first and last
+      // this is the probability used for each depth but the first
       // note that the product of the probabilities on each level must be equal
       // to *fraction*
-      depthProb = Math.pow(fraction, 1 / (depth - 2));
+      depthProb = Math.pow(fraction, 1 / (depth - 1));
    }
 
    @Override
-   public boolean hasNext() {
-      while (super.hasNext()) {
-         // distribute evenly the probabilities except for the first and last
-         // sampling depth
-         double prob = subgraph.getNumWords() > 0 ? depthProb : 1;
-         double n = ThreadLocalRandom.current().nextDouble();
-         if (n <= prob) {
-            return true;
-         } else {
-            next(); // ignore this rejected word
+   public void computeExtensions() {
+      super.computeExtensions();
+      if (getPrefix().size() == 0) return;
+
+      sampledExtensions.clear();
+      for (int i = 0; i < extensions.size(); ++i) {
+         if (rand.nextDouble() <= depthProb) {
+            sampledExtensions.add(extensions.getu(i));
          }
       }
-      return false;
+
+      newExtensions(sampledExtensions);
    }
 }

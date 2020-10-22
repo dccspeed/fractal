@@ -94,9 +94,11 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
          bootstrap(graph);
       }
 
+      //LOG.warn("ComputeExtensions2 " + this);
+
       if (cand.isEmpty() && fini.isEmpty()) {
          exts.clear();
-         set(exts);
+         newExtensions(exts);
          computation.getExecutionEngine().addValidSubgraphs(1);
          computation.lastComputation().process(subgraph);
          return;
@@ -108,7 +110,7 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
       Utils.sdifference(cand, uneighbors, 0, cand.size(), 0,
               uneighbors.size(), exts);
 
-      set(exts);
+      newExtensions(exts);
    }
 
    private void bootstrap(MainGraph graph) {
@@ -180,15 +182,18 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
    }
 
    @Override
-   public SubgraphEnumerator<S> extend() {
-      if (subgraph.getNumVertices() == 0) return super.extend();
-      MaximalCliquesEnumerator<S> nextEnumerator =
-              (MaximalCliquesEnumerator<S>) super.extend();
-      int u = subgraph.getVertices().getLast();
-      computeSets(u, nextEnumerator.cand, nextEnumerator.fini);
-      nextEnumerator.inducedGraph = inducedGraph;
+   public boolean extend() {
+      if (getPrefix().size() == 0) return super.extend();
 
-      return nextEnumerator;
+      if (super.extend()) {
+         MaximalCliquesEnumerator<S> nextEnumerator =
+                 (MaximalCliquesEnumerator<S>) computation.nextComputation().getSubgraphEnumerator();
+         int u = subgraph.getVertices().getLast();
+         computeSets(u, nextEnumerator.cand, nextEnumerator.fini);
+         nextEnumerator.inducedGraph = inducedGraph;
+         return true;
+      }
+      return false;
    }
 
    private void computeSets(int u, IntArrayList nextCand,
@@ -214,7 +219,8 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
 
    @Override
    public String toString() {
-      return cand + " " + fini + " " + exts + " " + inducedGraph;
+      return cand + " " + fini + " " + exts + " " + inducedGraph +
+              super.toString();
    }
 
    private class InducedGraphCleaner implements IntObjConsumer<IntArrayList> {

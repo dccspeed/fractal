@@ -428,9 +428,11 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
        * Work stealing {
        */
 
+      // worker actors not yet known, reply with empty response
       case StealWork if slaves == null =>
          addToOutbox(emptyResponseReusable)
 
+      // start the request tour among worker pivots
       case StealWork =>
          val numPivots = pivots.length
          val nextPivot = (localPivotIdx + 1) % numPivots
@@ -443,18 +445,24 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
 
          logDebug(s"${StealWork}: ${self} sending ${msg} to ${aRef}")
 
+      // worker actors not yet known, reply with empty response
       case req: StealWorkRequest if slaves == null =>
          val msg = StealWorkResponse(null, 0, req.seqNum, nextSeqNum)
          req.thief ! msg
 
+      // the request reached the end of the tour among pivots and there is
+      // rejected responses that can be used as response
       case req: StealWorkRequest
-         if slaves != null && req.nextPivot == req.lastPivot &&
+         if slaves != null &&
+            req.nextPivot == req.lastPivot &&
             !rejectedResponses.isEmpty =>
 
          val msg = rejectedResponses.getLast().copy(reqSeqNum = req.seqNum)
          rejectedResponses.removeLast()
          sendMsgWithRetransmission(msg, req.thief)
 
+      // the request reached the end of the tour among pivots and there is
+      // not rejected responses, try to steal local work
       case req: StealWorkRequest
          if slaves != null && req.nextPivot == req.lastPivot &&
             rejectedResponses.isEmpty =>
@@ -483,6 +491,8 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
             req.thief ! msg
          }
 
+      // the request has not yet reached the end of the tour among pivots and
+      // there is rejected response to be used
       case req: StealWorkRequest
          if slaves != null && req.nextPivot != req.lastPivot &&
             !rejectedResponses.isEmpty =>
@@ -495,6 +505,8 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
          // send response with retransmission
          sendMsgWithRetransmission(msg, req.thief)
 
+      // the request has not yet reached the end of the tour among pivots and
+      // there is no rejected response to be used, try stealing local work
       case req: StealWorkRequest
          if slaves != null && req.nextPivot != req.lastPivot &&
             rejectedResponses.isEmpty =>
@@ -525,13 +537,11 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
             logDebug(s"${req}: ${self} forwarded ${msg} to ${p}")
          }
 
+      // receive, add to outbox, and acknowledge incoming response
       case resp: StealWorkResponse =>
          val retryMsg = unackMessages.remove(resp.reqSeqNum)
          if (retryMsg != null) {
-            outbox.add(resp)
-            outbox.synchronized {
-               outbox.notify()
-            }
+            addToOutbox(resp)
 
             // stop request retransmission
             if (retryMsg._2 != null) retryMsg._2.cancel()
@@ -545,6 +555,7 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
             sender() ! msg
          }
 
+      // sent response confirmed, reject or not the response
       case ack: ResponseAck =>
          val msgRetry = unackMessages.remove(ack.seqNum)
          if (msgRetry != null) {
@@ -614,7 +625,6 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
 
       // mark as not acknowledged
       unackMessages.put(msg.seqNum, (reqRetry, cancellable))
-      //unackMessages.put(respTimeout.seqNum, (respTimeoutRetry, null))
    }
 
    private def sendMsgWithRetransmission(msg: SeqNum, dest: ActorRef): Unit = {
@@ -670,8 +680,6 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
    : Int = {
       // int array format: depth, prefixSize, prefix, words
 
-      if (!consumer.hasNext) return 0
-
       workUnit.clear()
 
       val prefix = consumer.getPrefix
@@ -683,10 +691,13 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
 
       // add words up to a maximum of *batchSize*
       var n = 0
-      while (n < batchSize && consumer.hasNext) {
-         workUnit.add(consumer.nextElem())
+      var extension = consumer.nextExtension()
+      //while (n < batchSize && consumer.hasNext) {
+      do {
+         workUnit.add(extension)
+         extension = consumer.nextExtension()
          n += 1
-      }
+      } while (n < batchSize && extension > SubgraphEnumerator.INVALID_EXTENSION)
 
       n
    }
@@ -697,8 +708,8 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
 
       if (computations == null) return -1
 
-      //var currComp = computation
-      var currComp = threadSafeComputation
+      var thisComp = threadSafeComputation
+      var thisSubgraphEnumerator = thisComp.getSubgraphEnumerator
 
       val gtagBatchLow = config.getWsBatchSizeLow()
       val gtagBatchHigh = config.getWsBatchSizeHigh()
@@ -711,20 +722,20 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
       // first level: root computations (fill visited array)
       var i = 0
       while (i < numComputations) {
-         val nextComp = computations.getu(i)
-         if (nextComp != null) {
-            val subgraphEnumerator = currComp.getSubgraphEnumerator
-            if (subgraphEnumerator.forkEnumerator(currComp)) {
+         val thatComp = computations.getu(i)
+         if (thatComp != null) {
+            val thatSubgraphEnumertor = thatComp.getSubgraphEnumerator
+            if (thatSubgraphEnumertor.forkEnumerator(thisComp)) {
                val workStealed = serializeSubgraphBatch(
-                  subgraphEnumerator, batchSize, workUnit)
+                  thisSubgraphEnumerator, batchSize, workUnit)
                if (workStealed > 0) {
                   return workStealed
                }
             }
 
-            val nextCompNext = nextComp.nextComputation()
+            val nextCompNext = thatComp.nextComputation()
             if (nextCompNext != null) {
-               unvisitedComputations.add(nextComp.nextComputation())
+               unvisitedComputations.add(nextCompNext)
             }
          }
 
@@ -736,19 +747,20 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
       var numUnvisitedComputations = unvisitedComputations.size()
       var continue = i < numUnvisitedComputations
       while (continue) {
-         currComp = currComp.nextComputation()
+         thisComp = thisComp.nextComputation()
+         thisSubgraphEnumerator = thisComp.getSubgraphEnumerator
          while (continue && i < numUnvisitedComputations) {
-            val nextComp = unvisitedComputations.getu(i)
-            val subgraphEnumerator = currComp.getSubgraphEnumerator
-            if (subgraphEnumerator.forkEnumerator(currComp)) {
+            val thatComp = unvisitedComputations.getu(i)
+            val thatSubgraphEnumerator = thatComp.getSubgraphEnumerator
+            if (thatSubgraphEnumerator.forkEnumerator(thisComp)) {
                val workStealed = serializeSubgraphBatch(
-                  subgraphEnumerator, batchSize, workUnit)
+                  thisComp.getSubgraphEnumerator, batchSize, workUnit)
                if (workStealed > 0) {
                   return workStealed
                }
             }
 
-            val nextCompNext = nextComp.nextComputation()
+            val nextCompNext = thatComp.nextComputation()
             if (nextCompNext != null) {
                unvisitedComputations.add(nextCompNext)
             }
@@ -805,6 +817,7 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
             s" stepId=${engine.getStep()}" +
             s" ${unackMessages}")
       }
+
       if (!rejectedResponses.isEmpty) {
          throw new RuntimeException(s"Rejected responses: ${unackMessages}")
       }

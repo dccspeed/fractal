@@ -90,8 +90,6 @@ case class FractalGraph
       pattern
    }
 
-   def tmpPath: String = s"${fc.tmpPath}/graph-${uuid}"
-
    def fractalContext: FractalContext = fc
 
    def this(path: String, fc: FractalContext) = {

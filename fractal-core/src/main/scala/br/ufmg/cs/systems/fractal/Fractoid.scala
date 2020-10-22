@@ -9,7 +9,7 @@ import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
 import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util._
-import org.apache.spark.SparkContext
+import org.apache.spark.{SparkContext, TaskContext}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 
@@ -125,7 +125,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
       val callback = subgraphAggregationCallback
       withNextStepId
          .withInitAggregations(c => callback.init(c))
-         .withProcessInc((s,c) => callback.apply(s,c))
+         .withProcess((s,c) => callback.apply(s,c))
          .masterEngineImmutable
          .longRDD(defaultValue, value, reduce)
          .reduce(reduce)
@@ -148,7 +148,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
          callback, _underlyingCallback)
       withNextStepId
          .withInitAggregations(c => providedCallback.init(c))
-         .withProcessInc((s,c) => providedCallback.apply(s,c))
+         .withProcess((s,c) => providedCallback.apply(s,c))
          .masterEngineImmutable
          .longRDD(defaultValue, value, reduce)
          .reduce(reduce)
@@ -191,7 +191,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
       val callback = subgraphAggregationCallback
       val objLongRDD = withNextStepId
          .withInitAggregations(c => callback.init(c))
-         .withProcessInc((s,c) => callback.apply(s,c))
+         .withProcess((s,c) => callback.apply(s,c))
          .masterEngineImmutable
          .objLongRDD[K](key, defaultValue, value, reduce)
          .foldByKey(defaultValue)(reduce)
@@ -216,7 +216,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
       val callback = subgraphAggregationCallback
       val objLongRDD = withNextStepId
          .withInitAggregations(c => callback.init(c))
-         .withProcessInc((s,c) => callback.apply(s,c))
+         .withProcess((s,c) => callback.apply(s,c))
          .masterEngineImmutable
          .objLongRDD[Pattern](key, defaultValue, value, reduce)
 
@@ -250,7 +250,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
          callback, _underlyingCallback)
       val objLongRDD = withNextStepId
          .withInitAggregations(c => providedCallback.init(c))
-         .withProcessInc((s,c) => providedCallback.apply(s,c))
+         .withProcess((s,c) => providedCallback.apply(s,c))
          .masterEngineImmutable
          .objLongRDD[Pattern](key, defaultValue, value, reduce)
          .foldByKey(defaultValue)(reduce)
@@ -279,7 +279,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
       val callback = subgraphAggregationCallback
       val objObjRDD = withNextStepId
          .withInitAggregations(c => callback.init(c))
-         .withProcessInc((s,c) => callback.apply(s,c))
+         .withProcess((s,c) => callback.apply(s,c))
          .masterEngineImmutable
          .objObjRDD[K,V](key, value, aggregate)
          .reduceByKey{case (v1,v2) => aggregate(v1, v2); v1}
@@ -312,7 +312,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
          _underlyingCallback)
       val objObjRDD = withNextStepId
          .withInitAggregations(c => providedCallback.init(c))
-         .withProcessInc((s,c) => providedCallback.apply(s,c))
+         .withProcess((s,c) => providedCallback.apply(s,c))
          .masterEngineImmutable
          .objObjRDD[K,V](key, value, aggregate)
          .reduceByKey{case (v1,v2) => aggregate(v1, v2); v1}
@@ -338,7 +338,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
       val callback = subgraphAggregationCallback
       val objObjRDD = withNextStepId
          .withInitAggregations(c => callback.init(c))
-         .withProcessInc((s,c) => callback.apply(s,c))
+         .withProcess((s,c) => callback.apply(s,c))
          .masterEngineImmutable
          .objObjRDD[Pattern,V](key, value, aggregate)
          .reduceByKey{case (v1,v2) => aggregate(v1, v2); v1}
@@ -391,8 +391,6 @@ case class Fractoid [S <: Subgraph : ClassTag]
       }
    }
 
-
-
    private def withFirstComputation: Fractoid[S] = {
       //this.copy(config = config.withNewComputation(
       //   Fractoid.createFirstComputation(pattern)))
@@ -407,7 +405,7 @@ case class Fractoid [S <: Subgraph : ClassTag]
     * @return the new fractoid
     */
    def process(callback: (S,Computation[S]) => Unit): Fractoid[S] = {
-      withProcessInc(callback)
+      withProcess(callback)
    }
 
    /**
@@ -464,36 +462,14 @@ case class Fractoid [S <: Subgraph : ClassTag]
     *
     * @return new result
     */
-   private def withProcess (process: (S,Computation[S]) => Unit): Fractoid[S] = {
+   private def withProcess (process: (S,Computation[S]) => Unit)
+   : Fractoid[S] = {
       val newComp = computationContainer.withNewFunctions (
          processOpt = Option(process))
       val result = this.copy(computationContainer = newComp)
       logInfo (s"WithProcess before: ${this} after: ${result}")
       logInfo (s"WithProcessComp before: ${computationContainer} after: ${newComp}")
       result
-   }
-
-   /**
-    * Append a body function to the process
-    *
-    * @param func function to be appended
-    *
-    * @return new result
-    */
-   private def withProcessInc (func: (S,Computation[S]) => Unit): Fractoid[S] = {
-      // get the current process function
-      val oldProcess = computationContainer.processOpt match {
-         case Some(process) => process
-         case None => (e: S, c: Computation[S]) => {}
-      }
-
-      // incremental process
-      val process = (e: S, c: Computation[S]) => {
-         oldProcess (e, c)
-         func (e, c)
-      }
-
-      withProcess(process)
    }
 
    /**

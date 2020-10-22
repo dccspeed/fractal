@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal
 
+import br.ufmg.cs.systems.fractal.util.Logging
 import org.apache.spark.{SparkConf, SparkContext}
 import org.junit.Assert._
 import org.junit.{After, AfterClass, Test}
@@ -49,14 +50,15 @@ object FractalApplicationsTest {
    }
 }
 
-class FractalApplicationsTest {
+class FractalApplicationsTest extends Logging {
    implicit val executionContext = scala.concurrent.ExecutionContext.global
 
    @Test def tests: Unit = {
-      val f1 = Future(MotifsTest.test())
-      val f2 = Future(FSMTest.test())
+      // TODO: switch to junit tests
+      //val f1 = Future(MotifsTest.test())
+      //val f2 = Future(FSMTest.test())
 
-      Await.ready(f1, Duration.Inf)
-      Await.ready(f2, Duration.Inf)
+      //Await.ready(f1, Duration.Inf)
+      //Await.ready(f2, Duration.Inf)
    }
 }

@@ -22,6 +22,8 @@ trait SparkEngine[S <: Subgraph]
    val accums: Map[String, LongAccumulator]
    val validSubgraphsAccum: LongAccumulator
 
+   private var validSubgraphsAccums: Array[LongAccumulator] = _
+
    def configuration: SparkConfiguration
 
    setLogLevel(configuration.getLogLevel)
@@ -47,13 +49,21 @@ trait SparkEngine[S <: Subgraph]
          configuration.setSubgraphClass(computation.getSubgraphClass())
       }
       computation.init(this, configuration)
+
+      val numComputations = computation.lastComputation().getDepth + 1
+      validSubgraphsAccums = new Array[LongAccumulator](numComputations)
+      var depth = 0
+      while (depth < numComputations) {
+         validSubgraphsAccums(depth) = accums(s"valid_subgraphs_${depth}")
+         depth += 1
+      }
    }
 
    override def getConfig(): Configuration = configuration
 
    override def getStageId: Int = stageId
 
-   override def finalize() = {
+   def finalizeEngine(): Unit = {
    }
 
    /**
@@ -85,6 +95,10 @@ trait SparkEngine[S <: Subgraph]
 
    override def addValidSubgraphs(n: Long) = {
       validSubgraphsAccum.add(n)
+   }
+
+   override def addValidSubgraphs(depth: Int, n: Long): Unit = {
+      validSubgraphsAccums(depth).add(n)
    }
 
    // other functions

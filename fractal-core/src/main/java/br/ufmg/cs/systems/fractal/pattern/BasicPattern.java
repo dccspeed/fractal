@@ -10,6 +10,7 @@ import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.IntCollectionAddConsumer;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
+import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntSetPool;
 import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.map.IntIntCursor;
@@ -692,11 +693,24 @@ public abstract class BasicPattern implements Pattern {
    @Override
    public String toOutputString() {
       if (getNumberOfEdges() > 0) {
-         return StringUtils.join(edges, ",");
+         StringBuffer sb = new StringBuffer("edges=[");
+         IntArrayList vlabels = IntArrayListPool.instance().createObject();
+         IntArrayList elabels = IntArrayListPool.instance().createObject();
+         for (int v = 0; v < getNumberOfVertices(); ++v) {
+            vlabels.add(-1);
+         }
+         for (int i = 0; i < getNumberOfEdges(); ++i) {
+            PatternEdge pe = edges.getu(i);
+            sb.append("(" + pe.getSrcPos() + "," + pe.getDestPos() + ")");
+            if (i != getNumberOfEdges() - 1) sb.append(",");
+            vlabels.setu(pe.getSrcPos(), pe.getSrcLabel());
+            vlabels.setu(pe.getDestPos(), pe.getDestLabel());
+            elabels.add(pe.getLabel());
+         }
+         sb.append("],vlabels=" + vlabels + ",elabels=" + elabels);
+         return sb.toString();
+         //return StringUtils.join(edges, ",");
       } else if (getNumberOfVertices() == 1) {
-         //int vertexLabel = getMainGraph().getVertex(vertices.getu(0))
-         //        .getVertexLabel();
-         //return "0(" + vertex.getVertexLabel() + ")";
          return "O(" + firstVertexLabel + ")";
       } else {
          return "";

@@ -5,6 +5,7 @@ version="SPARK-2.4.3"
 printf "Description: Script launcher for Fractal built-in applications\n\n"
 
 subgraphlisting="subgraphs_listing_sf"
+subgraphlisting="${subgraphlisting}|subgraphs_listing_pf"
 subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_sf"
 subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_pf"
 subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_pf_mcvc"
@@ -112,6 +113,15 @@ ALGOPTION for '$app':
 	;;
 
 	subgraphs_listing_sf)
+	required="inputgraph steps"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
+	;;
+
+	subgraphs_listing_pf)
 	required="inputgraph steps"
         appusage="
 

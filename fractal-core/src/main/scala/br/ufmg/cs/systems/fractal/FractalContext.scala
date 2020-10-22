@@ -32,10 +32,6 @@ class FractalContext(sc: SparkContext, logLevel: String = "info",
    setLogLevel(logLevel)
    sc.setLogLevel(logLevel.toUpperCase())
 
-   private val uuid: UUID = UUID.randomUUID
-
-   def tmpPath: String = s"${tmpDir}-${uuid}" // TODO: base dir as config
-
    def sparkContext: SparkContext = sc
 
    /**
@@ -55,10 +51,7 @@ class FractalContext(sc: SparkContext, logLevel: String = "info",
     * Stop this context, cleaning the temporary directory
     */
    def stop() = {
-      val fs = FileSystem.get (sc.hadoopConfiguration)
-      val res = fs.delete (new Path(tmpPath), true)
       ActorMessageSystem.shutdown()
       MainGraphStore.shutdown()
-      logInfo (s"Removing fractal temp directory: ${tmpPath} (exists=${res})")
    }
 }

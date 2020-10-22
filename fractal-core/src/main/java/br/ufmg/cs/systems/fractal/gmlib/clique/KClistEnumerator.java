@@ -55,27 +55,31 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
    @Override
    public void computeExtensions() {
       if (subgraph.getNumWords() > 0) {
-         set(dag.keySet());
+         newExtensions(dag.keySet());
       } else {
          super.computeExtensions();
       }
    }
 
    @Override
-   public SubgraphEnumerator<S> extend() {
-      KClistEnumerator<S> nextEnumerator = (KClistEnumerator<S>) super.extend();
-      int u = subgraph.getVertices().getLast();
+   public boolean extend() {
 
-      nextEnumerator.clearDag();
+      if (super.extend()) {
+         KClistEnumerator<S> nextEnumerator =
+                 (KClistEnumerator<S>) computation.nextComputation().getSubgraphEnumerator();
+         int u = subgraph.getVertices().getLast();
 
-      if (subgraph.getNumVertices() == 1) {
-         extendFromGraph(subgraph.getConfig().getMainGraph(), neighborhood,
-                 nextEnumerator.dag, u);
-      } else {
-         extendFromDag(dag, nextEnumerator.dag, u);
+         nextEnumerator.clearDag();
+
+         if (subgraph.getNumVertices() == 1) {
+            extendFromGraph(subgraph.getConfig().getMainGraph(), neighborhood,
+                    nextEnumerator.dag, u);
+         } else {
+            extendFromDag(dag, nextEnumerator.dag, u);
+         }
+         return true;
       }
-
-      return nextEnumerator;
+      return false;
    }
 
    /**

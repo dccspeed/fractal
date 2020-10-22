@@ -111,6 +111,8 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
          i += 1
       }
 
+      logInfo(s"Acummulators ${egAccums.toList}")
+
       // we will contruct the pipeline in this var
       var cc = originalContainer.withComputationLabel("last_step_begins")
 
@@ -196,11 +198,6 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
       logInfo (s"SparkConfiguration estimated size = " +
          s"${SparkConfiguration.serialize(config).length} bytes." +
          s" ${config}")
-      //logInfo (s"SparkConfiguration estimated size = " +
-      //   s"${SizeEstimator.estimate(config} bytes." +
-      //s" ${config}")
-      //logInfo (s"HadoopConfiguration estimated size = " +
-      //   s"${SizeEstimator.estimate(config.hadoopConf)} bytes")
 
       validSubgraphsAccum = sc.longAccumulator
       aggAccums.update("valid_subgraphs", validSubgraphsAccum)
@@ -230,7 +227,6 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
             step = _step,
             accums = _accums,
             validSubgraphsAccum = _validSubgraphsAccum,
-            //computation = computationCopy,
             computation = _computation,
             configuration = _configBc.value
          )
@@ -248,19 +244,24 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
    (_egAccum: LongAccumulator, _awAccum: LongAccumulator)
    : ProcessComputeFunc[S] = {
       new ProcessComputeFunc[S] with Logging {
-         val egAccum = _egAccum
-         val awAccum = _awAccum
          override def apply(enum: SubgraphEnumerator[S],
                             c: Computation[S]): Long = {
             val subgraph = enum.getSubgraph
             var ret = 0L
-            awAccum.add(1)
             if (c.filter(subgraph)) {
                c.process(subgraph)
-               egAccum.add(1)
+
+               if (Configuration.OPCOUNTER_ENABLED) {
+                  c.addValidSubgraphs(1)
+               }
+
                ret = 1L
             } else {
                ret = 0L
+            }
+
+            if (Configuration.OPCOUNTER_ENABLED) {
+               c.addCanonicalSubgraphs(1)
             }
 
             ret
@@ -275,23 +276,23 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
 
          new ProcessComputeFunc[S] with Logging {
 
-            val egAccum = _egAccum
-            val awAccum = _awAccum
-
             override def apply(enum: SubgraphEnumerator[S],
                                c: Computation[S]): Long = {
             var ret = 0L
-            var subgraphsGenerated = 0L
-            var addWords = 0L
-            val nextEnum = enum.extend()
-            val subgraph = nextEnum.getSubgraph
-            addWords += 1
+            val subgraph = enum.getSubgraph
             if (c.filter(subgraph)) {
-               subgraphsGenerated += 1
+
+               if (Configuration.OPCOUNTER_ENABLED) {
+                  c.addValidSubgraphs(1)
+               }
+
                ret += c.nextComputation().compute(subgraph)
             }
-            egAccum.add(subgraphsGenerated)
-            awAccum.add(addWords)
+
+            if (Configuration.OPCOUNTER_ENABLED) {
+               c.addCanonicalSubgraphs(1)
+            }
+
             ret
          }
 
@@ -302,30 +303,21 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
    def getProcessComputeFuncMiddle(_egAccum: LongAccumulator,
                                    _awAccum: LongAccumulator): ProcessComputeFunc[S] = {
       new ProcessComputeFunc[S] with Logging {
-         val egAccum = _egAccum
-         val awAccum = _awAccum
-
          override def toString = "EM"
 
          def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
             var currentSubgraph: S = iter.getSubgraph
-            var addWords = 0L
-            var subgraphsGenerated = 0L
             var ret = 0L
             val nextComp = c.nextComputation()
 
-            while (iter.hasNext) {
-               val nextEnum = iter.extend()
-               currentSubgraph = nextEnum.getSubgraph()
-               addWords += 1
-               subgraphsGenerated += 1
-               currentSubgraph.nextExtensionLevel()
-               ret += nextComp.compute(currentSubgraph)
-               currentSubgraph.previousExtensionLevel()
-            }
+            while (iter.extend()) {
+               if (Configuration.OPCOUNTER_ENABLED) {
+                  c.addCanonicalSubgraphs(1)
+                  c.addValidSubgraphs(1)
+               }
 
-            awAccum.add(addWords)
-            egAccum.add(subgraphsGenerated)
+               ret += nextComp.compute(currentSubgraph)
+            }
 
             ret
          }
@@ -336,23 +328,12 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
                              _awAccum: LongAccumulator): ProcessComputeFunc[S] = {
       new ProcessComputeFunc[S] with Logging {
 
-         val egAccum = _egAccum
-         val awAccum = _awAccum
-
          var workStealingSys: WorkStealingSystem[S] = _
 
          def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
             val config = c.getConfig()
             val execEngine = c.getExecutionEngine().
                asInstanceOf[SparkFromScratchEngine[S]]
-
-            //var currComp = c.nextComputation()
-            //while (currComp != null) {
-            //   currComp.setExecutionEngine(execEngine)
-            //   currComp.init(config)
-            //   currComp.initAggregations(config)
-            //   currComp = currComp.nextComputation
-            //}
 
             var start = System.currentTimeMillis
             val ret = processCompute(iter, c)
@@ -386,23 +367,28 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
          private def processCompute(iter: SubgraphEnumerator[S],
                                     c: Computation[S]): Long = {
             var currentSubgraph: S = iter.getSubgraph
-            var addWords = 0L
-            var subgraphsGenerated = 0L
             var ret = 0L
             val nextComp = c.nextComputation()
 
-            while (iter.hasNext) {
-               val nextEnum = iter.extend()
-               currentSubgraph = nextEnum.getSubgraph()
-               addWords += 1
-               subgraphsGenerated += 1
-               currentSubgraph.nextExtensionLevel()
-               ret += nextComp.compute(currentSubgraph)
-               currentSubgraph.previousExtensionLevel()
-            }
+            //while (iter.hasNext) {
+            //   iter.extend()
 
-            awAccum.add(addWords)
-            egAccum.add(subgraphsGenerated)
+            //   if (Configuration.OPCOUNTER_ENABLED) {
+            //      c.addCanonicalSubgraphs(1)
+            //      c.addValidSubgraphs(1)
+            //   }
+
+            //   ret += nextComp.compute(currentSubgraph)
+            //}
+
+            while (iter.extend()) {
+               if (Configuration.OPCOUNTER_ENABLED) {
+                  c.addCanonicalSubgraphs(1)
+                  c.addValidSubgraphs(1)
+               }
+
+               ret += nextComp.compute(currentSubgraph)
+            }
 
             ret
          }
@@ -412,10 +398,6 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
    def getProcessComputeFuncFirstLast(_egAccum: LongAccumulator,
                              _awAccum: LongAccumulator): ProcessComputeFunc[S] = {
       new ProcessComputeFunc[S] with Logging {
-         val egAccum = _egAccum
-
-         val awAccum = _awAccum
-
          var workStealingSys: WorkStealingSystem[S] = _
 
          val lastStepConsumer: LastStepConsumer[S] = new LastStepConsumer[S]
@@ -456,16 +438,23 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
 
          private def processCompute(iter: SubgraphEnumerator[S],
                                     c: Computation[S]): Long = {
-            var addWords = 0L
-            var subgraphsGenerated = 0L
-            val wordIds = iter.getWordIds()
-            lastStepConsumer.set(iter.getSubgraph(), c)
-            wordIds.forEach(lastStepConsumer)
-            addWords += lastStepConsumer.addWords
-            subgraphsGenerated += lastStepConsumer.subgraphsGenerated
-            awAccum.add(addWords)
-            egAccum.add(subgraphsGenerated)
-            subgraphsGenerated
+
+            val subgraph = iter.getSubgraph
+            val extensions = iter.getExtensions
+            val numExtensions = extensions.size()
+            var i = 0
+            while (i < numExtensions) {
+               subgraph.addWord(extensions.getu(i))
+               c.process(subgraph)
+               subgraph.removeLastWord()
+               i += 1
+            }
+
+            if (Configuration.OPCOUNTER_ENABLED) {
+               c.addValidSubgraphs(numExtensions)
+               c.addCanonicalSubgraphs(numExtensions)
+            }
+            0
          }
       }
    }
@@ -473,25 +462,28 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
    def getProcessComputeFuncLast(_egAccum: LongAccumulator,
                                  _awAccum: LongAccumulator): ProcessComputeFunc[S] = {
       new ProcessComputeFunc[S] with Logging {
-         val egAccum = _egAccum
-
-         val awAccum = _awAccum
-
          val lastStepConsumer: LastStepConsumer[S] = new LastStepConsumer[S]
 
          override def toString = "EL"
 
          def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
-            var addWords = 0L
-            var subgraphsGenerated = 0L
-            val wordIds = iter.getWordIds()
-            lastStepConsumer.set(iter.getSubgraph(), c)
-            wordIds.forEach(lastStepConsumer)
-            addWords += lastStepConsumer.addWords
-            subgraphsGenerated += lastStepConsumer.subgraphsGenerated
-            awAccum.add(addWords)
-            egAccum.add(subgraphsGenerated)
-            subgraphsGenerated
+            val subgraph = iter.getSubgraph
+            val extensions = iter.getExtensions
+            val numExtensions = extensions.size()
+            var i = 0
+            while (i < numExtensions) {
+               subgraph.addWord(extensions.getu(i))
+               c.process(subgraph)
+               subgraph.removeLastWord()
+               i += 1
+            }
+
+            if (Configuration.OPCOUNTER_ENABLED) {
+               c.addValidSubgraphs(numExtensions)
+               c.addCanonicalSubgraphs(numExtensions)
+            }
+
+            0
          }
       }
    }
@@ -501,21 +493,15 @@ private class LastStepConsumer[S <: Subgraph] extends IntConsumer with
    Serializable {
    var subgraph: S = _
    var computation: Computation[S] = _
-   var addWords: Long = _
-   var subgraphsGenerated: Long = _
 
    def set(subgraph: S, computation: Computation[S]): LastStepConsumer[S] = {
       this.subgraph = subgraph
       this.computation = computation
-      this.addWords = 0L
-      this.subgraphsGenerated = 0L
       this
    }
 
    override def accept(w: Int): Unit = {
-      addWords += 1
       subgraph.addWord(w)
-      subgraphsGenerated += 1
       computation.process(subgraph)
       subgraph.removeLastWord()
    }

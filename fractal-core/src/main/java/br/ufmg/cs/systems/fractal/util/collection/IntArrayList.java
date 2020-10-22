@@ -203,11 +203,22 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
       return Arrays.binarySearch(backingArray, from, size, value);
    }
 
-   public void transferFrom(IntArrayList src, int srcPos, int destPos, int length) {
+   public void arrayCopy(IntArrayList src, int srcPos, int destPos, int length) {
       int finalSize = destPos + length;
       ensureCanAddNElements(finalSize);
-      System.arraycopy(src.backingArray, srcPos, backingArray, destPos, length);
+      System.arraycopy(src.backingArray, src.getIdx(srcPos),
+              backingArray, destPos, length);
       numElements = finalSize;
+   }
+
+   public void setFrom(IntCollection collection) {
+      numElements = collection.size();
+      ensureCapacity(numElements);
+      collection.toArray(backingArray);
+   }
+
+   public int getIdx(int idx) {
+      return idx;
    }
 
    @Override
@@ -572,8 +583,17 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
       setu(index, newValue);
    }
 
+   public void increment(int index, int n) {
+      backingArray[index]++;
+   }
+
    public void setu(int index, int newValue) {
       backingArray[index] = newValue;
+   }
+
+   public void setAndTruncate(int index, int newValue) {
+      backingArray[index] = newValue;
+      numElements = index + 1;
    }
 
    public void incUnchecked(int index) {
@@ -589,7 +609,7 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
    }
 
    public void sort() {
-      Arrays.parallelSort(backingArray, 0, numElements);
+      Arrays.sort(backingArray, 0, numElements);
    }
 
    public boolean ensureCapacity(int targetCapacity) {

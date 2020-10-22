@@ -1,5 +1,6 @@
-package br.ufmg.cs.systems.fractal.computation;
+package br.ufmg.cs.systems.fractal.computation.vertexinduced;
 
+import br.ufmg.cs.systems.fractal.computation.BasicComputation;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
 

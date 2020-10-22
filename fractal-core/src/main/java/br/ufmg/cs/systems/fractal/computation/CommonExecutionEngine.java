@@ -24,6 +24,8 @@ public interface CommonExecutionEngine<S extends Subgraph> {
 
     void addValidSubgraphs(long n);
 
+    void addValidSubgraphs(int depth, long n);
+
     Primitive[] primitives();
 
     Configuration getConfig();

@@ -1,16 +1,10 @@
 package br.ufmg.cs.systems.fractal.conf;
 
-import br.ufmg.cs.systems.fractal.aggregation.AggregationStorage;
-import br.ufmg.cs.systems.fractal.aggregation.AggregationStorageMetadata;
-import br.ufmg.cs.systems.fractal.aggregation.EndAggregationFunction;
-import br.ufmg.cs.systems.fractal.aggregation.reductions.ReductionFunction;
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.computation.MasterComputation;
 import br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.graph.MainGraphStore;
-import br.ufmg.cs.systems.fractal.optimization.OptimizationSet;
-import br.ufmg.cs.systems.fractal.optimization.OptimizationSetDescriptor;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.pattern.VICPattern;
 import br.ufmg.cs.systems.fractal.subgraph.EdgeInducedSubgraph;
@@ -19,7 +13,6 @@ import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
 import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
@@ -28,9 +21,6 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.file.Paths;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Configuration implements Serializable {
@@ -74,9 +64,8 @@ public class Configuration implements Serializable {
     public static final String CONF_OUTPUT_ACTIVE = "fractal.output.active";
     public static final boolean CONF_OUTPUT_ACTIVE_DEFAULT = true;
     public static final String CONF_OUTPUT_FORMAT = "fractal.output.format";
-    public static final String CONF_OUTPUT_FORMAT_DEFAULT = "plain_text";
 
-    public static final String INFO_PERIOD = "fractal.info.period";
+   public static final String INFO_PERIOD = "fractal.info.period";
     public static final long INFO_PERIOD_DEFAULT = 60000;
 
     public static final String CONF_COMPUTATION_CLASS = "fractal.computation.class";
@@ -100,10 +89,7 @@ public class Configuration implements Serializable {
     public static final String CONF_INCREMENTAL_AGGREGATION = "fractal.aggregation.incremental";
     public static final boolean CONF_INCREMENTAL_AGGREGATION_DEFAULT = false;
 
-    public static final String CONF_AGGREGATION_STORAGE_CLASS = "fractal.aggregation.storage.class";
-    public static final String CONF_AGGREGATION_STORAGE_CLASS_DEFAULT = "br.ufmg.cs.systems.fractal.aggregation.AggregationStorage";
-
-    // work stealing {{
+   // work stealing {{
     public static final String CONF_WS_EXTERNAL_BATCHSIZE_LOW = "fractal.ws.external.batchsize.low";
     public static final int CONF_WS_EXTERNAL_BATCHSIZE_LOW_DEFAULT = 1;
 
@@ -127,9 +113,7 @@ public class Configuration implements Serializable {
    protected transient long infoPeriod;
 
     private transient Class<? extends MainGraph> mainGraphClass;
-    private transient Class<? extends OptimizationSetDescriptor>
-       optimizationSetDescriptorClass;
-    private transient Class<? extends Pattern> patternClass;
+   private transient Class<? extends Pattern> patternClass;
    private transient Class<? extends Computation> computationClass;
     private transient Class<? extends MasterComputation> masterComputationClass;
     private transient Class<? extends Subgraph> subgraphClass;
@@ -137,9 +121,7 @@ public class Configuration implements Serializable {
 
     private transient String outputPath;
 
-    private transient Map<String, AggregationStorageMetadata>
-       aggregationsMetadata;
-    protected transient MainGraph mainGraph;
+   protected transient MainGraph mainGraph;
     protected int mainGraphId = -1;
     private transient boolean isGraphEdgeLabelled;
     protected transient boolean initialized = false;
@@ -189,11 +171,6 @@ public class Configuration implements Serializable {
         isGraphMulti = getBoolean(CONF_MAINGRAPH_MULTIGRAPH,
               CONF_MAINGRAPH_MULTIGRAPH_DEFAULT);
 
-        optimizationSetDescriptorClass =
-           (Class<? extends OptimizationSetDescriptor>) getClass(
-                 CONF_OPTIMIZATIONSETDESCRIPTOR_CLASS,
-                 CONF_OPTIMIZATIONSETDESCRIPTOR_CLASS_DEFAULT);
-
         patternClass = (Class<? extends Pattern>) getClass(CONF_PATTERN_CLASS,
               CONF_PATTERN_CLASS_DEFAULT);
 
@@ -213,22 +190,11 @@ public class Configuration implements Serializable {
            getClass(CONF_MASTER_COMPUTATION_CLASS,
                  CONF_MASTER_COMPUTATION_CLASS_DEFAULT);
 
-        aggregationsMetadata = new HashMap<>();
-
         outputPath = getString(CONF_OUTPUT_PATH, CONF_OUTPUT_PATH_DEFAULT + "_"
               + computationClass.getName());
 
         Computation computation = createComputation();
         computation.initAggregations(this);
-
-        OptimizationSetDescriptor optimizationSetDescriptor =
-           ReflectionUtils.newInstance(optimizationSetDescriptorClass);
-        OptimizationSet optimizationSet =
-           optimizationSetDescriptor.describe(this);
-
-        LOG.info("Active optimizations: " + optimizationSet);
-
-        optimizationSet.applyStartup();
 
         if (!isMainGraphRead()) {
             // Load graph immediately (try to make it so that everyone loads the
@@ -239,7 +205,6 @@ public class Configuration implements Serializable {
             readMainGraph();
         }
 
-        optimizationSet.applyAfterGraphLoad();
         initialized = true;
         LOG.info("Configuration initialized");
     }
@@ -486,51 +451,11 @@ public class Configuration implements Serializable {
         return getBoolean(CONF_OUTPUT_ACTIVE, CONF_OUTPUT_ACTIVE_DEFAULT);
     }
 
-    public Map<String, AggregationStorageMetadata> getAggregationsMetadata() {
-        return Collections.unmodifiableMap(aggregationsMetadata);
-    }
-
-    public void setAggregationsMetadata(
-          Map<String,AggregationStorageMetadata> aggregationsMetadata) {
-       this.aggregationsMetadata = aggregationsMetadata;
-    }
-
-    public <K extends Writable, V extends Writable>
-    void registerAggregation(String name,
-          Class<? extends AggregationStorage> aggStorageClass,
-          Class<K> keyClass, Class<V> valueClass,
-          boolean persistent, ReductionFunction<V> reductionFunction,
-          EndAggregationFunction<K, V> endAggregationFunction, boolean isIncremental) {
-       if (aggregationsMetadata.containsKey(name)) {
-          return;
-       }
-
-       AggregationStorageMetadata<K, V> aggregationMetadata =
-          new AggregationStorageMetadata<>(aggStorageClass,
-                keyClass, valueClass, persistent, reductionFunction,
-                endAggregationFunction, isIncremental);
-
-       aggregationsMetadata.put(name, aggregationMetadata);
-    }
-
-    public <K extends Writable, V extends Writable>
-    AggregationStorageMetadata<K, V> getAggregationMetadata(String name) {
-        AggregationStorageMetadata<K,V> metadata =
-           (AggregationStorageMetadata<K, V>) aggregationsMetadata.get(name);
-        return metadata;
-    }
-
-    public <O extends Subgraph> Computation<O> createComputation() {
+   public <O extends Subgraph> Computation<O> createComputation() {
         return ReflectionUtils.newInstance(computationClass);
     }
-    
-    public <K extends Writable, V extends Writable>
-    AggregationStorage<K,V> createAggregationStorage(String name) {
-        return ReflectionUtils.newInstance (
-              getAggregationMetadata(name).getAggregationStorageClass());
-    }
 
-    public String getOutputPath() {
+   public String getOutputPath() {
         return outputPath;
     }
 
@@ -538,11 +463,7 @@ public class Configuration implements Serializable {
         this.outputPath = outputPath;
     }
 
-    public String getOutputFormat() {
-       return getString(CONF_OUTPUT_FORMAT, CONF_OUTPUT_FORMAT_DEFAULT);
-    }
-
-    public MasterComputation createMasterComputation() {
+   public MasterComputation createMasterComputation() {
         return ReflectionUtils.newInstance(masterComputationClass);
     }
 
@@ -554,13 +475,7 @@ public class Configuration implements Serializable {
         return isGraphEdgeLabelled;
     }
 
-    public Class<? extends AggregationStorage> getAggregationStorageClass() {
-        return (Class<? extends AggregationStorage>) getClass(
-              CONF_AGGREGATION_STORAGE_CLASS,
-              CONF_AGGREGATION_STORAGE_CLASS_DEFAULT);
-    }
-
-    public void setMasterComputationClass(
+   public void setMasterComputationClass(
           Class<? extends MasterComputation> masterComputationClass) {
        this.masterComputationClass = masterComputationClass;
     }
@@ -570,24 +485,7 @@ public class Configuration implements Serializable {
        this.computationClass = computationClass;
     }
 
-    public void setOptimizationSetDescriptorClass(
-          Class<? extends OptimizationSetDescriptor> optimizationSetDescriptorClass) {
-       this.optimizationSetDescriptorClass = optimizationSetDescriptorClass;
-    }
-
-    public OptimizationSet getOptimizationSet() {
-       OptimizationSetDescriptor optimizationSetDescriptor =
-          ReflectionUtils.newInstance(optimizationSetDescriptorClass);
-       OptimizationSet optimizationSet =
-          optimizationSetDescriptor.describe(this);
-       return optimizationSet;
-    }
-
-    public String getCommStrategy() {
-       return getString (CONF_COMM_STRATEGY, CONF_COMM_STRATEGY_DEFAULT);
-    }
-
-    public String getMasterHostname() {
+   public String getMasterHostname() {
        return getString(CONF_MASTER_HOSTNAME, CONF_MASTER_HOSTNAME_DEFAULT);
     }
 

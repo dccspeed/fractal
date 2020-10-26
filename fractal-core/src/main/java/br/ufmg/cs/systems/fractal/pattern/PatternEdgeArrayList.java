@@ -1,10 +1,10 @@
 package br.ufmg.cs.systems.fractal.pattern;
 
 import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgeArrayListPool;
-import br.ufmg.cs.systems.fractal.util.WritableObjArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.ThreadUnsafePool;
 
-public class PatternEdgeArrayList extends WritableObjArrayList<PatternEdge> implements Comparable<PatternEdgeArrayList> {
+public class PatternEdgeArrayList extends ObjArrayList<PatternEdge> implements Comparable<PatternEdgeArrayList> {
    private boolean areEdgesLabelled;
    private ThreadUnsafePool<PatternEdge> patternEdgePool;
 
@@ -18,12 +18,10 @@ public class PatternEdgeArrayList extends WritableObjArrayList<PatternEdge> impl
       this.patternEdgePool = patternEdgePool;
    }
 
-   @Override
    protected PatternEdge createObject() {
       return patternEdgePool.createObject();
    }
 
-   @Override
    public void reclaim() {
       PatternEdgeArrayListPool.instance(areEdgesLabelled).reclaimObject(this);
    }

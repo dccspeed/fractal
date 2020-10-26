@@ -1,12 +1,11 @@
 package br.ufmg.cs.systems.fractal.util;
 
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import org.apache.hadoop.io.Writable;
 
 import java.io.*;
 import java.util.function.IntPredicate;
 
-public class EdgePredicate implements IntPredicate, Writable, Externalizable {
+public class EdgePredicate implements IntPredicate, Externalizable {
    private int edgeLabel;
    private MainGraph graph;
 
@@ -23,12 +22,10 @@ public class EdgePredicate implements IntPredicate, Writable, Externalizable {
       return graph.edgeLabel(e) == edgeLabel;
    }
 
-   @Override
    public void write(DataOutput out) throws IOException {
       out.writeInt(edgeLabel);
    }
 
-   @Override
    public void readFields(DataInput in) throws IOException {
       edgeLabel = in.readInt();
    }

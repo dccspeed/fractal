@@ -963,13 +963,12 @@ public abstract class BasicPattern implements Pattern {
       readFields(objInput);
    }
 
-   @Override
    public void write(DataOutput dataOutput) throws IOException {
       dataOutput.writeBoolean(induced);
       dataOutput.writeBoolean(vertexLabeled);
       dataOutput.writeBoolean(edgeLabeled);
-      //dataOutput.writeInt(configurationId);
-      edges.write(dataOutput);
+      dataOutput.writeInt(edges.size());
+      for (int i = 0; i < edges.size(); ++i) edges.getu(i).write(dataOutput);
       vertices.write(dataOutput);
       dataOutput.writeInt(firstVertexLabel);
 
@@ -1003,7 +1002,6 @@ public abstract class BasicPattern implements Pattern {
 
    }
 
-   @Override
    public void readFields(DataInput dataInput) throws IOException {
       reset();
 
@@ -1025,7 +1023,12 @@ public abstract class BasicPattern implements Pattern {
          edges = createPatternEdgeArrayList(edgeLabeled);
       }
 
-      edges.readFields(dataInput);
+      int numEdges = dataInput.readInt();
+      for (int i = 0; i < numEdges; ++i) {
+         PatternEdge patternEdge = edges.createObject();
+         patternEdge.readFields(dataInput);
+         edges.add(patternEdge);
+      }
       vertices.readFields(dataInput);
       firstVertexLabel = dataInput.readInt();
 

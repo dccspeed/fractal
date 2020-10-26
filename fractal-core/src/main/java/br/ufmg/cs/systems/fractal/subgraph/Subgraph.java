@@ -5,7 +5,6 @@ import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.LabelledEdge;
 import br.ufmg.cs.systems.fractal.graph.Vertex;
-import br.ufmg.cs.systems.fractal.misc.WritableObject;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
@@ -13,7 +12,7 @@ import com.koloboke.collect.IntCollection;
 
 import java.io.Externalizable;
 
-public interface Subgraph extends WritableObject, Externalizable {
+public interface Subgraph extends Externalizable {
    long computeExtensionCost(IntArrayList extensionCandidates);
 
    void init(Configuration configuration);

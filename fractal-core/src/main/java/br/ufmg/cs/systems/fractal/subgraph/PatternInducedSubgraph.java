@@ -366,7 +366,6 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       readFields(objInput);
    }
 
-   @Override
    public void readFields(DataInput in) throws IOException {
       reset();
 

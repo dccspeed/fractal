@@ -33,7 +33,6 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
       readFields(objInput);
    }
 
-   @Override
    public void readFields(DataInput in) throws IOException {
       reset();
 

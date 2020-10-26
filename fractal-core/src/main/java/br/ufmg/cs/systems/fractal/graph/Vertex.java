@@ -1,12 +1,10 @@
 package br.ufmg.cs.systems.fractal.graph;
 
-import org.apache.hadoop.io.Writable;
-
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
-public class Vertex<V> implements Writable, java.io.Serializable {
+public class Vertex<V> implements java.io.Serializable {
 
    private int vertexOriginalId = -1;
 
@@ -53,13 +51,11 @@ public class Vertex<V> implements Writable, java.io.Serializable {
        return property;
     }
 
-    @Override
     public void write(DataOutput dataOutput) throws IOException {
         dataOutput.writeInt(this.vertexId);
         dataOutput.writeInt(this.vertexLabel);
     }
 
-    @Override
     public void readFields(DataInput dataInput) throws IOException {
         this.vertexId = dataInput.readInt();
         this.vertexLabel = dataInput.readInt();

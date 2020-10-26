@@ -150,7 +150,6 @@ public abstract class BasicSubgraph implements Subgraph {
       write(objOutput);
    }
 
-   @Override
    public void write(DataOutput out) throws IOException {
       out.writeInt(configuration.getId());
       getWords().write(out);

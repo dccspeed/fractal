@@ -1,12 +1,10 @@
 package br.ufmg.cs.systems.fractal.util;
 
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
-import org.apache.hadoop.io.Writable;
 
 import java.io.*;
 
-public class EdgePredicates extends ObjArrayList<EdgePredicate> implements Externalizable, Writable {
-   @Override
+public class EdgePredicates extends ObjArrayList<EdgePredicate> implements Externalizable {
    public void write(DataOutput out) throws IOException {
       out.writeInt(size());
       for (int i = 0; i < size(); ++i) {
@@ -14,7 +12,6 @@ public class EdgePredicates extends ObjArrayList<EdgePredicate> implements Exter
       }
    }
 
-   @Override
    public void readFields(DataInput in) throws IOException {
       int size = in.readInt();
       for (int i = 0; i < size; ++i) {

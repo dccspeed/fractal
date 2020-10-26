@@ -1,6 +1,5 @@
 package br.ufmg.cs.systems.fractal.gmlib
 
-import br.ufmg.cs.systems.fractal.annotation.Experimental
 import br.ufmg.cs.systems.fractal.computation.Computation
 import br.ufmg.cs.systems.fractal.gmlib.fsm.{FSMPF, FSMPFMCVC, FSMSF, MinImageSupport}
 import br.ufmg.cs.systems.fractal.gmlib.motifs.{MotifsPF, MotifsPFMCVC, MotifsSF}

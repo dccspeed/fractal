@@ -1,12 +1,10 @@
 package br.ufmg.cs.systems.fractal.graph;
 
-import org.apache.hadoop.io.Writable;
-
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
-public class Edge<E> implements Writable, java.io.Serializable {
+public class Edge<E> implements java.io.Serializable {
     public static final int DEFAULT_EDGE_ID = -1;
 
     private int edgeId;
@@ -56,14 +54,12 @@ public class Edge<E> implements Writable, java.io.Serializable {
        return true;
     }
 
-    @Override
     public void write(DataOutput dataOutput) throws IOException {
         dataOutput.writeInt(this.edgeId);
         dataOutput.writeInt(this.sourceVertexId);
         dataOutput.writeInt(this.destinationVertexId);
     }
 
-    @Override
     public void readFields(DataInput dataInput) throws IOException {
         this.edgeId = dataInput.readInt();
         this.sourceVertexId = dataInput.readInt();

@@ -6,7 +6,6 @@ import br.ufmg.cs.systems.fractal.Primitive
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.Logging
-import org.apache.hadoop.io.LongWritable
 import org.apache.spark.TaskContext
 import org.apache.spark.util.LongAccumulator
 
@@ -81,16 +80,6 @@ trait SparkEngine[S <: Subgraph]
       accums.map { case (name, accum) =>
          s"${name}:${accum.value}"
       }.mkString(",")
-   }
-
-   override def aggregate(name: String, value: LongWritable) = {
-      aggregate(name, value.get)
-   }
-
-   override def aggregate(name: String, value: Long) = {
-      if (accums.contains(name)) {
-         accums(name).add(value)
-      }
    }
 
    override def addValidSubgraphs(n: Long) = {

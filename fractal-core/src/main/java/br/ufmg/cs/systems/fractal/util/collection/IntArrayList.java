@@ -5,7 +5,6 @@ import br.ufmg.cs.systems.fractal.util.pool.IntArrayListViewPool;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.IntIterator;
-import org.apache.hadoop.io.Writable;
 
 import javax.annotation.Nonnull;
 import java.io.*;
@@ -15,7 +14,7 @@ import java.util.function.IntConsumer;
 import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 
-public class IntArrayList implements ReclaimableIntCollection, Writable, Externalizable {
+public class IntArrayList implements ReclaimableIntCollection, Externalizable {
    private static final int INITIAL_SIZE = 16;
 
    protected int[] backingArray;
@@ -221,7 +220,6 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
       return idx;
    }
 
-   @Override
    public void write(DataOutput dataOutput) throws IOException {
       dataOutput.writeInt(numElements);
 
@@ -235,7 +233,6 @@ public class IntArrayList implements ReclaimableIntCollection, Writable, Externa
       write (objOutput);
    }
 
-   @Override
    public void readFields(DataInput dataInput) throws IOException {
       clear();
 

@@ -3,7 +3,6 @@ package br.ufmg.cs.systems.fractal.apps
 import br.ufmg.cs.systems.fractal._
 import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.util.Logging
-import org.apache.hadoop.io.LongWritable
 import org.apache.spark.{SparkConf, SparkContext}
 
 object MyMotifsApp extends Logging {

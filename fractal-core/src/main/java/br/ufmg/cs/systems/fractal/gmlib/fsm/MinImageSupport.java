@@ -1,6 +1,5 @@
 package br.ufmg.cs.systems.fractal.gmlib.fsm;
 
-import br.ufmg.cs.systems.fractal.aggregation.PatternAggregationAwareValue;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.pattern.VertexPositionEquivalences;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
@@ -14,13 +13,12 @@ import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.set.IntSet;
 import com.koloboke.collect.set.hash.HashIntSet;
 import com.koloboke.collect.set.hash.HashIntSets;
-import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
 
 import java.io.*;
 import java.util.Arrays;
 
-public class MinImageSupport implements Writable, Externalizable, PatternAggregationAwareValue {
+public class MinImageSupport implements Externalizable {
    private static final Logger LOG = Logger.getLogger(MinImageSupport.class);
    private static final ThreadLocal<ClearSetConsumer> clearSetConsumer =
            ThreadLocal.withInitial(ClearSetConsumer::new);
@@ -165,7 +163,6 @@ public class MinImageSupport implements Writable, Externalizable, PatternAggrega
       write (objOutput);
    }
 
-   @Override
    public void write(DataOutput dataOutput) throws IOException {
       if (setFromSubgraph) {
          convertFromSubgraphToNormal();
@@ -205,7 +202,6 @@ public class MinImageSupport implements Writable, Externalizable, PatternAggrega
       readFields (objInput);
    }
 
-   @Override
    public void readFields(DataInput dataInput) throws IOException {
       this.clear();
 
@@ -400,7 +396,6 @@ public class MinImageSupport implements Writable, Externalizable, PatternAggrega
       return numberOfDomains;
    }
 
-   @Override
    public void handleConversionFromQuickToCanonical(Pattern quickPattern, Pattern canonicalPattern) {
       if (hasEnoughSupport()) {
          return;

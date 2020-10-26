@@ -210,7 +210,6 @@ public class VertexInducedSubgraph extends BasicSubgraph {
       readFields(objInput);
    }
 
-   @Override
    public void readFields(DataInput in) throws IOException {
       reset();
       vertices.readFields(in);

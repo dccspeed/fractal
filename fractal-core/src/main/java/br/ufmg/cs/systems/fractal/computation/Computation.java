@@ -1,13 +1,11 @@
 package br.ufmg.cs.systems.fractal.computation;
 
 import br.ufmg.cs.systems.fractal.Primitive;
-import br.ufmg.cs.systems.fractal.aggregation.AggregationStorage;
 import br.ufmg.cs.systems.fractal.aggregation.SubgraphAggregation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
-import org.apache.hadoop.io.Writable;
 
 import java.io.Serializable;
 

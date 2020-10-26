@@ -3,13 +3,12 @@ package br.ufmg.cs.systems.fractal.pattern;
 import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.graph.Vertex;
-import org.apache.hadoop.io.Writable;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
-public class PatternEdge implements Comparable<PatternEdge>, Writable {
+public class PatternEdge implements Comparable<PatternEdge> {
 
    /// protected MainGraph mainGraph;
    private int srcPos;
@@ -147,7 +146,6 @@ public class PatternEdge implements Comparable<PatternEdge>, Writable {
       return ("(" + srcPos + "," + srcLabel + "-" + destPos + "," + destLabel + ")");
    }
 
-   @Override
    public void write(DataOutput out) throws IOException {
       out.writeInt(this.srcPos);
       out.writeInt(this.srcLabel);
@@ -155,7 +153,6 @@ public class PatternEdge implements Comparable<PatternEdge>, Writable {
       out.writeInt(this.destLabel);
    }
 
-   @Override
    public void readFields(DataInput in) throws IOException {
       this.srcPos = in.readInt();
       this.srcLabel = in.readInt();

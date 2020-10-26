@@ -1,7 +1,5 @@
 package br.ufmg.cs.systems.fractal.computation;
 
-import br.ufmg.cs.systems.fractal.aggregation.AggregationStorage;
-import org.apache.hadoop.io.Writable;
 
 public class MasterComputation {
     private CommonMasterExecutionEngine executionEngine;

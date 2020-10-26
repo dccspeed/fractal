@@ -5,11 +5,10 @@ import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import com.koloboke.collect.map.IntIntMap;
-import org.apache.hadoop.io.Writable;
 
 import java.io.Externalizable;
 
-public interface Pattern extends Writable, Externalizable {
+public interface Pattern extends Externalizable {
     Pattern copy();
 
    int getFirstVertexLabel();

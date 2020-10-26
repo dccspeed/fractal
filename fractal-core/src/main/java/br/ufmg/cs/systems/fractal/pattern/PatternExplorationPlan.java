@@ -7,12 +7,11 @@ import br.ufmg.cs.systems.fractal.util.VertexPredicate;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
-import org.apache.hadoop.io.Writable;
 import org.apache.log4j.Logger;
 
 import java.io.*;
 
-public class PatternExplorationPlan implements Externalizable, Writable {
+public class PatternExplorationPlan implements Externalizable {
    private static final Logger LOG = Logger.getLogger(PatternExplorationPlan.class);
 
    protected ObjArrayList<IntArrayList> intersectionIdxs;
@@ -153,7 +152,6 @@ public class PatternExplorationPlan implements Externalizable, Writable {
               ", edgePredicates=" + edgePredicates;
    }
 
-   @Override
    public void write(DataOutput out) throws IOException {
       out.writeInt(intersectionIdxs.size());
       for (int i = 0; i < intersectionIdxs.size(); ++i) {
@@ -170,7 +168,6 @@ public class PatternExplorationPlan implements Externalizable, Writable {
       }
    }
 
-   @Override
    public void readFields(DataInput in) throws IOException {
       int numVertices = in.readInt();
       for (int i = 0; i < numVertices; ++i) {

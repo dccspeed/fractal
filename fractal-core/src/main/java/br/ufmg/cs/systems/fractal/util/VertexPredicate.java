@@ -1,12 +1,11 @@
 package br.ufmg.cs.systems.fractal.util;
 
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import org.apache.hadoop.io.Writable;
 
 import java.io.*;
 import java.util.function.IntPredicate;
 
-public class VertexPredicate implements IntPredicate, Writable, Externalizable {
+public class VertexPredicate implements IntPredicate, Externalizable {
 
    public static final DefaultVertexPredicate trueVertexPredicate = new DefaultVertexPredicate();
 
@@ -26,12 +25,10 @@ public class VertexPredicate implements IntPredicate, Writable, Externalizable {
       return graph.vertexLabel(u) == vertexLabel;
    }
 
-   @Override
    public void write(DataOutput out) throws IOException {
       out.writeInt(vertexLabel);
    }
 
-   @Override
    public void readFields(DataInput in) throws IOException {
       vertexLabel = in.readInt();
    }

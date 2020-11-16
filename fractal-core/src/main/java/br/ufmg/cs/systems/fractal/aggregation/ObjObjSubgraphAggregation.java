@@ -1,6 +1,8 @@
 package br.ufmg.cs.systems.fractal.aggregation;
 
+import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
+import br.ufmg.cs.systems.fractal.util.ProducerConsumerSignaling;
 import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
 import com.koloboke.collect.map.ObjObjMap;
 import com.koloboke.collect.map.hash.HashObjObjMaps;
@@ -10,6 +12,7 @@ import java.io.Serializable;
 
 public abstract class ObjObjSubgraphAggregation
         <S extends Subgraph, K extends Serializable, V extends Serializable>
+        extends ProducerConsumerSignaling
         implements SubgraphAggregation<S> {
    private static final Logger LOG = Logger.getLogger(ObjObjSubgraphAggregation.class);
 
@@ -17,63 +20,31 @@ public abstract class ObjObjSubgraphAggregation
 
    private ObjObjMap<K,V> keyValueMap;
 
-   public ObjObjSubgraphAggregation() {
+   public final void init(Configuration configuration) {
       keyValueMap = HashObjObjMaps.newUpdatableMap();
    }
 
-   @Override
-   public final void aggregate(S subgraph) {
-      final K key = key(subgraph);
-      final V value = value(subgraph);
+   public final void map(K key, V value) {
       final V existingValue = keyValueMap.get(key);
 
       if (existingValue != null) {
-         aggregate(existingValue, value);
+         reduce(existingValue, value);
       } else {
          keyValueMap.put(ReflectionUtils.clone(key),
                  ReflectionUtils.clone(value));
          if (keyValueMap.size() > MAX_SIZE) {
             // wait until map is consumed
-            notifyNextKeyValueMapAvailable();
-            waitForNextKeyValueMapConsumption();
+            notifyWorkProduced();
+            waitWorkConsumed();
+            keyValueMap.clear();
          }
       }
    }
 
-   public void waitForNextKeyValueMap() {
-      synchronized (keyValueMap) {
-         try {
-            keyValueMap.wait();
-         } catch (InterruptedException e) {
-            e.printStackTrace();
-         }
-      }
-   }
+   public abstract void reduce(V existingValue, V otherValue);
 
-   public synchronized void waitForNextKeyValueMapConsumption() {
-      try {
-         this.wait();
-      } catch (InterruptedException e) {
-         e.printStackTrace();
-      }
-      keyValueMap.clear();
-   }
-
-   public synchronized void notifyNextKeyValueMapConsumed() {
-      this.notify();
-   }
-
-   public void notifyNextKeyValueMapAvailable() {
-      synchronized (keyValueMap) {
-         keyValueMap.notify();
-      }
-   }
-
-   public ObjObjMap<K,V> consumeKeyValueMap() {
+   public final ObjObjMap<K,V> consumeKeyValueMap() {
       return keyValueMap;
    }
 
-   public abstract K key(S subgraph);
-   public abstract V value(S subgraph);
-   public abstract void aggregate(V existingValue, V otherValue);
 }

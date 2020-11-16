@@ -2,7 +2,6 @@ package br.ufmg.cs.systems.fractal.subgraph;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
-import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.pattern.PatternEdge;
@@ -16,15 +15,10 @@ import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
-import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.IntSet;
-import com.koloboke.collect.set.hash.HashIntSet;
 import com.koloboke.collect.set.hash.HashIntSets;
 import org.apache.log4j.Logger;
 
-import java.io.DataInput;
-import java.io.IOException;
-import java.io.ObjectInput;
 import java.util.function.BiPredicate;
 import java.util.function.IntConsumer;
 
@@ -118,8 +112,6 @@ public class PatternInducedSubgraph extends BasicSubgraph {
          vertices.clear();
          vertices.addAll(originalVertices);
       }
-
-      computation.getExecutionEngine().addValidSubgraphs(validSubgraphs);
 
       return validSubgraphs;
    }
@@ -362,57 +354,13 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    }
 
    @Override
-   public void readExternal(ObjectInput objInput) throws IOException {
-      readFields(objInput);
-   }
-
-   public void readFields(DataInput in) throws IOException {
-      reset();
-
-      edges.readFields(in);
-
-      int numEdges = edges.size();
-
-      for (int i = 0; i < numEdges; ++i) {
-         updateVertices(edges.getu(i));
-      }
-   }
-
-   protected void updateVertices(int word) {
-      final Edge edge = configuration.getMainGraph().getEdge(word);
-
-      int numVerticesAdded = 0;
-
-      boolean srcIsNew = false;
-      boolean dstIsNew = false;
-
-      if (!vertices.contains(edge.getSourceId())) {
-         srcIsNew = true;
-      }
-
-      if (!vertices.contains(edge.getDestinationId())) {
-         dstIsNew = true;
-      }
-
-      if (srcIsNew) {
-         vertices.add(edge.getSourceId());
-         ++numVerticesAdded;
-      }
-
-      if (dstIsNew) {
-         vertices.add(edge.getDestinationId());
-         ++numVerticesAdded;
-      }
-   }
-
-   @Override
    public String toString() {
       return "p" + super.toString();
    }
 
    @Override
-   public void init(Configuration config) {
-      super.init(config);
+   public void init(Configuration configuration) {
+      super.init(configuration);
    }
 
    @Override
@@ -432,66 +380,14 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    }
 
    @Override
-   public void setWordAndTruncate(int word, int index) {
-      super.setWordAndTruncate(word, index);
-      vertices.setAndTruncate(index, word);
-   }
-
-   @Override
    public void removeLastWord() {
       vertices.removeLast();
       super.removeLastWord();
    }
 
    @Override
-   public IntCollection computeExtensions(Computation computation) {
-      // If we have to recompute the extensionVertexIds set
-      if (dirtyExtensionWordIds) {
-         if (getNumWords() > 0) {
-            updateExtensions(computation);
-         } else {
-            updateInitExtensions(computation);
-         }
-
-         int numWords = getNumWords();
-         IntArrayList words = getWords();
-         for (int i = 0; i < numWords; ++i) {
-            extensionsSet.removeInt(words.getu(i));
-         }
-      }
-
-      return extensionsSet;
-   }
-
-   @Override
-   public void reset() {
-      super.reset();
-      intersection.clear();
-      difference.clear();
-      neighborhoods.clear();
-      for (int i = 0; i < neighborhoodsToReclaim.size(); ++i) {
-         neighborhoodsToReclaim.getu(i).reclaim();
-      }
-      neighborhoodsToReclaim.clear();
-      originalVertices.clear();
-      verticesBackup.clear();
-      extensionsSet.clear();
-   }
-
-   @Override
-   public long computeExtensionCost(IntArrayList extensionCandidates) {
-      long cost = Long.MAX_VALUE, numEdges = 0;
-      for (int i = 0; i < extensionCandidates.size(); ++i) {
-         int numExtensions = extensionCandidates.getu(i);
-         if (numExtensions >= 0) {
-            cost = Math.min(cost, extensionCandidates.getu(i));
-            numEdges++;
-         }
-      }
-      return cost * numEdges;
-   }
-
-   private void updateExtensions(Computation computation) {
+   public void computeExtensions(Computation computation,
+                                          IntArrayList extensions) {
       int numVertices = getNumVertices();
       Pattern pattern = computation.getPattern();
       PatternExplorationPlan explorationPlan = pattern.explorationPlan();
@@ -523,9 +419,19 @@ public class PatternInducedSubgraph extends BasicSubgraph {
                          lowerBound, upperBound, vertexPredicate,
                          edgePredicates, extensionsSet);
       }
+
+      int numWords = getNumWords();
+      IntArrayList words = getWords();
+      for (int i = 0; i < numWords; ++i) {
+         extensionsSet.removeInt(words.getu(i));
+      }
+
+      extensions.setFrom(extensionsSet);
    }
 
-   private void updateInitExtensions(Computation computation) {
+   @Override
+   public void computeFirstLevelExtensions(Computation computation,
+                                           IntArrayList extensions) {
       Pattern pattern = computation.getPattern();
       int totalNumWords = computation.getInitialNumWords();
       int numPartitions = computation.getNumberPartitions();
@@ -535,10 +441,37 @@ public class PatternInducedSubgraph extends BasicSubgraph {
               pattern.explorationPlan().vertexPredicate(0);
       boolean vertexLabeled = pattern.vertexLabeled();
 
-      extensionsSet.clear();
       for (int u = myPartitionId; u < totalNumWords; u += numPartitions) {
-         if (!vertexLabeled || vertexPredicate.test(u)) extensionsSet.add(u);
+         if (!vertexLabeled || vertexPredicate.test(u)) extensions.add(u);
       }
+   }
+
+   @Override
+   public void reset() {
+      super.reset();
+      intersection.clear();
+      difference.clear();
+      neighborhoods.clear();
+      for (int i = 0; i < neighborhoodsToReclaim.size(); ++i) {
+         neighborhoodsToReclaim.getu(i).reclaim();
+      }
+      neighborhoodsToReclaim.clear();
+      originalVertices.clear();
+      verticesBackup.clear();
+      extensionsSet.clear();
+   }
+
+   @Override
+   public long computeExtensionCost(IntArrayList extensionCandidates) {
+      long cost = Long.MAX_VALUE, numEdges = 0;
+      for (int i = 0; i < extensionCandidates.size(); ++i) {
+         int numExtensions = extensionCandidates.getu(i);
+         if (numExtensions >= 0) {
+            cost = Math.min(cost, extensionCandidates.getu(i));
+            numEdges++;
+         }
+      }
+      return cost * numEdges;
    }
 
    @Override
@@ -564,20 +497,6 @@ public class PatternInducedSubgraph extends BasicSubgraph {
    public int numEdgesAdded() {
       // TODO: get this information via pattern edges
       throw new UnsupportedOperationException();
-   }
-
-   @Override
-   public String toOutputString() {
-      StringBuilder sb = new StringBuilder();
-
-      IntArrayList vertices = getVertices();
-
-      for (int i = 0; i < vertices.size(); ++i) {
-         sb.append(vertices.getu(i));
-         sb.append(" ");
-      }
-
-      return sb.toString();
    }
 
    private class UpdateEdgesConsumer implements IntConsumer {

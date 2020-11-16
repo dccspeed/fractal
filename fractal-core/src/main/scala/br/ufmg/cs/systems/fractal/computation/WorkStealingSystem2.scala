@@ -7,6 +7,7 @@ import br.ufmg.cs.systems.fractal.subgraph.Subgraph
 import br.ufmg.cs.systems.fractal.util.Logging
 import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjArrayList}
 
+// TODO
 class WorkStealingSystem2 [S <: Subgraph]
 (rootComputation: Computation[S]) extends Logging {
 

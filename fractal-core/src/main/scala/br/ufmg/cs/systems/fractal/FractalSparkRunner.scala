@@ -2,12 +2,14 @@ package br.ufmg.cs.systems.fractal
 
 import java.util.function.BiPredicate
 
+import br.ufmg.cs.systems.fractal.aggregation.{LongLongSubgraphAggregation, ObjLongSubgraphAggregation, SubgraphAggregation}
 import br.ufmg.cs.systems.fractal.computation.Computation
 import br.ufmg.cs.systems.fractal.gmlib.periodic.InducedPeriodicSubgraphsPFMCVC
 import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.ScalaFractalFuncs.CustomSubgraphCallback
-import br.ufmg.cs.systems.fractal.util.{Logging, SubgraphCallback}
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
+import br.ufmg.cs.systems.fractal.util.{Logging, ReflectionUtils, SubgraphCallback}
 import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.concurrent.duration.Duration
@@ -731,10 +733,6 @@ object FractalSparkRunner extends Logging {
             "br.ufmg.cs.systems.fractal.graph.SuccinctMainGraph"
          case "al" =>
             "br.ufmg.cs.systems.fractal.graph.BasicMainGraph"
-         case "el" =>
-            "br.ufmg.cs.systems.fractal.graph.EdgeListGraph"
-         case "al-kws" =>
-            "br.ufmg.cs.systems.fractal.gmlib.keywordsearch.KeywordSearchGraph"
          case other =>
             throw new RuntimeException(s"Input graph format '${other}' is invalid")
       }
@@ -866,17 +864,6 @@ object FractalSparkRunner extends Logging {
             setRemainingConfigs()
             FSMPFMCVC(fractalGraph, commStrategy, numPartitions, explorationSteps,
                support)
-
-         //case KeywordSearchSF.appid =>
-         //   var arg = nextArg
-         //   var queryWords = List.empty[String]
-         //   while (arg != null) {
-         //      queryWords = arg :: queryWords
-         //      arg = nextArg
-         //   }
-         //   setRemainingConfigs()
-         //   KeywordSearchSF(fractalGraph, commStrategy, numPartitions,
-         //      explorationSteps, queryWords.toArray)
 
          case PatternMatchingPFMCVC.appid =>
             val subgraphPath = nextArg

@@ -99,7 +99,6 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
       if (cand.isEmpty() && fini.isEmpty()) {
          exts.clear();
          newExtensions(exts);
-         computation.getExecutionEngine().addValidSubgraphs(1);
          computation.lastComputation().process(subgraph);
          return;
       }

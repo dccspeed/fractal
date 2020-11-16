@@ -4,15 +4,10 @@ import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
-import com.koloboke.collect.IntCollection;
-import com.koloboke.collect.set.IntSet;
+import com.koloboke.collect.set.hash.HashIntSet;
 import com.koloboke.collect.set.hash.HashIntSets;
-import com.koloboke.function.IntIntConsumer;
 import org.apache.log4j.Logger;
 
-import java.io.DataInput;
-import java.io.IOException;
-import java.io.ObjectInput;
 import java.util.function.IntConsumer;
 
 public class VertexInducedSubgraph extends BasicSubgraph {
@@ -20,17 +15,13 @@ public class VertexInducedSubgraph extends BasicSubgraph {
            Logger.getLogger(VertexInducedSubgraph.class);
 
    private UpdateEdgesConsumer updateEdgesConsumer;
-   private UpdateExtensionsConsumer updateExtensionsConsumer;
    private IntArrayList numEdgesAddedWithWord;
-   private IntSet extensionsSet;
-   private int lastPositionAdded;
+   private HashIntSet extensionsSet;
 
    public VertexInducedSubgraph() {
       super();
       updateEdgesConsumer = new UpdateEdgesConsumer();
-      updateExtensionsConsumer = new UpdateExtensionsConsumer();
       numEdgesAddedWithWord = new IntArrayList();
-      lastPositionAdded = -1;
       extensionsSet = HashIntSets.newMutableSet();
    }
 
@@ -55,27 +46,12 @@ public class VertexInducedSubgraph extends BasicSubgraph {
 
    @Override
    public int numEdgesAdded() {
-      //ensureEdges();
       return numEdgesAddedWithWord.getLastOrDefault(0);
    }
 
    @Override
-   public String toOutputString() {
-      StringBuilder sb = new StringBuilder();
-
-      IntArrayList vertices = getVertices();
-
-      for (int i = 0; i < vertices.size(); ++i) {
-         sb.append(vertices.getu(i));
-         sb.append(" ");
-      }
-
-      return sb.toString();
-   }
-
-   @Override
-   public void init(Configuration config) {
-      super.init(config);
+   public void init(Configuration configuration) {
+      super.init(configuration);
    }
 
    @Override
@@ -83,50 +59,39 @@ public class VertexInducedSubgraph extends BasicSubgraph {
       super.reset();
       extensionsSet.clear();
       numEdgesAddedWithWord.clear();
-      lastPositionAdded = -1;
    }
 
    @Override
    public IntArrayList getEdges() {
-      //ensureEdges();
       return edges;
    }
 
-   private void updateInitExtensions(Computation computation) {
+   @Override
+   public void computeExtensions(Computation computation,
+                                 IntArrayList extensions) {
+      extensionsSet.clear();
+      getConfig().getMainGraph().validExtensionsVertexInduced(
+              computation, this, extensionsSet);
+
+      int numWords = getNumWords();
+      IntArrayList words = getWords();
+      for (int i = 0; i < numWords; ++i) {
+         extensionsSet.removeInt(words.getu(i));
+      }
+
+      extensions.setFrom(extensionsSet);
+   }
+
+   @Override
+   public void computeFirstLevelExtensions(Computation computation,
+                                           IntArrayList extensions) {
       int totalNumWords = computation.getInitialNumWords();
       int numPartitions = computation.getNumberPartitions();
       int myPartitionId = computation.getPartitionId();
 
-      extensionsSet.clear();
       for (int u = myPartitionId; u < totalNumWords; u += numPartitions) {
-         if (computation.containsWord(u)) extensionsSet.add(u);
+         extensions.add(u);
       }
-   }
-
-   private void updateExtensions(Computation computation) {
-      extensionsSet.clear();
-      getConfig().getMainGraph().validExtensionsVertexInduced(
-              computation, this, extensionsSet);
-   }
-
-   @Override
-   public IntCollection computeExtensions(Computation computation) {
-      // If we have to recompute the extensionVertexIds set
-      if (dirtyExtensionWordIds) {
-         if (getNumWords() > 0) {
-            updateExtensions(computation);
-         } else {
-            updateInitExtensions(computation);
-         }
-
-         int numWords = getNumWords();
-         IntArrayList words = getWords();
-         for (int i = 0; i < numWords; ++i) {
-            extensionsSet.removeInt(words.getu(i));
-         }
-      }
-
-      return extensionsSet;
    }
 
    @Override
@@ -134,14 +99,6 @@ public class VertexInducedSubgraph extends BasicSubgraph {
       super.addWord(word);
       updateEdges(word, vertices.size());
       vertices.add(word);
-      //ensureEdges();
-   }
-
-   @Override
-   public void setWordAndTruncate(int word, int index) {
-      super.setWordAndTruncate(word, index);
-      updateEdges(word, vertices.size());
-      vertices.setAndTruncate(index, word);
    }
 
    @Override
@@ -151,23 +108,15 @@ public class VertexInducedSubgraph extends BasicSubgraph {
       }
 
       vertices.removeLast();
-
-      removeExtraEdges();
+      int numEdgesToRemove = numEdgesAddedWithWord.pop();
+      edges.removeLast(numEdgesToRemove);
 
       super.removeLastWord();
    }
 
    @Override
    public Pattern quickPattern() {
-      //ensureEdges();
       return super.quickPattern();
-   }
-
-   private void ensureEdges() {
-      while (lastPositionAdded + 1 < vertices.size()) {
-         updateEdges(vertices.get(lastPositionAdded + 1),
-                 lastPositionAdded + 1);
-      }
    }
 
    /**
@@ -180,7 +129,6 @@ public class VertexInducedSubgraph extends BasicSubgraph {
       IntArrayList vertices = getVertices();
 
       int addedEdges = 0;
-
       // For each vertex (except the last one added)
       for (int i = 0; i < positionAdded; ++i) {
          int existingVertexId = vertices.getu(i);
@@ -192,50 +140,6 @@ public class VertexInducedSubgraph extends BasicSubgraph {
       }
 
       numEdgesAddedWithWord.add(addedEdges);
-
-      lastPositionAdded = positionAdded;
-   }
-
-   private void removeExtraEdges() {
-      while (lastPositionAdded >= vertices.size()) {
-         int numEdgesToRemove = numEdgesAddedWithWord.pop();
-         edges.removeLast(numEdgesToRemove);
-         lastPositionAdded--;
-      }
-   }
-
-   @Override
-   public void readExternal(ObjectInput objInput) throws IOException,
-           ClassNotFoundException {
-      readFields(objInput);
-   }
-
-   public void readFields(DataInput in) throws IOException {
-      reset();
-      vertices.readFields(in);
-      int numVertices = vertices.size();
-      for (int i = 0; i < numVertices; ++i) {
-         updateEdges(vertices.getu(i), i);
-      }
-   }
-
-   private class UpdateExtensionsConsumer implements IntIntConsumer {
-      private int lowerBound;
-      private IntSet extensionsWordIds;
-
-      @Override
-      public void accept(int u, int e) {
-         if (u > lowerBound) {
-            extensionsWordIds.add(u);
-         } else {
-            extensionsWordIds.removeInt(u);
-         }
-      }
-
-      public void setLowerBound(int lowerBound) {
-         this.lowerBound = lowerBound;
-         this.extensionsWordIds = VertexInducedSubgraph.this.extensionsSet;
-      }
    }
 
    private class UpdateEdgesConsumer implements IntConsumer {

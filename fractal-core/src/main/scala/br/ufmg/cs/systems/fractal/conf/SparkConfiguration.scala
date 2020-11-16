@@ -230,12 +230,6 @@ case class SparkConfiguration(confs: Map[String, Any])
       setIsGraphEdgeLabelled(getBoolean(CONF_MAINGRAPH_EDGE_LABELLED,
          CONF_MAINGRAPH_EDGE_LABELLED_DEFAULT))
 
-      setMasterComputationClass(
-         getClass(CONF_MASTER_COMPUTATION_CLASS,
-            CONF_MASTER_COMPUTATION_CLASS_DEFAULT).
-            asInstanceOf[Class[_ <: MasterComputation]]
-      )
-
       setComputationClass(
          getClass(CONF_COMPUTATION_CLASS, CONF_COMPUTATION_CLASS_DEFAULT).
             asInstanceOf[Class[_ <: Computation[_]]]

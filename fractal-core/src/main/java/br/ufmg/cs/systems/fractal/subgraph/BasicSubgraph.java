@@ -1,18 +1,10 @@
 package br.ufmg.cs.systems.fractal.subgraph;
 
-import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
-import br.ufmg.cs.systems.fractal.graph.Edge;
-import br.ufmg.cs.systems.fractal.graph.LabelledEdge;
-import br.ufmg.cs.systems.fractal.graph.Vertex;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
-import com.koloboke.collect.IntCollection;
 import org.apache.log4j.Logger;
 
-import java.io.DataOutput;
-import java.io.IOException;
-import java.io.ObjectOutput;
 import java.util.Objects;
 
 public abstract class BasicSubgraph implements Subgraph {
@@ -21,7 +13,6 @@ public abstract class BasicSubgraph implements Subgraph {
 
    protected IntArrayList vertices;
    protected IntArrayList edges;
-   protected boolean dirtyExtensionWordIds;
    protected Pattern pattern;
    protected boolean dirtyPattern;
 
@@ -46,13 +37,12 @@ public abstract class BasicSubgraph implements Subgraph {
 
    @Override
    public String toString() {
-      return "subgraph{" + "vertices=" + vertices + "," + "edges=" + edges +
-              "}";
+      return "subgraph{" + "vertices=" + vertices + "," + "edges=" + edges + "}";
    }
 
    @Override
-   public void init(Configuration config) {
-      configuration = config;
+   public void init(Configuration configuration) {
+      this.configuration = configuration;
       reset();
    }
 
@@ -67,11 +57,6 @@ public abstract class BasicSubgraph implements Subgraph {
    }
 
    @Override
-   public <V> Vertex<V> vertex(int vertexId) {
-      return (Vertex<V>) configuration.getMainGraph().getVertex(vertexId);
-   }
-
-   @Override
    public int getNumVertices() {
       return vertices.size();
    }
@@ -79,16 +64,6 @@ public abstract class BasicSubgraph implements Subgraph {
    @Override
    public IntArrayList getEdges() {
       return edges;
-   }
-
-   @Override
-   public <E> Edge<E> edge(int edgeId) {
-      return (Edge<E>) configuration.getMainGraph().getEdge(edgeId);
-   }
-
-   @Override
-   public <E> LabelledEdge<E> labelledEdge(int edgeId) {
-      return (LabelledEdge<E>) configuration.getMainGraph().getEdge(edgeId);
    }
 
    @Override
@@ -121,17 +96,9 @@ public abstract class BasicSubgraph implements Subgraph {
    }
 
    @Override
-   public void setWordAndTruncate(int word, int index) {
-      setDirty();
-   }
-
-   @Override
    public void removeLastWord() {
       setDirty();
    }
-
-   @Override
-   public abstract IntCollection computeExtensions(Computation computation);
 
    @Override
    public void reset() {
@@ -142,17 +109,6 @@ public abstract class BasicSubgraph implements Subgraph {
 
    protected void setDirty() {
       dirtyPattern = true;
-      dirtyExtensionWordIds = true;
-   }
-
-   @Override
-   public void writeExternal(ObjectOutput objOutput) throws IOException {
-      write(objOutput);
-   }
-
-   public void write(DataOutput out) throws IOException {
-      out.writeInt(configuration.getId());
-      getWords().write(out);
    }
 
    @Override

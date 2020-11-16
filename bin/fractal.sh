@@ -365,12 +365,14 @@ deploy_mode=${deploy_mode:-client}
 log_level=${log_level:-info}
 jars=${jars:-""}
 packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
+extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties\""
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\
    --driver-memory $master_memory \\
-   --conf spark.driver.extraJavaOptions=\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties\" \\
-   --conf spark.executor.extraJavaOptions=\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties\" \\
+   --conf spark.driver.extraJavaOptions=$extrajavaoptions \\
+   --conf spark.executor.extraJavaOptions=$extrajavaoptions \\
+   --conf spark.ui.enabled=false \\
    --num-executors $num_workers \\
    --executor-cores $worker_cores \\
    --executor-memory $worker_memory \\

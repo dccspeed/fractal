@@ -8,7 +8,10 @@ import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
 import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.subgraph._
+import br.ufmg.cs.systems.fractal.util.ScalaFractalFuncs.CustomSubgraphCallback
 import br.ufmg.cs.systems.fractal.util._
+import com.koloboke.collect.map.LongLongMap
+import javax.ws.rs.DefaultValue
 import org.apache.spark.{SparkContext, TaskContext}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
@@ -114,44 +117,58 @@ case class Fractoid [S <: Subgraph : ClassTag]
 
    /**
     * Aggregates valid subgraphs into a single long
-    * @param defaultValue initial value for this aggregation
-    * @param value mapping function applied on each valid subgraph
-    * @param reduce reduce function to aggregate the results
+    * @param _defaultValue initial value for this aggregation
+    * @param _value mapping function applied on each valid subgraph
+    * @param _reduce reduce function to aggregate the results
     * @return single final long
     */
    def aggregationLong
-   (defaultValue: Long, value: S => Long, reduce: (Long,Long) => Long)
+   (_defaultValue: Long, _value: S => Long, _reduce: (Long,Long) => Long)
    : Long = {
+
+      val longSubgraphAggregation = new LongSubgraphAggregation[S] {
+         override def reduce(v1: Long, v2: Long): Long = _reduce(v1, v2)
+         override def aggregate(subgraph: S): Unit = map(_value(subgraph))
+         override def defaultValue(): Long = _defaultValue
+      }
+
       val callback = subgraphAggregationCallback
       withNextStepId
          .withInitAggregations(c => callback.init(c))
          .withProcess((s,c) => callback.apply(s,c))
          .masterEngineImmutable
-         .longRDD(defaultValue, value, reduce)
-         .reduce(reduce)
+         .longRDD(longSubgraphAggregation)
+         .reduce(_reduce)
    }
 
    /**
     * Aggregates valid subgraphs into a single long with custom callback
-    * @param defaultValue initial value for this aggregation
-    * @param value mapping function applied on each valid subgraph
-    * @param reduce reduce function to aggregate the results
+    * @param _defaultValue initial value for this aggregation
+    * @param _value mapping function applied on each valid subgraph
+    * @param _reduce reduce function to aggregate the results
     * @param callback custom user callback
     * @return single final long
     */
    def aggregationLongWithCallback
-   (defaultValue: Long, value: S => Long, reduce: (Long,Long) => Long,
+   (_defaultValue: Long, _value: S => Long, _reduce: (Long,Long) => Long,
     callback: (S, Computation[S], SubgraphCallback[S]) => Unit)
    : Long = {
       val _underlyingCallback = subgraphAggregationCallback
       val providedCallback = customSubgraphAggregationCallback(
          callback, _underlyingCallback)
+
+      val longSubgraphAggregation = new LongSubgraphAggregation[S] {
+         override def reduce(v1: Long, v2: Long): Long = _reduce(v1, v2)
+         override def aggregate(subgraph: S): Unit = map(_value(subgraph))
+         override def defaultValue(): Long = _defaultValue
+      }
+
       withNextStepId
          .withInitAggregations(c => providedCallback.init(c))
          .withProcess((s,c) => providedCallback.apply(s,c))
          .masterEngineImmutable
-         .longRDD(defaultValue, value, reduce)
-         .reduce(reduce)
+         .longRDD(longSubgraphAggregation)
+         .reduce(_reduce)
    }
 
    /**
@@ -174,27 +191,70 @@ case class Fractoid [S <: Subgraph : ClassTag]
    }
 
    /**
+    * Aggregates valid subgraphs into a single long
+    * @param longSubgraphAggregation custom aggregation
+    * @return single final long
+    */
+   def aggregationLong
+   (longSubgraphAggregation: LongSubgraphAggregation[S])
+   : RDD[Long] = {
+      val callback = subgraphAggregationCallback
+      withNextStepId
+         .withInitAggregations(c => callback.init(c))
+         .withProcess((s,c) => callback.apply(s,c))
+         .masterEngineImmutable
+         .longRDD(longSubgraphAggregation)
+   }
+
+   /**
     * Aggregates valid subgraphs by mapping each valid subgraph to a
     * key/value pair and reducing the values by key. Values in this function
     * are exclusively primitive longs.
-    * @param key mapping function that extracts the key from a subgraph
-    * @param defaultValue the default value (long)
-    * @param value value mapping functions that extracts a value from a subgraph
-    * @param reduce reduce function that aggregates values of the same key
+    * @param _key mapping function that extracts the key from a subgraph
+    * @param _defaultValue the default value (long)
+    * @param _value value mapping functions that extracts a value from a subgraph
+    * @param _reduce reduce function that aggregates values of the same key
     * @tparam K key parameter type
     * @return an RDD of key/value pairs (K,Long)
     */
    def aggregationObjLong[K <: Serializable : ClassTag]
-   (key: S => K, defaultValue: Long, value: S => Long,
-    reduce: (Long,Long) => Long)
+   (_key: S => K, _defaultValue: Long, _value: S => Long,
+    _reduce: (Long,Long) => Long)
+   : RDD[(K,Long)] = {
+
+      val objLongSubgraphAggregation = new ObjLongSubgraphAggregation[S,K] {
+         override def reduce(v1: Long, v2: Long): Long = _reduce(v1, v2)
+
+         override def aggregate(subgraph: S): Unit = {
+            map(_key(subgraph), _value(subgraph))
+         }
+
+         override def defaultValue(): Long = _defaultValue
+      }
+
+      val objLongRDD = aggregationObjLong[K](objLongSubgraphAggregation)
+         .foldByKey(_defaultValue)(_reduce)
+
+      objLongRDD
+   }
+
+   /**
+    * Aggregates valid subgraphs by mapping each valid subgraph to a
+    * key/value pair and reducing the values by key. Values in this function
+    * are exclusively primitive longs.
+    * @param objLongSubgraphAggregation custom aggregation
+    * @tparam K key type
+    * @return
+    */
+   def aggregationObjLong[K <: Serializable : ClassTag]
+   (objLongSubgraphAggregation: ObjLongSubgraphAggregation[S,K])
    : RDD[(K,Long)] = {
       val callback = subgraphAggregationCallback
       val objLongRDD = withNextStepId
          .withInitAggregations(c => callback.init(c))
          .withProcess((s,c) => callback.apply(s,c))
          .masterEngineImmutable
-         .objLongRDD[K](key, defaultValue, value, reduce)
-         .foldByKey(defaultValue)(reduce)
+         .objLongRDD[K](objLongSubgraphAggregation)
 
       objLongRDD
    }
@@ -204,26 +264,88 @@ case class Fractoid [S <: Subgraph : ClassTag]
     * key/value pair and reducing the values by key. Values in this function
     * are exclusively primitive longs. Keys in this function are exclusively
     * canonical patterns (built-in).
-    * @param defaultValue the default value (long)
-    * @param value value mapping functions that extracts a value from a subgraph
-    * @param reduce reduce function that aggregates values of the same key
+    * @param _defaultValue the default value (long)
+    * @param _value value mapping functions that extracts a value from a subgraph
+    * @param _reduce reduce function that aggregates values of the same key
     * @return an RDD of key/value pairs (Pattern,Long)
     */
    def aggregationCanonicalPatternLong
-   (key: S => Pattern, defaultValue: Long, value: S => Long,
-    reduce: (Long,Long) => Long)
+   (_key: S => Pattern, _defaultValue: Long, _value: S => Long,
+    _reduce: (Long,Long) => Long)
+   : RDD[(Pattern,Long)] = {
+      val objLongSubgraphAggregation = new
+            ObjLongSubgraphAggregation[S,Pattern] {
+         override def reduce(v1: Long, v2: Long): Long = _reduce(v1, v2)
+
+         override def aggregate(subgraph: S): Unit = {
+            map(_key(subgraph), _value(subgraph))
+         }
+
+         override def defaultValue(): Long = _defaultValue
+      }
+
+      val objLongRDD = aggregationCanonicalPatternLong(objLongSubgraphAggregation)
+         .foldByKey(_defaultValue)(_reduce)
+         .map(kv => {kv._1.turnCanonical(); kv})
+         .foldByKey(_defaultValue)(_reduce)
+
+      objLongRDD
+   }
+
+   /**
+    * Aggregates valid subgraphs by mapping each valid subgraph to a
+    * key/value pair and reducing the values by key. Values in this function
+    * are exclusively primitive longs. Keys in this function are exclusively
+    * canonical patterns (built-in).
+    * @param objLongSubgraphAggregation custom aggregation
+    * @return an RDD of key/value pairs (Pattern,Long)
+    */
+   def aggregationCanonicalPatternLong
+   (objLongSubgraphAggregation: ObjLongSubgraphAggregation[S,Pattern])
    : RDD[(Pattern,Long)] = {
       val callback = subgraphAggregationCallback
       val objLongRDD = withNextStepId
          .withInitAggregations(c => callback.init(c))
          .withProcess((s,c) => callback.apply(s,c))
          .masterEngineImmutable
-         .objLongRDD[Pattern](key, defaultValue, value, reduce)
+         .objLongRDD[Pattern](objLongSubgraphAggregation)
+      objLongRDD
+   }
 
-         .foldByKey(defaultValue)(reduce)
+   /**
+    * Aggregates valid subgraphs by mapping each valid subgraph to a
+    * key/value pair and reducing the values by key. Values in this function
+    * are exclusively primitive longs. Keys in this function are exclusively
+    * canonical patterns (built-in). This function uses a custom user
+    * callback that has access to the underlying callback
+    * @param _defaultValue the default value (long)
+    * @param _value value mapping functions that extracts a value from a subgraph
+    * @param _reduce reduce function that aggregates values of the same key
+    * @param _callback custom user callback
+    * @return an RDD of key/value pairs (Pattern,Long)
+    */
+   def aggregationCanonicalPatternLongWithCallback
+   (_key: S => Pattern, _defaultValue: Long, _value: S => Long,
+    _reduce: (Long,Long) => Long,
+    _callback: (S, Computation[S], SubgraphCallback[S]) => Unit)
+   : RDD[(Pattern,Long)] = {
+
+      val objLongSubgraphAggregation = new ObjLongSubgraphAggregation[S,Pattern] {
+
+         override def reduce(v1: Long, v2: Long): Long = _reduce(v1, v2)
+
+         override def aggregate(subgraph: S): Unit = {
+            map(_key(subgraph), _value(subgraph))
+         }
+
+         override def defaultValue(): Long = _defaultValue
+      }
+
+      val objLongRDD = aggregationCanonicalPatternLongWithCallback(
+         objLongSubgraphAggregation, _callback)
+         .foldByKey(_defaultValue)(_reduce)
          .map(kv => {kv._1.turnCanonical(); kv})
-
-         .foldByKey(defaultValue)(reduce)
+         .foldByKey(_defaultValue)(_reduce)
 
       objLongRDD
    }
@@ -234,28 +356,22 @@ case class Fractoid [S <: Subgraph : ClassTag]
     * are exclusively primitive longs. Keys in this function are exclusively
     * canonical patterns (built-in). This function uses a custom user
     * callback that has access to the underlying callback
-    * @param defaultValue the default value (long)
-    * @param value value mapping functions that extracts a value from a subgraph
-    * @param reduce reduce function that aggregates values of the same key
-    * @param callback custom user callback
+    * @param objLongSubgraphAggregation custom aggregation
+    * @param _callback custom user callback
     * @return an RDD of key/value pairs (Pattern,Long)
     */
    def aggregationCanonicalPatternLongWithCallback
-   (key: S => Pattern, defaultValue: Long, value: S => Long,
-    reduce: (Long,Long) => Long,
-    callback: (S, Computation[S], SubgraphCallback[S]) => Unit)
+   (objLongSubgraphAggregation: ObjLongSubgraphAggregation[S,Pattern],
+    _callback: (S, Computation[S], SubgraphCallback[S]) => Unit)
    : RDD[(Pattern,Long)] = {
       val _underlyingCallback = subgraphAggregationCallback
       val providedCallback = customSubgraphAggregationCallback(
-         callback, _underlyingCallback)
+         _callback, _underlyingCallback)
       val objLongRDD = withNextStepId
          .withInitAggregations(c => providedCallback.init(c))
          .withProcess((s,c) => providedCallback.apply(s,c))
          .masterEngineImmutable
-         .objLongRDD[Pattern](key, defaultValue, value, reduce)
-         .foldByKey(defaultValue)(reduce)
-         .map(kv => {kv._1.turnCanonical(); kv})
-         .foldByKey(defaultValue)(reduce)
+         .objLongRDD[Pattern](objLongSubgraphAggregation)
 
       objLongRDD
    }
@@ -264,9 +380,9 @@ case class Fractoid [S <: Subgraph : ClassTag]
     * Aggregates valid subgraphs by mapping each valid subgraph to a
     * key/value pair and reducing the values by key. Keys and values in this
     * function are objects.
-    * @param key mapping function that extracts the key from a subgraph
-    * @param value value mapping functions that extracts a value from a subgraph
-    * @param aggregate reduce function that aggregates the value of the
+    * @param _key mapping function that extracts the key from a subgraph
+    * @param _value value mapping functions that extracts a value from a subgraph
+    * @param _reduce reduce function that aggregates the value of the
     *                  second parameter value into the first parameter value
     * @tparam K key parameter type
     * @tparam V value parameter type
@@ -274,15 +390,43 @@ case class Fractoid [S <: Subgraph : ClassTag]
     */
    def aggregationObjObj
    [K <: Serializable : ClassTag, V <: Serializable : ClassTag]
-   (key: S => K, value: S => V, aggregate: (V,V) => Unit)
+   (_key: S => K, _value: S => V, _reduce: (V,V) => Unit)
+   : RDD[(K,V)] = {
+      val objObjSubgraphAggregation = new ObjObjSubgraphAggregation[S,K,V] {
+         override def reduce(existingValue: V, otherValue: V): Unit = {
+            _reduce(existingValue, otherValue)
+         }
+
+         override def aggregate(subgraph: S): Unit = {
+            map(_key(subgraph), _value(subgraph))
+         }
+      }
+
+      val objObjRDD = aggregationObjObj[K,V](objObjSubgraphAggregation)
+         .reduceByKey{case (v1,v2) => _reduce(v1, v2); v1}
+
+      objObjRDD
+   }
+
+   /**
+    * Aggregates valid subgraphs by mapping each valid subgraph to a
+    * key/value pair and reducing the values by key. Keys and values in this
+    * function are objects.
+    * @param objObjSubgraphAggregation custom aggregation
+    * @tparam K key parameter type
+    * @tparam V value parameter type
+    * @return an RDD of key/value pairs (K,V)
+    */
+   def aggregationObjObj
+   [K <: Serializable : ClassTag, V <: Serializable : ClassTag]
+   (objObjSubgraphAggregation: ObjObjSubgraphAggregation[S,K,V])
    : RDD[(K,V)] = {
       val callback = subgraphAggregationCallback
       val objObjRDD = withNextStepId
          .withInitAggregations(c => callback.init(c))
          .withProcess((s,c) => callback.apply(s,c))
          .masterEngineImmutable
-         .objObjRDD[K,V](key, value, aggregate)
-         .reduceByKey{case (v1,v2) => aggregate(v1, v2); v1}
+         .objObjRDD[K,V](objObjSubgraphAggregation)
 
       objObjRDD
    }
@@ -293,9 +437,9 @@ case class Fractoid [S <: Subgraph : ClassTag]
     * function are objects. This function uses a custom callback for calling
     * the underlying callback, in case the user want to aggregate a subgraph
     * several times.
-    * @param key mapping function that extracts the key from a subgraph
-    * @param value value mapping functions that extracts a value from a subgraph
-    * @param aggregate reduce function that aggregates the value of the
+    * @param _key mapping function that extracts the key from a subgraph
+    * @param _value value mapping functions that extracts a value from a subgraph
+    * @param _reduce reduce function that aggregates the value of the
     *                  second parameter value into the first parameter value
     * @param callback user callback
     * @tparam K key parameter type
@@ -304,18 +448,53 @@ case class Fractoid [S <: Subgraph : ClassTag]
     */
    def aggregationObjObjWithCallback
    [K <: Serializable : ClassTag, V <: Serializable : ClassTag]
-   (key: S => K, value: S => V, aggregate: (V,V) => Unit,
+   (_key: S => K, _value: S => V, _reduce: (V,V) => Unit,
+    callback: (S, Computation[S], SubgraphCallback[S]) => Unit)
+   : RDD[(K,V)] = {
+
+      val objObjSubgraphAggregation = new ObjObjSubgraphAggregation[S,K,V] {
+         override def reduce(existingValue: V, otherValue: V): Unit = {
+            _reduce(existingValue, otherValue)
+         }
+
+         override def aggregate(subgraph: S): Unit = {
+            map(_key(subgraph), _value(subgraph))
+         }
+      }
+
+      val objObjRDD = aggregationObjObjWithCallback[K,V](
+         objObjSubgraphAggregation, callback)
+         .reduceByKey{case (v1,v2) => _reduce(v1, v2); v1}
+
+      objObjRDD
+   }
+
+   /**
+    * Aggregates valid subgraphs by mapping each valid subgraph to a
+    * key/value pair and reducing the values by key. Keys and values in this
+    * function are objects. This function uses a custom callback for calling
+    * the underlying callback, in case the user want to aggregate a subgraph
+    * several times.
+    * @param objObjSubgraphAggregation custom aggregation
+    * @param callback user callback
+    * @tparam K key parameter type
+    * @tparam V value parameter type
+    * @return an RDD of key/value pairs (K,V)
+    */
+   def aggregationObjObjWithCallback
+   [K <: Serializable : ClassTag, V <: Serializable : ClassTag]
+   (objObjSubgraphAggregation: ObjObjSubgraphAggregation[S,K,V],
     callback: (S, Computation[S], SubgraphCallback[S]) => Unit)
    : RDD[(K,V)] = {
       val _underlyingCallback = subgraphAggregationCallback
       val providedCallback = customSubgraphAggregationCallback(callback,
          _underlyingCallback)
+
       val objObjRDD = withNextStepId
          .withInitAggregations(c => providedCallback.init(c))
          .withProcess((s,c) => providedCallback.apply(s,c))
          .masterEngineImmutable
-         .objObjRDD[K,V](key, value, aggregate)
-         .reduceByKey{case (v1,v2) => aggregate(v1, v2); v1}
+         .objObjRDD[K,V](objObjSubgraphAggregation)
 
       objObjRDD
    }
@@ -335,17 +514,112 @@ case class Fractoid [S <: Subgraph : ClassTag]
    [V <: Serializable : ClassTag]
    (key: S => Pattern, value: S => V, aggregate: (V,V) => Unit)
    : RDD[(Pattern,V)] = {
-      val callback = subgraphAggregationCallback
-      val objObjRDD = withNextStepId
-         .withInitAggregations(c => callback.init(c))
-         .withProcess((s,c) => callback.apply(s,c))
-         .masterEngineImmutable
-         .objObjRDD[Pattern,V](key, value, aggregate)
-         .reduceByKey{case (v1,v2) => aggregate(v1, v2); v1}
+      val objObjRDD = aggregationObjObj[Pattern,V](key, value, aggregate)
          .map(kv => {kv._1.turnCanonical(); kv})
          .reduceByKey{case (v1,v2) => aggregate(v1, v2); v1}
 
       objObjRDD
+   }
+
+   /**
+    * Aggregates valid subgraphs by mapping each valid subgraph to a
+    * key/value pair and reducing the values by key. Keys and values in this
+    * function are longs.
+    * @param _key mapping function that extracts the key from a subgraph
+    * @param _value value mapping functions that extracts a value from a subgraph
+    * @param _reduce reduce function that aggregates the value of the
+    *                  second parameter value into the first parameter value
+    * @return an RDD of key/value pairs (K,V)
+    */
+   def aggregationLongLong
+   (_key: S => Long, _defaultValue: Long, _value: S => Long,
+    _reduce: (Long,Long) =>  Long)
+   : RDD[(Long,Long)] = {
+
+      val longLongSubgraphAggregation = new LongLongSubgraphAggregation[S] {
+         override def aggregate(subgraph: S): Unit = {
+            map(_key(subgraph), _value(subgraph))
+         }
+
+         override def reduce(v1: Long, v2: Long): Long = _reduce(v1, v2)
+
+         override def defaultValue(): Long = _defaultValue
+      }
+
+      val longLongRDD = aggregationLongLong(longLongSubgraphAggregation)
+         .reduceByKey(_reduce)
+
+      longLongRDD
+   }
+
+   /**
+    * Aggregates valid subgraphs by mapping each valid subgraph to a
+    * key/value pair and reducing the values by key. Keys and values in this
+    * function are longs.
+    * @param longLongSubgraphAggregation custom aggregation
+    * @return an RDD of key/value pairs (K,V)
+    */
+   def aggregationLongLong
+   (longLongSubgraphAggregation: LongLongSubgraphAggregation[S])
+   : RDD[(Long,Long)] = {
+      val callback = subgraphAggregationCallback
+      val longLongRDD = withNextStepId
+         .withInitAggregations(c => callback.init(c))
+         .withProcess((s,c) => callback.apply(s,c))
+         .masterEngineImmutable
+         .longLongRDD(longLongSubgraphAggregation)
+
+      longLongRDD
+   }
+
+   /**
+    * Aggregates valid subgraphs by mapping each valid subgraph to a
+    * key/value pair and reducing the values by key. Keys in this function
+    * are longs and values are objects.
+    * @param _key key function
+    * @param _value value function
+    * @param _reduce reduce function (inplace on the first parameter)
+    * @return an RDD of key/value pairs (K,V)
+    */
+   def aggregationLongObj
+   [V <: Serializable : ClassTag]
+   (_key: S => Long, _value: S => V, _reduce: (V,V) => Unit)
+   : RDD[(Long,V)] = {
+      val longObjSubgraphAggregation = new LongObjSubgraphAggregation[S,V] {
+         override def reduce(v1: V, v2: V): Unit = {
+            _reduce(v1, v2)
+         }
+
+         override def aggregate(subgraph: S): Unit = {
+            map(_key(subgraph), _value(subgraph))
+         }
+      }
+
+      val longObjRDD = aggregationLongObj[V](longObjSubgraphAggregation)
+            .reduceByKey{case (v1,v2) => _reduce(v1, v2); v1}
+
+      longObjRDD
+   }
+
+   /**
+    * Aggregates valid subgraphs by mapping each valid subgraph to a
+    * key/value pair and reducing the values by key. Keys in this function
+    * are longs and values are objects.
+    * @param longObjSubgraphAggregation custom aggregation
+    * @return an RDD of key/value pairs (K,V)
+    */
+   def aggregationLongObj
+   [V <: Serializable : ClassTag]
+   (longObjSubgraphAggregation: LongObjSubgraphAggregation[S,V])
+   : RDD[(Long,V)] = {
+      val callback = subgraphAggregationCallback
+      val longObjRDD = withNextStepId
+         .withInitAggregations(c => callback.init(c))
+         .withProcess((s,c) => callback.apply(s,c))
+         .masterEngineImmutable
+         .longObjRDD[V](longObjSubgraphAggregation)
+
+      longObjRDD
    }
 
    def explore(n: Int): Fractoid[S] = {

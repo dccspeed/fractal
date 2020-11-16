@@ -27,7 +27,6 @@ public abstract class BasicPattern implements Pattern {
    private static final Logger LOG = Logger.getLogger(BasicPattern.class);
    private static final int EDGE_POOL_SIZE = 10;
 
-   protected int configurationId;
    protected Configuration configuration;
 
    /**
@@ -272,7 +271,6 @@ public abstract class BasicPattern implements Pattern {
    @Override
    public void init(Configuration config) {
       if (config == null) return;
-      //configurationId = config.getId();
 
       configuration = config;
 
@@ -1009,12 +1007,7 @@ public abstract class BasicPattern implements Pattern {
       vertexLabeled = dataInput.readBoolean();
       edgeLabeled = dataInput.readBoolean();
 
-      //init(Configuration.get(dataInput.readInt()));
-      //configurationId = dataInput.readInt();
-      //configuration = Configuration.get(configurationId);
-
       if (patternEdgePool == null) {
-         //patternEdgePool = PatternEdgePool.instance(edgeLabeled);
          patternEdgePool = PatternEdgeThreadUnsafePool.instance(edgeLabeled,
                  EDGE_POOL_SIZE);
       }

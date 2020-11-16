@@ -5,10 +5,12 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.function.IntConsumer
 
 import akka.actor._
+import br.ufmg.cs.systems.fractal.aggregation.{LongLongSubgraphAggregation, LongObjSubgraphAggregation, LongSubgraphAggregation, ObjLongSubgraphAggregation, ObjObjSubgraphAggregation}
 import br.ufmg.cs.systems.fractal.{Fractoid, Primitive}
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.{EventTimer, Logging, ProcessComputeFunc, ReflectionUtils}
+import com.koloboke.collect.map.LongLongMap
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.{SparkContext, TaskContext}
 import org.apache.spark.rdd.RDD
@@ -25,8 +27,6 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
    val step: Int,
    configBc: Broadcast[SparkConfiguration],
    originalContainer: ComputationContainer[S]) extends SparkMasterEngine [S] {
-
-   import SparkFromScratchMasterEngineAggregation._
 
    def config: SparkConfiguration = configBc.value
 
@@ -54,24 +54,37 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
    }
 
    override def longRDD
-   (defaultValue: Long, value: S => Long, reduce: (Long,Long) => Long)
+   (longSubgraphAggregation: LongSubgraphAggregation[S])
    : RDD[Long] = {
-      execEnginesRDD.map(_.computeAggregationLong(defaultValue, value, reduce))
+      execEnginesRDD.map(_.computeAggregationLong(longSubgraphAggregation))
    }
 
    override def objLongRDD[K <: Serializable : ClassTag]
-   (key: S => K, defaultValue: Long, value: S => Long,
-    reduce: (Long,Long) => Long)
+   (objLongSubgraphAggregation: ObjLongSubgraphAggregation[S,K])
    : RDD[(K,Long)] = {
       execEnginesRDD.flatMap(
-         _.computeAggregationObjLong[K](key, defaultValue, value, reduce))
+         _.computeAggregationObjLong[K](objLongSubgraphAggregation))
    }
 
    override def objObjRDD[K <: Serializable, V <: Serializable]
-   (key: S => K, value: S => V, aggregate: (V,V) => Unit)
+   (objObjSubgraphAggregation: ObjObjSubgraphAggregation[S,K,V])
    : RDD[(K,V)] = {
       execEnginesRDD.flatMap(
-         _.computeAggregationObjObj[K,V](key, value, aggregate))
+         _.computeAggregationObjObj[K,V](objObjSubgraphAggregation))
+   }
+
+   override def longLongRDD
+   (longLongSubgraphAggregation: LongLongSubgraphAggregation[S])
+   : RDD[(Long,Long)] = {
+      execEnginesRDD.flatMap(
+         _.computeAggregationLongLong(longLongSubgraphAggregation))
+   }
+
+   override def longObjRDD[V <: Serializable : ClassTag]
+   (longObjSubgraphAggregation: LongObjSubgraphAggregation[S,V])
+   : RDD[(Long,V)] = {
+      execEnginesRDD.flatMap(
+         _.computeAggregationLongObj(longObjSubgraphAggregation))
    }
 
    override def execEnginesRDD: RDD[SparkEngine[S]] = {
@@ -81,37 +94,8 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
          s", StorageLevel=${stepRDD.getStorageLevel}")
 
       // save original container, i.e., without parents' computations
-      //val originalContainer = config.computationContainer[S]
       logInfo (s"From scratch computation (${this})." +
          s" Original computation: ${originalContainer}")
-
-      // find out how many computations are pipelined
-      val numComputations = originalContainer.setDepth(0)
-
-      // adding accumulators to each computation
-      val egAccums = new Array[LongAccumulator](numComputations)
-      val awAccums = new Array[LongAccumulator](numComputations)
-      val exAccums = new Array[LongAccumulator](numComputations)
-      var i = 0
-      while (i < numComputations) {
-         val egKey = s"${VALID_SUBGRAPHS}_${i}"
-         val awKey = s"${CANONICAL_SUBGRAPHS}_${i}"
-         val exKey = s"${NEIGHBORHOOD_LOOKUPS}_${i}"
-
-         egAccums(i) = sc.longAccumulator(egKey)
-         awAccums(i) = sc.longAccumulator(awKey)
-         exAccums(i) = sc.longAccumulator(exKey)
-
-         aggAccums.update (egKey, egAccums(i))
-         aggAccums.update (awKey, awAccums(i))
-         aggAccums.update (exKey, exAccums(i))
-
-         logInfo(s"Added accumulators (${egKey},${awKey},${exKey})")
-
-         i += 1
-      }
-
-      logInfo(s"Acummulators ${egAccums.toList}")
 
       // we will contruct the pipeline in this var
       var cc = originalContainer.withComputationLabel("last_step_begins")
@@ -125,29 +109,20 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
                cc.primitive match {
                   case Primitive.E =>
                      if (depth == 0) {
-                        val extensionFuncFirst = getProcessComputeFuncFirst(
-                           egAccums(depth),
-                           awAccums(depth)
-                        )
+                        val extensionFuncFirst = getProcessComputeFuncFirst()
                         cc.shallowCopy(
                            processComputeOpt = Option(extensionFuncFirst),
                            nextComputationOpt = Option(ncc),
                            processOpt = None)
                      } else {
-                        val extensionFuncMiddle = getProcessComputeFuncMiddle(
-                           egAccums(depth),
-                           awAccums(depth)
-                        )
+                        val extensionFuncMiddle = getProcessComputeFuncMiddle()
                         cc.shallowCopy(
                            processComputeOpt = Option(extensionFuncMiddle),
                            nextComputationOpt = Option(ncc),
                            processOpt = None)
                      }
                   case Primitive.F =>
-                     val filterFunc = getProcessComputeFuncFilter(
-                        egAccums(depth),
-                        awAccums(depth)
-                     )
+                     val filterFunc = getProcessComputeFuncFilter()
                      cc.shallowCopy(
                         processComputeOpt = Option(filterFunc),
                         nextComputationOpt = Option(ncc),
@@ -161,25 +136,16 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
                cc.primitive match {
                   case Primitive.E =>
                      if (depth == 0) {
-                        val extensionFuncFirstLast = getProcessComputeFuncFirstLast(
-                           egAccums(depth),
-                           awAccums(depth)
-                        )
+                        val extensionFuncFirstLast = getProcessComputeFuncFirstLast()
                         cc.shallowCopy(
                            processComputeOpt = Option(extensionFuncFirstLast))
                      } else {
-                        val extensionFuncLast = getProcessComputeFuncLast(
-                           egAccums(depth),
-                           awAccums(depth)
-                        )
+                        val extensionFuncLast = getProcessComputeFuncLast()
                         cc.shallowCopy(
                            processComputeOpt = Option(extensionFuncLast))
                      }
                   case Primitive.F =>
-                     val filterFuncLast = getProcessComputeFuncFilterLast(
-                        egAccums(depth),
-                        awAccums(depth)
-                     )
+                     val filterFuncLast = getProcessComputeFuncFilterLast()
                      cc.shallowCopy(
                         processComputeOpt = Option(filterFuncLast))
                   case other =>
@@ -199,15 +165,10 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
          s"${SparkConfiguration.serialize(config).length} bytes." +
          s" ${config}")
 
-      validSubgraphsAccum = sc.longAccumulator
-      aggAccums.update("valid_subgraphs", validSubgraphsAccum)
-
       /**
        * Local vars for clean serialization
        */
       val _step = step
-      val _accums = aggAccums
-      val _validSubgraphsAccum = validSubgraphsAccum
       val _configBc = configBc
       val _computation = cc
 
@@ -225,8 +186,6 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
          val execEngine = new SparkFromScratchEngine [S] (
             partitionId = idx,
             step = _step,
-            accums = _accums,
-            validSubgraphsAccum = _validSubgraphsAccum,
             computation = _computation,
             configuration = _configBc.value
          )
@@ -235,14 +194,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
       }
    }
 
-   /**
-    * Master's computation takes place here, superstep by superstep
-    */
-   lazy val next: Boolean = true
-
-   def getProcessComputeFuncFilterLast
-   (_egAccum: LongAccumulator, _awAccum: LongAccumulator)
-   : ProcessComputeFunc[S] = {
+   def getProcessComputeFuncFilterLast(): ProcessComputeFunc[S] = {
       new ProcessComputeFunc[S] with Logging {
          override def apply(enum: SubgraphEnumerator[S],
                             c: Computation[S]): Long = {
@@ -271,13 +223,12 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
       }
    }
 
-   def getProcessComputeFuncFilter(_egAccum: LongAccumulator,
-                                   _awAccum: LongAccumulator): ProcessComputeFunc[S] = {
+   def getProcessComputeFuncFilter(): ProcessComputeFunc[S] = {
 
-         new ProcessComputeFunc[S] with Logging {
+      new ProcessComputeFunc[S] with Logging {
 
-            override def apply(enum: SubgraphEnumerator[S],
-                               c: Computation[S]): Long = {
+         override def apply(enum: SubgraphEnumerator[S],
+                            c: Computation[S]): Long = {
             var ret = 0L
             val subgraph = enum.getSubgraph
             if (c.filter(subgraph)) {
@@ -286,7 +237,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
                   c.addValidSubgraphs(1)
                }
 
-               ret += c.nextComputation().compute(subgraph)
+               c.nextComputation().compute()
             }
 
             if (Configuration.OPCOUNTER_ENABLED) {
@@ -300,13 +251,11 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
       }
    }
 
-   def getProcessComputeFuncMiddle(_egAccum: LongAccumulator,
-                                   _awAccum: LongAccumulator): ProcessComputeFunc[S] = {
+   def getProcessComputeFuncMiddle(): ProcessComputeFunc[S] = {
       new ProcessComputeFunc[S] with Logging {
          override def toString = "EM"
 
          def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
-            var currentSubgraph: S = iter.getSubgraph
             var ret = 0L
             val nextComp = c.nextComputation()
 
@@ -316,7 +265,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
                   c.addValidSubgraphs(1)
                }
 
-               ret += nextComp.compute(currentSubgraph)
+               nextComp.compute()
             }
 
             ret
@@ -324,8 +273,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
       }
    }
 
-   def getProcessComputeFuncFirst(_egAccum: LongAccumulator,
-                             _awAccum: LongAccumulator): ProcessComputeFunc[S] = {
+   def getProcessComputeFuncFirst(): ProcessComputeFunc[S] = {
       new ProcessComputeFunc[S] with Logging {
 
          var workStealingSys: WorkStealingSystem[S] = _
@@ -366,28 +314,15 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
 
          private def processCompute(iter: SubgraphEnumerator[S],
                                     c: Computation[S]): Long = {
-            var currentSubgraph: S = iter.getSubgraph
             var ret = 0L
             val nextComp = c.nextComputation()
-
-            //while (iter.hasNext) {
-            //   iter.extend()
-
-            //   if (Configuration.OPCOUNTER_ENABLED) {
-            //      c.addCanonicalSubgraphs(1)
-            //      c.addValidSubgraphs(1)
-            //   }
-
-            //   ret += nextComp.compute(currentSubgraph)
-            //}
-
             while (iter.extend()) {
                if (Configuration.OPCOUNTER_ENABLED) {
                   c.addCanonicalSubgraphs(1)
                   c.addValidSubgraphs(1)
                }
 
-               ret += nextComp.compute(currentSubgraph)
+               nextComp.compute()
             }
 
             ret
@@ -395,12 +330,9 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
       }
    }
 
-   def getProcessComputeFuncFirstLast(_egAccum: LongAccumulator,
-                             _awAccum: LongAccumulator): ProcessComputeFunc[S] = {
+   def getProcessComputeFuncFirstLast(): ProcessComputeFunc[S] = {
       new ProcessComputeFunc[S] with Logging {
          var workStealingSys: WorkStealingSystem[S] = _
-
-         val lastStepConsumer: LastStepConsumer[S] = new LastStepConsumer[S]
 
          def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
             val config = c.getConfig()
@@ -459,10 +391,8 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
       }
    }
 
-   def getProcessComputeFuncLast(_egAccum: LongAccumulator,
-                                 _awAccum: LongAccumulator): ProcessComputeFunc[S] = {
+   def getProcessComputeFuncLast(): ProcessComputeFunc[S] = {
       new ProcessComputeFunc[S] with Logging {
-         val lastStepConsumer: LastStepConsumer[S] = new LastStepConsumer[S]
 
          override def toString = "EL"
 
@@ -487,45 +417,4 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
          }
       }
    }
-}
-
-private class LastStepConsumer[S <: Subgraph] extends IntConsumer with
-   Serializable {
-   var subgraph: S = _
-   var computation: Computation[S] = _
-
-   def set(subgraph: S, computation: Computation[S]): LastStepConsumer[S] = {
-      this.subgraph = subgraph
-      this.computation = computation
-      this
-   }
-
-   override def accept(w: Int): Unit = {
-      subgraph.addWord(w)
-      computation.process(subgraph)
-      subgraph.removeLastWord()
-   }
-}
-
-
-object SparkFromScratchMasterEngineAggregation {
-   val NEIGHBORHOOD_LOOKUPS = "neighborhood_lookups"
-
-   val NEIGHBORHOOD_LOOKUPS_ARR = {
-      val arr = new Array[String](16)
-      var i = 0
-      while (i < arr.length) {
-         arr(i) = s"${NEIGHBORHOOD_LOOKUPS}_${i}"
-         i += 1
-      }
-      arr
-   }
-
-   def NEIGHBORHOOD_LOOKUPS(depth: Int): String = {
-      NEIGHBORHOOD_LOOKUPS_ARR(depth)
-   }
-
-   val CANONICAL_SUBGRAPHS = "canonical_subgraphs"
-   val VALID_SUBGRAPHS = "valid_subgraphs"
-   val AGG_CANONICAL_FILTER = "canonical_filter"
 }

@@ -1,7 +1,7 @@
 package br.ufmg.cs.systems.fractal.conf;
 
+import br.ufmg.cs.systems.fractal.computation.BypassSubgraphEnumerator;
 import br.ufmg.cs.systems.fractal.computation.Computation;
-import br.ufmg.cs.systems.fractal.computation.MasterComputation;
 import br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.graph.MainGraphStore;
@@ -115,8 +115,7 @@ public class Configuration implements Serializable {
     private transient Class<? extends MainGraph> mainGraphClass;
    private transient Class<? extends Pattern> patternClass;
    private transient Class<? extends Computation> computationClass;
-    private transient Class<? extends MasterComputation> masterComputationClass;
-    private transient Class<? extends Subgraph> subgraphClass;
+   private transient Class<? extends Subgraph> subgraphClass;
     private transient Class<? extends SubgraphEnumerator> subgraphEnumClass;
 
     private transient String outputPath;
@@ -186,10 +185,6 @@ public class Configuration implements Serializable {
             computationClass = (Class<? extends Computation>)
                     getClass(CONF_COMPUTATION_CLASS, CONF_COMPUTATION_CLASS_DEFAULT);
         }
-        masterComputationClass = (Class<? extends MasterComputation>)
-           getClass(CONF_MASTER_COMPUTATION_CLASS,
-                 CONF_MASTER_COMPUTATION_CLASS_DEFAULT);
-
         outputPath = getString(CONF_OUTPUT_PATH, CONF_OUTPUT_PATH_DEFAULT + "_"
               + computationClass.getName());
 
@@ -463,11 +458,7 @@ public class Configuration implements Serializable {
         this.outputPath = outputPath;
     }
 
-   public MasterComputation createMasterComputation() {
-        return ReflectionUtils.newInstance(masterComputationClass);
-    }
-
-    public void setIsGraphEdgeLabelled(boolean isGraphEdgeLabelled) {
+   public void setIsGraphEdgeLabelled(boolean isGraphEdgeLabelled) {
        this.isGraphEdgeLabelled = isGraphEdgeLabelled;
     }
 
@@ -475,12 +466,7 @@ public class Configuration implements Serializable {
         return isGraphEdgeLabelled;
     }
 
-   public void setMasterComputationClass(
-          Class<? extends MasterComputation> masterComputationClass) {
-       this.masterComputationClass = masterComputationClass;
-    }
-
-    public void setComputationClass(
+   public void setComputationClass(
           Class<? extends Computation> computationClass) {
        this.computationClass = computationClass;
     }

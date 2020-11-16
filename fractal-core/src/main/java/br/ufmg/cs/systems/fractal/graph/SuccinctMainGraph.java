@@ -250,9 +250,16 @@ public class SuccinctMainGraph implements MainGraph {
 
    @Override
    public void forEachEdge(int u, int v, IntConsumer consumer) {
-      int startIdx = vertexNeighborhoodIdx.getu(u);
-      int endIdx = vertexNeighborhoodIdx.getu(u + 1);
-      forEachEdgeId(u, v, startIdx, endIdx, consumer);
+      int startIdxu = vertexNeighborhoodIdx.getu(u);
+      int endIdxu = vertexNeighborhoodIdx.getu(u + 1);
+      int startIdxv = vertexNeighborhoodIdx.getu(v);
+      int endIdxv = vertexNeighborhoodIdx.getu(v + 1);
+
+      if ((endIdxu - startIdxu) < (endIdxv - startIdxv)) {
+         forEachEdgeId(u, v, startIdxu, endIdxu, consumer);
+      } else {
+         forEachEdgeId(v, u, startIdxv, endIdxv, consumer);
+      }
    }
 
    @Override
@@ -707,6 +714,7 @@ public class SuccinctMainGraph implements MainGraph {
 
    public void forEachEdgeId(int u, int v, int startIdx, int endIdx,
                              IntConsumer consumer) {
+
       int idx = vertexNeighborhoods.binarySearch(v, startIdx, endIdx);
 
       if (idx < startIdx || idx >= endIdx) return;
@@ -714,23 +722,17 @@ public class SuccinctMainGraph implements MainGraph {
       // accept first edge (u,v) found
       consumer.accept(edgeNeighborhoods.getu(idx));
 
-      // accept all edges (u,v) rightwards
-      for (int i = idx - 1; i >= startIdx && vertexNeighborhoods.getu(i) == v;
-           --i) {
-         consumer.accept(edgeNeighborhoods.getu(i));
-      }
+      //// accept all edges (u,v) rightwards
+      //for (int i = idx - 1; i >= startIdx && vertexNeighborhoods.getu(i) == v;
+      //     --i) {
+      //   consumer.accept(edgeNeighborhoods.getu(i));
+      //}
 
-      // accept all edges (u,v) leftwards
-      for (int i = idx + 1; i < endIdx && vertexNeighborhoods.getu(i) == v;
-           ++i) {
-         consumer.accept(edgeNeighborhoods.getu(i));
-      }
-   }
-
-   public int edgeId(int u, int v) {
-      return edgeNeighborhoods.getu(vertexNeighborhoods
-              .binarySearch(v, vertexNeighborhoodIdx.getu(u),
-                      vertexNeighborhoodIdx.getu(u + 1)));
+      //// accept all edges (u,v) leftwards
+      //for (int i = idx + 1; i < endIdx && vertexNeighborhoods.getu(i) == v;
+      //     ++i) {
+      //   consumer.accept(edgeNeighborhoods.getu(i));
+      //}
    }
 
    public void init(Object path) throws IOException {

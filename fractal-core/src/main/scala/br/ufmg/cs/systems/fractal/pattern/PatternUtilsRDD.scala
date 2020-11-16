@@ -21,7 +21,7 @@ object PatternUtilsRDD {
    : RDD[Pattern] = {
       val sc = patterns.sparkContext
       patterns
-         .flatMap(p =>{
+         .flatMap(p => {
             PatternUtils.extendByVertex(p, vertexLabel).asScala
          })
          .distinct(3 * sc.defaultParallelism)

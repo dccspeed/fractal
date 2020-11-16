@@ -11,77 +11,29 @@ import java.io.Serializable;
 
 public interface Computation<S extends Subgraph> extends Serializable {
 
-    void init(Configuration config);
-
-   void init(CommonExecutionEngine<S> engine, Configuration config);
-
-   void initAggregations(Configuration config);
-    long compute(S Subgraph);
-
-
-   Computation<S> nextComputation();
-
-    // {{{ runtime
-    Primitive primitive();
-    Primitive[] primitives();
-
-   long processCompute(SubgraphEnumerator<S> expansions);
-    boolean filter(S Subgraph);
-    void process(S Subgraph);
-    int getStep();
-
-   SubgraphAggregation<S> getSubgraphAggregation();
-
-   int getPartitionId();
-
-    int getNumberPartitions();
-
-    Configuration getConfig();
-
-   void setSubgraph(S subgraph);
-
-   boolean shouldBypass();
-
-   double getComputeExtensionsMax();
-
-   double getComputeExtensionsMin();
-
-   Computation<S> lastComputation();
-
-    void setExecutionEngine(CommonExecutionEngine<S> executionEngine);
-    CommonExecutionEngine<S> getExecutionEngine();
-    
-    String computationLabel();
-    int setDepth(int depth);
-    int getDepth();
-
-    SubgraphEnumerator<S> getSubgraphEnumerator();
-
-   Class<? extends Subgraph> getSubgraphClass();
-    
-    int getInitialNumWords();
-
-    boolean containsWord(int wordId);
-
-   long getValidSubgraphs();
-
-   void setValidSubgraphs(long validSubgraphs);
-
-   void addValidSubgraphs(long inc);
-
-   long getCanonicalSubgraphs();
-
-   long getExpansionCandidates();
-
-   void setCanonicalSubgraphs(long canonicalSubgraphs);
-
-   void setExpansionCandidates(long expansionCandidates);
-
    void addCanonicalSubgraphs(long inc);
 
    void addExpansionNeighborhood(IntArrayList extensionCandidates);
 
-   long getTotalComputeExtensionsTime();
+   void addValidSubgraphs(long inc);
+
+   String computationLabel();
+
+   void compute();
+
+   void computeAndProcessExtensions();
+
+   boolean containsWord(int wordId);
+
+   boolean filter(S Subgraph);
+
+   long getCanonicalSubgraphs();
+
+   void setCanonicalSubgraphs(long canonicalSubgraphs);
+
+   double getComputeExtensionsMax();
+
+   double getComputeExtensionsMin();
 
    double getComputeExtensionsNumSamples();
 
@@ -89,10 +41,65 @@ public interface Computation<S extends Subgraph> extends Serializable {
 
    double getComputeExtensionsRunningMean();
 
+   Configuration getConfig();
+
+   int getDepth();
+
+   ExecutionEngine<S> getExecutionEngine();
+
+   void setExecutionEngine(ExecutionEngine<S> executionEngine);
+
+   long getExpansionCandidates();
+
+   void setExpansionCandidates(long expansionCandidates);
+
+   int getInitialNumWords();
+
+   int getNumberPartitions();
+
+   int getPartitionId();
+
    Pattern getPattern();
 
+   int getStep();
 
-    // java computations
+   SubgraphAggregation<S> getSubgraphAggregation();
+
+   Class<? extends Subgraph> getSubgraphClass();
+
+   SubgraphEnumerator<S> getSubgraphEnumerator();
+
+   long getTotalComputeExtensionsTime();
+
+   long getValidSubgraphs();
+
+   void setValidSubgraphs(long validSubgraphs);
+
+   void init(Configuration config);
+
+   void init(ExecutionEngine<S> engine, Configuration config);
+
+   void initAggregations(Configuration config);
+
+   Computation<S> lastComputation();
+
+   Computation<S> nextComputation();
+
+   // {{{ runtime
+   Primitive primitive();
+
+   Primitive[] primitives();
+
+   void process(S Subgraph);
+
+   long processCompute(SubgraphEnumerator<S> expansions);
+
+   // java computations
    void processExtensions();
-   void computeAndProcessExtensions();
+
+   int setDepth(int depth);
+
+   void setSubgraph(S subgraph);
+
+   boolean shouldBypass();
 }

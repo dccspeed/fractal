@@ -21,21 +21,6 @@ public class PatternUtils {
    private static final Logger LOG = Logger.getLogger(PatternUtils.class);
 
    /**
-    * Generates all canonical patterns from extending each existing pattern
-    * by one vertex
-    *
-    * @param patterns set of existing patterns
-    * @return set of new patterns
-    */
-   public static HashObjSet<Pattern> extendByVertex(
-           HashObjSet<Pattern> patterns, int vertexLabel) {
-      if (patterns.isEmpty()) return singleVertexPatternSet();
-      HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
-      patterns.forEach(p -> newPatterns.addAll(extendByVertex(p, vertexLabel)));
-      return newPatterns;
-   }
-
-   /**
     * Generates all canonical patterns obtained from *pattern* by extending
     * one vertex from it
     *
@@ -82,20 +67,6 @@ public class PatternUtils {
          }
       }
 
-      return newPatterns;
-   }
-
-   /**
-    * Generates all canonical patterns from extending each existing pattern by one edge
-    *
-    * @param patterns set of existing patterns
-    * @return set of new patterns
-    */
-   public static HashObjSet<Pattern> extendByEdge(
-           HashObjSet<Pattern> patterns, int vertexLabel) {
-      if (patterns.isEmpty()) return singleEdgePatternSet();
-      HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
-      patterns.forEach(p -> newPatterns.addAll(extendByEdge(p, vertexLabel)));
       return newPatterns;
    }
 
@@ -170,7 +141,6 @@ public class PatternUtils {
          canonicalPattern.turnCanonical();
          if (!quickMap.containsKey(canonicalPattern)) {
             quickMap.put(canonicalPattern, newPattern);
-            //newPatterns.add(newPattern);
             newPatterns.add(canonicalPattern);
          }
       }
@@ -188,11 +158,9 @@ public class PatternUtils {
     */
    public static Configuration createConfig() {
       Configuration config = new Configuration();
-      //config.setComputationClass(VertexInducedComputation.class);
       config.setSubgraphClass(VertexInducedSubgraph.class);
       config.setMainGraphClass(BasicMainGraph.class);
       config.setPatternClass(JBlissPattern.class);
-      //config.initialize();
       return config;
    }
 
@@ -243,17 +211,6 @@ public class PatternUtils {
    }
 
    /**
-    * Generates a set with one single vertex unlabeled pattern
-    *
-    * @return set containing the new pattern
-    */
-   public static HashObjSet<Pattern> singleVertexPatternSet() {
-      HashObjSet<Pattern> patterns = HashObjSets.newMutableSet();
-      patterns.add(singleVertexPattern());
-      return patterns;
-   }
-
-   /**
     * Generates a single vertex unlabeled pattern
     *
     * @return new pattern
@@ -297,17 +254,6 @@ public class PatternUtils {
       EdgeInducedSubgraph subgraph = (EdgeInducedSubgraph) config.createSubgraph();
       subgraph.addWord(0);
       return subgraph.quickPattern();
-   }
-
-   /**
-    * Generates a set with one single edge unlabeled pattern
-    *
-    * @return set containing the new pattern
-    */
-   public static HashObjSet<Pattern> singleEdgePatternSet() {
-      HashObjSet<Pattern> patterns = HashObjSets.newMutableSet();
-      patterns.add(singleEdgePattern());
-      return patterns;
    }
 
    /**

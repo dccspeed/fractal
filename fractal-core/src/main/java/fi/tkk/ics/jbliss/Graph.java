@@ -74,8 +74,7 @@ public class Graph<V extends Comparable> {
    }
 
    private long createBliss() {
-      IntArrayList vertices = pattern.getVertices();
-      int numVertices = vertices.size();
+      int numVertices = pattern.getNumberOfVertices();
       IntArrayList vertexLabels = new IntArrayList(numVertices);
       if (numVertices == 1) {
          vertexLabels.add(pattern.getFirstVertexLabel());
@@ -150,13 +149,6 @@ public class Graph<V extends Comparable> {
       while (labelCursor.moveNext()) {
          _add_vertex(bliss, labelCursor.elem());
       }
-
-      //IntCursor vertexCursor = vertices.cursor();
-
-      //while (vertexCursor.moveNext()) {
-      //	Vertex vertex = mainGraph.getVertex(vertexCursor.elem());
-      //	_add_vertex(bliss, vertex.getVertexLabel());
-      //}
 
       ObjCursor<PatternEdge> edgeCursor = edges.cursor();
 

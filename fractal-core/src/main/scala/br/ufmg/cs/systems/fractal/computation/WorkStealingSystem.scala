@@ -275,13 +275,7 @@ class WorkStealingSystem [S <: Subgraph]
       }
 
       // set subgraph enumerator and rebuild its state
-      subgraphEnum.extensions.clear()
-      while (i < workUnit.size()) {
-         subgraphEnum.extensions.add(workUnit.getu(i))
-         i += 1
-      }
-      //subgraphEnum.newExtensions(workUnit.view(i, workUnit.size()))
-      subgraphEnum.newExtensions(subgraphEnum.extensions)
+      subgraphEnum.newExtensions(workUnit.view(i, workUnit.size()))
       subgraphEnum.rebuildState()
 
       subgraphEnum

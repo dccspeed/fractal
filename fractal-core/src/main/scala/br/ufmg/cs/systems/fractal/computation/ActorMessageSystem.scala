@@ -100,7 +100,8 @@ case object ReportStats
 /**
  * Stats message
  */
-case class Stats(partitionId: Int, validSubgraphs: Long)
+case class Stats(partitionId: Int, validSubgraphs: Long, maxMemory: Double,
+                 totalMemory: Double, freeMemory: Double, usedMemory: Double)
 
 /**
  * Termination message
@@ -199,13 +200,18 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
 
          if (registeredSlaves == 0) {
             reset()
-            engine.reportAccumulators
          }
 
       case Log(msg) =>
          logInfo(msg)
 
-      case Stats(partitionId, _validSubgraphs) =>
+      case Stats(partitionId, _validSubgraphs, maxMemory, totalMemory,
+      freeMemory, usedMemory) =>
+
+         logInfo(s"MemoryStats threadId=${partitionId}" +
+            s" maxMemory=${maxMemory} totalMemory=${totalMemory}" +
+            s" freeMemory=${freeMemory} usedMemory=${usedMemory}" +
+            s" validSubgraphs=${_validSubgraphs}")
 
          // increment in the number of valid subgraphs
          val diff = _validSubgraphs - validSubgraphs(partitionId)
@@ -777,37 +783,17 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
    }
 
    private def reportStats(): Unit = {
-      val engine = computation.getExecutionEngine().
-         asInstanceOf[SparkFromScratchEngine[S]]
-
-      masterRef ! Log(
-         s"StatsReport{" +
-            s"step=${computation.getStep}," +
-            s"partitionId=${computation.getPartitionId}," +
-            s"${engine.getStatsAccumulators}," +
-            reportMemoryStats() + "}")
-
-      var validSubgraphsDepth = 0
-      while (engine.accums.contains(s"valid_subgraphs_${validSubgraphsDepth}")) {
-         validSubgraphsDepth += 1
-      }
-      validSubgraphsDepth -= 1
-
-      masterRef ! Stats(computation.getPartitionId,
-         engine.accums(s"valid_subgraphs_${validSubgraphsDepth}").value)
-   }
-
-   private def reportMemoryStats(): String = {
-      def scale(n: Double): Double = n / (1024 * 1024 * 1024)
+      val threadId = computation.getPartitionId
       val runtime = Runtime.getRuntime()
       val maxMemory = runtime.maxMemory()
       val totalMemory = runtime.totalMemory()
       val freeMemory = runtime.freeMemory()
       val usedMemory = totalMemory - freeMemory
-      val step = computation.getStep()
+      val validSubgraphs = computation.lastComputation().getValidSubgraphs
 
-      s"maxMemory=${scale(maxMemory)},totalMemory=${scale(totalMemory)}," +
-         s"freeMemory=${scale(freeMemory)},usedMemory=${scale(usedMemory)}"
+      val statsMsg = Stats(threadId, validSubgraphs, maxMemory, totalMemory,
+         freeMemory, usedMemory)
+      masterRef ! statsMsg
    }
 
    override def postStop(): Unit = {

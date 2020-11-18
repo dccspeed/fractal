@@ -1,7 +1,6 @@
 package br.ufmg.cs.systems.fractal.util
 
-import org.apache.log4j.{Level, LogManager}
-import org.slf4j.LoggerFactory
+import org.apache.log4j.{Level, LogManager, Logger}
 
 /**
  * Logging utility used primary in scala classes.
@@ -9,7 +8,7 @@ import org.slf4j.LoggerFactory
 trait Logging {
    protected def logName = this.getClass.getSimpleName
 
-   protected def log = LoggerFactory.getLogger (logName)
+   protected def log = Logger.getLogger (logName)
 
    /** client functions are called by name in order to avoid unecessary string
     *  building **/
@@ -18,7 +17,7 @@ trait Logging {
       log.info (msg)
    }
 
-   protected def logWarning(msg: => String): Unit = if (log.isWarnEnabled) {
+   protected def logWarning(msg: => String): Unit = if (log.isEnabledFor(Level.WARN)) {
       log.warn (msg)
    }
 
@@ -26,17 +25,22 @@ trait Logging {
       log.debug (msg)
    }
 
-   protected def logError(msg: => String): Unit = if (log.isErrorEnabled) {
+   protected def logError(msg: => String): Unit = if (log.isEnabledFor(Level.ERROR)) {
       log.error (msg)
+   }
+
+   protected def logApp(msg: => String): Unit = if (log.isEnabledFor(FractalAppLogLevel.APP)) {
+      log.log(FractalAppLogLevel.APP, msg)
    }
 
    /** **/
 
    protected def setLogLevel(level: String): Unit = {
-      LogManager.getLogger(logName).setLevel(Level.toLevel(level))
+      val logLevel = Level.toLevel(level.toUpperCase, FractalAppLogLevel.APP)
+      LogManager.getRootLogger.setLevel(logLevel)
    }
 }
 
 object Logging {
-   def getLogger(name: String) = LoggerFactory.getLogger (name)
+   def getLogger(name: String) = Logger.getLogger(name)
 }

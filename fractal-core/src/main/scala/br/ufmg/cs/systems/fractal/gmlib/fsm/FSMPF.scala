@@ -137,9 +137,6 @@ class FSMPF(minSupport: Int, maxNumEdges: Int)
    }
 
    override def apply(fg: FractalGraph): RDD[(Pattern, MinImageSupport)] = {
-      // INSTRUMENTATION
-      initializationStart()
-
       val sc = fg.fractalContext.sparkContext
 
       var frequentPatternsSupportsRDDs: List[PatternsSupports] = List.empty
@@ -154,9 +151,6 @@ class FSMPF(minSupport: Int, maxNumEdges: Int)
          val pattern = getPatternWithPlan(patternWithoutPlan)
          val rdd = canonicalPatternsSupports(fg, pattern).cache()
          rdd.foreachPartition(_ => {})
-
-         // INSTRUMENTATION
-         aggregationFinishInitializationStart()
 
          canonicalPatternsSupportsRDDs = rdd :: canonicalPatternsSupportsRDDs
          rdd
@@ -206,11 +200,6 @@ class FSMPF(minSupport: Int, maxNumEdges: Int)
                patternWithoutPlan.setVertexLabeled(true)
                val pattern = getPatternWithPlan(patternWithoutPlan)
                val rdd = canonicalPatternsSupports(fg, pattern).cache()
-               //rdd.foreachPartition(_ => {})
-
-               // INSTRUMENTATION
-               aggregationFinishInitializationStart()
-
                canonicalPatternsSupportsRDDs = rdd :: canonicalPatternsSupportsRDDs
                rdd
             }
@@ -249,9 +238,6 @@ class FSMPF(minSupport: Int, maxNumEdges: Int)
       // unpersist any RDD cached in this call (after materialization)
       frequentPatternsSupportsRDDs.foreach(_.unpersist())
       canonicalPatternsSupportsRDDs.foreach(_.unpersist())
-
-      // INSTRUMENTATION
-      initializationFinish()
 
       frequentPatternSupportRDD
    }

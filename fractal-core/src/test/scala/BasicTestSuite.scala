@@ -188,7 +188,8 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
       // triangles
       val triangle = new FractalGraph("../data/triangle-test.graph",
-         cubeGraph.fractalContext)
+         cubeGraph.fractalContext,
+         "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
       val trianglesFrac = cubeGraph.patternMatchingPF(triangle.asPattern).
          explore(2)
       val numTriangles = trianglesFrac.aggregationCount
@@ -196,7 +197,8 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
       // squares
       val square = new FractalGraph("../data/square-test.graph",
-         cubeGraph.fractalContext)
+         cubeGraph.fractalContext,
+         "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
       val squaresFrac = cubeGraph.patternMatchingPF(square.asPattern).
          explore(3)
       val numSquares = squaresFrac.aggregationCount
@@ -277,7 +279,8 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       val gt1 = citeseerSingleLabelGraph.cliquesSF(3).aggregationCount
 
       // ground-truth 2: triangle querying
-      val triangle = new FractalGraph("../data/triangle-test.graph", fc)
+      val triangle = new FractalGraph("../data/triangle-test.graph", fc,
+         "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
       val trianglesFrac = citeseerSingleLabelGraph
          .patternMatchingPF(triangle.asPattern).
          explore(2)
@@ -308,7 +311,8 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       citeseerSingleLabelGraph.set("num_partitions", numPartitions)
 
       // ground-truth: square querying
-      val square = new FractalGraph("../data/q2-square.graph", fc)
+      val square = new FractalGraph("../data/q2-square.graph", fc,
+         "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
       val squares = citeseerSingleLabelGraph.patternMatchingPF(square.asPattern)
          .
             explore(3)
@@ -371,7 +375,8 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
          citeseerSingleLabelGraph.set("num_partitions", numPartitions)
 
          val queryGraph = new FractalGraph(s"../data/${query}.graph",
-            citeseerSingleLabelGraph.fractalContext)
+            citeseerSingleLabelGraph.fractalContext,
+            "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
 
          val gqueryingFrac = citeseerSingleLabelGraph
             .patternMatchingPF(queryGraph.asPattern)

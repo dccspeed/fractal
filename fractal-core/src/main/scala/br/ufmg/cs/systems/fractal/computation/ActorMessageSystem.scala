@@ -1,24 +1,19 @@
 package br.ufmg.cs.systems.fractal.computation
 
-import java.io._
-import java.util
-import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue, ThreadLocalRandom}
 import java.util.{Arrays, Comparator, Properties}
 
 import akka.actor._
 import akka.dispatch.MessageDispatcher
 import akka.routing._
-import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
+import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph
+import br.ufmg.cs.systems.fractal.util.Logging
 import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjArrayList}
-import br.ufmg.cs.systems.fractal.util.{EventTimer, Logging, ReflectionUtils}
 import com.koloboke.collect.map.LongObjMap
 import com.koloboke.collect.map.hash.HashLongObjMaps
-import com.koloboke.collect.set.{IntSet, LongSet}
-import com.koloboke.collect.set.hash.{HashIntSets, HashLongSets}
 import com.typesafe.config.{Config, ConfigFactory}
-import io.netty.util.collection.LongObjectMap
 
 import scala.collection.mutable.Map
 import scala.concurrent.duration._
@@ -167,12 +162,6 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
             slavesRouter = slavesRouter.addRoutee(ActorRefRoutee(slaveRef))
          }
 
-         if (EventTimer.ENABLED) {
-            if (registeredSlaves == 1) {
-               EventTimer.masterInstance(0).finish(EventTimer.INITIALIZATION)
-            }
-         }
-
          logInfo(s"${self} knows ${registeredSlaves} slaves.")
 
          slaves(partitionId) = slaveRef
@@ -186,12 +175,6 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
       case ByeMaster(partitionId, slaveRef) =>
          if (slaves(partitionId) != null) {
             registeredSlaves -= 1
-         }
-
-         if (EventTimer.ENABLED) {
-            if (registeredSlaves == numSlaves - 1) {
-               EventTimer.masterInstance(0).start(EventTimer.AGGREGATION)
-            }
          }
 
          logInfo(s"ByeMaster: ${self} knows ${registeredSlaves} slaves.")
@@ -229,7 +212,9 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
             s" total=${totalValidSubgraphs}" +
             (
                if (maxValidSubgraphs < Long.MaxValue)
-                  s"/${maxValidSubgraphs} total(%)=${(totalValidSubgraphs / maxValidSubgraphs.toDouble)*100}/100"
+                  s"/${maxValidSubgraphs} total(%)=${
+                     (totalValidSubgraphs / maxValidSubgraphs.toDouble) * 100
+                  }/100"
                else
                   ""
                )
@@ -237,8 +222,9 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
 
          // if we reach *maxValidSubgraphs* then stop execution, we are done
          if (totalValidSubgraphs >= maxValidSubgraphs) {
-            logInfo(s"Reached the limit of ${maxValidSubgraphs} valid subgraphs." +
-               s" Terminating slaves=${slaves.mkString(",")}")
+            logInfo(
+               s"Reached the limit of ${maxValidSubgraphs} valid subgraphs." +
+                  s" Terminating slaves=${slaves.mkString(",")}")
 
             // send termination messages to all known slaves
             var i = 0
@@ -264,7 +250,7 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
 /**
  * Slave actor
  */
-class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
+class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
    extends MSActor(masterPath) {
 
    private val computation: Computation[S] = engine.computation
@@ -293,7 +279,7 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
 
    private var numLocalPeers: Int = _
 
-   private val unackMessages: LongObjMap[(Retry,Cancellable)] =
+   private val unackMessages: LongObjMap[(Retry, Cancellable)] =
       HashLongObjMaps.newMutableMap()
 
    private val rejectedResponses: ObjArrayList[StealWorkResponse] =
@@ -359,14 +345,14 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
       case HelloSlave(_slaves) =>
          slaves = _slaves
          if (slaves.length > 0) {
-            val pivotMap: Map[Address,ActorRef] = Map.empty
+            val pivotMap: Map[Address, ActorRef] = Map.empty
             var i = 0
             numLocalPeers = 0
             while (i < slaves.length) {
                val ref = slaves(i)
                slavesRouter = slavesRouter.addRoutee(ActorRefRoutee(ref))
                val refAddr = ref.path.address
-               pivotMap.update (refAddr, ref)
+               pivotMap.update(refAddr, ref)
                if (refAddr.equals(self.path.address)) {
                   numLocalPeers += 1
                }
@@ -576,7 +562,7 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
        * } Work stealing
        */
 
-      case inMsg @ Log(msg) =>
+      case inMsg@Log(msg) =>
          masterRef ! inMsg
 
       case Terminated(`actor`) =>
@@ -602,7 +588,7 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
          }
 
       case ReceiveTimeout =>
-         // nothing
+      // nothing
 
       case other =>
          logWarning(s"${self} is not ready. Ignoring message: ${other}.")
@@ -615,10 +601,11 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
       }
    }
 
-   private def sendRequestWithTimeout(msg: StealWorkRequest, dest: ActorRef): Unit = {
+   private def sendRequestWithTimeout(msg: StealWorkRequest,
+                                      dest: ActorRef): Unit = {
       // send first time
       //if (ThreadLocalRandom.current().nextBoolean())
-         dest ! msg
+      dest ! msg
 
       val reqRetry = Retry(msg, dest)
 
@@ -636,7 +623,7 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
    private def sendMsgWithRetransmission(msg: SeqNum, dest: ActorRef): Unit = {
       // send first time
       //if (ThreadLocalRandom.current().nextBoolean())
-         dest ! msg
+      dest ! msg
 
       // get or create retry message
       val retryMsgCancellable = unackMessages.get(msg.seqNum)
@@ -671,7 +658,8 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
    }
 
    private def maybeCheckReadyToFinishSlaves(): Unit = {
-      if (outbox != null && slaves != null && readyToFinishCount != slaves.length) {
+      if (outbox != null && slaves != null &&
+         readyToFinishCount != slaves.length) {
          val msg = ReadyToFinish(partitionId)
          var i = 0
          while (i < slaves.length) {
@@ -681,7 +669,7 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
       }
    }
 
-   private def serializeSubgraphBatch [S <: Subgraph]
+   private def serializeSubgraphBatch[S <: Subgraph]
    (consumer: SubgraphEnumerator[S], batchSize: Int, workUnit: IntArrayList)
    : Int = {
       // int array format: depth, prefixSize, prefix, words
@@ -703,7 +691,8 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
          workUnit.add(extension)
          extension = consumer.nextExtension()
          n += 1
-      } while (n < batchSize && extension > SubgraphEnumerator.INVALID_EXTENSION)
+      } while (n < batchSize &&
+         extension > SubgraphEnumerator.INVALID_EXTENSION)
 
       n
    }
@@ -789,7 +778,7 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
       val totalMemory = runtime.totalMemory()
       val freeMemory = runtime.freeMemory()
       val usedMemory = totalMemory - freeMemory
-      val validSubgraphs = computation.lastComputation().getValidSubgraphs
+      val validSubgraphs = computation.lastComputation().getNumValidExtensions
 
       val statsMsg = Stats(threadId, validSubgraphs, maxMemory, totalMemory,
          freeMemory, usedMemory)
@@ -816,7 +805,7 @@ class SlaveActor [S <: Subgraph](masterPath: String, engine: SparkEngine[S])
 }
 
 object ActorMessageSystem extends Logging {
-   val actorRefComparator = new Comparator[ActorRef] () {
+   val actorRefComparator = new Comparator[ActorRef]() {
       override def compare(a1: ActorRef, a2: ActorRef): Int = {
          a1.compareTo(a2)
       }
@@ -866,7 +855,8 @@ object ActorMessageSystem extends Logging {
       val props = getDefaultProperties
       // setting "0" means to allocate the first/any OS port available
       props.setProperty("akka.remote.netty.tcp.port", "0")
-      val as = ActorSystem("fractal-msgsys", config = Some(getAkkaConfig(props)))
+      val as = ActorSystem("fractal-msgsys",
+         config = Some(getAkkaConfig(props)))
       _akkaSysOpt = Option(as)
       _executorAkkaSysOpt = Option(as)
       logInfo(s"Started akka-sys: ${as} - executor - waiting for messages")
@@ -876,7 +866,8 @@ object ActorMessageSystem extends Logging {
    private lazy val _masterAkkaSys: ActorSystem = {
       val props = getDefaultProperties
       props.setProperty("akka.remote.netty.tcp.port", "2552")
-      val as = ActorSystem("fractal-msgsys", config = Some(getAkkaConfig(props)))
+      val as = ActorSystem("fractal-msgsys",
+         config = Some(getAkkaConfig(props)))
       _akkaSysOpt = Option(as)
       _masterAkkaSysOpt = Option(as)
       logInfo(s"Started akka-sys: ${as} - master - waiting for messages")
@@ -910,7 +901,7 @@ object ActorMessageSystem extends Logging {
          s"master-actor-${engine.config.getId}-${engine.step}")
    }
 
-   def createActor [E <: Subgraph] (engine: SparkEngine[E]): ActorRef = {
+   def createActor[E <: Subgraph](engine: SparkEngine[E]): ActorRef = {
       val remotePath = s"akka.tcp://fractal-msgsys@" +
          s"${engine.configuration.getMasterHostname}:2552" +
          s"/user/master-actor-${engine.configuration.getId}" +

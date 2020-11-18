@@ -4,6 +4,8 @@ version="SPARK-2.4.3"
 
 printf "Description: Script launcher for Fractal built-in applications\n\n"
 
+extras="custom"
+
 subgraphlisting="subgraphs_listing_sf"
 subgraphlisting="${subgraphlisting}|subgraphs_listing_pf"
 subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_sf"
@@ -24,8 +26,6 @@ cliquess="${cliquess}|maximal_cliques_pf"
 fsms="fsm_sf"
 fsms="${fsms}|fsm_pf"
 fsms="${fsms}|fsm_pf_mcvc"
-
-extras="keywordsearch_sf"
 
 gqueryings="pattern_matching_pf_mcvc"
 gqueryings="${gqueryings}|pattern_matching_pf"
@@ -82,6 +82,14 @@ else
 fi
 
 case "$app" in
+	custom)
+	required=""
+        appusage="
+
+ALGOPTION for '$app':
+   ** empty because this is a custom application **"
+	;;
+
 	fsm_sf)
 	required="inputgraph steps fsmsupp"
         appusage="
@@ -358,14 +366,16 @@ num_workers=${num_workers:-1}
 worker_cores=${worker_cores:-1}
 spark_master=${spark_master:-local[${worker_cores}]}
 worker_memory=${worker_memory:-2g}
-input_format=${input_format:-al}
+input_format=${input_format:-sc}
 comm=${comm:-scratch}
 total_cores=$((num_workers * worker_cores))
 deploy_mode=${deploy_mode:-client}
 log_level=${log_level:-info}
 jars=${jars:-""}
+app_class=${app_class:-br.ufmg.cs.systems.fractal.FractalSparkRunner}
 packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties\""
+args=${args:-"$input_format $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $fraction $periodicthreshold $configs"}
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\
@@ -376,13 +386,11 @@ cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --num-executors $num_workers \\
    --executor-cores $worker_cores \\
    --executor-memory $worker_memory \\
-   --class br.ufmg.cs.systems.fractal.FractalSparkRunner \\
+   --class $app_class \\
    --jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-$version.jar,$jars \\
    --packages $packages \\
    $FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-$version.jar \\
-      $input_format $inputgraph $app $comm $total_cores $steps $log_level \\
-      $fsmsupp $keywords $mindensity $query $fraction $periodicthreshold \\
-      $configs"
+   $args"
 
 printf "info: Submitting command:\n$cmd\n\n"
 bash -c "$cmd"

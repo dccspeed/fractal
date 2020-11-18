@@ -177,7 +177,6 @@ sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
    //   toStringPrimitives
    //   //s"CC[${primitiveOpt.getOrElse(Primitive.None).name()}]" +
    //      //s"[${containerId}]" +
-   //      //s"[${computationLabel()}]" +
    //      //s"(${computationRepr.mkString(",")})" +
    //      //s"${nextComputationOpt.map(c => "::" + c.toString).getOrElse("")}"
    //}
@@ -210,7 +209,6 @@ case class EComputationContainer [E <: EdgeInducedSubgraph]
    : (SubgraphEnumerator[E],Computation[E]) => Long = _
    private var _nextComputation: Computation[E] = _
 
-   override def computationLabel(): String = _computationLabel
    override def process(e: E): Unit = _process (e, this)
    override def filter(e: E): Boolean = _filter (e, this)
    override def init(config: Configuration): Unit = _init (config, this)
@@ -456,7 +454,6 @@ case class VComputationContainer [E <: VertexInducedSubgraph]
    private var _processCompute: (SubgraphEnumerator[E],Computation[E]) => Long = _
    private var _nextComputation: Computation[E] = _
 
-   override def computationLabel(): String = _computationLabel
    override def process(e: E): Unit = _process (e, this)
    override def filter(e: E): Boolean = _filter (e, this)
    override def init(config: Configuration): Unit = _init (config, this)
@@ -705,7 +702,6 @@ case class VEComputationContainer [S <: PatternInducedSubgraph](
    : (SubgraphEnumerator[S],Computation[S]) => Long = _
    private var _nextComputation: Computation[S] = _
 
-   override def computationLabel(): String = _computationLabel
    override def process(e: S): Unit = _process (e, this)
    override def filter(e: S): Boolean = _filter (e, this)
    override def init(config: Configuration): Unit = {

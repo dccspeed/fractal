@@ -185,6 +185,7 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
       if (getPrefix().size() == 0) return super.extend();
 
       if (super.extend()) {
+         if (computation.nextComputation() == null) return true;
          MaximalCliquesEnumerator<S> nextEnumerator =
                  (MaximalCliquesEnumerator<S>) computation.nextComputation().getSubgraphEnumerator();
          int u = subgraph.getVertices().getLast();

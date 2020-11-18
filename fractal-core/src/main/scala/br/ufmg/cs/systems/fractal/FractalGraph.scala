@@ -33,8 +33,6 @@ case class FractalGraph
  confs: Map[String, Any],
  logLevel: String) extends Logging {
 
-   private val uuid: UUID = UUID.randomUUID
-
    private val graphId: Int = FractalGraph.newGraphId()
 
    private val config: SparkConfiguration = {
@@ -73,7 +71,7 @@ case class FractalGraph
       val config = new SparkConfiguration
       config.set ("input_graph_path", path)
       config.set ("input_graph_local", local)
-      //config.set ("edge_labelled", true)
+      config.set ("input_graph_class", "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
       config.setSubgraphClass (computation.getSubgraphClass())
       config.setMainGraphId (graphId)
       config.initialize()
@@ -97,16 +95,16 @@ case class FractalGraph
          false, fc, Map.empty, "warn")
    }
 
+   def this(path: String, fc: FractalContext, graphClass: String) = {
+      this (path, graphClass, false, fc, Map.empty, "warn")
+   }
+
    def this(path: String, graphClass: String,
             fc: FractalContext, logLevel: String) = {
       this (path, graphClass, false, fc, Map.empty, logLevel)
    }
 
    private def newFractoid[S <: Subgraph : ClassTag]: Fractoid[S] = {
-      //val newConfig = config
-      //newConfig.setSubgraphClass(
-      //   scala.reflect.classTag[S].runtimeClass.asInstanceOf[Class[S]]
-      //)
       new Fractoid[S](this, config)
    }
 

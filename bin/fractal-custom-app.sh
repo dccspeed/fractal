@@ -16,7 +16,7 @@ else
 	echo "SPARK_HOME is set to $SPARK_HOME"
 fi
 
-required="app_class"
+required="app_class args"
 
 for argname in $required; do
 	if [ -z ${!argname+x} ]; then
@@ -27,24 +27,4 @@ for argname in $required; do
 	fi
 done
 
-spark_master=${spark_master:-local[1]}
-master_memory=${master_memory:-2g}
-num_workers=${num_workers:-1}
-worker_cores=${worker_cores:-1}
-worker_memory=${worker_memory:-2g}
-inputformat=${inputformat:-al}
-comm=${comm:-scratch}
-total_cores=$((num_workers * worker_cores))
-deploy_mode=${deploy_mode:-client}
-
-cmd="$SPARK_HOME/bin/spark-submit --master $spark_master --deploy-mode $deploy_mode \\
-	--driver-memory $master_memory \\
-	--num-executors $num_workers \\
-	--executor-cores $worker_cores \\
-	--executor-memory $worker_memory \\
-        --class $app_class \\
-	--jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-$version.jar \\
-	$FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-$version.jar $@"
-
-echo $cmd
-bash -c "$cmd"
+app="custom" app_class=$app_class $FRACTAL_HOME/bin/fractal.sh

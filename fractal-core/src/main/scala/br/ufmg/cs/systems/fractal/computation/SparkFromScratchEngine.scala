@@ -8,14 +8,13 @@ import akka.actor._
 import br.ufmg.cs.systems.fractal.aggregation._
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
+import br.ufmg.cs.systems.fractal.util.Logging
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList
-import br.ufmg.cs.systems.fractal.util.{EventTimer, Logging, OperationCounter, ReflectionUtils}
+import com.koloboke.collect.map._
 import com.koloboke.collect.map.hash.{HashIntIntMaps, HashIntObjMaps}
-import com.koloboke.collect.map.{IntIntMap, IntObjMap, LongLongCursor, LongLongMap, LongObjCursor, ObjLongCursor, ObjObjCursor}
 import org.apache.spark.TaskContext
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.reflect.ClassTag
 
 case class SparkFromScratchEngine[S <: Subgraph]
 (
@@ -94,65 +93,31 @@ case class SparkFromScratchEngine[S <: Subgraph]
          SparkFromScratchEngine.unregisterComputation(this)
       }
 
+      computationTimeEnd = System.nanoTime()
+      val elapsed = (computationTimeEnd - computationTimeStart) * 1e-9
+      logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+         s" id=${partitionId}" +
+         s" total_compute_time ${elapsed}")
+      logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+         s" id=${partitionId}" +
+         s" timeline ${computationTimeStart} ${computationTimeEnd}")
+
       if (Configuration.OPCOUNTER_ENABLED) {
-         computationTimeEnd = System.nanoTime()
-         val elapsed = (computationTimeEnd - computationTimeStart) * 1e-9
-         logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
-            s" id=${partitionId}" +
-            s" total_compute_time ${elapsed}")
-         logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
-            s" id=${partitionId}" +
-            s" timeline ${computationTimeStart} ${computationTimeEnd}")
          var comp = computation
          while (comp != null) {
             val d = comp.getDepth
             logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
                s" id=${partitionId} depth=${d}" +
-               s" valid_subgraphs ${comp.getValidSubgraphs}")
+               s" extensions ${comp.getNumExtensions}")
             logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
                s" id=${partitionId} depth=${d}" +
-               s" canonical_subgraphs ${comp.getCanonicalSubgraphs}")
+               s" extensions_unique ${comp.getNumUniqueExtensions}")
             logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
                s" id=${partitionId} depth=${d}" +
-               s" extension_candidates ${comp.getExpansionCandidates}")
+               s" extensions_valid ${comp.getNumValidExtensions}")
             logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
                s" id=${partitionId} depth=${d}" +
-               s" total_compute_extensions_time" +
-               s" ${comp.getTotalComputeExtensionsTime}")
-            logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
-               s" id=${partitionId} depth=${d}" +
-               s" min_compute_extensions_time" +
-               s" ${comp.getComputeExtensionsMin}")
-            logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
-               s" id=${partitionId} depth=${d}" +
-               s" max_compute_extensions_time" +
-               s" ${comp.getComputeExtensionsMax}")
-            logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
-               s" id=${partitionId} depth=${d}" +
-               s" num_samples_compute_extensions" +
-               s" ${comp.getComputeExtensionsNumSamples}")
-            logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
-               s" id=${partitionId} depth=${d}" +
-               s" mean_compute_extensions" +
-               s" ${comp.getComputeExtensionsRunningMean}")
-            logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
-               s" id=${partitionId} depth=${d}" +
-               s" m2_compute_extensions" +
-               s" ${comp.getComputeExtensionsRunningM2}")
-            logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
-               s" id=${partitionId} depth=${d}" +
-               s" variance_compute_extensions" +
-               s" ${
-                  comp.getComputeExtensionsRunningM2 / (comp
-                     .getComputeExtensionsNumSamples - 1)
-               }")
-            logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
-               s" id=${partitionId} depth=${d}" +
-               s" std_compute_extensions" +
-               s" ${
-                  Math.sqrt(comp.getComputeExtensionsRunningM2 / (comp
-                     .getComputeExtensionsNumSamples - 1))
-               }")
+               s" extensions_canonical ${comp.getNumCanonicalExtensions}")
             comp = comp.nextComputation()
          }
       }
@@ -161,29 +126,10 @@ case class SparkFromScratchEngine[S <: Subgraph]
    override def getSubgraphAggregation() = subgraphAggregation
 
    private def run(): Unit = {
-      if (EventTimer.ENABLED) {
-         EventTimer.workerInstance(partitionId).finishAndStart(
-            EventTimer.INITIALIZATION,
-            EventTimer.ENUMERATION_FILTERING)
-      }
-
-      if (OperationCounter.ENABLED) {
-         OperationCounter.clear(partitionId)
-      }
-
-      if (Configuration.OPCOUNTER_ENABLED) {
-         computationTimeStart = System.nanoTime()
-      }
-
-      //computation.compute()
+      computationTimeStart = System.nanoTime()
       val subgraphEnumerator = computation.getSubgraphEnumerator
       subgraphEnumerator.computeFirstLevelExtensions()
       computation.processCompute(subgraphEnumerator)
-
-      if (EventTimer.ENABLED) {
-         EventTimer.workerInstance(partitionId)
-            .finish(EventTimer.ENUMERATION_FILTERING)
-      }
    }
 
    /**
@@ -358,13 +304,12 @@ case class SparkFromScratchEngine[S <: Subgraph]
     * subgraphs by key/value, where both keys and values are objects
     *
     * @param objObjSubgraphAggregation
-    *
     * @tparam K key type parameter
     * @tparam V value type parameter
     * @return an iterator of (K,V) to be consumed downstream
     */
    override def computeAggregationObjObj[K <: Serializable, V <: Serializable]
-   (objObjSubgraphAggregation: ObjObjSubgraphAggregation[S,K,V])
+   (objObjSubgraphAggregation: ObjObjSubgraphAggregation[S, K, V])
    : Iterator[(K, V)] = {
       objObjSubgraphAggregation.init(configuration)
       val start = System.currentTimeMillis
@@ -479,8 +424,8 @@ case class SparkFromScratchEngine[S <: Subgraph]
    /**
     * This call starts this engine computation and aggregates the valid
     * subgraphs by key/value, where value is a long.
-    * @param longLongSubgraphAggregation
     *
+    * @param longLongSubgraphAggregation
     * @return iterator of (Long,Long) to be consumed downstream
     */
    override def computeAggregationLongLong
@@ -609,13 +554,13 @@ case class SparkFromScratchEngine[S <: Subgraph]
    /**
     * This call starts this engine computation and aggregates the valid
     * subgraphs by key/value, where value is a long.
-    * @param longObjSubgraphAggregation
     *
+    * @param longObjSubgraphAggregation
     * @return iterator of (Long,Long) to be consumed downstream
     */
    override def computeAggregationLongObj
    [V <: Serializable]
-   (longObjSubgraphAggregation: LongObjSubgraphAggregation[S,V])
+   (longObjSubgraphAggregation: LongObjSubgraphAggregation[S, V])
    : Iterator[(Long, V)] = {
       longObjSubgraphAggregation.init(configuration)
       val start = System.currentTimeMillis

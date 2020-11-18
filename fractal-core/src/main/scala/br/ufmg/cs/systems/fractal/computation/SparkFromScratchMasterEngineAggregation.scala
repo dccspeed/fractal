@@ -2,19 +2,15 @@ package br.ufmg.cs.systems.fractal.computation
 
 import java.io.Serializable
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.function.IntConsumer
 
 import akka.actor._
-import br.ufmg.cs.systems.fractal.aggregation.{LongLongSubgraphAggregation, LongObjSubgraphAggregation, LongSubgraphAggregation, ObjLongSubgraphAggregation, ObjObjSubgraphAggregation}
-import br.ufmg.cs.systems.fractal.{Fractoid, Primitive}
+import br.ufmg.cs.systems.fractal.aggregation._
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
-import br.ufmg.cs.systems.fractal.util.{EventTimer, Logging, ProcessComputeFunc, ReflectionUtils}
-import com.koloboke.collect.map.LongLongMap
+import br.ufmg.cs.systems.fractal.util.{Logging, ProcessComputeFunc}
+import br.ufmg.cs.systems.fractal.{Fractoid, Primitive}
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.{SparkContext, TaskContext}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.util.{LongAccumulator, SizeEstimator}
 import spire.ClassTag
 
 /**
@@ -26,14 +22,14 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
 (
    val step: Int,
    configBc: Broadcast[SparkConfiguration],
-   originalContainer: ComputationContainer[S]) extends SparkMasterEngine [S] {
+   originalContainer: ComputationContainer[S]) extends SparkMasterEngine[S] {
 
    def config: SparkConfiguration = configBc.value
 
    var masterActorRef: ActorRef = _
 
    def this(frac: Fractoid[S]) {
-      this (frac.step, frac.configBc, frac.computationContainer)
+      this(frac.step, frac.configBc, frac.computationContainer)
       sc = frac.sparkContext
    }
 
@@ -60,29 +56,29 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
    }
 
    override def objLongRDD[K <: Serializable : ClassTag]
-   (objLongSubgraphAggregation: ObjLongSubgraphAggregation[S,K])
-   : RDD[(K,Long)] = {
+   (objLongSubgraphAggregation: ObjLongSubgraphAggregation[S, K])
+   : RDD[(K, Long)] = {
       execEnginesRDD.flatMap(
          _.computeAggregationObjLong[K](objLongSubgraphAggregation))
    }
 
    override def objObjRDD[K <: Serializable, V <: Serializable]
-   (objObjSubgraphAggregation: ObjObjSubgraphAggregation[S,K,V])
-   : RDD[(K,V)] = {
+   (objObjSubgraphAggregation: ObjObjSubgraphAggregation[S, K, V])
+   : RDD[(K, V)] = {
       execEnginesRDD.flatMap(
-         _.computeAggregationObjObj[K,V](objObjSubgraphAggregation))
+         _.computeAggregationObjObj[K, V](objObjSubgraphAggregation))
    }
 
    override def longLongRDD
    (longLongSubgraphAggregation: LongLongSubgraphAggregation[S])
-   : RDD[(Long,Long)] = {
+   : RDD[(Long, Long)] = {
       execEnginesRDD.flatMap(
          _.computeAggregationLongLong(longLongSubgraphAggregation))
    }
 
    override def longObjRDD[V <: Serializable : ClassTag]
-   (longObjSubgraphAggregation: LongObjSubgraphAggregation[S,V])
-   : RDD[(Long,V)] = {
+   (longObjSubgraphAggregation: LongObjSubgraphAggregation[S, V])
+   : RDD[(Long, V)] = {
       execEnginesRDD.flatMap(
          _.computeAggregationLongObj(longObjSubgraphAggregation))
    }
@@ -90,11 +86,11 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
    override def execEnginesRDD: RDD[SparkEngine[S]] = {
       init(originalContainer)
 
-      logInfo (s"${this} Computation starting from ${stepRDD}," +
+      logInfo(s"${this} Computation starting from ${stepRDD}," +
          s", StorageLevel=${stepRDD.getStorageLevel}")
 
       // save original container, i.e., without parents' computations
-      logInfo (s"From scratch computation (${this})." +
+      logInfo(s"From scratch computation (${this})." +
          s" Original computation: ${originalContainer}")
 
       // we will contruct the pipeline in this var
@@ -104,7 +100,8 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
          def withCustomFuncs(cc: ComputationContainer[S], depth: Int)
          : ComputationContainer[S] = cc.nextComputationOpt match {
             case Some(c) =>
-               val ncc = withCustomFuncs(c.asInstanceOf[ComputationContainer[S]],
+               val ncc = withCustomFuncs(
+                  c.asInstanceOf[ComputationContainer[S]],
                   depth + 1)
                cc.primitive match {
                   case Primitive.E =>
@@ -136,7 +133,8 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
                cc.primitive match {
                   case Primitive.E =>
                      if (depth == 0) {
-                        val extensionFuncFirstLast = getProcessComputeFuncFirstLast()
+                        val extensionFuncFirstLast =
+                           getProcessComputeFuncFirstLast()
                         cc.shallowCopy(
                            processComputeOpt = Option(extensionFuncFirstLast))
                      } else {
@@ -159,9 +157,9 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
          cc
       }
 
-      logInfo (s"From scratch computation (${this}). Final computation: ${cc}")
+      logInfo(s"From scratch computation (${this}). Final computation: ${cc}")
 
-      logInfo (s"SparkConfiguration estimated size = " +
+      logInfo(s"SparkConfiguration estimated size = " +
          s"${SparkConfiguration.serialize(config).length} bytes." +
          s" ${config}")
 
@@ -178,12 +176,8 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
          s"${SparkConfiguration.serialize(taskData).length}")
 
       stepRDD.mapPartitionsWithIndex { (idx, _) =>
-         if (EventTimer.ENABLED) {
-            EventTimer.workerInstance(idx).start(EventTimer.INITIALIZATION)
-         }
-
          _configBc.value.initializeWithTag(isMaster = false)
-         val execEngine = new SparkFromScratchEngine [S] (
+         val execEngine = new SparkFromScratchEngine[S](
             partitionId = idx,
             step = _step,
             computation = _computation,
@@ -287,10 +281,10 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
             val ret = processCompute(iter, c)
             var elapsed = System.currentTimeMillis - start
 
-            logInfo (s"WorkStealingMode internal=${config.internalWsEnabled()}" +
+            logInfo(s"WorkStealingMode internal=${config.internalWsEnabled()}" +
                s" external=${config.externalWsEnabled()}")
 
-            logInfo (s"InitialComputation step=${c.getStep}" +
+            logInfo(s"InitialComputation step=${c.getStep}" +
                s" partitionId=${c.getPartitionId} took ${elapsed} ms")
 
             // setup work-stealing system
@@ -298,13 +292,14 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
             if (config.wsEnabled()) {
                val gtagExecutorActor = execEngine.slaveActorRef
                workStealingSys = new WorkStealingSystem[S](
-                  processCompute, gtagExecutorActor, new ConcurrentLinkedQueue())
+                  processCompute, gtagExecutorActor,
+                  new ConcurrentLinkedQueue())
 
                workStealingSys.workStealingCompute(c)
             }
             elapsed = System.currentTimeMillis - start
 
-            logInfo (s"WorkStealingComputation step=${c.getStep}" +
+            logInfo(s"WorkStealingComputation step=${c.getStep}" +
                s" partitionId=${c.getPartitionId} took ${elapsed} ms")
 
             ret
@@ -343,10 +338,10 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
             val ret = processCompute(iter, c)
             var elapsed = System.currentTimeMillis - start
 
-            logInfo (s"WorkStealingMode internal=${config.internalWsEnabled()}" +
+            logInfo(s"WorkStealingMode internal=${config.internalWsEnabled()}" +
                s" external=${config.externalWsEnabled()}")
 
-            logInfo (s"InitialComputation step=${c.getStep}" +
+            logInfo(s"InitialComputation step=${c.getStep}" +
                s" partitionId=${c.getPartitionId} took ${elapsed} ms")
 
             // setup work-stealing system
@@ -354,13 +349,14 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
             if (config.wsEnabled()) {
                val gtagExecutorActor = execEngine.slaveActorRef
                workStealingSys = new WorkStealingSystem[S](
-                  processCompute, gtagExecutorActor, new ConcurrentLinkedQueue())
+                  processCompute, gtagExecutorActor,
+                  new ConcurrentLinkedQueue())
 
                workStealingSys.workStealingCompute(c)
             }
             elapsed = System.currentTimeMillis - start
 
-            logInfo (s"WorkStealingComputation step=${c.getStep}" +
+            logInfo(s"WorkStealingComputation step=${c.getStep}" +
                s" partitionId=${c.getPartitionId} took ${elapsed} ms")
 
             ret
@@ -374,13 +370,15 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
             val subgraph = iter.getSubgraph
             val extensions = iter.getExtensions
             val numExtensions = extensions.size()
-            var i = 0
-            while (i < numExtensions) {
-               subgraph.addWord(extensions.getu(i))
-               c.process(subgraph)
-               subgraph.removeLastWord()
-               i += 1
-            }
+            //var i = 0
+            //while (i < numExtensions) {
+            //   subgraph.addWord(extensions.getu(i))
+            //   c.process(subgraph)
+            //   subgraph.removeLastWord()
+            //   i += 1
+            //}
+
+            while (iter.extend()) c.process(subgraph)
 
             if (Configuration.OPCOUNTER_ENABLED) {
                c.addValidSubgraphs(numExtensions)
@@ -400,13 +398,15 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
             val subgraph = iter.getSubgraph
             val extensions = iter.getExtensions
             val numExtensions = extensions.size()
-            var i = 0
-            while (i < numExtensions) {
-               subgraph.addWord(extensions.getu(i))
-               c.process(subgraph)
-               subgraph.removeLastWord()
-               i += 1
-            }
+            //var i = 0
+            //while (i < numExtensions) {
+            //   subgraph.addWord(extensions.getu(i))
+            //   c.process(subgraph)
+            //   subgraph.removeLastWord()
+            //   i += 1
+            //}
+
+            while (iter.extend()) c.process(subgraph)
 
             if (Configuration.OPCOUNTER_ENABLED) {
                c.addValidSubgraphs(numExtensions)

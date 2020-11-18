@@ -21,23 +21,15 @@ public abstract class BasicComputation<S extends Subgraph>
    protected transient ExecutionEngine<S> executionEngine;
    protected transient MainGraph mainGraph;
    protected transient Configuration configuration;
-
    protected transient Computation<S> lastComputation;
 
    /* Characterization stats */
 
    // basic counters
-   private long validSubgraphs;
-   private long canonicalSubgraphs;
+   private long extensionUniqueCandidates;
    private long expansionCandidates;
-
-   // compute extensions time
-   private long totalComputeExtensionsTime;
-   private double computeExtensionsMin = Double.MAX_VALUE;
-   private double computeExtensionsMax = Double.MIN_VALUE;
-   private double computeExtensionsNumSamples;
-   private double computeExtensionsRunningMean;
-   private double computeExtensionsRunningM2;
+   private long canonicalSubgraphs;
+   private long validSubgraphs;
 
    @Override
    public void addCanonicalSubgraphs(long inc) {
@@ -51,37 +43,23 @@ public abstract class BasicComputation<S extends Subgraph>
    }
 
    @Override
+   public long getNumUniqueExtensions() {
+      return extensionUniqueCandidates;
+   }
+
+   @Override
+   public void addExtensionUniqueCandidates(long inc) {
+      this.extensionUniqueCandidates += inc;
+   }
+
+   @Override
    public void addValidSubgraphs(long inc) {
       this.validSubgraphs += inc;
    }
 
-   public String computationLabel() {
-      return null;
-   }
-
    @Override
    public void compute() {
-      if (Configuration.OPCOUNTER_ENABLED) {
-         long start = System.nanoTime();
-         subgraphEnumerator.computeExtensions();
-         double elapsedMs = (System.nanoTime() - start) * 1e-6;
-         totalComputeExtensionsTime += elapsedMs;
-         computeExtensionsMax = Math.max(computeExtensionsMax, elapsedMs);
-         computeExtensionsMin = Math.min(computeExtensionsMin, elapsedMs);
-         if (++computeExtensionsNumSamples == 1) {
-            computeExtensionsRunningMean = elapsedMs;
-            computeExtensionsRunningM2 = 0;
-         } else {
-            double d1 = elapsedMs - computeExtensionsRunningMean;
-            computeExtensionsRunningMean += d1 / computeExtensionsNumSamples;
-            double d2 = elapsedMs - computeExtensionsRunningMean;
-            computeExtensionsRunningM2 += d1 * d2;
-         }
-
-      } else {
-         subgraphEnumerator.computeExtensions();
-      }
-
+      subgraphEnumerator.computeExtensions();
       processCompute(subgraphEnumerator);
    }
 
@@ -96,38 +74,8 @@ public abstract class BasicComputation<S extends Subgraph>
    }
 
    @Override
-   public long getCanonicalSubgraphs() {
+   public long getNumCanonicalExtensions() {
       return canonicalSubgraphs;
-   }
-
-   @Override
-   public void setCanonicalSubgraphs(long canonicalSubgraphs) {
-      this.canonicalSubgraphs = canonicalSubgraphs;
-   }
-
-   @Override
-   public double getComputeExtensionsMax() {
-      return computeExtensionsMax;
-   }
-
-   @Override
-   public double getComputeExtensionsMin() {
-      return computeExtensionsMin;
-   }
-
-   @Override
-   public double getComputeExtensionsNumSamples() {
-      return computeExtensionsNumSamples;
-   }
-
-   @Override
-   public double getComputeExtensionsRunningM2() {
-      return computeExtensionsRunningM2;
-   }
-
-   @Override
-   public double getComputeExtensionsRunningMean() {
-      return computeExtensionsRunningMean;
    }
 
    @Override
@@ -151,13 +99,8 @@ public abstract class BasicComputation<S extends Subgraph>
    }
 
    @Override
-   public long getExpansionCandidates() {
+   public long getNumExtensions() {
       return expansionCandidates;
-   }
-
-   @Override
-   public void setExpansionCandidates(long expansionCandidates) {
-      this.expansionCandidates = expansionCandidates;
    }
 
    @Override
@@ -194,22 +137,8 @@ public abstract class BasicComputation<S extends Subgraph>
    }
 
    @Override
-   public long getTotalComputeExtensionsTime() {
-      return totalComputeExtensionsTime;
-   }
-
-   /**
-    * Stats counters
-    **/
-
-   @Override
-   public long getValidSubgraphs() {
+   public long getNumValidExtensions() {
       return validSubgraphs;
-   }
-
-   @Override
-   public void setValidSubgraphs(long validSubgraphs) {
-      this.validSubgraphs = validSubgraphs;
    }
 
    @Override

@@ -8,6 +8,7 @@ pattern mining (GPM) applications. Our current version is built on top of Spark 
 Fractal features include:
 * Interactive and intuitive API specifically designed for Graph Pattern Mining.
 * Scalable and efficient.
+* Efficient integration with RDD abstraction.
 
 Fractal is open-source with the Apache 2.0 license. Fractal paper is available [here](https://dl.acm.org/citation.cfm?id=3319875).
 
@@ -17,16 +18,32 @@ Fractal is open-source with the Apache 2.0 license. Fractal paper is available [
 * Spark 2.x.x
 
 ## Preparing your input
-Fractal currently takes as input graphs with the following format:
+Fractal currently takes as input undirected multi-labeled graph.
 
+* Vertices are numbered from ```0``` until ```nvertices - 1```.
+* Edges are numbered from ```0``` until ```nedges - 1```.
+
+The following adjacency lists format is used:
 ```
-# <num vertices> <num edges>
-<vertex id> <vertex label> [<neighbour id1> <neighbour id2> ... <neighbour id n>]
-<vertex id> <vertex label> [<neighbour id1> <neighbour id2> ... <neighbour id n>]
+<nvertices> <nedges>
+<vertex data>( <neighbor data>)*
+<vertex data>( <neighbor data>)*
 ...
 ```
 
-Vertex ids are expected to be sequential integers between 0 and (total number of vertices - 1).
+Where:
+
+```
+<vertex data> := <vlabel>(,<vlabel>)*
+
+<neighbor data> := <vid>,<eid>(,<elabel>)*
+
+<nvertices> := <nedges> := <vlabel> := <elabel> := [0-9][0-9]* // 32 bit integer
+<vid> := [0-9][0-9]* // 32 bit integer within range [0,nvertices)
+<eid> := [0-9][0-9]* // 32 bit integer within range [0,nedges)
+```
+
+Directory ```data/```  includes a few examples (extension ```*.sc```).
 
 ## Installing Fractal
 
@@ -35,7 +52,7 @@ Vertex ids are expected to be sequential integers between 0 and (total number of
 ```
 export JAVA_HOME=<openjdk-8-installation-folder>
 cd <repositories-folder>
-wget https://archive.apache.org/dist/spark/spark-2.4.0/spark-2.2.0-bin-hadoop2.7.tgz
+wget https://archive.apache.org/dist/spark/spark-2.4.3/spark-2.4.3-bin-hadoop2.7.tgz
 mv spark-2.4.3-bin-hadoop2.7.tgz spark
 cd spark
 export SPARK_HOME=`pwd` 
@@ -47,126 +64,36 @@ cd <repositories-folder>
 git clone https://github.com/dccspeed/fractal.git
 cd fractal
 export FRACTAL_HOME=`pwd`
-./gradlew assemble
+./gradlew jar # alternatively, run './gradlew test jar' for tests
 ```
 
 ## Running built-in applications
 
-Fractal includes the following built-in applications (GPM kernels):
+For a list and description regarding built-in applications:
 
-- Motifs Enumeration & Counting
-- Cliques Enumeration & Counting
-- Frequent Subgraph Mining (FSM)
-- Subgraph Querying
-
-Please check out our [Fractal paper](https://dl.acm.org/citation.cfm?id=3319875) for more details on
-those kernels. You can run those applications through the ```bin/fractal.sh``` script:
-
-```
-Description: Script launcher for Fractal built-in applications
-
-info: FRACTAL_HOME is set to ...
-info: SPARK_HOME is set to ...
-error: app is unset
-
-Usage:
-app=fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws [OPTION]... [ALGOPTION]... fractal.sh
-
-OPTION:
-   master_memory=512m|1g|2g|...            'Master memory'                      Default: 2g
-   num_workers=1|2|3|...                   'Number of workers'                  Default: 1
-   worker_cores=1|2|3|...                  'Number of cores per worker'         Default: 1
-   worker_memory=512m|1g|2g|...            'Workers memory'                     Default: 2g
-   input_format=al|el                      'al: adjacency list; el: edge list'  Default: al
-   comm=scratch|graphred                   'Execution strategy'                 Default: scratch
-   spark_master=local[1]|local[2]|yarn|... 'Spark master URL'                   Default: local[worker_cores]
-   deploy_mode=server|client               'Spark deploy mode'                  Default: client
-   log_level=info|warn|error               'Log vebosity'                       Default: info
-```
-
-If you specify `app` to this command you get parameters for specific applications, such as `cliques`:
-
-```
-Description: Script launcher for Fractal built-in application
-
-info: FRACTAL_HOME is set to ...
-info: SPARK_HOME is set to ...
-info: app is set to 'cliques'
-error: inputgraph is unset
-
-Usage:
-app=fsm|motifs|cliques|cliquesopt|gquerying|gqueryingnaive|kws [OPTION]... [ALGOPTION]... fractal.sh
-
-OPTION:
-   master_memory=512m|1g|2g|...            'Master memory'                      Default: 2g
-   num_workers=1|2|3|...                   'Number of workers'                  Default: 1
-   worker_cores=1|2|3|...                  'Number of cores per worker'         Default: 1
-   worker_memory=512m|1g|2g|...            'Workers memory'                     Default: 2g
-   input_format=al|el                      'al: adjacency list; el: edge list'  Default: al
-   comm=scratch|graphred                   'Execution strategy'                 Default: scratch
-   spark_master=local[1]|local[2]|yarn|... 'Spark master URL'                   Default: local[worker_cores]
-   deploy_mode=server|client               'Spark deploy mode'                  Default: client
-   log_level=info|warn|error               'Log vebosity'                       Default: info 
-
-ALGOPTION for 'cliques':
-   inputgraph=<file-path>                  'Input graph file path'
-   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
-```
-
-For example, the following example submits the cliques kernel with k=2 extension steps
-(i.e., cliques with k+1=3 vertices) over the dataset ```citeseer-single-label.graph```:
-```
-steps=2 inputgraph=$FRACTAL_HOME/data/citeseer-single-label.graph app=cliques ./bin/fractal.sh
+```$xslt
+bin/fractal.sh
 ```
 
 ## Running custom applications
 
 You can also implement your own application using Fractal API. We provide the subproject 
 "fractal-apps" to make this process easier. All you need to do is to add your application class
-into ```fractal-apps/src/```, re-compile the project with ```./gradlew assemble```, and run your
+into ```fractal-apps/src/```, re-compile the project with ```./gradlew jar```, and run your
 code with the ```bin/fractal-custom-app.sh``` script:
 
 ```
 ./bin/fractal-custom-app.sh
 ```
 
-For example, lets create a custom application that counts motifs with 3 vertices.
-We just have to add the file ```MyMotifsApp.scala``` into
-```fractal-apps/src/main/scala/br/ufmg/cs/systems/fractal/apps/```:
-```
-// file: fractal-apps/src/main/scala/br/ufmg/cs/systems/fractal/apps/MyMotifsApp.scala
-package br.ufmg.cs.systems.fractal.apps
+Please, refer to
+```fractal-apps/src/main/scala/br/ufmg/cs/systems/fractal/apps/```
+for an example.
 
-import br.ufmg.cs.systems.fractal._
-import br.ufmg.cs.systems.fractal.pattern.Pattern
-import br.ufmg.cs.systems.fractal.util.Logging
-import org.apache.spark.{SparkConf, SparkContext}
-
-object MyFractalApp extends Logging {
-  def main(args: Array[String]): Unit = {
-    // environment setup
-    val conf = new SparkConf().setAppName("MotifsApp")
-    val sc = new SparkContext(conf)
-    val fc = new FractalContext(sc)
-    val graphPath = args(0) // input graph
-    val fgraph = fc.textFile (graphPath)
-
-    // motifs application
-    // TODO
-
-    // environment cleaning
-    fc.stop()
-    sc.stop()
-  }
-}
-```
-
-Next, we re-compile the project with ```./gradlew assemble``` and run the application over
-the dataset ```data/citeseer.graph```:
+Next, we re-compile the project with ```./gradlew jar``` and run the
+ application over
+the dataset ```data/citeseer-single-label.sc```:
 
 ```
-app_class=br.ufmg.cs.systems.fractal.apps.MyMotifsApp ./bin/fractal-custom-app.sh data/citeseer.graph
+args=data/citeseer-single-label.sc app_class=br.ufmg.cs.systems.fractal.apps.MyMotifsApp ./bin/fractal-custom-app.sh
 ```
-
-Obs. You can use the template in ```fractal-apps/src/main/scala/br/ufmg/cs/systems/fractal/apps/MyFractalApp.scala```
-for a quick start.

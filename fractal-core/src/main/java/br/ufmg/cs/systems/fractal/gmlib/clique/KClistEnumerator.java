@@ -65,6 +65,8 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
    public boolean extend() {
 
       if (super.extend()) {
+         if (computation.nextComputation() == null) return true;
+
          KClistEnumerator<S> nextEnumerator =
                  (KClistEnumerator<S>) computation.nextComputation().getSubgraphEnumerator();
          int u = subgraph.getVertices().getLast();

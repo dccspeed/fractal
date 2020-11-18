@@ -8,7 +8,10 @@ import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
+import br.ufmg.cs.systems.fractal.util.pool.IntSetPool;
 import com.koloboke.collect.IntCollection;
+import com.koloboke.collect.set.IntSet;
+import com.koloboke.collect.set.hash.HashIntSet;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.Logger;
 
@@ -623,6 +626,8 @@ public class SuccinctMainGraph implements MainGraph {
       if (Configuration.OPCOUNTER_ENABLED) {
          IntArrayList extensionCandidates =
                  IntArrayListPool.instance().createObject();
+         IntSet uniqueExtensionCandidates =
+                 IntSetPool.instance().createObject();
          for (int i = 0; i < numVertices; ++i) extensionCandidates.add(0);
          for (int i = numVertices - 1; i >= 0; --i) {
             int u = vertices.getu(i);
@@ -634,13 +639,16 @@ public class SuccinctMainGraph implements MainGraph {
             extensionCandidates.setu(i, endIdx - startIdx);
             for (int j = startIdx; j < endIdx; ++j) {
                int v = vertexNeighborhoods.getu(j);
+               uniqueExtensionCandidates.add(v);
                if (v > lowerBound) validExtensions.add(v);
                else validExtensions.removeInt(v);
             }
             lowerBound = Math.max(u, lowerBound);
          }
          computation.addExpansionNeighborhood(extensionCandidates);
+         computation.addExtensionUniqueCandidates(uniqueExtensionCandidates.size());
          IntArrayListPool.instance().reclaimObject(extensionCandidates);
+         IntSetPool.instance().reclaimObject(uniqueExtensionCandidates);
       } else {
          for (int i = numVertices - 1; i >= 0; --i) {
             int u = vertices.getu(i);

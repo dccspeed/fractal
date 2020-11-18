@@ -13,9 +13,5 @@ public abstract class PatternInducedComputation<E extends PatternInducedSubgraph
     public Class<? extends Subgraph> getSubgraphClass() {
         return PatternInducedSubgraph.class;
     }
-    
-    @Override
-    public boolean containsWord(int vertexId) {
-       return getMainGraph().containsVertex(vertexId);
-    }
+
 }

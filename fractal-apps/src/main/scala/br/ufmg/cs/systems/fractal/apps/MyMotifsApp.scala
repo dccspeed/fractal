@@ -1,7 +1,6 @@
 package br.ufmg.cs.systems.fractal.apps
 
 import br.ufmg.cs.systems.fractal._
-import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.util.Logging
 import org.apache.spark.{SparkConf, SparkContext}
 
@@ -12,7 +11,7 @@ object MyMotifsApp extends Logging {
     val sc = new SparkContext(conf)
     val fc = new FractalContext(sc)
     val graphPath = args(0) // input graph
-    val fgraph = fc.textFile (graphPath)
+    val fgraph = fc.textFile(graphPath)
 
     val motifs = fgraph.vfractoid.expand(3)
 
@@ -24,7 +23,7 @@ object MyMotifsApp extends Logging {
     val iter = motifsCountsRDD.toLocalIterator
     while (iter.hasNext) {
       val (motif, count) = iter.next()
-      logInfo(s"motif=${motif} count=${count}")
+      logApp(s"motif=${motif} count=${count}")
     }
 
     motifsCountsRDD.unpersist()

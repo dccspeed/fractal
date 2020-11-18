@@ -123,9 +123,6 @@ class FSMSF(minSupport: Int, maxNumEdges: Int)
       val sc = fg.fractalContext.sparkContext
       if (maxNumEdges < 1) return sc.emptyRDD
 
-      // INSTRUMENTATION
-      initializationStart()
-
       // final frequent patterns -> supports RDDs
       var frequentPatternSupportRDDs = List.empty[RDD[(Pattern,MinImageSupport)]]
 
@@ -147,10 +144,6 @@ class FSMSF(minSupport: Int, maxNumEdges: Int)
          val freqRDD = frequentCanonicalPatternsSupports(rdd).cache()
          frequentPatternSupportRDDs = freqRDD :: frequentPatternSupportRDDs
          freqRDD.foreachPartition(_ => {})
-
-         // INSTRUMENTATION
-         aggregationFinishInitializationStart()
-
          rdd
       }
 
@@ -188,10 +181,6 @@ class FSMSF(minSupport: Int, maxNumEdges: Int)
             val freqRDD = frequentCanonicalPatternsSupports(rdd).cache()
             frequentPatternSupportRDDs = freqRDD :: frequentPatternSupportRDDs
             freqRDD.foreachPartition(_ => {})
-
-            // INSTRUMENTATION
-            aggregationFinishInitializationStart()
-
             rdd
          }
 
@@ -218,9 +207,6 @@ class FSMSF(minSupport: Int, maxNumEdges: Int)
       // unpersist cached RDDs no longer necessary
       frequentPatternSupportRDDs.foreach(_.unpersist())
       frequentPatternsSupportsRDD.unpersist()
-
-      // INSTRUMENTATION
-      initializationFinish()
 
       frequentPatternSupportRDD
    }

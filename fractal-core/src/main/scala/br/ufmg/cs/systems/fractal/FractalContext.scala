@@ -15,7 +15,7 @@ import org.apache.spark.SparkContext
  * @param logLevel log level: "error", "warn", "info"
  * @param tmpDir temporary directory to store fractal data/metadata
  */
-class FractalContext(sc: SparkContext, logLevel: String = "info",
+class FractalContext(sc: SparkContext, logLevel: String = "warn",
                      tmpDir: String = Configuration.CONF_TMP_DIR_DEFAULT)
    extends Logging {
 
@@ -30,7 +30,6 @@ class FractalContext(sc: SparkContext, logLevel: String = "info",
    }
 
    setLogLevel(logLevel)
-   sc.setLogLevel(logLevel.toUpperCase())
 
    def sparkContext: SparkContext = sc
 

@@ -29,9 +29,6 @@ trait SparkMasterEngine[S <: Subgraph] extends Logging {
       }
 
       // set log level
-      logInfo(s"Setting log level to ${config.getLogLevel}")
-      setLogLevel(config.getLogLevel)
-      sc.setLogLevel(config.getLogLevel.toUpperCase)
       logInfo(s"Setting num_partitions to " +
          s"${config.getInteger("num_partitions", sc.defaultParallelism)}")
 

@@ -18,6 +18,51 @@ import scala.util.{Failure, Success}
 
 trait ApplicationRunner extends Logging
 
+object Test extends ApplicationRunner {
+   val appid: String = "test_app"
+
+   def apply(fractalGraph: FractalGraph, commStrategy: String,
+             numPartitions: Int, explorationSteps: Int): Unit = {
+      fractalGraph
+         .set("num_partitions", numPartitions)
+         .set("comm_strategy", commStrategy)
+
+      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
+         val frac1 = fractalGraph.vfractoid
+            .expand(1).filter((s,c) => s.getVertices.getu(0) == 0)
+            .expand(explorationSteps - 1)
+         val frac2 = fractalGraph.vfractoid
+            .expand(1).filter((s,c) => s.getVertices.getu(0) != 0)
+            .expand(explorationSteps - 1)
+         val agg = new LongLongSubgraphAggregation[VertexInducedSubgraph] {
+            override def reduce(v1: Long, v2: Long): Long = v1 + v2
+
+            override def aggregate(subgraph: VertexInducedSubgraph): Unit = {
+               val vertices = subgraph.getVertices
+               val numVertices = vertices.size()
+               var i = 0
+               while (i < numVertices) {
+                  map(vertices.getu(i), 1)
+                  i += 1
+               }
+            }
+         }
+         val frac3 = fractalGraph.vfractoid.expand(explorationSteps)
+            .aggregationLongLong(agg)
+
+         val iter = frac3.reduceByKey(_ + _).toLocalIterator
+         while (iter.hasNext) {
+            val kv = iter.next()
+            logInfo(s"VertexRank ${kv._1} ${kv._2}")
+         }
+
+         (frac1.aggregationCount, frac2.aggregationCount)
+      }
+
+      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+   }
+}
+
 object SubgraphsListingSF extends ApplicationRunner {
    val appid: String = "subgraphs_listing_sf"
 
@@ -769,6 +814,10 @@ object FractalSparkRunner extends Logging {
       }
 
       algorithm.toLowerCase match {
+         case Test.appid =>
+            setRemainingConfigs()
+            Test(fractalGraph, commStrategy, numPartitions, explorationSteps)
+
          case SubgraphsListingSF.appid =>
             setRemainingConfigs()
             SubgraphsListingSF(fractalGraph, commStrategy,

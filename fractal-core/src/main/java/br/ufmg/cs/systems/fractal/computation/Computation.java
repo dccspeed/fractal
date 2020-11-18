@@ -15,31 +15,19 @@ public interface Computation<S extends Subgraph> extends Serializable {
 
    void addExpansionNeighborhood(IntArrayList extensionCandidates);
 
-   void addValidSubgraphs(long inc);
+   long getNumUniqueExtensions();
 
-   String computationLabel();
+   void addExtensionUniqueCandidates(long inc);
+
+   void addValidSubgraphs(long inc);
 
    void compute();
 
    void computeAndProcessExtensions();
 
-   boolean containsWord(int wordId);
-
    boolean filter(S Subgraph);
 
-   long getCanonicalSubgraphs();
-
-   void setCanonicalSubgraphs(long canonicalSubgraphs);
-
-   double getComputeExtensionsMax();
-
-   double getComputeExtensionsMin();
-
-   double getComputeExtensionsNumSamples();
-
-   double getComputeExtensionsRunningM2();
-
-   double getComputeExtensionsRunningMean();
+   long getNumCanonicalExtensions();
 
    Configuration getConfig();
 
@@ -49,9 +37,7 @@ public interface Computation<S extends Subgraph> extends Serializable {
 
    void setExecutionEngine(ExecutionEngine<S> executionEngine);
 
-   long getExpansionCandidates();
-
-   void setExpansionCandidates(long expansionCandidates);
+   long getNumExtensions();
 
    int getInitialNumWords();
 
@@ -69,11 +55,7 @@ public interface Computation<S extends Subgraph> extends Serializable {
 
    SubgraphEnumerator<S> getSubgraphEnumerator();
 
-   long getTotalComputeExtensionsTime();
-
-   long getValidSubgraphs();
-
-   void setValidSubgraphs(long validSubgraphs);
+   long getNumValidExtensions();
 
    void init(Configuration config);
 

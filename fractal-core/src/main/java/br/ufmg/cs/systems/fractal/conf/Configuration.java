@@ -44,7 +44,8 @@ public class Configuration implements Serializable {
     public static final String CONF_LOG_LEVEL_DEFAULT = "info";
 
     public static final String CONF_MAINGRAPH_CLASS = "fractal.graph.class";
-    public static final String CONF_MAINGRAPH_CLASS_DEFAULT = "br.ufmg.cs.systems.fractal.graph.BasicMainGraph";
+    public static final String CONF_MAINGRAPH_CLASS_DEFAULT =
+            "br.ufmg.cs.systems.fractal.graph.SuccinctMainGraph";
 
     public static final String CONF_MAINGRAPH_PATH = "fractal.graph.location";
     public static final String CONF_MAINGRAPH_PATH_DEFAULT = null;

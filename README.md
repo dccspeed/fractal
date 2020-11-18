@@ -1,10 +1,10 @@
 # Fractal: A General-Purpose Graph Pattern Mining System
 [![Build Status](https://travis-ci.com/dccspeed/fractal.svg?branch=master)](https://travis-ci.com/dccspeed/fractal)
 
-*Current Version:* SPARK-2.2.0
+*Current Version:* SPARK-2.4.3
 
 Fractal is a high performance and high productivity system for supporting distributed graph
-pattern mining (GPM) applications. Our current version is built on top of Spark 2.x.x.
+pattern mining (GPM) applications. Our current version is built on top of Spark 2.4.3.
 Fractal features include:
 * Interactive and intuitive API specifically designed for Graph Pattern Mining.
 * Scalable and efficient.
@@ -15,7 +15,7 @@ Fractal is open-source with the Apache 2.0 license. Fractal paper is available [
 ## Requirements for running
 
 * OpenJDK 8
-* Spark 2.x.x
+* Spark 2.4.3
 
 ## Preparing your input
 Fractal currently takes as input undirected multi-labeled graph.
@@ -47,7 +47,7 @@ Directory ```data/```  includes a few examples (extension ```*.sc```).
 
 ## Installing Fractal
 
-1. Download and configure Spark 2.x.x:
+1. Download and configure Spark 2.4.3:
 
 ```
 export JAVA_HOME=<openjdk-8-installation-folder>

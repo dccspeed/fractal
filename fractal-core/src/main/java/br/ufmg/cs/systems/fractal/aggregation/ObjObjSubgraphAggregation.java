@@ -43,7 +43,7 @@ public abstract class ObjObjSubgraphAggregation
 
    public abstract void reduce(V existingValue, V otherValue);
 
-   public final ObjObjMap<K,V> consumeKeyValueMap() {
+   public final ObjObjMap<K,V> getKeyValueMap() {
       return keyValueMap;
    }
 

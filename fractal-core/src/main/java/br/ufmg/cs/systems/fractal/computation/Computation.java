@@ -23,8 +23,6 @@ public interface Computation<S extends Subgraph> extends Serializable {
 
    void compute();
 
-   void computeAndProcessExtensions();
-
    boolean filter(S Subgraph);
 
    long getNumCanonicalExtensions();
@@ -75,9 +73,6 @@ public interface Computation<S extends Subgraph> extends Serializable {
    void process(S Subgraph);
 
    long processCompute(SubgraphEnumerator<S> expansions);
-
-   // java computations
-   void processExtensions();
 
    int setDepth(int depth);
 

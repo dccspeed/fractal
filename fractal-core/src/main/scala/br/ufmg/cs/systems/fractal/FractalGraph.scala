@@ -33,8 +33,6 @@ case class FractalGraph
  confs: Map[String, Any],
  logLevel: String) extends Logging {
 
-   private val graphId: Int = FractalGraph.newGraphId()
-
    private val config: SparkConfiguration = {
       val _config = new SparkConfiguration
       confs.foreach { case (k,v) =>
@@ -46,7 +44,6 @@ case class FractalGraph
       _config.set ("input_graph_local", local)
       _config.set ("input_graph_class", graphClass)
       _config.set ("log_level", logLevel)
-      _config.setMainGraphId (graphId)
 
       val numPartitions = _config.getInteger("num_partitions",
          fractalContext.sparkContext.defaultParallelism).intValue()
@@ -73,7 +70,6 @@ case class FractalGraph
       config.set ("input_graph_local", local)
       config.set ("input_graph_class", "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
       config.setSubgraphClass (computation.getSubgraphClass())
-      config.setMainGraphId (graphId)
       config.initialize()
       val subgraph = config.createSubgraph[EdgeInducedSubgraph]
 

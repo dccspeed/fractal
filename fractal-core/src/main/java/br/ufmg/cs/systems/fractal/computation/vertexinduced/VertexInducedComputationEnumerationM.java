@@ -18,21 +18,11 @@ public class VertexInducedComputationEnumerationM<S extends VertexInducedSubgrap
    }
 
    @Override
-   public long processCompute(SubgraphEnumerator<S> expansions) {
-      return 0;
-   }
-
-   @Override
-   public void computeAndProcessExtensions() {
-      subgraphEnumerator.computeExtensions();
-      processExtensions();
-   }
-
-   @Override
-   public void processExtensions() {
+   public long processCompute(SubgraphEnumerator<S> subgraphEnumerator) {
       while (subgraphEnumerator.extend()) {
-         nextComputation().computeAndProcessExtensions();
+         nextComputation.compute();
       }
+      return 0;
    }
 
    @Override

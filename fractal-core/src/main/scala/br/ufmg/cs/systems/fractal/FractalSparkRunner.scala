@@ -31,7 +31,7 @@ object SubgraphsListingSF extends ApplicationRunner {
          frac.aggregationCount
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -44,7 +44,7 @@ object SubgraphsListingPF extends ApplicationRunner {
       val callback: Fractoid[PatternInducedSubgraph] => Unit = frac =>
          synchronized {
             val count = frac.aggregationCount
-            logInfo(s"PatternCount ${frac.pattern} ${count}")
+            logApp(s"PatternCount ${frac.pattern} ${count}")
             numSubgraphs += count
          }
 
@@ -55,7 +55,7 @@ object SubgraphsListingPF extends ApplicationRunner {
             .subgraphsMaxEdgesPF(explorationSteps + 1, callback)
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -78,7 +78,7 @@ object InducedSubgraphsListingPFMCVC extends ApplicationRunner {
             .inducedSubgraphsPFMCVC(explorationSteps + 1, callback)
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -99,7 +99,7 @@ object InducedSubgraphsListingPF extends ApplicationRunner {
             .inducedSubgraphsPF(explorationSteps + 1, callback)
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -117,7 +117,7 @@ object InducedSubgraphsListingSF extends ApplicationRunner {
          frac.aggregationCount
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -137,7 +137,7 @@ object InducedSubgraphsListingSampleSF extends ApplicationRunner {
             .aggregationCount
       }
 
-      logInfo(s"numSubgraphs=${numSugbraphs}" +
+      logApp(s"numSubgraphs=${numSugbraphs}" +
          s" numSubgraphsEstimate=${numSugbraphs / fraction} elapsed=${elapsed}")
    }
 }
@@ -163,14 +163,14 @@ object MotifsPF extends ApplicationRunner {
       val iter = motifsCountsRDD.toLocalIterator
       while (iter.hasNext) {
          val (motif, count) = iter.next()
-         logInfo(s"MotifCount ${motif}: ${count}")
+         logApp(s"MotifCount ${motif}: ${count}")
          numMotifs += 1
          numSubgraphs += count
       }
 
       motifsCountsRDD.unpersist()
 
-      logInfo(s"numMotifs=${numMotifs} numSubgraphs=${numSubgraphs}" +
+      logApp(s"numMotifs=${numMotifs} numSubgraphs=${numSubgraphs}" +
          s" elapsed=${elapsed}")
    }
 }
@@ -195,14 +195,14 @@ object MotifsPFMCVC extends ApplicationRunner {
       val iter = motifsCountsRDD.toLocalIterator
       while (iter.hasNext) {
          val (motif, count) = iter.next()
-         logInfo(s"MotifCount ${motif}: ${count}")
+         logApp(s"MotifCount ${motif}: ${count}")
          numMotifs += 1
          numSubgraphs += count
       }
 
       motifsCountsRDD.unpersist()
 
-      logInfo(s"numMotifs=${numMotifs} numSubgraphs=${numSubgraphs}" +
+      logApp(s"numMotifs=${numMotifs} numSubgraphs=${numSubgraphs}" +
          s" elapsed=${elapsed}")
    }
 }
@@ -229,7 +229,7 @@ object MotifsSampleSF extends ApplicationRunner {
       val iter = motifsCountsRDD.toLocalIterator
       while (iter.hasNext) {
          val (motif, count) = iter.next()
-         logInfo(s"MotifCount ${motif}: ${count}" +
+         logApp(s"MotifCount ${motif}: ${count}" +
             s" estimatedCount=${count / fraction}")
          numMotifs += 1
          numSubgraphs += count
@@ -237,7 +237,7 @@ object MotifsSampleSF extends ApplicationRunner {
 
       motifsCountsRDD.unpersist()
 
-      logInfo(s"numMotifs=${numMotifs} numSubgraphs=${numSubgraphs}" +
+      logApp(s"numMotifs=${numMotifs} numSubgraphs=${numSubgraphs}" +
          s" numSubgraphsEstimate=${numSubgraphs / fraction} elapsed=${elapsed}")
    }
 }
@@ -263,14 +263,14 @@ object MotifsSF extends ApplicationRunner {
       val iter = motifsCountsRDD.toLocalIterator
       while (iter.hasNext) {
          val (motif, count) = iter.next()
-         logInfo(s"MotifCount ${motif}: ${count}")
+         logApp(s"MotifCount ${motif}: ${count}")
          numMotifs += 1
          numSubgraphs += count
       }
 
       motifsCountsRDD.unpersist()
 
-      logInfo(s"numMotifs=${numMotifs} numSubgraphs=${numSubgraphs}" +
+      logApp(s"numMotifs=${numMotifs} numSubgraphs=${numSubgraphs}" +
          s" elapsed=${elapsed}")
    }
 
@@ -290,7 +290,7 @@ object CliquesKClistSF extends ApplicationRunner {
          frac.aggregationCount
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -308,7 +308,7 @@ object CliquesSF extends ApplicationRunner {
          frac.aggregationCount
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -330,7 +330,7 @@ object MaximalCliquesPF extends ApplicationRunner {
             .maximalCliquesPF(explorationSteps + 1, callback)
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -358,7 +358,7 @@ object MaximalCliquesQuickSF extends ApplicationRunner {
          frac.aggregationCountWithCallback(callback)
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -395,14 +395,14 @@ object FSMSF extends ApplicationRunner {
       val iter = patternsSupportsRDD.toLocalIterator
       while (iter.hasNext) {
          val (pattern, support) = iter.next()
-         logInfo(s"PatternSupport ${pattern} ${support}")
+         logApp(s"PatternSupport ${pattern} ${support}")
          numSubgraphs += support.getNumSubgraphsAggregated
          numPatterns += 1
       }
 
       patternsSupportsRDD.unpersist()
 
-      logInfo(s"numSubgraphs=${numSubgraphs}" +
+      logApp(s"numSubgraphs=${numSubgraphs}" +
          s" numPatterns=${numPatterns} elapsed=${elapsed}")
    }
 }
@@ -431,14 +431,14 @@ object FSMPF extends ApplicationRunner {
       val iter = patternsSupportsRDD.toLocalIterator
       while (iter.hasNext) {
          val (pattern, support) = iter.next()
-         logInfo(s"PatternSupport ${pattern} ${support}")
+         logApp(s"PatternSupport ${pattern} ${support}")
          numSubgraphs += support.getNumSubgraphsAggregated
          numPatterns += 1
       }
 
       patternsSupportsRDD.unpersist()
 
-      logInfo(s"numSubgraphs=${numSubgraphs}" +
+      logApp(s"numSubgraphs=${numSubgraphs}" +
          s" numPatterns=${numPatterns} elapsed=${elapsed}")
    }
 }
@@ -467,14 +467,14 @@ object FSMPFMCVC extends ApplicationRunner {
       val iter = patternsSupportsRDD.toLocalIterator
       while (iter.hasNext) {
          val (pattern, support) = iter.next()
-         logInfo(s"PatternSupport ${pattern} ${support}")
+         logApp(s"PatternSupport ${pattern} ${support}")
          numSubgraphs += support.getNumSubgraphsAggregated
          numPatterns += 1
       }
 
       patternsSupportsRDD.unpersist()
 
-      logInfo(s"numSubgraphs=${numSubgraphs}" +
+      logApp(s"numSubgraphs=${numSubgraphs}" +
          s" numPatterns=${numPatterns} elapsed=${elapsed}")
    }
 }
@@ -504,7 +504,7 @@ object PatternMatchingPFMCVC extends ApplicationRunner {
          numSubgraphs
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -527,7 +527,7 @@ object PatternMatchingSamplePF extends ApplicationRunner {
          frac.aggregationCount
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs}" +
+      logApp(s"numSubgraphs=${numSubgraphs}" +
          s" numSubgraphsEstimated=${numSubgraphs / fraction}" +
          s" elapsed=${elapsed}")
    }
@@ -555,7 +555,7 @@ object PatternMatchingInducedSamplePF extends ApplicationRunner {
          frac.aggregationCount
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs}" +
+      logApp(s"numSubgraphs=${numSubgraphs}" +
          s" numSubgraphsEstimated=${numSubgraphs / fraction}" +
          s" elapsed=${elapsed}")
    }
@@ -580,7 +580,7 @@ object PatternMatchingPF extends ApplicationRunner {
          frac.aggregationCount
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -606,7 +606,7 @@ object PatternMatchingInducedPF extends ApplicationRunner {
          frac.aggregationCount
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -640,7 +640,7 @@ object PeriodicSubgraphsInducedPF extends ApplicationRunner {
                periodicThreshold, explorationSteps + 1, callback)
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -683,7 +683,7 @@ object PeriodicSubgraphsInducedPFMCVC extends ApplicationRunner {
                periodicThreshold, explorationSteps + 1, callback)
       }
 
-      logInfo(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -703,7 +703,7 @@ object PeriodicSubgraphsInducedSF extends ApplicationRunner {
          frac.aggregationCount
       }
 
-      logInfo(s" numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s" numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -758,7 +758,7 @@ object FractalSparkRunner extends Logging {
       def setRemainingConfigs(): Unit = {
          var arg = nextArg
          while (arg != null) {
-            logInfo(s"Found config=${arg}")
+            logApp(s"Found config=${arg}")
             val kv = arg.split(":")
             if (kv.length == 2) {
                fractalGraph = fractalGraph.set(kv(0), kv(1))

@@ -18,20 +18,11 @@ public class VertexInducedComputationFilteringM<S extends VertexInducedSubgraph>
    }
 
    @Override
-   public long processCompute(SubgraphEnumerator<S> expansions) {
-      return 0;
-   }
-
-   @Override
-   public void computeAndProcessExtensions() {
+   public long processCompute(SubgraphEnumerator<S> subgraphEnumerator) {
       if (filter(subgraph)) {
-         nextComputation().computeAndProcessExtensions();
+         nextComputation.compute();
       }
-   }
-
-   @Override
-   public void processExtensions() {
-      throw new RuntimeException("NotSupported");
+      return 0;
    }
 
    @Override

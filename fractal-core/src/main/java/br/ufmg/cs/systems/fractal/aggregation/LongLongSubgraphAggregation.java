@@ -4,10 +4,15 @@ import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.ProducerConsumerSignaling;
 import com.koloboke.collect.hash.HashConfig;
+import com.koloboke.collect.map.LongLongCursor;
 import com.koloboke.collect.map.LongLongMap;
 import com.koloboke.collect.map.hash.HashLongLongMaps;
 import com.koloboke.function.LongLongToLongFunction;
 import org.apache.log4j.Logger;
+import scala.Long;
+import scala.Tuple2;
+
+import java.util.Iterator;
 
 public abstract class LongLongSubgraphAggregation<S extends Subgraph>
         extends ProducerConsumerSignaling
@@ -18,6 +23,7 @@ public abstract class LongLongSubgraphAggregation<S extends Subgraph>
    private static final int MAX_SIZE = 10000;
 
    private transient LongLongMap keyValueMap;
+   private transient LongLongCursor cursor;
    private transient long newValue;
 
    public final void init(Configuration configuration) {
@@ -28,13 +34,14 @@ public abstract class LongLongSubgraphAggregation<S extends Subgraph>
    }
 
    public abstract long reduce(long v1, long v2);
-   public long defaultValue() { return 0; }
+   public abstract long defaultValue();
 
    protected final void map(long key, long value) {
       newValue = value;
       keyValueMap.compute(key, this);
       if (keyValueMap.size() > MAX_SIZE) {
          // wait until map is consumed
+         cursor = keyValueMap.cursor();
          notifyWorkProduced();
          waitWorkConsumed();
          keyValueMap.clear();

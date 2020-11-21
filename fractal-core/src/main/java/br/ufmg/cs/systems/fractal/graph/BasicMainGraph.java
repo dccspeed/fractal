@@ -77,7 +77,7 @@ public class BasicMainGraph<V, E> implements MainGraph<V, E> {
 
       if (LOG.isInfoEnabled()) {
          start = System.currentTimeMillis();
-         LOG.debug("Initializing graph," + " id=" + id + " name=" + name + " "
+         LOG.debug("Initializing graph," + " name=" + name + " "
                  + "isEdgeLabelled=" + isEdgeLabelled + " isMultiGraph=" + isMultiGraph + " class=" + getClass());
       }
 
@@ -441,11 +441,6 @@ public class BasicMainGraph<V, E> implements MainGraph<V, E> {
    }
 
    @Override
-   public void setId(int id) {
-      this.id = id;
-   }
-
-   @Override
    public Vertex<V> getVertex(int vertexId) {
       return vertexIndexF[vertexId];
    }
@@ -726,7 +721,7 @@ public class BasicMainGraph<V, E> implements MainGraph<V, E> {
       long start = 0;
 
       if (LOG.isInfoEnabled()) {
-         LOG.info("Reading graph," + " id=" + id + " name=" + name + " path=" + path + " isEdgeLabelled=" + isEdgeLabelled + " isMultiGraph=" + isMultiGraph + " class=" + getClass());
+         LOG.info("Reading graph," + " name=" + name + " path=" + path + " isEdgeLabelled=" + isEdgeLabelled + " isMultiGraph=" + isMultiGraph + " class=" + getClass());
          start = System.currentTimeMillis();
       }
 
@@ -744,7 +739,7 @@ public class BasicMainGraph<V, E> implements MainGraph<V, E> {
       afterGraphUpdate();
 
       if (LOG.isInfoEnabled()) {
-         LOG.debug("Done reading graph," + " id=" + id + " name=" + name + " "
+         LOG.debug("Done reading graph," + " name=" + name + " "
                  + "path=" + path + " isEdgeLabelled=" + isEdgeLabelled + " " + "isMultiGraph=" + isMultiGraph + " class=" + getClass() + " " + "numVertices=" + numVertices + " numEdges=" + numEdges + " " + "elapsed=" + (System.currentTimeMillis() - start));
       }
    }
@@ -989,7 +984,7 @@ public class BasicMainGraph<V, E> implements MainGraph<V, E> {
 
    @Override
    public String toString() {
-      return "Graph(id=" + id + ", name=" + name + ", isEdgeLabelled=" + isEdgeLabelled + ", isMultiGraph=" + isMultiGraph + ", class=" + getClass() + ")";
+      return "BasicMainGraph(name=" + name + ", isEdgeLabelled=" + isEdgeLabelled + ", isMultiGraph=" + isMultiGraph + ", class=" + getClass() + ")";
    }
 
    public String toDetailedString() {

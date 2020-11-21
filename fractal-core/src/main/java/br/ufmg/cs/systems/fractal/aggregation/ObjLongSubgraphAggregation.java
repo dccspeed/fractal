@@ -52,7 +52,7 @@ public abstract class ObjLongSubgraphAggregation
 
    public abstract long reduce(long v1, long v2);
 
-   public final ObjLongMap<K> consumeKeyValueMap() {
+   public final ObjLongMap<K> getKeyValueMap() {
       return keyValueMap;
    }
 

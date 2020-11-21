@@ -197,7 +197,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
             if (c.filter(subgraph)) {
                c.process(subgraph)
 
-               if (Configuration.OPCOUNTER_ENABLED) {
+               if (Configuration.INSTRUMENTATION_ENABLED) {
                   c.addValidSubgraphs(1)
                }
 
@@ -206,7 +206,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
                ret = 0L
             }
 
-            if (Configuration.OPCOUNTER_ENABLED) {
+            if (Configuration.INSTRUMENTATION_ENABLED) {
                c.addCanonicalSubgraphs(1)
             }
 
@@ -227,14 +227,14 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
             val subgraph = enum.getSubgraph
             if (c.filter(subgraph)) {
 
-               if (Configuration.OPCOUNTER_ENABLED) {
+               if (Configuration.INSTRUMENTATION_ENABLED) {
                   c.addValidSubgraphs(1)
                }
 
                c.nextComputation().compute()
             }
 
-            if (Configuration.OPCOUNTER_ENABLED) {
+            if (Configuration.INSTRUMENTATION_ENABLED) {
                c.addCanonicalSubgraphs(1)
             }
 
@@ -254,7 +254,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
             val nextComp = c.nextComputation()
 
             while (iter.extend()) {
-               if (Configuration.OPCOUNTER_ENABLED) {
+               if (Configuration.INSTRUMENTATION_ENABLED) {
                   c.addCanonicalSubgraphs(1)
                   c.addValidSubgraphs(1)
                }
@@ -270,49 +270,11 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
    def getProcessComputeFuncFirst(): ProcessComputeFunc[S] = {
       new ProcessComputeFunc[S] with Logging {
 
-         var workStealingSys: WorkStealingSystem[S] = _
-
          def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
-            val config = c.getConfig()
-            val execEngine = c.getExecutionEngine().
-               asInstanceOf[SparkFromScratchEngine[S]]
-
-            var start = System.currentTimeMillis
-            val ret = processCompute(iter, c)
-            var elapsed = System.currentTimeMillis - start
-
-            logInfo(s"WorkStealingMode internal=${config.internalWsEnabled()}" +
-               s" external=${config.externalWsEnabled()}")
-
-            logInfo(s"InitialComputation step=${c.getStep}" +
-               s" partitionId=${c.getPartitionId} took ${elapsed} ms")
-
-            // setup work-stealing system
-            start = System.currentTimeMillis
-            if (config.wsEnabled()) {
-               val gtagExecutorActor = execEngine.slaveActorRef
-               workStealingSys = new WorkStealingSystem[S](
-                  processCompute, gtagExecutorActor,
-                  new ConcurrentLinkedQueue())
-
-               workStealingSys.workStealingCompute(c)
-            }
-            elapsed = System.currentTimeMillis - start
-
-            logInfo(s"WorkStealingComputation step=${c.getStep}" +
-               s" partitionId=${c.getPartitionId} took ${elapsed} ms")
-
-            ret
-         }
-
-         override def toString = "EF"
-
-         private def processCompute(iter: SubgraphEnumerator[S],
-                                    c: Computation[S]): Long = {
             var ret = 0L
             val nextComp = c.nextComputation()
             while (iter.extend()) {
-               if (Configuration.OPCOUNTER_ENABLED) {
+               if (Configuration.INSTRUMENTATION_ENABLED) {
                   c.addCanonicalSubgraphs(1)
                   c.addValidSubgraphs(1)
                }
@@ -327,46 +289,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
 
    def getProcessComputeFuncFirstLast(): ProcessComputeFunc[S] = {
       new ProcessComputeFunc[S] with Logging {
-         var workStealingSys: WorkStealingSystem[S] = _
-
          def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
-            val config = c.getConfig()
-            val execEngine = c.getExecutionEngine().
-               asInstanceOf[SparkFromScratchEngine[S]]
-
-            var start = System.currentTimeMillis
-            val ret = processCompute(iter, c)
-            var elapsed = System.currentTimeMillis - start
-
-            logInfo(s"WorkStealingMode internal=${config.internalWsEnabled()}" +
-               s" external=${config.externalWsEnabled()}")
-
-            logInfo(s"InitialComputation step=${c.getStep}" +
-               s" partitionId=${c.getPartitionId} took ${elapsed} ms")
-
-            // setup work-stealing system
-            start = System.currentTimeMillis
-            if (config.wsEnabled()) {
-               val gtagExecutorActor = execEngine.slaveActorRef
-               workStealingSys = new WorkStealingSystem[S](
-                  processCompute, gtagExecutorActor,
-                  new ConcurrentLinkedQueue())
-
-               workStealingSys.workStealingCompute(c)
-            }
-            elapsed = System.currentTimeMillis - start
-
-            logInfo(s"WorkStealingComputation step=${c.getStep}" +
-               s" partitionId=${c.getPartitionId} took ${elapsed} ms")
-
-            ret
-         }
-
-         override def toString = "EFL"
-
-         private def processCompute(iter: SubgraphEnumerator[S],
-                                    c: Computation[S]): Long = {
-
             val subgraph = iter.getSubgraph
             val extensions = iter.getExtensions
             val numExtensions = extensions.size()
@@ -380,7 +303,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
 
             while (iter.extend()) c.process(subgraph)
 
-            if (Configuration.OPCOUNTER_ENABLED) {
+            if (Configuration.INSTRUMENTATION_ENABLED) {
                c.addValidSubgraphs(numExtensions)
                c.addCanonicalSubgraphs(numExtensions)
             }
@@ -408,7 +331,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
 
             while (iter.extend()) c.process(subgraph)
 
-            if (Configuration.OPCOUNTER_ENABLED) {
+            if (Configuration.INSTRUMENTATION_ENABLED) {
                c.addValidSubgraphs(numExtensions)
                c.addCanonicalSubgraphs(numExtensions)
             }

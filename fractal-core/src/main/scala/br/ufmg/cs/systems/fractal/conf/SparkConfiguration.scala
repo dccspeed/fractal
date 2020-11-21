@@ -71,19 +71,15 @@ case class SparkConfiguration(confs: Map[String, Any])
       updateIfExists("info_period", INFO_PERIOD)
 
       // computation classes
-      updateIfExists("master_computation", CONF_MASTER_COMPUTATION_CLASS)
       updateIfExists("computation", CONF_COMPUTATION_CLASS)
 
       // communication strategy
       updateIfExists("comm_strategy", CONF_COMM_STRATEGY)
 
-      // gtag
-      updateIfExists("gtag_batch_low", CONF_WS_EXTERNAL_BATCHSIZE_LOW)
-      updateIfExists("gtag_batch_high", CONF_WS_EXTERNAL_BATCHSIZE_HIGH)
-
       // work stealing
       updateIfExists("ws_internal", CONF_WS_INTERNAL)
       updateIfExists("ws_external", CONF_WS_EXTERNAL)
+      updateIfExists("ws_external_batchsize", CONF_WS_EXTERNAL_BATCHSIZE)
 
       // enumerator class
       updateIfExists("subgraph_enumerator", CONF_ENUMERATOR_CLASS)
@@ -94,19 +90,8 @@ case class SparkConfiguration(confs: Map[String, Any])
       updateIfExists("input_graph_local", CONF_MAINGRAPH_LOCAL)
       updateIfExists("edge_labelled", CONF_MAINGRAPH_EDGE_LABELLED)
 
-      // output
-      updateIfExists("output_active", CONF_OUTPUT_ACTIVE)
-      updateIfExists("output_path", CONF_OUTPUT_PATH)
-      updateIfExists("output_format", CONF_OUTPUT_FORMAT)
-
-      // aggregation
-      updateIfExists("incremental_aggregation", CONF_INCREMENTAL_AGGREGATION)
-
       // multigraph
       updateIfExists("multigraph", CONF_MAINGRAPH_MULTIGRAPH)
-
-      // jvm profiler cmd
-      updateIfExists("jvmprof_cmd", CONF_JVMPROF_CMD)
    }
 
    var tagApplied = false
@@ -172,7 +157,6 @@ case class SparkConfiguration(confs: Map[String, Any])
          }
 
          val elapsedFilter = System.currentTimeMillis - startFilter
-         //System.gc()
 
          if (removedVertices + removedEdges > 0) {
             logInfo(s"GraphFiltering took ${elapsedFilter} ms" +
@@ -192,7 +176,7 @@ case class SparkConfiguration(confs: Map[String, Any])
     * TODO: generalize the initialization in the superclass Configuration
     */
    override def initialize(isMaster: Boolean = false): Unit = synchronized {
-      logDebug(s"Initializing config, id=${id} config=${this}" +
+      logDebug(s"Initializing config=${this}" +
          s" mainGraph=${getMainGraph()} isMainGraphRead=${isMainGraphRead()}" +
          s" isMaster=${isMaster}")
 
@@ -203,7 +187,7 @@ case class SparkConfiguration(confs: Map[String, Any])
       if (getMainGraph == null || !isMainGraphRead()) {
          val graph = getOrCreateMainGraph()
          setMainGraph(graph)
-         logInfo(s"Graph created, configId=${id} graph=${graph}")
+         logInfo(s"Graph created graph=${graph}")
       }
 
       if (!isMaster && !isMainGraphRead()) {
@@ -215,11 +199,10 @@ case class SparkConfiguration(confs: Map[String, Any])
     * Called whether no fractal configuration is set in the running jvm
     */
    private def initializeInstance(shouldSetGraph: Boolean = true): Unit = {
-
       fixAssignments
 
       // periodic information about execution
-      infoPeriod = getLong(INFO_PERIOD, INFO_PERIOD_DEFAULT)
+      infoPeriod = getLong(INFO_PERIOD, INFO_PERIOD_DEFAULT_MS)
 
       // common configs
       setMainGraphClass(
@@ -247,8 +230,6 @@ case class SparkConfiguration(confs: Map[String, Any])
 
       isGraphMulti = getBoolean(CONF_MAINGRAPH_MULTIGRAPH,
          CONF_MAINGRAPH_MULTIGRAPH_DEFAULT)
-
-      setOutputPath(getString(CONF_OUTPUT_PATH, CONF_OUTPUT_PATH_DEFAULT))
 
       initialized = true
    }

@@ -373,7 +373,6 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
 
             readyToFinishSlaves = new Array[Boolean](slaves.length)
 
-            computation.getConfig().taskCheckIn(0, numLocalPeers)
             logInfo(s"${self} knows ${slaves.length} slaves" +
                s" (${pivots.length} pivots)" +
                s" (${numLocalPeers} local)" +
@@ -604,13 +603,11 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
    private def sendRequestWithTimeout(msg: StealWorkRequest,
                                       dest: ActorRef): Unit = {
       // send first time
-      //if (ThreadLocalRandom.current().nextBoolean())
       dest ! msg
 
       val reqRetry = Retry(msg, dest)
 
       val respTimeout = StealWorkResponse(null, 0, msg.seqNum, nextSeqNum)
-      val respTimeoutRetry = Retry(respTimeout, self)
 
       import context.dispatcher
       val cancellable = context.system.scheduler.
@@ -622,7 +619,6 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
 
    private def sendMsgWithRetransmission(msg: SeqNum, dest: ActorRef): Unit = {
       // send first time
-      //if (ThreadLocalRandom.current().nextBoolean())
       dest ! msg
 
       // get or create retry message
@@ -686,7 +682,6 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
       // add words up to a maximum of *batchSize*
       var n = 0
       var extension = consumer.nextExtension()
-      //while (n < batchSize && consumer.hasNext) {
       do {
          workUnit.add(extension)
          extension = consumer.nextExtension()
@@ -698,18 +693,16 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
    }
 
    private def tryStealFromLocal(workUnit: IntArrayList): Int = {
-      val computations = SparkFromScratchEngine
-         .localComputations[S](computation.getExecutionEngine.getStageId)
+      val computations = LocalComputationStore.localComputations(
+         computation.getExecutionEngine.getStageId
+      ).asInstanceOf[ObjArrayList[Computation[S]]]
 
       if (computations == null) return -1
 
       var thisComp = threadSafeComputation
       var thisSubgraphEnumerator = thisComp.getSubgraphEnumerator
 
-      val gtagBatchLow = config.getWsBatchSizeLow()
-      val gtagBatchHigh = config.getWsBatchSizeHigh()
-      val batchSize = ThreadLocalRandom.current().nextInt(
-         gtagBatchHigh - gtagBatchLow + 1) + gtagBatchLow
+      val batchSize = config.getWsBatchSize
 
       val numComputations = computations.size()
       unvisitedComputations.clear()
@@ -799,8 +792,7 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
 
       logInfo(s"SlaveActor stopped step=${computation.getStep}" +
          s" partitionId=${partitionId} actor=${self}")
-      computation.getConfig().taskCheckOut()
-      SparkFromScratchEngine.unregisterComputation(engine)
+      LocalComputationStore.unregisterComputation(engine)
    }
 }
 
@@ -894,35 +886,23 @@ object ActorMessageSystem extends Logging {
    def createActor(engine: SparkMasterEngine[_]): ActorRef = {
       val remotePath = s"akka.tcp://fractal-msgsys@" +
          s"${engine.config.getMasterHostname}:2552" +
-         s"/user/master-actor-${engine.config.getId}-${engine.step}"
+         s"/user/master-actor-${engine.step}"
       akkaSys(engine).actorOf(
          Props(classOf[MasterActor], remotePath, engine).
             withDispatcher("akka.actor.default-dispatcher"),
-         s"master-actor-${engine.config.getId}-${engine.step}")
+         s"master-actor-${engine.step}")
    }
 
    def createActor[E <: Subgraph](engine: SparkEngine[E]): ActorRef = {
       val remotePath = s"akka.tcp://fractal-msgsys@" +
          s"${engine.configuration.getMasterHostname}:2552" +
-         s"/user/master-actor-${engine.configuration.getId}" +
-         s"-${engine.step}"
+         s"/user/master-actor-${engine.step}"
       val slaveActorRef = akkaSys(engine).actorOf(
          Props(classOf[SlaveActor[E]], remotePath, engine).
             withDispatcher("akka.actor.default-dispatcher"),
          s"slave-actor" +
-            s"-${engine.configuration.getId}-${engine.step}" +
+            s"-${engine.stageId}-${engine.step}" +
             s"-${engine.partitionId}-${getNextActorId}")
-
-      // wait for this slave to know the all other slaves before proceed
-      //slaveActorRef.synchronized {
-      //   while (engine.configuration.taskCounter() == 0) {
-      //      slaveActorRef.wait()
-      //   }
-      //}
-
-      // ensure that local computation structures are properly created
-      //SparkFromScratchEngine.createComputationsMap(
-      //   engine.step, engine.configuration.taskCounter())
 
       slaveActorRef
    }

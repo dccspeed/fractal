@@ -3,9 +3,8 @@ package br.ufmg.cs.systems.fractal.computation.vertexinduced;
 import br.ufmg.cs.systems.fractal.Primitive;
 import br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator;
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
-import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 
-import java.util.function.IntConsumer;
+import javax.annotation.OverridingMethodsMustInvokeSuper;
 
 public class VertexInducedComputationEnumerationL<S extends VertexInducedSubgraph>
         extends VertexInducedComputation<S> {
@@ -21,29 +20,19 @@ public class VertexInducedComputationEnumerationL<S extends VertexInducedSubgrap
    }
 
    @Override
-   public long processCompute(SubgraphEnumerator<S> expansions) {
+   public long processCompute(SubgraphEnumerator<S> subgraphEnumerator) {
+      while (subgraphEnumerator.extend()) process(subgraph);
       return 0;
    }
 
    @Override
-   public void computeAndProcessExtensions() {
-      subgraphEnumerator.computeExtensions();
-      processExtensions();
-   }
-
-   @Override
-   public void processExtensions() {
-      IntArrayList extensions = subgraphEnumerator.getExtensions();
-      int numExtensions = extensions.size();
-      for (int i = 0; i < numExtensions; ++i) {
-         subgraph.addWord(extensions.getu(i));
-         process(subgraph);
-         subgraph.removeLastWord();
-      }
+   public boolean filter(S subgraph) {
+      throw new UnsupportedOperationException();
    }
 
    @Override
    public String toString() {
-      return "El";
+      return "Efl";
    }
+
 }

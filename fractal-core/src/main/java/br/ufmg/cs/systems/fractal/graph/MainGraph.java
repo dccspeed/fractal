@@ -74,8 +74,6 @@ public interface MainGraph<V, E> {
                                       int vertexUpperBound,
                                       IntCollection result);
 
-   void setId(int id);
-
    Vertex getVertex(int vertexId);
 
    VertexNeighbourhood getVertexNeighbourhood(int vertexId);

@@ -32,17 +32,6 @@ trait SparkMasterEngine[S <: Subgraph] extends Logging {
       logInfo(s"Setting num_partitions to " +
          s"${config.getInteger("num_partitions", sc.defaultParallelism)}")
 
-      // garantees that outputPath does not exist
-      if (config.isOutputActive) {
-         val fs = FileSystem.get(sc.hadoopConfiguration)
-         val outputPath = new Path(s"${config.getOutputPath}/*")
-         if (fs.exists(outputPath))
-            throw new RuntimeException(
-               s"Output path ${config.getOutputPath} exists. Choose another " +
-                  s"one."
-            )
-      }
-
       // master must know aggregators metadata
       var currComp = computation
       while (currComp != null) {

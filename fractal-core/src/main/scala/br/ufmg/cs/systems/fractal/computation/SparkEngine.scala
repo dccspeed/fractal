@@ -38,14 +38,13 @@ trait SparkEngine[S <: Subgraph]
          configuration.setSubgraphClass(computation.getSubgraphClass())
       }
       computation.init(this, configuration)
-
    }
 
    override def getConfig(): Configuration = configuration
 
    override def getStageId: Int = stageId
 
-   def finalizeEngine(): Unit = {}
+   def finalizeEngine(): Unit
 
    override def getPartitionId() = partitionId
 

@@ -21,15 +21,14 @@ public abstract class BasicComputation<S extends Subgraph>
    protected transient ExecutionEngine<S> executionEngine;
    protected transient MainGraph mainGraph;
    protected transient Configuration configuration;
+   protected transient Computation<S> nextComputation;
    protected transient Computation<S> lastComputation;
 
-   /* Characterization stats */
-
    // basic counters
-   private long extensionUniqueCandidates;
-   private long expansionCandidates;
-   private long canonicalSubgraphs;
-   private long validSubgraphs;
+   private transient long extensionUniqueCandidates;
+   private transient long expansionCandidates;
+   private transient long canonicalSubgraphs;
+   private transient long validSubgraphs;
 
    @Override
    public void addCanonicalSubgraphs(long inc) {
@@ -61,11 +60,6 @@ public abstract class BasicComputation<S extends Subgraph>
    public void compute() {
       subgraphEnumerator.computeExtensions();
       processCompute(subgraphEnumerator);
-   }
-
-   @Override
-   public void computeAndProcessExtensions() {
-
    }
 
    @Override
@@ -147,6 +141,7 @@ public abstract class BasicComputation<S extends Subgraph>
       mainGraph = configuration.getMainGraph();
       subgraphEnumerator = configuration.createSubgraphEnumerator(this);
       lastComputation = this;
+      nextComputation = nextComputation();
       while (lastComputation.nextComputation() != null) {
          lastComputation = lastComputation.nextComputation();
       }
@@ -188,11 +183,6 @@ public abstract class BasicComputation<S extends Subgraph>
    @Override
    public void process(S subgraph) {
       // Empty by default
-   }
-
-   @Override
-   public void processExtensions() {
-
    }
 
    @Override

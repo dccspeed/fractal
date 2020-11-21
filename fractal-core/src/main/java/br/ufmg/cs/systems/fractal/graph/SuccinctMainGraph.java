@@ -11,7 +11,6 @@ import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntSetPool;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.IntSet;
-import com.koloboke.collect.set.hash.HashIntSet;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.log4j.Logger;
 
@@ -315,7 +314,7 @@ public class SuccinctMainGraph implements MainGraph {
          if (startIdx >= endIdx) return;
       }
 
-      if (Configuration.OPCOUNTER_ENABLED) {
+      if (Configuration.INSTRUMENTATION_ENABLED) {
          IntArrayList extensionCandidates =
                  IntArrayListPool.instance().createObject();
          for (int i = 0; i < subgraph.getNumVertices(); ++i) {
@@ -435,7 +434,7 @@ public class SuccinctMainGraph implements MainGraph {
          if (startIdx >= endIdx) return;
       }
 
-      if (Configuration.OPCOUNTER_ENABLED) {
+      if (Configuration.INSTRUMENTATION_ENABLED) {
          IntArrayList extensionCandidates =
                  IntArrayListPool.instance().createObject();
          for (int i = 0; i < subgraph.getNumVertices(); ++i) {
@@ -516,11 +515,6 @@ public class SuccinctMainGraph implements MainGraph {
    }
 
    @Override
-   public void setId(int id) {
-      this.id = id;
-   }
-
-   @Override
    public Vertex getVertex(int vertexId) {
       throw new UnsupportedOperationException();
    }
@@ -557,7 +551,7 @@ public class SuccinctMainGraph implements MainGraph {
       int firstEdge = lowerBound;
       int currVertexIdx = numVertices - 1;
 
-      if (Configuration.OPCOUNTER_ENABLED) {
+      if (Configuration.INSTRUMENTATION_ENABLED) {
          IntArrayList extensionCandidates =
                  IntArrayListPool.instance().createObject();
          for (int i = 0; i < numEdges; ++i) extensionCandidates.add(0);
@@ -623,7 +617,7 @@ public class SuccinctMainGraph implements MainGraph {
       int lowerBound = vertices.getu(0);
       int firstVertex = lowerBound;
 
-      if (Configuration.OPCOUNTER_ENABLED) {
+      if (Configuration.INSTRUMENTATION_ENABLED) {
          IntArrayList extensionCandidates =
                  IntArrayListPool.instance().createObject();
          IntSet uniqueExtensionCandidates =

@@ -200,12 +200,7 @@ public class IntArrayList implements ReclaimableIntCollection, Externalizable {
    public void setFrom(IntCollection collection) {
       ensureCapacity(collection.size());
       clear();
-      //addAll(collection);
       collection.forEach(intAdder);
-
-      //numElements = collection.size();
-      //ensureCapacity(numElements);
-      //collection.toArray(backingArray);
    }
 
    public void arrayCopy(IntArrayList src, int srcPos, int destPos, int length) {

@@ -1,12 +1,10 @@
 package br.ufmg.cs.systems.fractal.util.collection;
 
-import org.apache.hadoop.io.Writable;
-
 import java.io.*;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.function.IntBinaryOperator;
 
-public class AtomicBitSetArray implements Externalizable, Writable {
+public class AtomicBitSetArray implements Externalizable {
    protected AtomicIntegerArray internalArray;
 
    private static final IntBinaryOperator insert = new IntBinaryOperator() {
@@ -96,7 +94,6 @@ public class AtomicBitSetArray implements Externalizable, Writable {
    }
 
     
-   @Override
    public void write(DataOutput dataOutput) throws IOException {
       int length = internalArray != null ? internalArray.length() : 0;
       dataOutput.writeInt(length);
@@ -105,7 +102,6 @@ public class AtomicBitSetArray implements Externalizable, Writable {
       }
    }
 
-   @Override
    public void readFields(DataInput dataInput) throws IOException {
       int length = dataInput.readInt();
       if (length > 0) {

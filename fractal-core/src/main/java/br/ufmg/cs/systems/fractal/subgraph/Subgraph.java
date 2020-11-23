@@ -2,70 +2,44 @@ package br.ufmg.cs.systems.fractal.subgraph;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
-import br.ufmg.cs.systems.fractal.graph.Edge;
-import br.ufmg.cs.systems.fractal.graph.LabelledEdge;
-import br.ufmg.cs.systems.fractal.graph.Vertex;
-import br.ufmg.cs.systems.fractal.misc.WritableObject;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
-import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
-import com.koloboke.collect.IntCollection;
-import com.koloboke.collect.map.hash.HashIntObjMap;
 
-import java.io.Externalizable;
+public interface Subgraph {
+   void addWord(int word);
 
-public interface Subgraph extends WritableObject, Externalizable {
-    void init(Configuration configuration);
+   long computeExtensionCost(IntArrayList extensionCandidates);
 
-    Configuration getConfig();
+   void computeExtensions(Computation computation, IntArrayList extensions);
 
-    IntArrayList getWords();
+   void computeFirstLevelExtensions(Computation computation,
+                                    IntArrayList extensions);
 
-    IntArrayList getVertices();
-    
-    <V> Vertex<V> vertex(int vertexId);
+   Configuration getConfig();
 
-    int getNumVertices();
+   IntArrayList getEdges();
 
-    IntArrayList getEdges();
-    
-    <E> Edge<E> edge(int edgeId);
-    
-    <E> LabelledEdge<E> labelledEdge(int edgeId);
-    
-    int getNumEdges();
+   int getNumEdges();
 
-    int getNumWords();
+   int getNumVertices();
 
-    Pattern getPattern();
+   int getNumWords();
 
-    int numVerticesAdded();
+   IntArrayList getVertices();
 
-    int numEdgesAdded();
+   IntArrayList getWords();
 
-    void addWord(int word);
+   void init(Configuration configuration);
 
-    void removeLastWord();
+   int numEdgesAdded();
 
-    IntCollection computeExtensions(Computation computation);
+   int numVerticesAdded();
 
-  IntCollection extensions();
+   int numVerticesAdded(int wordIdx);
 
-    boolean isCanonicalSubgraphWithWord(int wordId);
+   Pattern quickPattern();
 
-    String toOutputString();
-    
-    void nextExtensionLevel();
-    
-    void nextExtensionLevel(Subgraph other);
-    
-    void previousExtensionLevel();
+   void removeLastWord();
 
-    void applyTagFrom(Computation computation,
-          AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos);
-    
-    void applyTagTo(Computation computation,
-          AtomicBitSetArray vtag, AtomicBitSetArray etag, int pos);
-
-    HashIntObjMap cacheStore();
+   void reset();
 }

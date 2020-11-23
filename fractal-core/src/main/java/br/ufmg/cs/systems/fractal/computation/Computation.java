@@ -1,75 +1,82 @@
 package br.ufmg.cs.systems.fractal.computation;
 
-import br.ufmg.cs.systems.fractal.aggregation.AggregationStorage;
+import br.ufmg.cs.systems.fractal.Primitive;
+import br.ufmg.cs.systems.fractal.aggregation.SubgraphAggregation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
-import com.koloboke.collect.IntCollection;
-import org.apache.hadoop.io.Writable;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 
-public interface Computation<S extends Subgraph> {
+import java.io.Serializable;
 
-    // {{{ initialization
-    void init(Configuration<S> config);
-    void initAggregations(Configuration<S> config);
-    long compute(S Subgraph);
-    Computation<S> nextComputation();
-    void finish();
-    // }}}
+public interface Computation<S extends Subgraph> extends Serializable {
 
-    // {{{ runtime
-    SubgraphEnumerator<S> expandCompute(S Subgraph);
-    IntCollection getPossibleExtensions(S Subgraph);
-    long processCompute(SubgraphEnumerator<S> expansions);
-    boolean filter(S Subgraph);
-    void process(S Subgraph);
-    boolean filter(S existingSubgraph, int newWord);
-    // }}}
+   void addCanonicalSubgraphs(long inc);
 
-    // {{{ Output
-    void output(S Subgraph);
-    // }}}
+   void addExpansionNeighborhood(IntArrayList extensionCandidates);
 
-    // {{{ Aggregation-related stuff
-    <K extends Writable, V extends Writable>
-       AggregationStorage<K, V> readAggregation(String name);
-    
-    <K extends Writable, V extends Writable> 
-       AggregationStorage<K, V> getAggregationStorage(String name);
+   long getNumUniqueExtensions();
 
-    <K extends Writable, V extends Writable>
-       void map(String name, K key, V value);
-    // }}}
+   void addExtensionUniqueCandidates(long inc);
 
-    // {{{ Misc
-    int getStep();
+   void addValidSubgraphs(long inc);
 
-    int getPartitionId();
+   void compute();
 
-    int getNumberPartitions();
+   boolean filter(S Subgraph);
 
-    Configuration<S> getConfig();
+   long getNumCanonicalExtensions();
 
-    boolean shouldBypass();
-    // }}}
+   Configuration getConfig();
 
-    // {{{ Internal
-    void setExecutionEngine(CommonExecutionEngine<S> executionEngine);
-    CommonExecutionEngine<S> getExecutionEngine();
-    
-    String computationLabel();
-    int setDepth(int depth);
-    int getDepth();
+   int getDepth();
 
-    SubgraphEnumerator<S> getSubgraphEnumerator();
-    SubgraphEnumerator<S> forkEnumerator(Computation<S> computation);
+   ExecutionEngine<S> getExecutionEngine();
 
-    Class<? extends Subgraph> getSubgraphClass();
-    
-    int getInitialNumWords();
+   void setExecutionEngine(ExecutionEngine<S> executionEngine);
 
-    boolean containsWord(int wordId);
+   long getNumExtensions();
 
-    Pattern getPattern();
-    // }}}
+   int getInitialNumWords();
+
+   int getNumberPartitions();
+
+   int getPartitionId();
+
+   Pattern getPattern();
+
+   int getStep();
+
+   SubgraphAggregation<S> getSubgraphAggregation();
+
+   Class<? extends Subgraph> getSubgraphClass();
+
+   SubgraphEnumerator<S> getSubgraphEnumerator();
+
+   long getNumValidExtensions();
+
+   void init(Configuration config);
+
+   void init(ExecutionEngine<S> engine, Configuration config);
+
+   void initAggregations(Configuration config);
+
+   Computation<S> lastComputation();
+
+   Computation<S> nextComputation();
+
+   // {{{ runtime
+   Primitive primitive();
+
+   Primitive[] primitives();
+
+   void process(S Subgraph);
+
+   long processCompute(SubgraphEnumerator<S> expansions);
+
+   int setDepth(int depth);
+
+   void setSubgraph(S subgraph);
+
+   boolean shouldBypass();
 }

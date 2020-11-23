@@ -1,9 +1,8 @@
 package br.ufmg.cs.systems.fractal.util;
 
-import java.util.function.IntConsumer;
-
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.function.IntConsumer;
 
 public class IntWriterConsumer implements IntConsumer {
     private DataOutput dataOutput;

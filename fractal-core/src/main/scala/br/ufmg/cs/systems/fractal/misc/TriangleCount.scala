@@ -1,8 +1,8 @@
 package br.ufmg.cs.systems.fractal.misc
 
 import br.ufmg.cs.systems.fractal.util.Logging
-import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.graphx.{Edge, Graph, GraphLoader}
+import org.apache.spark.{SparkConf, SparkContext}
 
 class TriangleCount(sc: SparkContext, inputFile: String, numPartitions: Int,
     inputType: String) extends Logging {

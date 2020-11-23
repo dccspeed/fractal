@@ -3,124 +3,209 @@ package br.ufmg.cs.systems.fractal.util;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import com.koloboke.collect.IntCollection;
 
-import java.util.Random;
-import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.IntConsumer;
 import java.util.function.IntPredicate;
 
 public class Utils {
-  // Implementing Fisher–Yates shuffle
-  public static void shuffleArray(int[] ar) {
-    Random rnd = ThreadLocalRandom.current();
-    for (int i = ar.length - 1; i > 0; i--) {
-      int index = rnd.nextInt(i + 1);
-      // Simple swap
-      int a = ar[index];
-      ar[index] = ar[i];
-      ar[i] = a;
-    }
-  }
+   public static int sintersectSize(IntArrayList arr1, IntArrayList arr2,
+                                    int startIdx1, int endIdx1, int startIdx2,
+                                    int endIdx2) {
+      int size = 0;
+      while (startIdx1 < endIdx1 && startIdx2 < endIdx2) {
+         int v1 = arr1.getu(startIdx1);
+         int v2 = arr2.getu(startIdx2);
+         if (v1 == v2) {
+            ++size;
+            ++startIdx1;
+            ++startIdx2;
+         } else if (v1 < v2) {
+            ++startIdx1;
+         } else {
+            ++startIdx2;
+         }
+      }
 
-  public static int sintersect(IntArrayList arr1, IntArrayList arr2,
-        int i1, int size1, int i2, int size2, IntCollection target) {
-     int cost = 0;
-     while (i1 < size1 && i2 < size2) {
-        int v1 = arr1.getUnchecked(i1);
-        int v2 = arr2.getUnchecked(i2);
-        if (v1 == v2) {
-           target.add(v1);
-           ++i1;
-           ++i2;
-        } else if (v1 < v2) {
-           ++i1;
-        } else {
-           ++i2;
-        }
-        ++cost;
-     }
+      return size;
+   }
 
-     return cost;
-  }
-  
-  public static int sintersect(IntArrayList arr1, IntArrayList arr2,
-        int i1, int size1, int i2, int size2, IntCollection target,
-        IntPredicate pred) {
-     int cost = 0;
-     while (i1 < size1 && i2 < size2) {
-        int v1 = arr1.getUnchecked(i1);
-        int v2 = arr2.getUnchecked(i2);
-        if (v1 == v2) {
-           if (pred.test(v1)) {
-              target.add(v1);
-           }
-           ++i1;
-           ++i2;
-        } else if (v1 < v2) {
-           ++i1;
-        } else {
-           ++i2;
-        }
-        ++cost;
-     }
+   public static int sintersect(IntArrayList arr1, IntArrayList arr2,
+                                int startIdx1, int endIdx1, int startIdx2,
+                                int endIdx2, IntCollection target) {
+      int cost = 0;
+      while (startIdx1 < endIdx1 && startIdx2 < endIdx2) {
+         int v1 = arr1.getu(startIdx1);
+         int v2 = arr2.getu(startIdx2);
+         if (v1 < v2) {
+            ++startIdx1;
+         } else if (v1 > v2) {
+            ++startIdx2;
+         } else {
+            target.add(v1);
+            ++startIdx1;
+            ++startIdx2;
+         }
+         ++cost;
+      }
 
-     return cost;
-  }
+      return cost;
+   }
 
-  public static int sdifference(IntArrayList arr1, IntArrayList arr2,
-        int i1, int size1, int i2, int size2, IntCollection target) {
-     int cost = 0;
-     while (i1 < size1 && i2 < size2) {
-        int v1 = arr1.getUnchecked(i1);
-        int v2 = arr2.getUnchecked(i2);
-        if (v1 == v2) {
-           ++i1;
-           ++i2;
-        } else if (v1 < v2) {
-           target.add(v1);
-           ++i1;
-        } else {
-           ++i2;
-        }
-        ++cost;
-     }
+   public static int sintersectWithKeyPred(IntArrayList arr1,
+                                           IntArrayList arr2, int startIdx1,
+                                           int endIdx1, int startIdx2,
+                                           int endIdx2, IntCollection target,
+                                           IntArrayList arr2Keys,
+                                           IntPredicate pred) {
+      int cost = 0;
+      while (startIdx1 < endIdx1 && startIdx2 < endIdx2) {
+         int v1 = arr1.getu(startIdx1);
+         int v2 = arr2.getu(startIdx2);
+         if (v1 < v2) {
+            ++startIdx1;
+         } else if (v1 > v2) {
+            ++startIdx2;
+         } else {
+            if (pred.test(arr2Keys.getu(startIdx2))) {
+               target.add(v1);
+            }
+            ++startIdx1;
+            ++startIdx2;
+         }
+         ++cost;
+      }
 
-     while (i1 < size1) {
-        target.add(arr1.getUnchecked(i1));
-        ++i1;
-     }
+      return cost;
+   }
 
-     return cost;
-  }
+   public static int sintersectConsumeWithKeyPred(IntArrayList arr1,
+                                                  IntArrayList arr2,
+                                                  int startIdx1, int endIdx1,
+                                                  int startIdx2, int endIdx2,
+                                                  IntConsumer consumer,
+                                                  IntArrayList arr2Keys,
+                                                  IntPredicate pred) {
+      int cost = 0;
+      while (startIdx1 < endIdx1 && startIdx2 < endIdx2) {
+         int v1 = arr1.getu(startIdx1);
+         int v2 = arr2.getu(startIdx2);
+         if (v1 < v2) {
+            ++startIdx1;
+         } else if (v1 > v2) {
+            ++startIdx2;
+         } else {
+            if (pred.test(arr2Keys.getu(startIdx2))) {
+               consumer.accept(v1);
+            }
+            ++startIdx1;
+            ++startIdx2;
+         }
+         ++cost;
+      }
 
-  public static int sunion(IntArrayList arr1, IntArrayList arr2,
-        int i1, int size1, int i2, int size2, IntCollection target) {
-     int cost = 0;
-     while (i1 < size1 && i2 < size2) {
-        int v1 = arr1.getUnchecked(i1);
-        int v2 = arr2.getUnchecked(i2);
-        if (v1 == v2) {
-           target.add(v1);
-           ++i1;
-           ++i2;
-        } else if (v1 < v2) {
-           target.add(v1);
-           ++i1;
-        } else {
-           target.add(v2);
-           ++i2;
-        }
-        ++cost;
-     }
-     
-     while (i1 < size1) {
-        target.add(arr1.getUnchecked(i1));
-        ++i1;
-     }
-     
-     while (i2 < size2) {
-        target.add(arr2.getUnchecked(i2));
-        ++i2;
-     }
+      return cost;
+   }
 
-     return cost;
-  }
+   public static int sintersectConsume(IntArrayList arr1, IntArrayList arr2,
+                                       int startIdx1, int endIdx1,
+                                       int startIdx2, int endIdx2,
+                                       IntConsumer consumer) {
+      int cost = 0;
+      while (startIdx1 < endIdx1 && startIdx2 < endIdx2) {
+         int v1 = arr1.getu(startIdx1);
+         int v2 = arr2.getu(startIdx2);
+         if (v1 < v2) {
+            ++startIdx1;
+         } else if (v1 > v2) {
+            ++startIdx2;
+         } else {
+            consumer.accept(v1);
+            ++startIdx1;
+            ++startIdx2;
+         }
+         ++cost;
+      }
+
+      return cost;
+   }
+
+   public static int sdifferenceConsume(IntArrayList arr1, IntArrayList arr2,
+                                        int startIdx1, int endIdx1,
+                                        int startIdx2, int endIdx2,
+                                        IntConsumer consumer) {
+      int cost = 0;
+      while (startIdx1 < endIdx1 && startIdx2 < endIdx2) {
+         int v1 = arr1.getu(startIdx1);
+         int v2 = arr2.getu(startIdx2);
+         if (v1 < v2) {
+            consumer.accept(v1);
+            ++startIdx1;
+         } else if (v1 > v2) {
+            ++startIdx2;
+         } else {
+            ++startIdx1;
+            ++startIdx2;
+         }
+         ++cost;
+      }
+
+      while (startIdx1 < endIdx1) consumer.accept(arr1.getu(startIdx1++));
+
+      return cost;
+   }
+
+   public static int sdifference(IntArrayList arr1, IntArrayList arr2,
+                                 int startIdx1, int endIdx1, int startIdx2,
+                                 int endIdx2, IntArrayList target) {
+      int cost = 0;
+      while (startIdx1 < endIdx1 && startIdx2 < endIdx2) {
+         int v1 = arr1.getu(startIdx1);
+         int v2 = arr2.getu(startIdx2);
+         if (v1 < v2) {
+            target.add(v1);
+            ++startIdx1;
+         } else if (v1 > v2) {
+            ++startIdx2;
+         } else {
+            ++startIdx1;
+            ++startIdx2;
+         }
+         ++cost;
+      }
+
+      if (startIdx1 < endIdx1) {
+         target.arrayCopy(arr1, startIdx1, target.size(), endIdx1 - startIdx1);
+      }
+
+      return cost;
+   }
+
+   public static int sunion(IntArrayList arr1, IntArrayList arr2,
+                            int startIdx1, int endIdx1, int startIdx2,
+                            int endIdx2, IntArrayList target) {
+      int cost = 0;
+      while (startIdx1 < endIdx1 && startIdx2 < endIdx2) {
+         int v1 = arr1.getu(startIdx1);
+         int v2 = arr2.getu(startIdx2);
+         if (v1 < v2) {
+            target.add(v1);
+            ++startIdx1;
+         } else if (v1 > v2) {
+            target.add(v2);
+            ++startIdx2;
+         } else {
+            target.add(v1);
+            ++startIdx1;
+            ++startIdx2;
+         }
+         ++cost;
+      }
+
+      if (startIdx1 < endIdx1) {
+         target.arrayCopy(arr1, startIdx1, target.size(), endIdx1 - startIdx1);
+      } else if (startIdx2 < endIdx2) {
+         target.arrayCopy(arr2, startIdx2, target.size(), endIdx2 - startIdx2);
+      }
+
+      return cost;
+   }
 }

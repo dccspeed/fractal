@@ -8,10 +8,10 @@ import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.map.IntIntCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
+import com.koloboke.function.IntIntConsumer;
+
 import java.util.function.IntConsumer;
 import java.util.function.Predicate;
-
-import com.koloboke.function.IntIntConsumer;
 
 public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Serializable {
    // Key = neighbour vertex id, Value = edge id that connects owner of neighbourhood with Key
@@ -170,6 +170,11 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
    }
 
    @Override
+   public int getEdge(int u) {
+      return neighbourhoodMap.get(u);
+   }
+
+   @Override
    public IntCollection getNeighborEdges() {
       return neighbourhoodMap.values();
    }
@@ -195,8 +200,35 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
    }
 
    @Override
-   public void forEachVertexEdge(IntIntConsumer consumer) {
-      neighbourhoodMap.forEach(consumer);
+   public void traversalEdgeRange(int lowerBound, IntIntConsumer consumer) {
+      int idx = orderedEdges.binarySearch(lowerBound);
+      int size = orderedEdges.size();
+      idx = (idx < 0) ? (-idx - 1) : idx;
+
+      for (int i = idx; i < size; ++i) {
+         int e = orderedEdges.getu(i);
+         Edge edge = graph.getEdge(e);
+         int u = edge.getSourceId();
+         if (neighbourhoodMap.containsKey(u)) {
+            consumer.accept(u, e);
+            continue;
+         } else {
+            consumer.accept(edge.getDestinationId(), e);
+         }
+      }
+
+   }
+
+   @Override
+   public void traversalVertexRange(int lowerBound, IntIntConsumer consumer) {
+      int idx = orderedVertices.binarySearch(lowerBound);
+      int size = orderedVertices.size();
+      idx = (idx < 0) ? (-idx - 1) : idx;
+
+      for (int i = idx; i < size; ++i) {
+         int v = orderedVertices.getu(i);
+         consumer.accept(v, neighbourhoodMap.get(v));
+      }
    }
 
    @Override
@@ -206,10 +238,6 @@ public class BasicVertexNeighbourhood implements VertexNeighbourhood, java.io.Se
 
    @Override
    public void addEdge(int neighbourVertexId, int edgeId) {
-      //if (neighbourhoodMap.containsKey(neighbourVertexId)) {
-      //   throw new RuntimeException(
-      //         "This edge already exists and this is not a multi-vertex neighbourhood.");
-      //}
       neighbourhoodMap.put(neighbourVertexId, edgeId);
    }
 

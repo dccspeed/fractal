@@ -6,7 +6,7 @@
  * user guide available at https://docs.gradle.org/4.2.1/userguide/java_library_plugin.html
  */
 
-version="SPARK-2.2.0"
+version="SPARK-2.4.3"
 
 buildscript {
    repositories {
@@ -23,6 +23,7 @@ buildscript {
 apply plugin: 'java-library'
 apply plugin: 'java'
 apply plugin: 'scala'
+apply plugin: 'application'
 apply plugin: "com.github.johnrengelman.shadow"
  
 repositories {
@@ -50,7 +51,7 @@ task scalaTest(dependsOn: ['testClasses'], type: JavaExec) {
   classpath = sourceSets.test.runtimeClasspath
 }
 
-test.dependsOn scalaTest
+//test.dependsOn scalaTest
 
 task assemble(dependsOn: ['shadowJar'], overwrite: true)
 
@@ -59,6 +60,10 @@ task assemble(dependsOn: ['shadowJar'], overwrite: true)
 //    jvmArgs "-javaagent:${projectDir}/lib/aspectjweaver-1.8.10.jar"
 //}
 
+application {
+    applicationDefaultJvmArgs = ['-Xmx10g']
+    mainClassName = project.hasProperty("mainClass") ? getProperty("mainClass") : "NULL"
+}
 
 subprojects {
    apply plugin: 'java-library'
@@ -81,6 +86,34 @@ subprojects {
    }
 
    test.dependsOn scalaTest
+
+    //dependencies {
+    //    testImplementation 'junit:junit:4.13'
+    //}
+
+    //test {
+    //    useJUnit()
+
+    //    maxHeapSize = '1G'
+
+    //    maxParallelForks = 10
+
+    //    testLogging {
+    //        // set options for log level LIFECYCLE
+    //        events "started", "skipped", "failed"
+    //        exceptionFormat "full"
+
+    //        // set options for log level DEBUG
+    //        debug {
+    //            events "started", "skipped", "failed"
+    //            exceptionFormat "full"
+    //        }
+
+    //        // remove standard output/error logging from --info builds
+    //        // by assigning only 'failed' and 'skipped' events
+    //        info.events = ["failed", "skipped"]
+    //    }
+    //}
 
    task assemble(dependsOn: ['test', 'shadowJar'], overwrite: true)
 }

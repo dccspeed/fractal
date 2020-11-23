@@ -4,7 +4,7 @@ import br.ufmg.cs.systems.fractal.util.Factory;
 
 import java.util.Collection;
 
-public class CollectionPool<O extends Collection> extends Pool<O> {
+public class CollectionPool<O extends Collection> extends ThreadSafePool<O> {
     public CollectionPool(Factory<O> objectFactory) {
         super(objectFactory);
     }

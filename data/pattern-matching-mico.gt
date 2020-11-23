@@ -1,0 +1,8 @@
+mico q1-triangle 3 12534960
+mico q2-square 4 2016507139
+mico q3-chordal-square 4 3527170461
+mico q4-4clique 4 514864225
+mico q5-5clique 5
+mico q6-house 5
+mico q7-2chordal-square 6
+mico q8-box-house 5

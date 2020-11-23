@@ -3,1292 +3,944 @@ package br.ufmg.cs.systems.fractal.computation
 import java.util.concurrent.atomic.AtomicInteger
 
 import br.ufmg.cs.systems.fractal.Primitive
+import br.ufmg.cs.systems.fractal.computation.vertexinduced.VertexInducedComputation
 import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.subgraph._
-import br.ufmg.cs.systems.fractal.util.{Logging, WordFilterFunc}
-import com.koloboke.collect.IntCollection
+import br.ufmg.cs.systems.fractal.util.Logging
 
 import scala.collection.mutable.Stack
 
 // TODO: Refactor me!
 sealed trait ComputationContainer [E <: Subgraph] extends Computation[E]
-    with Logging {
+   with Logging {
 
-  val callerSite: String = {
-    val calls = Thread.currentThread().getStackTrace()
-    def findCaller: String = {
-      var i = 0
-      while (i < calls.length) {
-        if (calls(i).getClassName equals "br.ufmg.cs.systems.fractal.fractalResult") {
-          return calls(i).getMethodName
-        }
-        i += 1
+   val containerId: Int = ComputationContainer.nextContainerId
+      .getAndIncrement
+
+   val computationLabelOpt: Option[String]
+
+   val patternOpt: Option[Pattern]
+
+   val processOpt: Option[(E,Computation[E]) => Unit]
+
+   val filterOpt: Option[(E,Computation[E]) => Boolean]
+
+   val initOpt: Option[(Computation[E]) => Unit]
+
+   val initAggregationsOpt: Option[(Computation[E]) => Unit]
+
+   val shouldBypassOpt: Option[Boolean]
+
+   val processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long]
+
+   val nextComputationOpt: Option[Computation[E]]
+
+   @transient lazy val lastComputationContainer: ComputationContainer[E] = {
+      nextComputationOpt match {
+         case Some(nextComputation: ComputationContainer[E]) =>
+            nextComputation.lastComputationContainer
+         case _ =>
+            this
       }
-      null
-    }
-    findCaller
-  }
+   }
 
-  val containerId: Int = ComputationContainer.nextContainerId.getAndIncrement
+   override def lastComputation(): Computation[E] = lastComputationContainer
 
-  val primitiveOpt: Option[Primitive]
+   def initContainerFunctions(): Unit
 
-  val computationLabelOpt: Option[String]
+   def withComputationAppended(lastComputation: Computation[E])
+   : ComputationContainer[E]
 
-  val patternOpt: Option[Pattern]
+   def withPrimitive(p: Primitive): ComputationContainer[E]
 
-  val processOpt: Option[(E,Computation[E]) => Unit]
+   def withComputationLabel(label: String): ComputationContainer[E]
 
-  val filterOpt: Option[(E,Computation[E]) => Boolean]
-  
-  val wordFilterOpt: Option[WordFilterFunc[E]]
+   def asLastComputation: ComputationContainer[E]
 
-  val getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection]
+   def take(n: Int): ComputationContainer[E]
 
-  val initOpt: Option[(Computation[E]) => Unit]
+   def shallowCopy(
+                     primitive: Primitive = primitive,
+                     computationLabelOpt: Option[String] =
+                     computationLabelOpt,
+                     patternOpt: Option[Pattern] =
+                     patternOpt,
+                     processOpt: Option[(E,Computation[E]) => Unit] =
+                     processOpt,
+                     filterOpt: Option[(E,Computation[E]) => Boolean] =
+                     filterOpt,
+                     initOpt: Option[(Computation[E]) => Unit] =
+                     initOpt,
+                     initAggregationsOpt: Option[(Computation[E]) => Unit] =
+                     initAggregationsOpt,
+                     shouldBypassOpt: Option[Boolean] =
+                     shouldBypassOpt,
+                     processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
+                     processComputeOpt,
+                     nextComputationOpt: Option[Computation[E]] =
+                     nextComputationOpt
+                  ): ComputationContainer[E]
 
-  val initAggregationsOpt: Option[(Computation[E]) => Unit]
+   def withNewFunctions(
+                          primitive: Primitive = primitive,
+                          computationLabelOpt: Option[String] =
+                          computationLabelOpt,
+                          patternOpt: Option[Pattern] =
+                          patternOpt,
+                          processOpt: Option[(E,Computation[E]) => Unit] =
+                          processOpt,
+                          filterOpt: Option[(E,Computation[E]) => Boolean] =
+                          filterOpt,
+                          initOpt: Option[(Computation[E]) => Unit] =
+                          initOpt,
+                          initAggregationsOpt: Option[(Computation[E]) => Unit] =
+                          initAggregationsOpt,
+                          shouldBypassOpt: Option[Boolean] =
+                          shouldBypassOpt,
+                          processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
+                          processComputeOpt
+                       ): ComputationContainer[E]
 
-  val finishOpt: Option[(Computation[E]) => Unit]
+   def withNewFunctionsAll(
+                             primitive: Primitive = primitive,
+                             computationLabelOpt: Option[String] =
+                             computationLabelOpt,
+                             patternOpt: Option[Pattern] =
+                             patternOpt,
+                             processOpt: Option[(E,Computation[E]) => Unit] =
+                             processOpt,
+                             filterOpt: Option[(E,Computation[E]) => Boolean] =
+                             filterOpt,
+                             initOpt: Option[(Computation[E]) => Unit] =
+                             initOpt,
+                             initAggregationsOpt: Option[(Computation[E]) => Unit] =
+                             initAggregationsOpt,
+                             shouldBypassOpt: Option[Boolean] =
+                             shouldBypassOpt,
+                             processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
+                             processComputeOpt
+                          ): ComputationContainer[E]
 
-  val expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]]
+   def shallowCopy(): ComputationContainer[E]
 
-  val shouldBypassOpt: Option[Boolean]
-  
-  val processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long]
+   def clear(): ComputationContainer[E] = withNewFunctions (
+      primitive = Primitive.None,
+      computationLabelOpt = None,
+      // When creating an empty computation for pattern-induced fractoids, new
+      // containers lose this pattern.
+      //patternOpt = None,
+      processOpt = Some((e,c) => {}),
+      filterOpt = Some((e,c) => true)
+   )
 
-  val nextComputationOpt: Option[Computation[E]]
- 
-  @transient lazy val lastComputation: ComputationContainer[E] = {
-    nextComputationOpt match {
-      case Some(nextComputation: ComputationContainer[E]) =>
-        nextComputation.lastComputation
+   @transient lazy val computationRepr: Array[String] = {
+      Array(
+         shouldBypassOpt.map(b => s"bypass=${b}").getOrElse("bypass=false"),
+         filterOpt.map(_ => "f").getOrElse("_"),
+         processComputeOpt.map(_.toString()).getOrElse("_"),
+         processOpt.map(_ => "p").getOrElse("_"))
+   }
+
+   override def primitives(): Array[Primitive] = nextComputationOpt match {
+      case Some(c: ComputationContainer[E]) =>
+         Array(primitive) ++ c.primitives()
+      case Some(c) =>
+         throw new RuntimeException(s"Computation ${c} is not a container.")
+      case None =>
+         Array(primitive)
+   }
+
+   def toStringPrimitives: String = {
+      var curr = this
+      var lastPrimitive = curr.primitive
+      var lastPrimitiveCount = 1
+      var str = ""
+      curr = curr.nextComputationOpt.getOrElse(null)
+         .asInstanceOf[ComputationContainer[E]]
+      while (curr != null) {
+         val primitive = curr.primitive
+         if (lastPrimitive != primitive) {
+            str = s"${str}${lastPrimitive.name()}(${lastPrimitiveCount})"
+            lastPrimitive = primitive
+            lastPrimitiveCount = 1
+         } else {
+            lastPrimitiveCount += 1
+         }
+         curr = curr.nextComputationOpt.getOrElse(null)
+            .asInstanceOf[ComputationContainer[E]]
+      }
+      s"${str}${lastPrimitive.name()}(${lastPrimitiveCount})"
+   }
+
+   //override def toString: String = {
+   //   toStringPrimitives
+   //   //s"CC[${primitiveOpt.getOrElse(Primitive.None).name()}]" +
+   //      //s"[${containerId}]" +
+   //      //s"(${computationRepr.mkString(",")})" +
+   //      //s"${nextComputationOpt.map(c => "::" + c.toString).getOrElse("")}"
+   //}
+}
+
+case class EComputationContainer [E <: EdgeInducedSubgraph]
+(primitive: Primitive = Primitive.None,
+ computationLabelOpt: Option[String] = None,
+ patternOpt: Option[Pattern] = None,
+ processOpt: Option[(E,Computation[E]) => Unit] = None,
+ filterOpt: Option[(E,Computation[E]) => Boolean] = None,
+ initOpt: Option[(Computation[E]) => Unit] = None,
+ initAggregationsOpt: Option[(Computation[E]) => Unit] = None,
+ shouldBypassOpt: Option[Boolean] = None,
+ processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
+ None,
+ nextComputationOpt: Option[Computation[E]] = None)
+   extends EdgeInducedComputation[E] with ComputationContainer[E] {
+
+   initContainerFunctions()
+
+   private var _computationLabel: String = _
+   private var _pattern: Pattern = _
+   private var _process: (E,Computation[E]) => Unit = _
+   private var _filter: (E,Computation[E]) => Boolean = _
+   private var _init: (Configuration, Computation[E]) => Unit = _
+   private var _initAggregations: (Configuration, Computation[E]) => Unit = _
+   private var _shouldBypass: Boolean = _
+   private var _processCompute
+   : (SubgraphEnumerator[E],Computation[E]) => Long = _
+   private var _nextComputation: Computation[E] = _
+
+   override def process(e: E): Unit = _process (e, this)
+   override def filter(e: E): Boolean = _filter (e, this)
+   override def init(config: Configuration): Unit = _init (config, this)
+   override def initAggregations(config: Configuration): Unit =
+      _initAggregations (config, this)
+   override def shouldBypass(): Boolean = _shouldBypass
+   override def processCompute(iter: SubgraphEnumerator[E]) =
+      _processCompute (iter, this)
+   override def nextComputation(): Computation[E] = _nextComputation
+   override def getPattern(): Pattern = _pattern
+
+   def shallowCopy(): ComputationContainer[E] = nextComputationOpt match {
+      case Some(nextComputation : ComputationContainer[E]) =>
+         this.copy(
+            primitive = primitive,
+            computationLabelOpt =
+               Option(computationLabelOpt.getOrElse(containerId.toString)),
+            nextComputationOpt = Option(nextComputation.shallowCopy()))
+      case None =>
+         this.copy(
+            primitive = primitive,
+            computationLabelOpt =
+               Option(computationLabelOpt.getOrElse(containerId.toString)))
       case _ =>
-        this
-    }
-  }
+         throw new RuntimeException(s"Next computation should be a container")
+   }
 
-  def withComputationAppended(lastComputation: Computation[E])
-    : ComputationContainer[E]
+   def shallowCopy(
+                     primitive: Primitive = Primitive.None,
+                     computationLabelOpt: Option[String] =
+                     computationLabelOpt,
+                     patternOpt: Option[Pattern] =
+                     patternOpt,
+                     processOpt: Option[(E,Computation[E]) => Unit] =
+                     processOpt,
+                     filterOpt: Option[(E,Computation[E]) => Boolean] =
+                     filterOpt,
+                     initOpt: Option[(Computation[E]) => Unit] =
+                     initOpt,
+                     initAggregationsOpt: Option[(Computation[E]) => Unit] =
+                     initAggregationsOpt,
+                     shouldBypassOpt: Option[Boolean] =
+                     shouldBypassOpt,
+                     processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
+                     processComputeOpt,
+                     nextComputationOpt: Option[Computation[E]] =
+                     nextComputationOpt)
+   : ComputationContainer[E] = {
+      this.copy(
+         primitive = primitive,
+         computationLabelOpt = computationLabelOpt,
+         patternOpt = patternOpt,
+         processOpt = processOpt,
+         filterOpt = filterOpt,
+         initOpt = initOpt,
+         initAggregationsOpt = initAggregationsOpt,
+         shouldBypassOpt = shouldBypassOpt,
+         processComputeOpt = processComputeOpt,
+         nextComputationOpt = nextComputationOpt
+      )
+   }
 
-  def withPrimitive(p: Primitive): ComputationContainer[E]
-  
-  def withComputationLabel(label: String): ComputationContainer[E]
+   def withNewFunctions(
+                          primitive: Primitive =
+                          lastComputationContainer.primitive,
+                          computationLabelOpt: Option[String] =
+                          lastComputationContainer.computationLabelOpt,
+                          patternOpt: Option[Pattern] =
+                          patternOpt,
+                          processOpt: Option[(E,Computation[E]) => Unit] =
+                          lastComputationContainer.processOpt,
+                          filterOpt: Option[(E,Computation[E]) => Boolean] =
+                          lastComputationContainer.filterOpt,
+                          initOpt: Option[(Computation[E]) => Unit] =
+                          lastComputationContainer.initOpt,
+                          initAggregationsOpt: Option[(Computation[E]) => Unit] =
+                          lastComputationContainer.initAggregationsOpt,
+                          shouldBypassOpt: Option[Boolean] =
+                          lastComputationContainer.shouldBypassOpt,
+                          processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
+                          lastComputationContainer.processComputeOpt)
+   : ComputationContainer[E] = {
 
-  def asLastComputation: ComputationContainer[E]
-  
-  def take(n: Int): ComputationContainer[E]
+      val comps = new Stack[EComputationContainer[E]]()
+      var currOpt: Option[EComputationContainer[E]] = Option(this)
+      while (currOpt.isDefined) {
+         comps.push(currOpt.get)
+         currOpt = currOpt.get.nextComputationOpt.
+            asInstanceOf[Option[EComputationContainer[E]]]
+      }
 
-  def shallowCopy(
-      primitiveOpt: Option[Primitive] =
-        primitiveOpt,
-      computationLabelOpt: Option[String] =
-        computationLabelOpt,
-      patternOpt: Option[Pattern] =
-        patternOpt,
-      processOpt: Option[(E,Computation[E]) => Unit] =
-        processOpt,
-      filterOpt: Option[(E,Computation[E]) => Boolean] =
-        filterOpt,
-      wordFilterOpt: Option[WordFilterFunc[E]] =
-        wordFilterOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
-        getPossibleExtensionsOpt,
-      initOpt: Option[(Computation[E]) => Unit] =
-        initOpt,
-      initAggregationsOpt: Option[(Computation[E]) => Unit] =
-        initAggregationsOpt,
-      finishOpt: Option[(Computation[E]) => Unit] =
-        finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
-        expandComputeOpt,
-      shouldBypassOpt: Option[Boolean] =
-        shouldBypassOpt,
-      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
-        processComputeOpt,
-      nextComputationOpt: Option[Computation[E]] =
-        nextComputationOpt
-    ): ComputationContainer[E]
+      var lastComp = comps.pop()
+      lastComp = lastComp.copy(primitive, computationLabelOpt, patternOpt,
+         processOpt, filterOpt,
+         initOpt, initAggregationsOpt,
+         shouldBypassOpt, processComputeOpt)
 
-  def withNewFunctions(
-      primitiveOpt: Option[Primitive] =
-        primitiveOpt,
-      computationLabelOpt: Option[String] =
-        computationLabelOpt,
-      patternOpt: Option[Pattern] =
-        patternOpt,
-      processOpt: Option[(E,Computation[E]) => Unit] =
-        processOpt,
-      filterOpt: Option[(E,Computation[E]) => Boolean] =
-        filterOpt,
-      wordFilterOpt: Option[WordFilterFunc[E]] =
-        wordFilterOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
-        getPossibleExtensionsOpt,
-      initOpt: Option[(Computation[E]) => Unit] =
-        initOpt,
-      initAggregationsOpt: Option[(Computation[E]) => Unit] =
-        initAggregationsOpt,
-      finishOpt: Option[(Computation[E]) => Unit] =
-        finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
-        expandComputeOpt,
-      shouldBypassOpt: Option[Boolean] =
-        shouldBypassOpt,
-      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
-        processComputeOpt
-    ): ComputationContainer[E]
+      while (!comps.isEmpty) {
+         lastComp = comps.pop().copy(nextComputationOpt = Some(lastComp))
+      }
 
-  def withNewFunctionsAll(
-      primitiveOpt: Option[Primitive] =
-        primitiveOpt,
-      computationLabelOpt: Option[String] =
-        computationLabelOpt,
-      patternOpt: Option[Pattern] =
-        patternOpt,
-      processOpt: Option[(E,Computation[E]) => Unit] =
-        processOpt,
-      filterOpt: Option[(E,Computation[E]) => Boolean] =
-        filterOpt,
-      wordFilterOpt: Option[WordFilterFunc[E]] =
-        wordFilterOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
-        getPossibleExtensionsOpt,
-      initOpt: Option[(Computation[E]) => Unit] =
-        initOpt,
-      initAggregationsOpt: Option[(Computation[E]) => Unit] =
-        initAggregationsOpt,
-      finishOpt: Option[(Computation[E]) => Unit] =
-        finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
-        expandComputeOpt,
-      shouldBypassOpt: Option[Boolean] =
-        shouldBypassOpt,
-      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
-        processComputeOpt
-    ): ComputationContainer[E]
+      lastComp
+   }
 
-  def shallowCopy(): ComputationContainer[E]
-  
-  def clear(): ComputationContainer[E] = withNewFunctions (
-    primitiveOpt = None,
-    computationLabelOpt = None,
-    patternOpt = None,
-    processOpt = Some((e,c) => {}),
-    filterOpt = Some((e,c) => true),
-    getPossibleExtensionsOpt = None,
-    //expandComputeOpt = Some((e,c) => Iterator.empty)
-    expandComputeOpt = None
-    )
+   def withNewFunctionsAll(
+                             primitive: Primitive = primitive,
+                             computationLabelOpt: Option[String] =
+                             computationLabelOpt,
+                             patternOpt: Option[Pattern] =
+                             patternOpt,
+                             processOpt: Option[(E,Computation[E]) => Unit] =
+                             processOpt,
+                             filterOpt: Option[(E,Computation[E]) => Boolean] =
+                             filterOpt,
+                             initOpt: Option[(Computation[E]) => Unit] =
+                             initOpt,
+                             initAggregationsOpt: Option[(Computation[E]) => Unit] =
+                             initAggregationsOpt,
+                             shouldBypassOpt: Option[Boolean] =
+                             shouldBypassOpt,
+                             processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
+                             processComputeOpt)
+   : ComputationContainer[E] = nextComputationOpt match {
+      case Some(nextComputation) =>
+         val nextComp = nextComputation.asInstanceOf[ComputationContainer[E]].
+            withNewFunctionsAll (primitive, computationLabelOpt, patternOpt,
+               processOpt, filterOpt,
+               initOpt, initAggregationsOpt,
+               shouldBypassOpt, processComputeOpt)
+         this.copy (primitive = primitive,
+            computationLabelOpt = computationLabelOpt,
+            patternOpt = patternOpt,
+            processOpt = processOpt, filterOpt = filterOpt,
+            initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
+            shouldBypassOpt = shouldBypassOpt,
+            processComputeOpt = processComputeOpt,
+            nextComputationOpt = Some(nextComp))
 
-  @transient lazy val computationRepr: Array[String] = {
-    Array(
-      shouldBypassOpt.map(b => s"bypass=${b}").getOrElse("bypass=false"),
-      expandComputeOpt.map(_ => "ec").getOrElse("_"),
-      getPossibleExtensionsOpt.map(_ => "ex").getOrElse("_"),
-      wordFilterOpt.map(_ => "wf").getOrElse("_"),
-      filterOpt.map(_ => "f").getOrElse("_"),
-      processComputeOpt.map(_ => "pc").getOrElse("_"),
-      processOpt.map(_ => "p").getOrElse("_"))
-  }
+      case None =>
+         this.copy (primitive = primitive,
+            computationLabelOpt = computationLabelOpt,
+            patternOpt = patternOpt,
+            processOpt = processOpt, filterOpt = filterOpt,
+            initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
+            shouldBypassOpt = shouldBypassOpt,
+            processComputeOpt = processComputeOpt, nextComputationOpt = None)
+   }
 
-  override def toString: String = {
-    //s"${primitiveOpt.getOrElse(Primitive.None).name()}" +
-    //s"${nextComputationOpt.map(c => c.toString).getOrElse("")}"
-    s" CC[${containerId}]" +
-    s"[${computationLabel()}]" +
-    s"(${computationRepr.mkString(",")})" +
-    s"${nextComputationOpt.map(c => "::" + c.toString).getOrElse("")}"
-  }
+   def withComputationAppended(lastComputation: Computation[E])
+   : ComputationContainer[E] = nextComputationOpt match {
+      case Some(nextComputation) =>
+         val container = nextComputation.asInstanceOf[ComputationContainer[E]]
+         val _nextComputation = container.
+            withComputationAppended(lastComputation)
+         this.copy(nextComputationOpt = Option(_nextComputation))
+      case None =>
+         this.copy(nextComputationOpt = Option(lastComputation))
+   }
+
+   def withPrimitive(p: Primitive): ComputationContainer[E] = {
+      this.copy (primitive = p)
+   }
+
+   def withComputationLabel(label: String): ComputationContainer[E] = {
+      this.copy (computationLabelOpt = Option(label))
+   }
+
+   def asLastComputation: ComputationContainer[E] = {
+      this.copy(nextComputationOpt = None)
+   }
+
+   def take(n: Int): ComputationContainer[E] = {
+      if (n <= 1) {
+         this.asLastComputation
+      } else {
+         nextComputationOpt match {
+            case Some(nextComputation : ComputationContainer[E]) =>
+               val _nextComputation = nextComputation.take(n - 1)
+               this.copy(nextComputationOpt = Some(_nextComputation))
+            case _ =>
+               this.asLastComputation
+         }
+      }
+   }
+
+   override def initContainerFunctions(): Unit = {
+      _processCompute = processComputeOpt.getOrElse ((_,_) => -1)
+      _nextComputation = nextComputationOpt.getOrElse(null)
+      _shouldBypass = shouldBypassOpt.getOrElse(super.shouldBypass())
+      _initAggregations = initAggregationsOpt match {
+         case Some(thisInitAggregations) =>
+            (config: Configuration, c: Computation[E]) => {
+               super.initAggregations(config)
+               thisInitAggregations(c)
+            }
+
+         case None =>
+            (config: Configuration, c: Computation[E]) => {
+               super.initAggregations(config)
+            }
+      }
+      _init = initOpt match {
+         case Some(thisInit) =>
+            (config: Configuration, c: Computation[E]) => {
+               super.init(config); thisInit(c)
+            }
+         case None =>
+            (config: Configuration, c: Computation[E]) => {
+               super.init(config)
+            }
+      }
+      _filter =  filterOpt
+         .getOrElse ((e: E, c: Computation[E]) => super.filter(e))
+      _process = processOpt
+         .getOrElse ((e: E, c: Computation[E]) => super.process (e))
+      _pattern = patternOpt.getOrElse(null)
+      _computationLabel = computationLabelOpt.getOrElse (containerId.toString)
+   }
 }
 
-case class EComputationContainer [E <: EdgeInducedSubgraph] (
-    primitiveOpt: Option[Primitive] = None,
-    computationLabelOpt: Option[String] = None,
-    patternOpt: Option[Pattern] = None,
-    processOpt: Option[(E,Computation[E]) => Unit] = None,
-    filterOpt: Option[(E,Computation[E]) => Boolean] = None,
-    wordFilterOpt: Option[WordFilterFunc[E]] = None,
-    getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = None,
-    initOpt: Option[(Computation[E]) => Unit] = None,
-    initAggregationsOpt: Option[(Computation[E]) => Unit] = None,
-    finishOpt: Option[(Computation[E]) => Unit] = None,
-    expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] = None,
-    shouldBypassOpt: Option[Boolean] = None,
-    processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
-      None,
-    nextComputationOpt: Option[Computation[E]] = None)
-  extends EdgeInducedComputation[E] with ComputationContainer[E] {
-  
-  private val pconfigOpt: Option[Configuration[E]] =
-    patternOpt.map(_.getConfig().asInstanceOf[Configuration[E]])
+case class VComputationContainer [E <: VertexInducedSubgraph]
+(primitive: Primitive = Primitive.None,
+ computationLabelOpt: Option[String] = None,
+ patternOpt: Option[Pattern] = None,
+ processOpt: Option[(E,Computation[E]) => Unit] = None,
+ filterOpt: Option[(E,Computation[E]) => Boolean] = None,
+ initOpt: Option[(Computation[E]) => Unit] = None,
+ initAggregationsOpt: Option[(Computation[E]) => Unit] = None,
+ shouldBypassOpt: Option[Boolean] = None,
+ processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] = None,
+ nextComputationOpt: Option[Computation[E]] = None)
+   extends VertexInducedComputation[E] with ComputationContainer[E] {
 
-  @transient private lazy val _computationLabel: String =
-    computationLabelOpt.getOrElse (containerId.toString)
+   initContainerFunctions()
 
-  @transient private lazy val _primitive: Primitive =
-    primitiveOpt.getOrElse (Primitive.None)
-  
-  @transient private lazy val _pattern: Pattern =
-    patternOpt.getOrElse(null)
+   private var _computationLabel: String = _
+   private var _pattern: Pattern = _
+   private var _process: (E,Computation[E]) => Unit = _
+   private var _filter: (E,Computation[E]) => Boolean = _
+   private var _init: (Configuration, Computation[E]) => Unit = _
+   private var _initAggregations: (Configuration, Computation[E]) => Unit = _
+   private var _shouldBypass: Boolean = _
+   private var _processCompute: (SubgraphEnumerator[E],Computation[E]) => Long = _
+   private var _nextComputation: Computation[E] = _
 
-  @transient private lazy val _process: (E,Computation[E]) => Unit =
-    processOpt.getOrElse ((e: E, c: Computation[E]) => super.process (e))
-  
-  @transient private lazy val _filter: (E,Computation[E]) => Boolean =
-    filterOpt.getOrElse ((e: E, c: Computation[E]) => super.filter (e))
-  
-  @transient private lazy val _wordFilter: WordFilterFunc[E] = {
-    wordFilterOpt.getOrElse (
-      new WordFilterFunc [E] {
-        def apply(e: E, w: Int, c: Computation[E]): Boolean = {
-          e.isCanonicalSubgraphWithWord(w)
-        }
-      }
-    )
-  }
+   override def process(e: E): Unit = _process (e, this)
+   override def filter(e: E): Boolean = _filter (e, this)
+   override def init(config: Configuration): Unit = _init (config, this)
+   override def initAggregations(config: Configuration): Unit =
+      _initAggregations (config, this)
+   override def shouldBypass(): Boolean = _shouldBypass
+   override def processCompute(iter: SubgraphEnumerator[E]) =
+      _processCompute (iter, this)
+   override def nextComputation(): Computation[E] = _nextComputation
+   override def getPattern(): Pattern = _pattern
 
-  @transient private lazy val _getPossibleExtensions: (E,Computation[E]) => IntCollection =
-    getPossibleExtensionsOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.getPossibleExtensions (e)
-    )
-  
-  @transient private lazy val _init
-    : (Configuration[E], Computation[E]) => Unit = initOpt match {
-
-    case Some(thisInit) =>
-      (config: Configuration[E], c: Computation[E]) => {
-        super.init(config)
-        thisInit(c)
-      }
-
-    case None =>
-      (config:Configuration[E], c: Computation[E]) => {
-        super.init(config)
-      }
-  }
-
-  @transient private lazy val _initAggregations
-    : (Configuration[E], Computation[E]) => Unit = {
-    initAggregationsOpt match {
-      case Some(thisInitAggregations) =>
-        (config: Configuration[E], c: Computation[E]) => {
-          super.initAggregations(config)
-          thisInitAggregations(c)
-        }
-
+   def shallowCopy(): ComputationContainer[E] = nextComputationOpt match {
+      case Some(nextComputation : ComputationContainer[E]) =>
+         this.copy(
+            primitive = Primitive.None,
+            computationLabelOpt =
+               Option(computationLabelOpt.getOrElse(containerId.toString)),
+            nextComputationOpt = Option(nextComputation.shallowCopy()))
       case None =>
-        (config: Configuration[E], c: Computation[E]) => {
-          super.initAggregations(config)
-        }
-    }
-  }
+         this.copy(
+            primitive = Primitive.None,
+            computationLabelOpt =
+               Option(computationLabelOpt.getOrElse(containerId.toString)))
+      case _ =>
+         throw new RuntimeException(s"Next computation should be a container")
+   }
 
-  @transient private lazy val _finish
-    : (Computation[E]) => Unit = finishOpt match {
-    case Some(thisFinish) =>
-      (c: Computation[E]) => {super.finish(); thisFinish(c)}
-    case None =>
-      (c: Computation[E]) => {super.finish()}
-  }
-
-  @transient private lazy val _expandCompute
-    : (E,Computation[E]) => SubgraphEnumerator[E] =
-    expandComputeOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.expandCompute(e)
-    )
-
-  @transient private lazy val _shouldBypass: Boolean = {
-    shouldBypassOpt.getOrElse(super.shouldBypass())
-  }
-
-  @transient private lazy val _processCompute
-    : (SubgraphEnumerator[E],Computation[E]) => Long =
-    processComputeOpt.getOrElse (
-      (iter: SubgraphEnumerator[E], c: Computation[E]) => -1
-    )
-
-  @transient private lazy val _nextComputation
-    : Computation[E] = nextComputationOpt match {
-    case Some(nc) => nc
-    case None => null
-  }
-
-  def shallowCopy(): ComputationContainer[E] = nextComputationOpt match {
-    case Some(nextComputation : ComputationContainer[E]) =>
+   def shallowCopy(
+                     primitive: Primitive = primitive,
+                     computationLabelOpt: Option[String] =
+                     computationLabelOpt,
+                     patternOpt: Option[Pattern] =
+                     patternOpt,
+                     processOpt: Option[(E,Computation[E]) => Unit] =
+                     processOpt,
+                     filterOpt: Option[(E,Computation[E]) => Boolean] =
+                     filterOpt,
+                     initOpt: Option[(Computation[E]) => Unit] =
+                     initOpt,
+                     initAggregationsOpt: Option[(Computation[E]) => Unit] =
+                     initAggregationsOpt,
+                     shouldBypassOpt: Option[Boolean] =
+                     shouldBypassOpt,
+                     processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
+                     processComputeOpt,
+                     nextComputationOpt: Option[Computation[E]] =
+                     nextComputationOpt)
+   : ComputationContainer[E] = {
       this.copy(
-        primitiveOpt =
-          Option(primitiveOpt.getOrElse(Primitive.None)),
-        computationLabelOpt =
-          Option(computationLabelOpt.getOrElse(containerId.toString)),
-        nextComputationOpt = Option(nextComputation.shallowCopy()))
-    case None =>
-      this.copy(
-        primitiveOpt =
-          Option(primitiveOpt.getOrElse(Primitive.None)),
-        computationLabelOpt =
-          Option(computationLabelOpt.getOrElse(containerId.toString)))
-    case _ =>
-      throw new RuntimeException(s"Next computation should be a container")
-  }
+         primitive = primitive,
+         computationLabelOpt = computationLabelOpt,
+         patternOpt = patternOpt,
+         processOpt = processOpt,
+         filterOpt = filterOpt,
+         initOpt = initOpt,
+         initAggregationsOpt = initAggregationsOpt,
+         shouldBypassOpt = shouldBypassOpt,
+         processComputeOpt = processComputeOpt,
+         nextComputationOpt = nextComputationOpt
+      )
+   }
 
-  def shallowCopy(
-      primitiveOpt: Option[Primitive] =
-        primitiveOpt,
-      computationLabelOpt: Option[String] =
-        computationLabelOpt,
-      patternOpt: Option[Pattern] =
-        patternOpt,
-      processOpt: Option[(E,Computation[E]) => Unit] =
-        processOpt,
-      filterOpt: Option[(E,Computation[E]) => Boolean] =
-        filterOpt,
-      wordFilterOpt: Option[WordFilterFunc[E]] =
-        wordFilterOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
-        getPossibleExtensionsOpt,
-      initOpt: Option[(Computation[E]) => Unit] =
-        initOpt,
-      initAggregationsOpt: Option[(Computation[E]) => Unit] =
-        initAggregationsOpt,
-      finishOpt: Option[(Computation[E]) => Unit] =
-        finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
-        expandComputeOpt,
-      shouldBypassOpt: Option[Boolean] =
-        shouldBypassOpt,
-      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
-        processComputeOpt,
-      nextComputationOpt: Option[Computation[E]] =
-        nextComputationOpt)
-    : ComputationContainer[E] = {
-    this.copy(
-      primitiveOpt = primitiveOpt,
-      computationLabelOpt = computationLabelOpt,
-      patternOpt = patternOpt,
-      processOpt = processOpt,
-      filterOpt = filterOpt,
-      wordFilterOpt = wordFilterOpt,
-      getPossibleExtensionsOpt = getPossibleExtensionsOpt,
-      initOpt = initOpt,
-      initAggregationsOpt = initAggregationsOpt,
-      finishOpt = finishOpt,
-      expandComputeOpt = expandComputeOpt,
-      shouldBypassOpt = shouldBypassOpt,
-      processComputeOpt = processComputeOpt,
-      nextComputationOpt = nextComputationOpt
-    )
-  }
+   def withNewFunctions(
+                          primitive: Primitive =
+                          lastComputationContainer.primitive,
+                          computationLabelOpt: Option[String] =
+                          lastComputationContainer.computationLabelOpt,
+                          patternOpt: Option[Pattern] =
+                          patternOpt,
+                          processOpt: Option[(E,Computation[E]) => Unit] =
+                          lastComputationContainer.processOpt,
+                          filterOpt: Option[(E,Computation[E]) => Boolean] =
+                          lastComputationContainer.filterOpt,
+                          initOpt: Option[(Computation[E]) => Unit] =
+                          lastComputationContainer.initOpt,
+                          initAggregationsOpt: Option[(Computation[E]) => Unit] =
+                          lastComputationContainer.initAggregationsOpt,
+                          shouldBypassOpt: Option[Boolean] =
+                          lastComputationContainer.shouldBypassOpt,
+                          processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
+                          lastComputationContainer.processComputeOpt)
+   : ComputationContainer[E] = {
 
-  def withNewFunctions(
-      primitiveOpt: Option[Primitive] = 
-        primitiveOpt,
-      computationLabelOpt: Option[String] =
-        lastComputation.computationLabelOpt,
-      patternOpt: Option[Pattern] =
-        patternOpt,
-      processOpt: Option[(E,Computation[E]) => Unit] =
-        lastComputation.processOpt,
-      filterOpt: Option[(E,Computation[E]) => Boolean] =
-        lastComputation.filterOpt,
-      wordFilterOpt: Option[WordFilterFunc[E]] =
-        lastComputation.wordFilterOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
-        lastComputation.getPossibleExtensionsOpt,
-      initOpt: Option[(Computation[E]) => Unit] =
-        lastComputation.initOpt,
-      initAggregationsOpt: Option[(Computation[E]) => Unit] =
-        lastComputation.initAggregationsOpt,
-      finishOpt: Option[(Computation[E]) => Unit] =
-        lastComputation.finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
-        lastComputation.expandComputeOpt,
-      shouldBypassOpt: Option[Boolean] =
-        lastComputation.shouldBypassOpt,
-      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
-        lastComputation.processComputeOpt)
-    : ComputationContainer[E] = {
+      val comps = new Stack[VComputationContainer[E]]()
+      var currOpt: Option[VComputationContainer[E]] = Option(this)
+      while (currOpt.isDefined) {
+         comps.push(currOpt.get)
+         currOpt = currOpt.get.nextComputationOpt.
+            asInstanceOf[Option[VComputationContainer[E]]]
+      }
 
-    val comps = new Stack[EComputationContainer[E]]()
-    var currOpt: Option[EComputationContainer[E]] = Option(this)
-    while (currOpt.isDefined) {
-      comps.push(currOpt.get)
-      currOpt = currOpt.get.nextComputationOpt.
-        asInstanceOf[Option[EComputationContainer[E]]]
-    }
+      var lastComp = comps.pop()
+      lastComp = lastComp.copy(primitive, computationLabelOpt, patternOpt,
+         processOpt, filterOpt,
+         initOpt, initAggregationsOpt,
+         shouldBypassOpt, processComputeOpt)
 
-    var lastComp = comps.pop()
-    lastComp = lastComp.copy(primitiveOpt, computationLabelOpt, patternOpt,
-        processOpt, filterOpt, wordFilterOpt,
-        getPossibleExtensionsOpt,
-        initOpt, initAggregationsOpt, finishOpt,
-        expandComputeOpt, shouldBypassOpt, processComputeOpt)
-    
-    while (!comps.isEmpty) {
-      lastComp = comps.pop().copy(nextComputationOpt = Some(lastComp))
-    }
-    
-    lastComp
-  }
+      while (!comps.isEmpty) {
+         lastComp = comps.pop().copy(nextComputationOpt = Some(lastComp))
+      }
 
-  def withNewFunctionsAll(
-      primitiveOpt: Option[Primitive] =
-        primitiveOpt,
-      computationLabelOpt: Option[String] =
-        computationLabelOpt,
-      patternOpt: Option[Pattern] =
-        patternOpt,
-      processOpt: Option[(E,Computation[E]) => Unit] =
-        processOpt,
-      filterOpt: Option[(E,Computation[E]) => Boolean] =
-        filterOpt,
-      wordFilterOpt: Option[WordFilterFunc[E]] =
-        wordFilterOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
-        getPossibleExtensionsOpt,
-      initOpt: Option[(Computation[E]) => Unit] =
-        initOpt,
-      initAggregationsOpt: Option[(Computation[E]) => Unit] =
-        initAggregationsOpt,
-      finishOpt: Option[(Computation[E]) => Unit] =
-        finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
-        expandComputeOpt,
-      shouldBypassOpt: Option[Boolean] =
-        shouldBypassOpt,
-      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
-        processComputeOpt)
-    : ComputationContainer[E] = nextComputationOpt match {
-    case Some(nextComputation) =>
-      val nextComp = nextComputation.asInstanceOf[ComputationContainer[E]].
-      withNewFunctionsAll (primitiveOpt, computationLabelOpt, patternOpt,
-        processOpt, filterOpt, wordFilterOpt,
-        getPossibleExtensionsOpt,
-        initOpt, initAggregationsOpt,
-        finishOpt, expandComputeOpt, shouldBypassOpt, processComputeOpt)
-      this.copy (primitiveOpt = primitiveOpt,
-        computationLabelOpt = computationLabelOpt,
-        patternOpt = patternOpt,
-        processOpt = processOpt, filterOpt = filterOpt,
-        wordFilterOpt = wordFilterOpt,
-        getPossibleExtensionsOpt = getPossibleExtensionsOpt,
-        initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
-        finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
-        shouldBypassOpt = shouldBypassOpt,
-        processComputeOpt = processComputeOpt,
-        nextComputationOpt = Some(nextComp))
+      lastComp
+   }
 
-    case None =>
-      this.copy (primitiveOpt = primitiveOpt,
-        computationLabelOpt = computationLabelOpt,
-        patternOpt = patternOpt,
-        processOpt = processOpt, filterOpt = filterOpt,
-        wordFilterOpt = wordFilterOpt,
-        getPossibleExtensionsOpt = getPossibleExtensionsOpt,
-        initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
-        finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
-        shouldBypassOpt = shouldBypassOpt,
-        processComputeOpt = processComputeOpt, nextComputationOpt = None)
-  }
-  
-  def withComputationAppended(lastComputation: Computation[E])
-    : ComputationContainer[E] = nextComputationOpt match {
+   def withNewFunctionsAll(
+                             primitive: Primitive = primitive,
+                             computationLabelOpt: Option[String] =
+                             computationLabelOpt,
+                             patternOpt: Option[Pattern] =
+                             patternOpt,
+                             processOpt: Option[(E,Computation[E]) => Unit] =
+                             processOpt,
+                             filterOpt: Option[(E,Computation[E]) => Boolean] =
+                             filterOpt,
+                             initOpt: Option[(Computation[E]) => Unit] =
+                             initOpt,
+                             initAggregationsOpt: Option[(Computation[E]) => Unit] =
+                             initAggregationsOpt,
+                             shouldBypassOpt: Option[Boolean] =
+                             shouldBypassOpt,
+                             processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
+                             processComputeOpt)
+   : ComputationContainer[E] = nextComputationOpt match {
       case Some(nextComputation) =>
-        val container = nextComputation.asInstanceOf[ComputationContainer[E]]
-        val _nextComputation = container.
-          withComputationAppended(lastComputation)
-        this.copy(nextComputationOpt = Option(_nextComputation))
+         val nextComp = nextComputation.asInstanceOf[ComputationContainer[E]].
+            withNewFunctionsAll (primitive, computationLabelOpt, patternOpt,
+               processOpt, filterOpt,
+               initOpt, initAggregationsOpt,
+               shouldBypassOpt, processComputeOpt)
+         this.copy (primitive = primitive,
+            computationLabelOpt = computationLabelOpt,
+            patternOpt = patternOpt,
+            processOpt = processOpt, filterOpt = filterOpt,
+            initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
+            shouldBypassOpt = shouldBypassOpt,
+            processComputeOpt = processComputeOpt,
+            nextComputationOpt = Some(nextComp))
+
       case None =>
-        this.copy(nextComputationOpt = Option(lastComputation))
-  }
+         this.copy (primitive = primitive,
+            computationLabelOpt = computationLabelOpt,
+            patternOpt = patternOpt,
+            processOpt = processOpt, filterOpt = filterOpt,
+            initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
+            shouldBypassOpt = shouldBypassOpt,
+            processComputeOpt = processComputeOpt, nextComputationOpt = None)
+   }
 
-  def withPrimitive(p: Primitive): ComputationContainer[E] = {
-    this.copy (primitiveOpt = Option(p))
-  }
-  
-  def withComputationLabel(label: String): ComputationContainer[E] = {
-    this.copy (computationLabelOpt = Option(label))
-  }
+   def withComputationAppended(lastComputation: Computation[E])
+   : ComputationContainer[E] = nextComputationOpt match {
+      case Some(nextComputation) =>
+         val container = nextComputation.asInstanceOf[ComputationContainer[E]]
+         val _nextComputation = container.
+            withComputationAppended(lastComputation)
+         this.copy(nextComputationOpt = Option(_nextComputation))
+      case None =>
+         this.copy(nextComputationOpt = Option(lastComputation))
+   }
 
-  def asLastComputation: ComputationContainer[E] = {
-    this.copy(nextComputationOpt = None)
-  }
+   def withPrimitive(p: Primitive): ComputationContainer[E] = {
+      this.copy (primitive = p)
+   }
 
-  def take(n: Int): ComputationContainer[E] = {
-    if (n <= 1) {
-      this.asLastComputation
-    } else {
-      nextComputationOpt match {
-        case Some(nextComputation : ComputationContainer[E]) =>
-          val _nextComputation = nextComputation.take(n - 1)
-          this.copy(nextComputationOpt = Some(_nextComputation))
-        case _ =>
-          this.asLastComputation
+   def withComputationLabel(label: String): ComputationContainer[E] = {
+      this.copy (computationLabelOpt = Option(label))
+   }
+
+   def asLastComputation: ComputationContainer[E] = {
+      this.copy(nextComputationOpt = None)
+   }
+
+   def take(n: Int): ComputationContainer[E] = {
+      if (n <= 1) {
+         this.asLastComputation
+      } else {
+         nextComputationOpt match {
+            case Some(nextComputation : ComputationContainer[E]) =>
+               val _nextComputation = nextComputation.take(n - 1)
+               this.copy(nextComputationOpt = Some(_nextComputation))
+            case _ =>
+               this.asLastComputation
+         }
       }
-    }
-  }
+   }
 
-  override def computationLabel(): String = _computationLabel
+   override def initContainerFunctions(): Unit = {
+      _processCompute = processComputeOpt.getOrElse ((_,_) => -1)
+      _nextComputation = nextComputationOpt.getOrElse(null)
+      _shouldBypass = shouldBypassOpt.getOrElse(super.shouldBypass())
+      _initAggregations = initAggregationsOpt match {
+         case Some(thisInitAggregations) =>
+            (config: Configuration, c: Computation[E]) => {
+               super.initAggregations(config)
+               thisInitAggregations(c)
+            }
 
-  override def process(e: E): Unit = _process (e, this)
-
-  override def filter(e: E): Boolean = _filter (e, this)
-  
-  override def filter(e: E, w: Int): Boolean = _wordFilter (e, w, this)
-
-  override def getPossibleExtensions(e: E): IntCollection =
-    _getPossibleExtensions (e, this)
-
-  override def init(config: Configuration[E]): Unit = _init (config, this)
-
-  override def initAggregations(config: Configuration[E]): Unit =
-    _initAggregations (config, this)
-
-  override def finish(): Unit = _finish (this)
-  
-  override def expandCompute(e: E): SubgraphEnumerator[E] =
-    _expandCompute (e, this)
-
-  override def shouldBypass(): Boolean = _shouldBypass
-
-  override def processCompute(iter: SubgraphEnumerator[E]) =
-    _processCompute (iter, this)
-  
-  override def nextComputation(): Computation[E] = _nextComputation
-  
-  override def getPattern(): Pattern = _pattern
-  
-  //override def toString: String = s"E${super.toString}"
+         case None =>
+            (config: Configuration, c: Computation[E]) => {
+               super.initAggregations(config)
+            }
+      }
+      _init = initOpt match {
+         case Some(thisInit) =>
+            (config: Configuration, c: Computation[E]) => {
+               super.init(config); thisInit(c)
+            }
+         case None =>
+            (config: Configuration, c: Computation[E]) => {
+               super.init(config)
+            }
+      }
+      _filter =  filterOpt
+         .getOrElse ((e: E, c: Computation[E]) => super.filter(e))
+      _process = processOpt
+         .getOrElse ((e: E, c: Computation[E]) => super.process (e))
+      _pattern = patternOpt.getOrElse(null)
+      _computationLabel = computationLabelOpt.getOrElse (containerId.toString)
+   }
 }
 
-case class VComputationContainer [E <: VertexInducedSubgraph] (
-    primitiveOpt: Option[Primitive] = None,
-    computationLabelOpt: Option[String] = None,
-    patternOpt: Option[Pattern] = None,
-    processOpt: Option[(E,Computation[E]) => Unit] = None,
-    filterOpt: Option[(E,Computation[E]) => Boolean] = None,
-    wordFilterOpt: Option[WordFilterFunc[E]] = None,
-    getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = None,
-    initOpt: Option[(Computation[E]) => Unit] = None,
-    initAggregationsOpt: Option[(Computation[E]) => Unit] = None,
-    finishOpt: Option[(Computation[E]) => Unit] = None,
-    expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] = None,
-    shouldBypassOpt: Option[Boolean] = None,
-    processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
-      None,
-    nextComputationOpt: Option[Computation[E]] = None)
-  extends VertexInducedComputation[E] with ComputationContainer[E] {
-  
-  private val pconfigOpt: Option[Configuration[E]] =
-    patternOpt.map(_.getConfig().asInstanceOf[Configuration[E]])
+case class VEComputationContainer [S <: PatternInducedSubgraph](
+                                                                  primitive: Primitive = Primitive.None,
+                                                                  computationLabelOpt: Option[String] = None,
+                                                                  patternOpt: Option[Pattern] = None,
+                                                                  processOpt: Option[(S,Computation[S]) => Unit] = None,
+                                                                  filterOpt: Option[(S,Computation[S]) => Boolean] = None,
+                                                                  initOpt: Option[(Computation[S]) => Unit] = None,
+                                                                  initAggregationsOpt: Option[(Computation[S]) => Unit] = None,
+                                                                  shouldBypassOpt: Option[Boolean] = None,
+                                                                  processComputeOpt: Option[(SubgraphEnumerator[S],Computation[S]) => Long] =
+                                                                  None,
+                                                                  nextComputationOpt: Option[Computation[S]] = None)
+   extends PatternInducedComputation[S] with ComputationContainer[S] {
 
-  @transient private lazy val _primitive: Primitive =
-    primitiveOpt.getOrElse (Primitive.None)
+   initContainerFunctions()
 
-  @transient private lazy val _computationLabel: String =
-    computationLabelOpt.getOrElse (containerId.toString)
-  
-  @transient private lazy val _pattern: Pattern =
-    patternOpt.getOrElse(null)
+   private var _computationLabel: String = _
+   private var _pattern: Pattern = _
+   private var _process: (S,Computation[S]) => Unit = _
+   private var _filter: (S,Computation[S]) => Boolean = _
+   private var _patternInit: (Configuration, Computation[S]) => Unit = _
+   private var _init: (Configuration, Computation[S]) => Unit = _
+   private var _initAggregations: (Configuration, Computation[S]) => Unit = _
+   private var _shouldBypass: Boolean = _
+   private var _processCompute
+   : (SubgraphEnumerator[S],Computation[S]) => Long = _
+   private var _nextComputation: Computation[S] = _
 
-  @transient private lazy val _process: (E,Computation[E]) => Unit =
-    processOpt.getOrElse ((e: E, c: Computation[E]) => super.process (e))
-  
-  @transient private lazy val _filter: (E,Computation[E]) => Boolean =
-    filterOpt.getOrElse ((e: E, c: Computation[E]) => super.filter (e))
-  
-  @transient private lazy val _wordFilter: WordFilterFunc[E] = {
-    wordFilterOpt.getOrElse (
-      new WordFilterFunc [E] {
-        def apply(e: E, w: Int, c: Computation[E]): Boolean = {
-          true
-        }
-      }
-    )
-  }
+   override def process(e: S): Unit = _process (e, this)
+   override def filter(e: S): Boolean = _filter (e, this)
+   override def init(config: Configuration): Unit = {
+      _patternInit(config, this)
+      _init (config, this)
+   }
+   override def initAggregations(config: Configuration): Unit =
+      _initAggregations (config, this)
+   override def shouldBypass(): Boolean = _shouldBypass
+   override def processCompute(iter: SubgraphEnumerator[S]) =
+      _processCompute (iter, this)
+   override def nextComputation(): Computation[S] = _nextComputation
+   override def getPattern(): Pattern = _pattern
 
-  @transient private lazy val _getPossibleExtensions: (E,Computation[E]) => IntCollection =
-    getPossibleExtensionsOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.getPossibleExtensions (e))
-  
-  @transient private lazy val _init
-    : (Configuration[E], Computation[E]) => Unit = initOpt match {
-    case Some(thisInit) =>
-      (config: Configuration[E], c: Computation[E]) => {
-        super.init(config); thisInit(c)
-      }
-    case None =>
-      (config: Configuration[E], c: Computation[E]) => {
-        super.init(config)
-      }
-  }
+   def shallowCopy(): ComputationContainer[S] = nextComputationOpt match {
+      case Some(nextComputation : ComputationContainer[S]) =>
+         this.copy(
+            primitive = primitive,
+            computationLabelOpt =
+               Option(computationLabelOpt.getOrElse(containerId.toString)),
+            nextComputationOpt = Option(nextComputation.shallowCopy()))
+      case None =>
+         this.copy(
+            primitive = primitive,
+            computationLabelOpt =
+               Option(computationLabelOpt.getOrElse(containerId.toString)))
+      case _ =>
+         throw new RuntimeException(s"Next computation should be a container")
+   }
 
-  @transient private lazy val _initAggregations
-    : (Configuration[E], Computation[E]) => Unit = initAggregationsOpt match {
-    case Some(thisInitAggregations) =>
-      (config: Configuration[E], c: Computation[E]) => {
-        super.initAggregations(config)
-        thisInitAggregations(c)
-      }
-
-    case None =>
-      (config: Configuration[E], c: Computation[E]) => {
-        super.initAggregations(config)
-      }
-  }
-
-  @transient private lazy val _finish
-    : (Computation[E]) => Unit = finishOpt match {
-    case Some(thisFinish) =>
-      (c: Computation[E]) => {super.finish(); thisFinish(c)}
-    case None =>
-      (c: Computation[E]) => {super.finish()}
-  }
-  
-  @transient private lazy val _expandCompute
-    : (E,Computation[E]) => SubgraphEnumerator[E] =
-    expandComputeOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.expandCompute(e)
-    )
-
-  @transient private lazy val _shouldBypass: Boolean = {
-    shouldBypassOpt.getOrElse(super.shouldBypass())
-  }
-  
-  @transient private lazy val _processCompute
-    : (SubgraphEnumerator[E],Computation[E]) => Long =
-    processComputeOpt.getOrElse (
-      (iter: SubgraphEnumerator[E], c: Computation[E]) => -1
-    )
-  
-  @transient private lazy val _nextComputation
-    : Computation[E] = nextComputationOpt match {
-    case Some(nc) => nc
-    case None => null
-  }
-
-  def shallowCopy(): ComputationContainer[E] = nextComputationOpt match {
-    case Some(nextComputation : ComputationContainer[E]) =>
+   def shallowCopy(
+                     primitive: Primitive = primitive,
+                     computationLabelOpt: Option[String] =
+                     computationLabelOpt,
+                     patternOpt: Option[Pattern] =
+                     patternOpt,
+                     processOpt: Option[(S,Computation[S]) => Unit] =
+                     processOpt,
+                     filterOpt: Option[(S,Computation[S]) => Boolean] =
+                     filterOpt,
+                     initOpt: Option[(Computation[S]) => Unit] =
+                     initOpt,
+                     initAggregationsOpt: Option[(Computation[S]) => Unit] =
+                     initAggregationsOpt,
+                     shouldBypassOpt: Option[Boolean] =
+                     shouldBypassOpt,
+                     processComputeOpt: Option[(SubgraphEnumerator[S],Computation[S]) => Long] =
+                     processComputeOpt,
+                     nextComputationOpt: Option[Computation[S]] =
+                     nextComputationOpt)
+   : ComputationContainer[S] = {
       this.copy(
-        primitiveOpt =
-          Option(primitiveOpt.getOrElse(Primitive.None)),
-        computationLabelOpt =
-          Option(computationLabelOpt.getOrElse(containerId.toString)),
-        nextComputationOpt = Option(nextComputation.shallowCopy()))
-    case None =>
-      this.copy(
-        primitiveOpt =
-          Option(primitiveOpt.getOrElse(Primitive.None)),
-        computationLabelOpt =
-          Option(computationLabelOpt.getOrElse(containerId.toString)))
-    case _ =>
-      throw new RuntimeException(s"Next computation should be a container")
-  }
-  
-  def shallowCopy(
-      primitiveOpt: Option[Primitive] =
-        primitiveOpt,
-      computationLabelOpt: Option[String] =
-        computationLabelOpt,
-      patternOpt: Option[Pattern] =
-        patternOpt,
-      processOpt: Option[(E,Computation[E]) => Unit] =
-        processOpt,
-      filterOpt: Option[(E,Computation[E]) => Boolean] =
-        filterOpt,
-      wordFilterOpt: Option[WordFilterFunc[E]] =
-        wordFilterOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
-        getPossibleExtensionsOpt,
-      initOpt: Option[(Computation[E]) => Unit] =
-        initOpt,
-      initAggregationsOpt: Option[(Computation[E]) => Unit] =
-        initAggregationsOpt,
-      finishOpt: Option[(Computation[E]) => Unit] =
-        finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
-        expandComputeOpt,
-      shouldBypassOpt: Option[Boolean] =
-        shouldBypassOpt,
-      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
-        processComputeOpt,
-      nextComputationOpt: Option[Computation[E]] =
-        nextComputationOpt)
-    : ComputationContainer[E] = {
-    this.copy(
-      primitiveOpt = primitiveOpt,
-      computationLabelOpt = computationLabelOpt,
-      patternOpt = patternOpt,
-      processOpt = processOpt,
-      filterOpt = filterOpt,
-      wordFilterOpt = wordFilterOpt,
-      getPossibleExtensionsOpt = getPossibleExtensionsOpt,
-      initOpt = initOpt,
-      initAggregationsOpt = initAggregationsOpt,
-      finishOpt = finishOpt,
-      expandComputeOpt = expandComputeOpt,
-      shouldBypassOpt = shouldBypassOpt,
-      processComputeOpt = processComputeOpt,
-      nextComputationOpt = nextComputationOpt
-    )
-  }
+         primitive = primitive,
+         computationLabelOpt = computationLabelOpt,
+         patternOpt = patternOpt,
+         processOpt = processOpt,
+         filterOpt = filterOpt,
+         initOpt = initOpt,
+         initAggregationsOpt = initAggregationsOpt,
+         shouldBypassOpt = shouldBypassOpt,
+         processComputeOpt = processComputeOpt,
+         nextComputationOpt = nextComputationOpt
+      )
+   }
 
-  def withNewFunctions(
-      primitiveOpt: Option[Primitive] =
-        primitiveOpt,
-      computationLabelOpt: Option[String] =
-        lastComputation.computationLabelOpt,
-      patternOpt: Option[Pattern] =
-        patternOpt,
-      processOpt: Option[(E,Computation[E]) => Unit] =
-        lastComputation.processOpt,
-      filterOpt: Option[(E,Computation[E]) => Boolean] =
-        lastComputation.filterOpt,
-      wordFilterOpt: Option[WordFilterFunc[E]] =
-        lastComputation.wordFilterOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
-        lastComputation.getPossibleExtensionsOpt,
-      initOpt: Option[(Computation[E]) => Unit] =
-        lastComputation.initOpt,
-      initAggregationsOpt: Option[(Computation[E]) => Unit] =
-        lastComputation.initAggregationsOpt,
-      finishOpt: Option[(Computation[E]) => Unit] =
-        lastComputation.finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
-        lastComputation.expandComputeOpt,
-      shouldBypassOpt: Option[Boolean] =
-        lastComputation.shouldBypassOpt,
-      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
-        lastComputation.processComputeOpt)
-    : ComputationContainer[E] = {
+   def withNewFunctions(
+                          primitive: Primitive =
+                          lastComputationContainer.primitive,
+                          computationLabelOpt: Option[String] =
+                          lastComputationContainer.computationLabelOpt,
+                          patternOpt: Option[Pattern] =
+                          patternOpt,
+                          processOpt: Option[(S,Computation[S]) => Unit] =
+                          lastComputationContainer.processOpt,
+                          filterOpt: Option[(S,Computation[S]) => Boolean] =
+                          lastComputationContainer.filterOpt,
+                          initOpt: Option[(Computation[S]) => Unit] =
+                          lastComputationContainer.initOpt,
+                          initAggregationsOpt: Option[(Computation[S]) => Unit] =
+                          lastComputationContainer.initAggregationsOpt,
+                          shouldBypassOpt: Option[Boolean] =
+                          lastComputationContainer.shouldBypassOpt,
+                          processComputeOpt: Option[(SubgraphEnumerator[S],Computation[S]) => Long] =
+                          lastComputationContainer.processComputeOpt)
+   : ComputationContainer[S] = {
 
-    val comps = new Stack[VComputationContainer[E]]()
-    var currOpt: Option[VComputationContainer[E]] = Option(this)
-    while (currOpt.isDefined) {
-      comps.push(currOpt.get)
-      currOpt = currOpt.get.nextComputationOpt.
-        asInstanceOf[Option[VComputationContainer[E]]]
-    }
+      val comps = new Stack[VEComputationContainer[S]]()
+      var currOpt: Option[VEComputationContainer[S]] = Option(this)
+      while (currOpt.isDefined) {
+         comps.push(currOpt.get)
+         currOpt = currOpt.get.nextComputationOpt.
+            asInstanceOf[Option[VEComputationContainer[S]]]
+      }
 
-    var lastComp = comps.pop()
-    lastComp = lastComp.copy(primitiveOpt, computationLabelOpt, patternOpt,
-        processOpt, filterOpt, wordFilterOpt,
-        getPossibleExtensionsOpt,
-        initOpt, initAggregationsOpt, finishOpt,
-        expandComputeOpt, shouldBypassOpt, processComputeOpt)
-    
-    while (!comps.isEmpty) {
-      lastComp = comps.pop().copy(nextComputationOpt = Some(lastComp))
-    }
-    
-    lastComp
-  }
+      var lastComp = comps.pop()
+      lastComp = lastComp.copy(primitive, computationLabelOpt, patternOpt,
+         processOpt, filterOpt,
+         initOpt, initAggregationsOpt,
+         shouldBypassOpt, processComputeOpt)
 
-  def withNewFunctionsAll(
-      primitiveOpt: Option[Primitive] =
-        primitiveOpt,
-      computationLabelOpt: Option[String] =
-        computationLabelOpt,
-      patternOpt: Option[Pattern] =
-        patternOpt,
-      processOpt: Option[(E,Computation[E]) => Unit] =
-        processOpt,
-      filterOpt: Option[(E,Computation[E]) => Boolean] =
-        filterOpt,
-      wordFilterOpt: Option[WordFilterFunc[E]] =
-        wordFilterOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
-        getPossibleExtensionsOpt,
-      initOpt: Option[(Computation[E]) => Unit] =
-        initOpt,
-      initAggregationsOpt: Option[(Computation[E]) => Unit] =
-        initAggregationsOpt,
-      finishOpt: Option[(Computation[E]) => Unit] =
-        finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
-        expandComputeOpt,
-      shouldBypassOpt: Option[Boolean] =
-        shouldBypassOpt,
-      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
-        processComputeOpt)
-    : ComputationContainer[E] = nextComputationOpt match {
-    case Some(nextComputation) =>
-      val nextComp = nextComputation.asInstanceOf[ComputationContainer[E]].
-      withNewFunctionsAll (primitiveOpt, computationLabelOpt, patternOpt,
-        processOpt, filterOpt, wordFilterOpt,
-        getPossibleExtensionsOpt,
-        initOpt, initAggregationsOpt,
-        finishOpt, expandComputeOpt, shouldBypassOpt, processComputeOpt)
-      this.copy (primitiveOpt = primitiveOpt,
-        computationLabelOpt = computationLabelOpt,
-        patternOpt = patternOpt,
-        processOpt = processOpt, filterOpt = filterOpt,
-        wordFilterOpt = wordFilterOpt,
-        getPossibleExtensionsOpt = getPossibleExtensionsOpt,
-        initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
-        finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
-        shouldBypassOpt = shouldBypassOpt,
-        processComputeOpt = processComputeOpt,
-        nextComputationOpt = Some(nextComp))
+      while (!comps.isEmpty) {
+         lastComp = comps.pop().copy(nextComputationOpt = Some(lastComp))
+      }
 
-    case None =>
-      this.copy (primitiveOpt = primitiveOpt,
-        computationLabelOpt = computationLabelOpt,
-        patternOpt = patternOpt,
-        processOpt = processOpt, filterOpt = filterOpt,
-        wordFilterOpt = wordFilterOpt,
-        getPossibleExtensionsOpt = getPossibleExtensionsOpt,
-        initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
-        finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
-        shouldBypassOpt = shouldBypassOpt,
-        processComputeOpt = processComputeOpt, nextComputationOpt = None)
-  }
-  
-  def withComputationAppended(lastComputation: Computation[E])
-    : ComputationContainer[E] = nextComputationOpt match {
+      lastComp
+   }
+
+   def withNewFunctionsAll(
+                             primitive: Primitive = primitive,
+                             computationLabelOpt: Option[String] =
+                             computationLabelOpt,
+                             patternOpt: Option[Pattern] =
+                             patternOpt,
+                             processOpt: Option[(S,Computation[S]) => Unit] =
+                             processOpt,
+                             filterOpt: Option[(S,Computation[S]) => Boolean] =
+                             filterOpt,
+                             initOpt: Option[(Computation[S]) => Unit] =
+                             initOpt,
+                             initAggregationsOpt: Option[(Computation[S]) => Unit] =
+                             initAggregationsOpt,
+                             shouldBypassOpt: Option[Boolean] =
+                             shouldBypassOpt,
+                             processComputeOpt: Option[(SubgraphEnumerator[S],Computation[S]) => Long] =
+                             processComputeOpt)
+   : ComputationContainer[S] = nextComputationOpt match {
       case Some(nextComputation) =>
-        val container = nextComputation.asInstanceOf[ComputationContainer[E]]
-        val _nextComputation = container.
-          withComputationAppended(lastComputation)
-        this.copy(nextComputationOpt = Option(_nextComputation))
-      case None =>
-        this.copy(nextComputationOpt = Option(lastComputation))
-  }
-
-  def withPrimitive(p: Primitive): ComputationContainer[E] = {
-    this.copy (primitiveOpt = Option(p))
-  }
-  
-  def withComputationLabel(label: String): ComputationContainer[E] = {
-    this.copy (computationLabelOpt = Option(label))
-  }
-  
-  def asLastComputation: ComputationContainer[E] = {
-    this.copy(nextComputationOpt = None)
-  }
-  
-  def take(n: Int): ComputationContainer[E] = {
-    if (n <= 1) {
-      this.asLastComputation
-    } else {
-      nextComputationOpt match {
-        case Some(nextComputation : ComputationContainer[E]) =>
-          val _nextComputation = nextComputation.take(n - 1)
-          this.copy(nextComputationOpt = Some(_nextComputation))
-        case _ =>
-          this.asLastComputation
-      }
-    }
-  }
-
-  override def computationLabel(): String = _computationLabel
-
-  override def process(e: E): Unit = _process (e, this)
-
-  override def filter(e: E): Boolean = _filter (e, this)
-  
-  override def filter(e: E, w: Int): Boolean = _wordFilter (e, w, this)
-
-  override def getPossibleExtensions(e: E): IntCollection =
-    _getPossibleExtensions (e, this)
-
-  override def init(config: Configuration[E]): Unit = _init (config, this)
-
-  override def initAggregations(config: Configuration[E]): Unit =
-    _initAggregations (config, this)
-
-  override def finish(): Unit = _finish (this)
-
-  override def expandCompute(e: E): SubgraphEnumerator[E] =
-    _expandCompute (e, this)
-
-  override def shouldBypass(): Boolean = _shouldBypass
-  
-  override def processCompute(iter: SubgraphEnumerator[E]) =
-    _processCompute (iter, this)
-  
-  override def nextComputation(): Computation[E] = _nextComputation
-  
-  override def getPattern(): Pattern = _pattern
-  
-  //override def toString: String = s"V${super.toString}"
-}
-
-case class VEComputationContainer [E <: PatternInducedSubgraph](
-    primitiveOpt: Option[Primitive] = None,
-    computationLabelOpt: Option[String] = None,
-    patternOpt: Option[Pattern] = None,
-    processOpt: Option[(E,Computation[E]) => Unit] = None,
-    filterOpt: Option[(E,Computation[E]) => Boolean] = None,
-    wordFilterOpt: Option[WordFilterFunc[E]] = None,
-    getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] = None,
-    initOpt: Option[(Computation[E]) => Unit] = None,
-    initAggregationsOpt: Option[(Computation[E]) => Unit] = None,
-    finishOpt: Option[(Computation[E]) => Unit] = None,
-    expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] = None,
-    shouldBypassOpt: Option[Boolean] = None,
-    processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
-      None,
-    nextComputationOpt: Option[Computation[E]] = None)
-  extends PatternInducedComputation[E] with ComputationContainer[E] {
-  
-  private val pconfigOpt: Option[Configuration[E]] =
-    patternOpt.map(_.getConfig().asInstanceOf[Configuration[E]])
-
-  @transient private lazy val _primitive: Primitive =
-    primitiveOpt.getOrElse (Primitive.None)
-
-  @transient private lazy val _computationLabel: String =
-    computationLabelOpt.getOrElse (containerId.toString)
-  
-  @transient private lazy val _pattern: Pattern =
-    patternOpt.getOrElse(null)
-
-  @transient private lazy val _process: (E,Computation[E]) => Unit =
-    processOpt.getOrElse ((e: E, c: Computation[E]) => super.process (e))
-  
-  @transient private lazy val _filter: (E,Computation[E]) => Boolean =
-    filterOpt.getOrElse ((e: E, c: Computation[E]) => super.filter (e))
-  
-  @transient private lazy val _wordFilter: WordFilterFunc[E] = {
-    wordFilterOpt.getOrElse (
-      new WordFilterFunc [E] {
-        def apply(e: E, w: Int, c: Computation[E]): Boolean = {
-          e.isCanonicalSubgraphWithWord(w)
-        }
-      }
-    )
-  }
-
-  @transient private lazy val _getPossibleExtensions: (E,Computation[E]) => IntCollection =
-    getPossibleExtensionsOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.getPossibleExtensions (e)
-    )
-  
-  @transient private lazy val _init
-    : (Configuration[E], Computation[E]) => Unit = initOpt match {
-
-    case Some(thisInit) =>
-      (config: Configuration[E], c: Computation[E]) => {
-        super.init(config)
-        thisInit(c)
-      }
-
-    case None =>
-      (config:Configuration[E], c: Computation[E]) => {
-        super.init(config)
-      }
-  }
-
-  @transient private lazy val _initAggregations
-    : (Configuration[E], Computation[E]) => Unit = {
-    initAggregationsOpt match {
-      case Some(thisInitAggregations) =>
-        (config: Configuration[E], c: Computation[E]) => {
-          super.initAggregations(config)
-          thisInitAggregations(c)
-        }
+         val nextComp = nextComputation.asInstanceOf[ComputationContainer[S]].
+            withNewFunctionsAll (primitive, computationLabelOpt, patternOpt,
+               processOpt, filterOpt,
+               initOpt, initAggregationsOpt,
+               shouldBypassOpt, processComputeOpt)
+         this.copy (primitive = primitive,
+            computationLabelOpt = computationLabelOpt,
+            patternOpt = patternOpt,
+            processOpt = processOpt, filterOpt = filterOpt,
+            initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
+            shouldBypassOpt = shouldBypassOpt,
+            processComputeOpt = processComputeOpt,
+            nextComputationOpt = Some(nextComp))
 
       case None =>
-        (config: Configuration[E], c: Computation[E]) => {
-          super.initAggregations(config)
-        }
-    }
-  }
+         this.copy (primitive = primitive,
+            computationLabelOpt = computationLabelOpt,
+            patternOpt = patternOpt,
+            processOpt = processOpt, filterOpt = filterOpt,
+            initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
+            shouldBypassOpt = shouldBypassOpt,
+            processComputeOpt = processComputeOpt, nextComputationOpt = None)
+   }
 
-  @transient private lazy val _finish
-    : (Computation[E]) => Unit = finishOpt match {
-    case Some(thisFinish) =>
-      (c: Computation[E]) => {super.finish(); thisFinish(c)}
-    case None =>
-      (c: Computation[E]) => {super.finish()}
-  }
-
-  @transient private lazy val _expandCompute
-    : (E,Computation[E]) => SubgraphEnumerator[E] =
-    expandComputeOpt.getOrElse (
-      (e: E, c: Computation[E]) => super.expandCompute(e)
-    )
-
-  @transient private lazy val _shouldBypass: Boolean = {
-    shouldBypassOpt.getOrElse(super.shouldBypass())
-  }
-
-  @transient private lazy val _processCompute
-    : (SubgraphEnumerator[E],Computation[E]) => Long =
-    processComputeOpt.getOrElse (
-      (iter: SubgraphEnumerator[E], c: Computation[E]) => -1
-    )
-
-  @transient private lazy val _nextComputation
-    : Computation[E] = nextComputationOpt match {
-    case Some(nc) => nc
-    case None => null
-  }
-
-  def shallowCopy(): ComputationContainer[E] = nextComputationOpt match {
-    case Some(nextComputation : ComputationContainer[E]) =>
-      this.copy(
-        primitiveOpt =
-          Option(primitiveOpt.getOrElse(Primitive.None)),
-        computationLabelOpt =
-          Option(computationLabelOpt.getOrElse(containerId.toString)),
-        nextComputationOpt = Option(nextComputation.shallowCopy()))
-    case None =>
-      this.copy(
-        primitiveOpt =
-          Option(primitiveOpt.getOrElse(Primitive.None)),
-        computationLabelOpt =
-          Option(computationLabelOpt.getOrElse(containerId.toString)))
-    case _ =>
-      throw new RuntimeException(s"Next computation should be a container")
-  }
-
-  def shallowCopy(
-      primitiveOpt: Option[Primitive] =
-        primitiveOpt,
-      computationLabelOpt: Option[String] =
-        computationLabelOpt,
-      patternOpt: Option[Pattern] =
-        patternOpt,
-      processOpt: Option[(E,Computation[E]) => Unit] =
-        processOpt,
-      filterOpt: Option[(E,Computation[E]) => Boolean] =
-        filterOpt,
-      wordFilterOpt: Option[WordFilterFunc[E]] =
-        wordFilterOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
-        getPossibleExtensionsOpt,
-      initOpt: Option[(Computation[E]) => Unit] =
-        initOpt,
-      initAggregationsOpt: Option[(Computation[E]) => Unit] =
-        initAggregationsOpt,
-      finishOpt: Option[(Computation[E]) => Unit] =
-        finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
-        expandComputeOpt,
-      shouldBypassOpt: Option[Boolean] =
-        shouldBypassOpt,
-      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
-        processComputeOpt,
-      nextComputationOpt: Option[Computation[E]] =
-        nextComputationOpt)
-    : ComputationContainer[E] = {
-    this.copy(
-      primitiveOpt = primitiveOpt,
-      computationLabelOpt = computationLabelOpt,
-      patternOpt = patternOpt,
-      processOpt = processOpt,
-      filterOpt = filterOpt,
-      wordFilterOpt = wordFilterOpt,
-      getPossibleExtensionsOpt = getPossibleExtensionsOpt,
-      initOpt = initOpt,
-      initAggregationsOpt = initAggregationsOpt,
-      finishOpt = finishOpt,
-      expandComputeOpt = expandComputeOpt,
-      shouldBypassOpt = shouldBypassOpt,
-      processComputeOpt = processComputeOpt,
-      nextComputationOpt = nextComputationOpt
-    )
-  }
-
-  def withNewFunctions(
-      primitiveOpt: Option[Primitive] =
-        primitiveOpt,
-      computationLabelOpt: Option[String] =
-        lastComputation.computationLabelOpt,
-        patternOpt: Option[Pattern] =
-          patternOpt,
-      processOpt: Option[(E,Computation[E]) => Unit] =
-        lastComputation.processOpt,
-      filterOpt: Option[(E,Computation[E]) => Boolean] =
-        lastComputation.filterOpt,
-      wordFilterOpt: Option[WordFilterFunc[E]] =
-        lastComputation.wordFilterOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
-        lastComputation.getPossibleExtensionsOpt,
-      initOpt: Option[(Computation[E]) => Unit] =
-        lastComputation.initOpt,
-      initAggregationsOpt: Option[(Computation[E]) => Unit] =
-        lastComputation.initAggregationsOpt,
-      finishOpt: Option[(Computation[E]) => Unit] =
-        lastComputation.finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
-        lastComputation.expandComputeOpt,
-      shouldBypassOpt: Option[Boolean] =
-        lastComputation.shouldBypassOpt,
-      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
-        lastComputation.processComputeOpt)
-    : ComputationContainer[E] = {
-
-    val comps = new Stack[VEComputationContainer[E]]()
-    var currOpt: Option[VEComputationContainer[E]] = Option(this)
-    while (currOpt.isDefined) {
-      comps.push(currOpt.get)
-      currOpt = currOpt.get.nextComputationOpt.
-        asInstanceOf[Option[VEComputationContainer[E]]]
-    }
-
-    var lastComp = comps.pop()
-    lastComp = lastComp.copy(primitiveOpt, computationLabelOpt, patternOpt,
-        processOpt, filterOpt, wordFilterOpt,
-        getPossibleExtensionsOpt,
-        initOpt, initAggregationsOpt, finishOpt,
-        expandComputeOpt, shouldBypassOpt, processComputeOpt)
-    
-    while (!comps.isEmpty) {
-      lastComp = comps.pop().copy(nextComputationOpt = Some(lastComp))
-    }
-    
-    lastComp
-  }
-
-  def withNewFunctionsAll(
-      primitiveOpt: Option[Primitive] =
-        primitiveOpt,
-      computationLabelOpt: Option[String] =
-        computationLabelOpt,
-      patternOpt: Option[Pattern] =
-        patternOpt,
-      processOpt: Option[(E,Computation[E]) => Unit] =
-        processOpt,
-      filterOpt: Option[(E,Computation[E]) => Boolean] =
-        filterOpt,
-      wordFilterOpt: Option[WordFilterFunc[E]] =
-        wordFilterOpt,
-      getPossibleExtensionsOpt: Option[(E,Computation[E]) => IntCollection] =
-        getPossibleExtensionsOpt,
-      initOpt: Option[(Computation[E]) => Unit] =
-        initOpt,
-      initAggregationsOpt: Option[(Computation[E]) => Unit] =
-        initAggregationsOpt,
-      finishOpt: Option[(Computation[E]) => Unit] =
-        finishOpt,
-      expandComputeOpt: Option[(E,Computation[E]) => SubgraphEnumerator[E]] =
-        expandComputeOpt,
-      shouldBypassOpt: Option[Boolean] =
-        shouldBypassOpt,
-      processComputeOpt: Option[(SubgraphEnumerator[E],Computation[E]) => Long] =
-        processComputeOpt)
-    : ComputationContainer[E] = nextComputationOpt match {
-    case Some(nextComputation) =>
-      val nextComp = nextComputation.asInstanceOf[ComputationContainer[E]].
-      withNewFunctionsAll (primitiveOpt, computationLabelOpt, patternOpt,
-        processOpt, filterOpt, wordFilterOpt,
-        getPossibleExtensionsOpt,
-        initOpt, initAggregationsOpt,
-        finishOpt, expandComputeOpt, shouldBypassOpt, processComputeOpt)
-      this.copy (primitiveOpt = primitiveOpt,
-        computationLabelOpt = computationLabelOpt,
-        patternOpt = patternOpt,
-        processOpt = processOpt, filterOpt = filterOpt,
-        wordFilterOpt = wordFilterOpt,
-        getPossibleExtensionsOpt = getPossibleExtensionsOpt,
-        initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
-        finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
-        shouldBypassOpt = shouldBypassOpt,
-        processComputeOpt = processComputeOpt,
-        nextComputationOpt = Some(nextComp))
-
-    case None =>
-      this.copy (primitiveOpt = primitiveOpt,
-        computationLabelOpt = computationLabelOpt,
-        patternOpt = patternOpt,
-        processOpt = processOpt, filterOpt = filterOpt,
-        wordFilterOpt = wordFilterOpt,
-        getPossibleExtensionsOpt = getPossibleExtensionsOpt,
-        initOpt = initOpt, initAggregationsOpt = initAggregationsOpt,
-        finishOpt = finishOpt, expandComputeOpt = expandComputeOpt,
-        shouldBypassOpt = shouldBypassOpt,
-        processComputeOpt = processComputeOpt, nextComputationOpt = None)
-  }
-  
-  def withComputationAppended(lastComputation: Computation[E])
-    : ComputationContainer[E] = nextComputationOpt match {
+   def withComputationAppended(lastComputation: Computation[S])
+   : ComputationContainer[S] = nextComputationOpt match {
       case Some(nextComputation) =>
-        val container = nextComputation.asInstanceOf[ComputationContainer[E]]
-        val _nextComputation = container.
-          withComputationAppended(lastComputation)
-        this.copy(nextComputationOpt = Option(_nextComputation))
+         val container = nextComputation.asInstanceOf[ComputationContainer[S]]
+         val _nextComputation = container.
+            withComputationAppended(lastComputation)
+         this.copy(nextComputationOpt = Option(_nextComputation))
       case None =>
-        this.copy(nextComputationOpt = Option(lastComputation))
-  }
+         this.copy(nextComputationOpt = Option(lastComputation))
+   }
 
-  def withPrimitive(p: Primitive): ComputationContainer[E] = {
-    this.copy (primitiveOpt = Option(p))
-  }
-  
-  def withComputationLabel(label: String): ComputationContainer[E] = {
-    this.copy (computationLabelOpt = Option(label))
-  }
+   def withPrimitive(p: Primitive): ComputationContainer[S] = {
+      this.copy (primitive = p)
+   }
 
-  def asLastComputation: ComputationContainer[E] = {
-    this.copy(nextComputationOpt = None)
-  }
+   def withComputationLabel(label: String): ComputationContainer[S] = {
+      this.copy (computationLabelOpt = Option(label))
+   }
 
-  def take(n: Int): ComputationContainer[E] = {
-    if (n <= 1) {
-      this.asLastComputation
-    } else {
-      nextComputationOpt match {
-        case Some(nextComputation : ComputationContainer[E]) =>
-          val _nextComputation = nextComputation.take(n - 1)
-          this.copy(nextComputationOpt = Some(_nextComputation))
-        case _ =>
-          this.asLastComputation
+   def asLastComputation: ComputationContainer[S] = {
+      this.copy(nextComputationOpt = None)
+   }
+
+   def take(n: Int): ComputationContainer[S] = {
+      if (n <= 1) {
+         this.asLastComputation
+      } else {
+         nextComputationOpt match {
+            case Some(nextComputation : ComputationContainer[S]) =>
+               val _nextComputation = nextComputation.take(n - 1)
+               this.copy(nextComputationOpt = Some(_nextComputation))
+            case _ =>
+               this.asLastComputation
+         }
       }
-    }
-  }
+   }
 
-  override def computationLabel(): String = _computationLabel
 
-  override def process(e: E): Unit = _process (e, this)
+   override def initContainerFunctions(): Unit = {
+      _processCompute = processComputeOpt.getOrElse ((_,_) => -1)
+      _nextComputation = nextComputationOpt.getOrElse(null)
+      _shouldBypass = shouldBypassOpt.getOrElse(super.shouldBypass())
+      _initAggregations = initAggregationsOpt match {
+         case Some(thisInitAggregations) =>
+            (config: Configuration, c: Computation[S]) => {
+               super.initAggregations(config)
+               thisInitAggregations(c)
+            }
 
-  override def filter(e: E): Boolean = _filter (e, this)
-  
-  override def filter(e: E, w: Int): Boolean = _wordFilter (e, w, this)
-
-  override def getPossibleExtensions(e: E): IntCollection =
-    _getPossibleExtensions (e, this)
-
-  override def init(config: Configuration[E]): Unit = {
-    val pattern = getPattern()
-    if (pattern != null) {
-      pconfigOpt match {
-        case Some(conf) =>
-          conf.initialize()
-          pattern.init(conf)
-        case None =>
-          throw new RuntimeException(
-            s"Invalid state, pattern configuration is missing.")
+         case None =>
+            (config: Configuration, c: Computation[S]) => {
+               super.initAggregations(config)
+            }
       }
-    }
-    _init (config, this)
-  }
-
-  override def initAggregations(config: Configuration[E]): Unit =
-    _initAggregations (config, this)
-
-  override def finish(): Unit = _finish (this)
-  
-  override def expandCompute(e: E): SubgraphEnumerator[E] =
-    _expandCompute (e, this)
-
-  override def shouldBypass(): Boolean = _shouldBypass
-
-  override def processCompute(iter: SubgraphEnumerator[E]) =
-    _processCompute (iter, this)
-
-  override def nextComputation(): Computation[E] = _nextComputation
-
-  override def getPattern(): Pattern = _pattern
-  
-  //override def toString: String = s"E${super.toString}"
+      _init = initOpt match {
+         case Some(thisInit) =>
+            (config: Configuration, c: Computation[S]) => {
+               super.init(config); thisInit(c)
+            }
+         case None =>
+            (config: Configuration, c: Computation[S]) => {
+               super.init(config)
+            }
+      }
+      _patternInit = (config: Configuration, c: Computation[S]) => {
+         val pattern = getPattern()
+         if (pattern != null) {
+            patternOpt.map(_.getConfig().asInstanceOf[Configuration]) match {
+               case Some(conf) =>
+                  //conf.initialize()
+                  pattern.init(config)
+               case None =>
+                  throw new RuntimeException(
+                     s"Invalid state, pattern configuration is missing.")
+            }
+         }
+      }
+      _filter =  filterOpt
+         .getOrElse ((e: S, c: Computation[S]) => super.filter(e))
+      _process = processOpt
+         .getOrElse ((e: S, c: Computation[S]) => super.process (e))
+      _pattern = patternOpt.getOrElse(null)
+      _computationLabel = computationLabelOpt.getOrElse (containerId.toString)
+   }
 }
 
 object ComputationContainer {
-  val nextContainerId = new AtomicInteger(0)
+   val nextContainerId = new AtomicInteger(0)
 }
 
 

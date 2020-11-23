@@ -4,7 +4,7 @@ import br.ufmg.cs.systems.fractal.util.BasicFactory;
 import br.ufmg.cs.systems.fractal.util.Factory;
 import br.ufmg.cs.systems.fractal.util.collection.IntSingleton;
 
-public class IntSingletonPool extends Pool<IntSingleton> {
+public class IntSingletonPool extends ThreadSafePool<IntSingleton> {
     public static IntSingletonPool instance() {
         return IntSingletonPoolHolder.INSTANCE;
     }

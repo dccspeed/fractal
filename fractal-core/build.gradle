@@ -6,7 +6,7 @@
  * user guide available at https://docs.gradle.org/4.2.1/userguide/java_library_plugin.html
  */
 
-version="SPARK-2.2.0"
+version="SPARK-2.4.3"
 
 buildscript {
    repositories {
@@ -41,9 +41,9 @@ repositories {
 
 dependencies {
     // framework to be probed
-    compile 'org.apache.spark:spark-core_2.11:2.2.0'
+    compile 'org.apache.spark:spark-core_2.11:2.4.3'
     
-    compile 'org.apache.spark:spark-graphx_2.11:2.2.0'
+    compile 'org.apache.spark:spark-graphx_2.11:2.4.3'
     
     compile 'com.koloboke:koloboke-api-jdk8:1.0.0'
     
@@ -54,4 +54,15 @@ dependencies {
     compile 'org.scalatest:scalatest_2.11:2.2.6'
 
     compile 'com.typesafe.akka:akka-remote_2.11:2.5.3'
+}
+
+sourceSets {
+    main {
+        scala {
+            srcDirs = ['src/main/scala', 'src/main/java']
+        }
+        java {
+            srcDirs = []
+        }
+    }
 }

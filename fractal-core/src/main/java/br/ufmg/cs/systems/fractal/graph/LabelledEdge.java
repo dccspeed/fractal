@@ -27,6 +27,10 @@ public class LabelledEdge<E> extends Edge<E> {
         return edgeLabel;
     }
 
+    public void setEdgeLabel(int label) {
+        this.edgeLabel = label;
+    }
+
     public boolean validateLabel(int label) {
        return edgeLabel == label;
     }

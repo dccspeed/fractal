@@ -11,14 +11,16 @@ import br.ufmg.cs.systems.fractal.util.collection.IntIntMapAddConsumer;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntSetPool;
-import br.ufmg.cs.systems.fractal.util.pool.Pool;
+import br.ufmg.cs.systems.fractal.util.pool.ThreadSafePool;
 import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.map.IntIntCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.set.IntSet;
-import java.util.function.IntConsumer;
 import org.apache.log4j.Logger;
 
+import java.util.function.IntConsumer;
+
+@Deprecated
 public class VICPattern extends BasicPattern {
     private static final Logger LOG = Logger.getLogger(VICPattern.class);
 
@@ -275,7 +277,7 @@ public class VICPattern extends BasicPattern {
 
             // Add it...
             int newTmpVertexPos = addTmpVertex(underlyingVertexPosToAdd);
-            int newTmpVertexLabel = underlyingPosToLabel.getUnchecked(underlyingVertexPosToAdd);
+            int newTmpVertexLabel = underlyingPosToLabel.getu(underlyingVertexPosToAdd);
 
             // And find its neighbours
             IntSet neighbourUnderlyingPositions = underlyingAdjacencyList.get(underlyingVertexPosToAdd);
@@ -324,7 +326,7 @@ public class VICPattern extends BasicPattern {
                     // Else, if this is the first vertex, check if the labels match
                     else {
                         int minFirstUnderlyingVertexPos = minInverseLabelling.get(newTmpVertexPos);
-                        int minFirstUnderylingVertexLabel = underlyingPosToLabel.getUnchecked(minFirstUnderlyingVertexPos);
+                        int minFirstUnderylingVertexLabel = underlyingPosToLabel.getu(minFirstUnderlyingVertexPos);
 
                         comparisonResult = Integer.compare(newTmpVertexLabel, minFirstUnderylingVertexLabel);
                     }
@@ -416,21 +418,21 @@ public class VICPattern extends BasicPattern {
 
         IntArrayList vertices = getVertices();
 
-        int neighbourVertexId = vertices.getUnchecked(neighbourUnderlyingPos);
-        int newVertexId = vertices.getUnchecked(underlyingVertexPosToAdd);
+        int neighbourVertexId = vertices.getu(neighbourUnderlyingPos);
+        int newVertexId = vertices.getu(underlyingVertexPosToAdd);
 
         addCandidatePatternEdgeConsumer.setCandidateEdgesList(edgesToAdd);
         addCandidatePatternEdgeConsumer.setNeighbourTmpPos(neighbourTmpPos);
         addCandidatePatternEdgeConsumer.setNewTmpVertexPos(newTmpVertexPos);
         addCandidatePatternEdgeConsumer.setNeighbourVertexId(neighbourVertexId);
 
-        mainGraph.forEachEdgeId(neighbourVertexId, newVertexId, addCandidatePatternEdgeConsumer);
+        mainGraph.forEachEdge(neighbourVertexId, newVertexId, addCandidatePatternEdgeConsumer);
     }
 
     private void copyTmpToMin() {
         int numVertices = tmpLabelling.size();
 
-        Pool<PatternEdge> patternEdgePool = PatternEdgePool.
+        ThreadSafePool<PatternEdge> patternEdgePool = PatternEdgePool.
            instance(getConfig().isGraphEdgeLabelled());
 
         for (int i = 0; i < numVertices; ++i) {

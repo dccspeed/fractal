@@ -6,16 +6,12 @@ import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 public abstract class EdgeInducedComputation<E extends EdgeInducedSubgraph> extends BasicComputation<E> {
     @Override
     public final int getInitialNumWords() {
-        return getMainGraph().getNumberEdges();
+        return getMainGraph().numEdges();
     }
 
     @Override
     public Class<? extends Subgraph> getSubgraphClass() {
         return EdgeInducedSubgraph.class;
     }
-    
-    @Override
-    public boolean containsWord(int edgeId) {
-       return getMainGraph().getEdge(edgeId) != null;
-    }
+
 }

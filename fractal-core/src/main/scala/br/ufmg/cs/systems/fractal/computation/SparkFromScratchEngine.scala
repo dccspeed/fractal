@@ -1,157 +1,313 @@
 package br.ufmg.cs.systems.fractal.computation
 
-import java.util.concurrent.ConcurrentHashMap
+import java.io.Serializable
 import java.util.concurrent.atomic._
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue, Executors, ThreadFactory}
 
 import akka.actor._
+import br.ufmg.cs.systems.fractal.aggregation._
+import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.Logging
-import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.util.LongAccumulator
+import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList
+import com.koloboke.collect.map._
+import com.koloboke.collect.map.hash.{HashIntIntMaps, HashIntObjMaps}
+import org.apache.spark.TaskContext
 
-import scala.collection.mutable.Map
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, ExecutionContextExecutorService, Future}
 
-/**
- */
-case class SparkFromScratchEngine[E <: Subgraph](
-                                                  partitionId: Int,
-                                                  step: Int,
-                                                  accums: Map[String,LongAccumulator],
-                                                  previousAggregationsBc: Broadcast[_],
-                                                  configurationId: Int) extends SparkEngine[E] {
+class SparkFromScratchEngine[S <: Subgraph]
+(
+   val partitionId: Int,
+   val step: Int,
+   val computation: Computation[S],
+   val configuration: SparkConfiguration) extends SparkEngine[S] {
 
-  @transient var slaveActorRef: ActorRef = _
+   @transient var slaveActorRef: ActorRef = _
 
-  override def init() = {
-    val start = System.currentTimeMillis
+   private var subgraphAggregation: SubgraphAggregation[S] = _
 
-    super.init()
+   private var executionContext: ExecutionContextExecutorService = _
 
-    // accumulators
-    numSubgraphsOutput = 0
+   override def slaveActor(): ActorRef = slaveActorRef
 
-    // actor
-    slaveActorRef = ActorMessageSystem.createActor(this)
+   private var computationTimeStart: Long = _
+   private var computationTimeEnd: Long = _
+   private var initTimeStart: Long = _
+   private var initTimeEnd: Long = _
 
-    // register computation
-    SparkFromScratchEngine.registerComputation(computation)
+   private var computationWorkStealingTimeStart: Long = _
+   private var computationWorkStealingTimeEnd: Long = _
 
-    logInfo(s"Started slave-actor(step=${step}," +
-      s" partitionId=${partitionId}): ${slaveActorRef}")
-
-    val end = System.currentTimeMillis
-
-    logInfo(s"SparkFromScratchEngine(step=${step},partitionId=${partitionId}" +
-      s" took ${(end - start)} ms to initialize.")
-  }
-
-  /**
-   * Releases resources allocated for this instance
-   */
-  override def finalize() = {
-    super.finalize()
-    slaveActorRef = null
-    // make sure we close writers
-    if (outputStreamOpt.isDefined) outputStreamOpt.get.close
-    if (subgraphWriterOpt.isDefined) subgraphWriterOpt.get.close
-  }
-
-  /**
-   * It does the computation of this module, i.e., expand/compute
-   *
-   * @param inboundCaches
-   */
-  def compute(): Unit = {
-    val start = System.currentTimeMillis
-    val subgraph: E = configuration.createSubgraph()
-    val ret = computation.compute (subgraph)
-    aggregationStorages.foreach {
-      case (name, agg) =>
-        aggregateAndSplitFinalAggregation(name, agg)
-    }
-    flushStatsAccumulators
-    val elapsed = System.currentTimeMillis - start
-    logInfo(s"SparkFromScratchEngine(step=${step},partitionId=${partitionId}" +
-      s" took ${elapsed} ms to compute.")
-  }
-
-}
-
-object SparkFromScratchEngine extends Logging {
-  private val nextIdxs
-    : ConcurrentHashMap[Int, AtomicInteger] = new ConcurrentHashMap()
-  
-  private val activeComputationsIdx
-    : ConcurrentHashMap[Int, ConcurrentHashMap[Int,Int]] = new ConcurrentHashMap()
-
-  private val activeComputations
-    : ConcurrentHashMap[Int, Array[Computation[_]]] = new ConcurrentHashMap()
-
-  def localComputations [E <: Subgraph] (step: Int): Array[Computation[E]] = {
-    activeComputations.get(step).asInstanceOf[Array[Computation[E]]]
-  }
-  
-  def localComputation [E <: Subgraph] (
-      step: Int, partitionId: Int): Computation[E] = {
-    val stepIdxs = activeComputationsIdx.getOrDefault(step, null)
-    if (stepIdxs == null) return null
-
-    val computationIdx = stepIdxs.getOrDefault(partitionId, -1)
-    if (computationIdx == -1) return null
-    
-    activeComputations.get(step)(computationIdx).asInstanceOf[Computation[E]]
-  }
-
-  def createComputationsMap(step: Int, numComputations: Int): Unit = {
-    activeComputations.synchronized {
-      if (!activeComputations.containsKey(step)) {
-        logInfo (s"Registering computation map step=${step}" +
-          s" numComputations=${numComputations}")
-
-        val newArr = new Array[Computation[_]](numComputations)
-        activeComputations.put(step, newArr)
-        nextIdxs.put(step, new AtomicInteger(0))
-        activeComputationsIdx.put(step, new ConcurrentHashMap(numComputations))
-
-      } else {
-        val _numComputations = activeComputations.get(step).length
-
-        if (_numComputations != numComputations) {
-          throw new RuntimeException(
-            s"NumberOfComputations current: ${_numComputations}" +
-            s", expected: ${numComputations}")
-        }
+   val computationCopy: Computation[S] = {
+      val comp = SparkConfiguration.clone(computation)
+      if (configuration.getSubgraphClass() == null) {
+         configuration.setSubgraphClass(comp.getSubgraphClass())
       }
-    }
-  }
+      comp.init(this, configuration)
+      comp
+   }
 
-  def registerComputation(computation: Computation[_]): Unit = {
-    val step = computation.getStep
-    val partitionId = computation.getPartitionId
-    val computations = activeComputations.get(step)
-    val computationIdx = nextIdxs.get(step).getAndIncrement()
-    activeComputationsIdx.get(step).put(partitionId, computationIdx)
-    computations(computationIdx) = computation
+   private def ensureExecutionContext(): Unit = {
+      if (executionContext != null) return
+      // executor service
+      val threadName = Thread.currentThread().getName
+      val threadFactory = new ThreadFactory {
+         override def newThread(runnable: Runnable): Thread = {
+            new Thread(runnable, s"FractalWorkerThread(${threadName})")
+         }
+      }
 
-    logInfo (s"Registered computation step=${step} partitionId=${partitionId}" +
-      s" computations=${computations.filter(_ != null).size}" +
-      s" computationsIdx=${activeComputationsIdx.get(step)}" +
-      s" nextIdxs=${nextIdxs.get(step)}")
-  }
-  
-  def unregisterComputation(computation: Computation[_]): Unit = {
-    val step = computation.getStep
-    val partitionId = computation.getPartitionId
-    if (nextIdxs.get(step).decrementAndGet() == 0) {
-      logInfo (s"Unregistering last computation step=${step} partitionId=${partitionId}")
-      activeComputations.remove(step)
-      nextIdxs.remove(step)
-      activeComputationsIdx.remove(step)
-    } else {
-      logInfo (s"Unregistering computation step=${step} partitionId=${partitionId}")
-      val computations = activeComputations.get(step)
-      val computationIdx = activeComputationsIdx.get(step).get(partitionId)
-      computations(computationIdx) = null
-    }
-  }
+      executionContext = ExecutionContext.fromExecutorService(
+         Executors.newSingleThreadExecutor(threadFactory)
+      )
+   }
+
+   override def init(): Unit = {
+      initTimeStart = System.nanoTime()
+      super.init()
+
+      // actor
+      if (configuration.externalWsEnabled()) {
+         slaveActorRef = ActorMessageSystem.createActor(this)
+         logInfo(s"StartedSlaveActor step=${step} stageId=${stageId}" +
+            s" id=${partitionId} ${slaveActorRef}")
+      }
+
+      if (configuration.wsEnabled()) {
+         LocalComputationStore.createComputationsMap(this)
+         LocalComputationStore.registerComputation(computation)
+      }
+
+      initTimeEnd = System.nanoTime()
+   }
+
+   /**
+    * Releases resources allocated for this instance
+    */
+   override def finalizeEngine(): Unit = {
+      val initElapsedTime = (initTimeEnd - initTimeStart) * 1e-9
+      val computeElapsedTime = (
+         computationTimeEnd - computationTimeStart) * 1e-9
+      val computeWorkStealingElapsedTime = (
+         computationWorkStealingTimeEnd - computationWorkStealingTimeStart) *
+         1e-9
+      logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+         s" id=${partitionId}" +
+         s" init_time ${initElapsedTime}")
+      logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+         s" id=${partitionId}" +
+         s" init_timeline ${initTimeStart} ${initTimeEnd}")
+      logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+         s" id=${partitionId}" +
+         s" compute_time ${computeElapsedTime}")
+      logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+         s" id=${partitionId}" +
+         s" compute_timeline ${computationTimeStart} ${computationTimeEnd}")
+      logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+         s" id=${partitionId}" +
+         s" compute_workstealing_time ${computeWorkStealingElapsedTime}")
+      logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+         s" id=${partitionId}" +
+         s" compute_workstealing_timeline ${computationWorkStealingTimeStart} " +
+         s"${computationWorkStealingTimeEnd}")
+
+      if (Configuration.INSTRUMENTATION_ENABLED) {
+         var comp = computation
+         while (comp != null) {
+            val d = comp.getDepth
+            logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+               s" id=${partitionId} depth=${d}" +
+               s" extensions ${comp.getNumExtensions}")
+            logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+               s" id=${partitionId} depth=${d}" +
+               s" extensions_unique ${comp.getNumUniqueExtensions}")
+            logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+               s" id=${partitionId} depth=${d}" +
+               s" extensions_valid ${comp.getNumValidExtensions}")
+            logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+               s" id=${partitionId} depth=${d}" +
+               s" extensions_canonical ${comp.getNumCanonicalExtensions}")
+            comp = comp.nextComputation()
+         }
+      }
+
+      // clear-up resources
+      if (executionContext != null) executionContext.shutdown()
+
+      if (configuration.externalWsEnabled()) {
+         slaveActorRef ! Terminate
+         slaveActorRef = null
+      }
+
+      if (configuration.wsEnabled()) {
+         LocalComputationStore.unregisterComputation(this)
+      }
+   }
+
+   override def getSubgraphAggregation() = subgraphAggregation
+
+   private def compute(): Unit = {
+      computationTimeStart = System.nanoTime()
+
+      val subgraphEnumerator = computation.getSubgraphEnumerator
+      subgraphEnumerator.computeFirstLevelExtensions()
+      computation.processCompute(subgraphEnumerator)
+
+      logInfo(s"WorkStealingStart step=${step} stageId=${stageId}" +
+         s" id=${partitionId}")
+      computationWorkStealingTimeStart = System.nanoTime()
+      val workStealingSystem = new WorkStealingSystem[S](computation)
+      workStealingSystem.workStealingCompute(computation)
+      computationWorkStealingTimeEnd = System.nanoTime()
+
+      computationTimeEnd = System.nanoTime()
+   }
+
+   /**
+    * This call starts the step computation of this engine and aggregates the
+    * valid subgraphs into a single long number
+    *
+    * @param longSubgraphAggregation
+    * @return a single long
+    */
+   override def computeAggregationLong
+   (longSubgraphAggregation: LongSubgraphAggregation[S])
+   : Long = {
+      subgraphAggregation = longSubgraphAggregation
+      longSubgraphAggregation.init(configuration)
+      init()
+      compute()
+      finalizeEngine()
+      longSubgraphAggregation.value()
+   }
+
+   /**
+    * This call starts this engine computation and aggregates the valid
+    * subgraphs by key/value, where value is a long.
+    *
+    * @param objLongSubgraphAggregation
+    * @tparam K key type parameter
+    * @return iterator of (K,Long) to be consumed downstream
+    */
+   override def computeAggregationObjLong[K <: Serializable]
+   (objLongSubgraphAggregation: ObjLongSubgraphAggregation[S, K])
+   : Iterator[(K, Long)] = {
+      // initialization
+      subgraphAggregation = objLongSubgraphAggregation
+      objLongSubgraphAggregation.init(configuration)
+      init()
+      ensureExecutionContext()
+
+      // future acting as a key/value *producer* (async)
+      val computeFuture = Future(compute())(executionContext)
+
+      // iterator acting as a key/value *consumer*
+      val objLongIterator = new ObjLongIteratorConsumer[S,K](objLongSubgraphAggregation)
+
+      // finish consumer after producer finished producing (async)
+      computeFuture.onComplete { _ =>
+         objLongIterator.finishIterator
+         finalizeEngine()
+      }(executionContext)
+
+      objLongIterator
+   }
+
+   /**
+    * This call starts this engine computation and aggregates the valid
+    * subgraphs by key/value, where both keys and values are objects
+    *
+    * @param objObjSubgraphAggregation
+    * @tparam K key type parameter
+    * @tparam V value type parameter
+    * @return an iterator of (K,V) to be consumed downstream
+    */
+   override def computeAggregationObjObj[K <: Serializable, V <: Serializable]
+   (objObjSubgraphAggregation: ObjObjSubgraphAggregation[S, K, V])
+   : Iterator[(K, V)] = {
+      // initialization
+      subgraphAggregation = objObjSubgraphAggregation
+      objObjSubgraphAggregation.init(configuration)
+      init()
+      ensureExecutionContext()
+
+      // future acting as a key/value *producer* (async)
+      val computeFuture = Future(compute())(executionContext)
+
+      // iterator acting as a key/value *consumer*
+      val objObjIterator = new ObjObjIteratorConsumer[S,K,V](objObjSubgraphAggregation)
+
+      // finish consumer after producer finished producing (async)
+      computeFuture.onComplete { _ =>
+         objObjIterator.finishIterator
+         finalizeEngine()
+      }(executionContext)
+
+      objObjIterator
+   }
+
+   /**
+    * This call starts this engine computation and aggregates the valid
+    * subgraphs by key/value, where value is a long.
+    *
+    * @param longLongSubgraphAggregation
+    * @return iterator of (Long,Long) to be consumed downstream
+    */
+   override def computeAggregationLongLong
+   (longLongSubgraphAggregation: LongLongSubgraphAggregation[S])
+   : Iterator[(Long, Long)] = {
+      // initialization
+      subgraphAggregation = longLongSubgraphAggregation
+      longLongSubgraphAggregation.init(configuration)
+      init()
+      ensureExecutionContext()
+
+      // future acting as a key/value *producer* (async)
+      val computeFuture = Future(compute())(executionContext)
+
+      // iterator acting as a key/value *consumer*
+      val longLongIterator = new LongLongIteratorConsumer[S](longLongSubgraphAggregation)
+
+      // finish consumer after producer finished producing (async)
+      computeFuture.onComplete { _ =>
+         longLongIterator.finishIterator
+         finalizeEngine()
+      }(executionContext)
+
+      longLongIterator
+   }
+
+   /**
+    * This call starts this engine computation and aggregates the valid
+    * subgraphs by key/value, where value is a long.
+    *
+    * @param longObjSubgraphAggregation
+    * @return iterator of (Long,Long) to be consumed downstream
+    */
+   override def computeAggregationLongObj
+   [V <: Serializable]
+   (longObjSubgraphAggregation: LongObjSubgraphAggregation[S, V])
+   : Iterator[(Long, V)] = {
+      // initialization
+      subgraphAggregation = longObjSubgraphAggregation
+      longObjSubgraphAggregation.init(configuration)
+      init()
+      ensureExecutionContext()
+
+      // future acting as a key/value *producer* (async)
+      val computeFuture = Future(compute())(executionContext)
+
+      // iterator acting as a key/value *consumer*
+      val longObjIterator = new LongObjteratorConsumer[S,V](longObjSubgraphAggregation)
+
+      // finish consumer after producer finished producing (async)
+      computeFuture.onComplete { _ =>
+         longObjIterator.finishIterator
+         finalizeEngine()
+      }(executionContext)
+
+      longObjIterator
+   }
 }
+

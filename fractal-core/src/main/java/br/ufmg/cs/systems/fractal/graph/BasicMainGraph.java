@@ -1,17 +1,19 @@
 package br.ufmg.cs.systems.fractal.graph;
 
+import br.ufmg.cs.systems.fractal.computation.Computation;
+import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
+import br.ufmg.cs.systems.fractal.util.EdgePredicates;
+import br.ufmg.cs.systems.fractal.util.VertexPredicate;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
-import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.IntCursor;
-import com.koloboke.collect.map.IntObjCursor;
 import com.koloboke.collect.map.IntIntMap;
+import com.koloboke.collect.map.IntObjCursor;
 import com.koloboke.collect.map.IntObjMap;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
-import java.util.function.IntConsumer;
-
 import com.koloboke.collect.map.hash.HashIntObjMaps;
-import com.koloboke.function.IntIntConsumer;
 import com.koloboke.function.IntObjConsumer;
 import org.apache.commons.io.input.BOMInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -26,81 +28,269 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.StringTokenizer;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntConsumer;
 import java.util.function.Predicate;
 
-public class BasicMainGraph<V,E> implements MainGraph<V,E> {
+public class BasicMainGraph<V, E> implements MainGraph<V, E> {
    private static final Logger LOG = Logger.getLogger(BasicMainGraph.class);
-
+   private static final int INITIAL_ARRAY_SIZE = 4096;
    // we keep a local (per JVM) pool of configurations potentially
    // representing several active fractal applications
    private static AtomicInteger nextGraphId = new AtomicInteger(0);
-   protected int id = newGraphId();
-
-   private static final int INITIAL_ARRAY_SIZE = 4096;
-   
-   protected IntIntMap vertexIdMap = 
-      HashIntIntMaps.getDefaultFactory().withDefaultValue(-1).newMutableMap();
-
-   protected Vertex<V>[] vertexIndexF;
-   protected Edge<E>[] edgeIndexF;
-   
-   protected V[] vertexProperties;
-   protected E[] edgeProperties;
-
-   protected int numVertices;
-   protected int numEdges;
-   
-   private int numVertexLabels;
-   private int numEdgeLabels;
-
-   private VertexNeighbourhood[] vertexNeighborhoods;
-
-   private IntObjMap<VertexNeighbourhood> removedNeighborhoods;
-   private IntObjMap<Vertex<V>> removedVertices;
-   private IntObjMap<Edge<E>> removedEdges;
-
    protected final EdgeRemover edgeRemover = new EdgeRemover();
    protected final VertexReset vertexReset = new VertexReset();
    protected final EdgeReset edgeReset = new EdgeReset();
-   protected final NeighborhoodReset neighborhoodReset = new NeighborhoodReset();
-
+   protected final NeighborhoodReset neighborhoodReset =
+           new NeighborhoodReset();
+   protected int id = newGraphId();
+   protected IntIntMap vertexIdMap =
+           HashIntIntMaps.getDefaultFactory().withDefaultValue(-1).newMutableMap();
+   protected Vertex<V>[] vertexIndexF;
+   protected Edge<E>[] edgeIndexF;
+   protected V[] vertexProperties;
+   protected E[] edgeProperties;
+   protected int numVertices;
+   protected int numEdges;
    protected boolean isEdgeLabelled;
    protected boolean isMultiGraph;
+   private int numVertexLabels;
+   private int numEdgeLabels;
+   private VertexNeighbourhood[] vertexNeighborhoods;
+   private IntObjMap<VertexNeighbourhood> removedNeighborhoods;
+   private IntObjMap<Vertex<V>> removedVertices;
+   private IntObjMap<Edge<E>> removedEdges;
    private String name;
+
+   public BasicMainGraph(String name) {
+      this(name, false, false);
+   }
+
+   public BasicMainGraph(String name, boolean isEdgeLabelled,
+                         boolean isMultiGraph) {
+      init(name, isEdgeLabelled, isMultiGraph);
+   }
+
+   private void init(String name, boolean isEdgeLabelled,
+                     boolean isMultiGraph) {
+      this.name = name;
+      long start = 0;
+
+      if (LOG.isInfoEnabled()) {
+         start = System.currentTimeMillis();
+         LOG.debug("Initializing graph," + " name=" + name + " "
+                 + "isEdgeLabelled=" + isEdgeLabelled + " isMultiGraph=" + isMultiGraph + " class=" + getClass());
+      }
+
+      vertexIndexF = null;
+      edgeIndexF = null;
+
+      vertexNeighborhoods = null;
+      removedNeighborhoods = HashIntObjMaps.newMutableMap();
+      removedVertices = HashIntObjMaps.newMutableMap();
+      removedEdges = HashIntObjMaps.newMutableMap();
+
+      reset();
+
+      this.isEdgeLabelled = isEdgeLabelled;
+      this.isMultiGraph = isMultiGraph;
+
+      if (LOG.isInfoEnabled()) {
+         LOG.debug("Done initializing graph," + " id=" + id + " name=" + name + " isEdgeLabelled=" + isEdgeLabelled + " isMultiGraph=" + isMultiGraph + " class=" + getClass() + " elapsed=" + (System.currentTimeMillis() - start) + " ms");
+      }
+   }
+
+   protected void reset() {
+      numVertices = 0;
+      numEdges = 0;
+      numVertexLabels = 0;
+      numEdgeLabels = 0;
+   }
+
+   public BasicMainGraph(Path filePath, boolean isEdgeLabelled,
+                         boolean isMultiGraph) throws IOException {
+      this(filePath.getFileName().toString(), isEdgeLabelled, isMultiGraph);
+   }
+
+   public BasicMainGraph(org.apache.hadoop.fs.Path hdfsPath,
+                         boolean isEdgeLabelled, boolean isMultiGraph) throws IOException {
+      this(hdfsPath.getName(), isEdgeLabelled, isMultiGraph);
+   }
 
    private static int newGraphId() {
       return nextGraphId.getAndIncrement();
    }
 
    @Override
-   public int getId() {
-      return id;
+   public MainGraph addEdge(Edge edge) {
+      // Assuming input graph contains all edges but we treat it as undirected
+      // TODO: What if input only contains one of the edges? Should we enforce
+      // this via a sanity check?
+      // TODO: Handle this when directed graphs
+      if (edge.getSourceId() > edge.getDestinationId()) {
+         return this;
+      }
+
+      if (edge.getEdgeId() == -1) {
+         edge.setEdgeId(numEdges);
+      }
+      //else if (edge.getEdgeId() != numEdges) {
+      //   throw new RuntimeException("Sanity check, edge with id " + edge
+      //   .getEdgeId() + " added at position " + numEdges);
+      //}
+
+      if (edge.getEdgeId() == numEdges) {
+         ensureCanStoreNewEdge();
+         ++numEdges;
+      } else if (edge.getEdgeId() > numEdges) {
+         throw new RuntimeException("Sanity check, edge with id " + edge.getEdgeId() + " added at position " + numEdges);
+      }
+
+      ensureCanStoreUpToVertex(Math.max(edge.getSourceId(),
+              edge.getDestinationId()));
+      edgeIndexF[edge.getEdgeId()] = edge;
+
+      try {
+         VertexNeighbourhood vertexNeighbourhood =
+                 vertexNeighborhoods[edge.getSourceId()];
+
+         if (vertexNeighbourhood == null) {
+            vertexNeighbourhood = createVertexNeighbourhood();
+            vertexNeighborhoods[edge.getSourceId()] = vertexNeighbourhood;
+         }
+
+         vertexNeighbourhood.addEdge(edge.getDestinationId(), edge.getEdgeId());
+      } catch (ArrayIndexOutOfBoundsException e) {
+         LOG.error("Tried to access index " + edge.getSourceId() + " of " +
+                 "array" + " with size " + vertexNeighborhoods.length);
+         LOG.error("vertexIndexF.length=" + vertexIndexF.length);
+         LOG.error("vertexNeighborhoods.length=" + vertexNeighborhoods.length);
+         throw e;
+      }
+
+      try {
+         VertexNeighbourhood vertexNeighbourhood =
+                 vertexNeighborhoods[edge.getDestinationId()];
+
+         if (vertexNeighbourhood == null) {
+            vertexNeighbourhood = createVertexNeighbourhood();
+            vertexNeighborhoods[edge.getDestinationId()] = vertexNeighbourhood;
+         }
+
+         vertexNeighbourhood.addEdge(edge.getSourceId(), edge.getEdgeId());
+      } catch (ArrayIndexOutOfBoundsException e) {
+         LOG.error("Tried to access index " + edge.getDestinationId() + " of "
+                 + "array with size " + vertexNeighborhoods.length);
+         LOG.error("vertexIndexF.length=" + vertexIndexF.length);
+         LOG.error("vertexNeighborhoods.length=" + vertexNeighborhoods.length);
+         throw e;
+      }
+
+      return this;
    }
 
    @Override
-   public void setId(int id) {
-      this.id = id;
+   public void addEdge(int u, int v, int e) {
+      ensureCanStoreUpToVertex(Math.max(u, v));
+      Edge edge = createEdge(u, v);
+      edge.setEdgeId(e);
+      ensureCanStoreNewEdge();
+      edgeIndexF[e] = edge;
+      ++numEdges;
+
+      VertexNeighbourhood neighbourhood = vertexNeighborhoods[u];
+      if (neighbourhood == null) {
+         neighbourhood = createVertexNeighbourhood();
+         vertexNeighborhoods[u] = neighbourhood;
+      }
+      neighbourhood.addEdge(v, e);
+
+      neighbourhood = vertexNeighborhoods[v];
+      if (neighbourhood == null) {
+         neighbourhood = createVertexNeighbourhood();
+         vertexNeighborhoods[v] = neighbourhood;
+      }
+      neighbourhood.addEdge(u, e);
    }
 
    @Override
-   public int undoVertexFilter() {
-      //LOG.info("removedVertices " + removedVertices);
-      removedVertices.forEach(vertexReset);
-      //LOG.info("removedNeighborhoods " + removedNeighborhoods);
-      removedNeighborhoods.forEach(neighborhoodReset);
-      removedVertices.clear();
-      removedNeighborhoods.clear();
-      return 0;
+   public void addEdgeLabel(int e, int label) {
+      ((LabelledEdge) edgeIndexF[e]).setEdgeLabel(label);
    }
-   
+
    @Override
-   public int undoEdgeFilter() {
-      //LOG.info("removedEdges" + removedEdges);
-      removedEdges.forEach(edgeReset);
-      removedEdges.clear();
-      return 0;
+   public MainGraph addVertex(Vertex vertex) {
+      if (vertex.getVertexId() == numVertices) {
+         ensureCanStoreNewVertex();
+         ++numVertices;
+      }
+      vertexIndexF[vertex.getVertexId()] = vertex;
+      return this;
    }
-   
+
+   @Override
+   public void addVertex(int u) {
+      ensureCanStoreUpToVertex(u);
+      Vertex vertex = createVertex(u, u, 1);
+      vertexIndexF[u] = vertex;
+      ++numVertices;
+   }
+
+   @Override
+   public void addVertexLabel(int u, int label) {
+      vertexIndexF[u].setVertexLabel(label);
+   }
+
+   @Override
+   public void afterGraphUpdate() {
+      // build sorted neighborhood for fast subgraph enumeration
+      for (int i = 0; i < vertexNeighborhoods.length; ++i) {
+         if (vertexNeighborhoods[i] != null) {
+            vertexNeighborhoods[i].buildSortedNeighborhood();
+            //LOG.info(vertexNeighborhoods[i]);
+         }
+      }
+   }
+
+   @Override
+   public boolean containsEdge(int e) {
+      return edgeIndexF[e] != null;
+   }
+
+   @Override
+   public boolean containsVertex(int u) {
+      return vertexIndexF[u] != null;
+   }
+
+   @Override
+   public int edgeDst(int e) {
+      return edgeIndexF[e].getDestinationId();
+   }
+
+   @Override
+   public int edgeLabel(int e) {
+      Edge edge = edgeIndexF[e];
+      if (edge instanceof LabelledEdge) {
+         return ((LabelledEdge) edge).getEdgeLabel();
+      } else {
+         return 1;
+      }
+   }
+
+   @Override
+   public IntArrayListView edgeLabels(int e) {
+      return null;
+   }
+
+   @Override
+   public void edgeLabels(int e, IntArrayListView view) {
+
+   }
+
+   @Override
+   public int edgeSrc(int e) {
+      return edgeIndexF[e].getSourceId();
+   }
+
    @Override
    public int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag) {
       int removedEdges = 0;
@@ -116,40 +306,10 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
          }
       }
 
-      LOG.info("GraphTagging removedVertices=" + removedVertices +
-         " removedEdges=" + removedEdges);
+      LOG.info("GraphTagging removedVertices=" + removedVertices + " " +
+              "removedEdges=" + removedEdges);
 
       return numVertices - removedVertices;
-   }
-
-   @Override
-   public int filterVertices(Predicate<Vertex<V>> vpred) {
-      int numRemovedVertices = 0;
-      for (int vertexId = 0; vertexId < numVertices; ++vertexId) {
-         Vertex vertex = getVertex(vertexId);
-         if (vertex != null) {
-            if (!vpred.test(vertex)) {
-               removeVertex(vertex);
-               ++numRemovedVertices;
-            }
-         } else {
-            vertex = removedVertices.remove(vertexId);
-            if (vpred.test(vertex)) {
-               addVertex(vertex);
-               addNeighborhood(vertexId, removedNeighborhoods.remove(vertexId));
-            } else {
-               ++numRemovedVertices;
-            }
-         }
-      }
-
-      IntObjCursor<Vertex<V>> cur = removedVertices.cursor();
-      while (cur.moveNext()) {
-         vertexIndexF[cur.key()] = null;
-         vertexNeighborhoods[cur.key()] = null;
-      }
-
-      return numRemovedVertices;
    }
 
    @Override
@@ -195,37 +355,196 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    }
 
    @Override
-   public int filterVertices(AtomicBitSetArray tag) {
-      int removedEdges = 0;
-      int removedVertices = 0;
-      for (int i = 0; i < vertexNeighborhoods.length; ++i) {
-         if (vertexNeighborhoods[i] != null) {
-            if (!tag.contains(i)) {
-               vertexNeighborhoods[i] = null;
-               ++removedVertices;
+   public int filterVertices(Predicate<Vertex<V>> vpred) {
+      int numRemovedVertices = 0;
+      for (int vertexId = 0; vertexId < numVertices; ++vertexId) {
+         Vertex vertex = getVertex(vertexId);
+         if (vertex != null) {
+            if (!vpred.test(vertex)) {
+               removeVertex(vertex);
+               ++numRemovedVertices;
+            }
+         } else {
+            vertex = removedVertices.remove(vertexId);
+            if (vpred.test(vertex)) {
+               addVertex(vertex);
+               addNeighborhood(vertexId, removedNeighborhoods.remove(vertexId));
             } else {
-               removedEdges += vertexNeighborhoods[i].filterVertices(tag);
+               ++numRemovedVertices;
             }
          }
       }
 
-      LOG.info("GraphTagging removedVertices=" + removedVertices +
-         " removedEdges=" + removedEdges);
+      IntObjCursor<Vertex<V>> cur = removedVertices.cursor();
+      while (cur.moveNext()) {
+         vertexIndexF[cur.key()] = null;
+         vertexNeighborhoods[cur.key()] = null;
+      }
 
-      return numVertices - removedVertices;
+      return numRemovedVertices;
    }
 
    @Override
-   public int filterEdges(AtomicBitSetArray tag) {
-      int numEdges = 0;
-      for (int i = 0; i < vertexNeighborhoods.length; ++i) {
-         if (vertexNeighborhoods[i] != null) {
-            int neighborhoodSize = vertexNeighborhoods[i].filterEdges(tag);
-            numEdges += neighborhoodSize;
-         }
+   public void forEachCommonEdgeLabels(IntArrayList edges,
+                                       IntConsumer consumer) {
+
+   }
+
+   @Override
+   public void forEachEdge(IntConsumer consumer) {
+      for (int e = 0; e < numEdges; ++e) {
+         consumer.accept(e);
+      }
+   }
+
+   @Override
+   public void forEachEdge(int v1, int v, IntConsumer consumer) {
+      int minv;
+      int maxv;
+
+      // TODO: Change this for directed edges
+      if (v1 < v) {
+         minv = v1;
+         maxv = v;
+      } else {
+         minv = v;
+         maxv = v1;
       }
 
+      VertexNeighbourhood vertexNeighbourhood = this.vertexNeighborhoods[minv];
+
+      vertexNeighbourhood.forEachEdgeId(maxv, consumer);
+   }
+
+   @Override
+   public Edge<E> getEdge(int edgeId) {
+      return edgeIndexF[edgeId];
+   }
+
+   @Override
+   public int getId() {
+      return id;
+   }
+
+   @Override
+   public void validExtensionsPatternInducedLabeled(Computation computation,
+                                                    Subgraph subgraph,
+                                                    IntArrayList intersectionVertexIdxs, IntArrayList differenceVertexIdxs, IntArrayList starts, IntArrayList ends, int vertexLowerBound, int vertexUpperBound, VertexPredicate vpred, EdgePredicates epreds, IntCollection result) {
+
+   }
+
+   @Override
+   public void validExtensionsPatternInduced(Computation computation,
+                                             Subgraph subgraph,
+                                             IntArrayList intersectionVertexIdxs, IntArrayList differenceVertexIdxs, IntArrayList starts, IntArrayList ends, int vertexLowerBound, int vertexUpperBound, IntCollection result) {
+
+   }
+
+   @Override
+   public Vertex<V> getVertex(int vertexId) {
+      return vertexIndexF[vertexId];
+   }
+
+   @Override
+   public VertexNeighbourhood getVertexNeighbourhood(int vertexId) {
+      return vertexNeighborhoods[vertexId];
+   }
+
+   @Override
+   public IntCollection getVertexNeighbours(int vertexId) {
+      VertexNeighbourhood vertexNeighbourhood =
+              getVertexNeighbourhood(vertexId);
+
+      if (vertexNeighbourhood == null) {
+         return null;
+      }
+
+      return vertexNeighbourhood.getNeighborVertices();
+   }
+
+   @Override
+   public boolean isEdgeLabelled() {
+      return isEdgeLabelled;
+   }
+
+   @Override
+   public boolean isMultiGraph() {
+      return isMultiGraph;
+   }
+
+   @Override
+   public void validExtensionsEdgeInduced(Computation computation,
+                                          Subgraph subgraph,
+                                          IntCollection validExtensions) {
+
+   }
+
+   @Override
+   public void validExtensionsVertexInduced(Computation computation,
+                                            Subgraph subgraph,
+                                            IntCollection validExtensions) {
+      throw new UnsupportedOperationException();
+   }
+
+   @Override
+   public IntArrayListView neighborhoodVertices(int u) {
+      return null;
+   }
+
+   @Override
+   public void neighborhoodVertices(int u, IntArrayListView view) {
+      VertexNeighbourhood neighbourhood = vertexNeighborhoods[u];
+      if (neighbourhood != null) {
+         IntArrayList orderedVertices = neighbourhood.getOrderedVertices();
+         view.set(orderedVertices, 0, orderedVertices.size());
+      } else {
+         view.set(null, 0, 0);
+         return;
+      }
+   }
+
+   @Override
+   public int numEdges() {
       return numEdges;
+   }
+
+   @Override
+   public int numVertices() {
+      return numVertices;
+   }
+
+   @Override
+   public int undoEdgeFilter() {
+      //LOG.info("removedEdges" + removedEdges);
+      removedEdges.forEach(edgeReset);
+      removedEdges.clear();
+      return 0;
+   }
+
+   @Override
+   public int undoVertexFilter() {
+      //LOG.debug("removedVertices " + removedVertices);
+      removedVertices.forEach(vertexReset);
+      //LOG.debug("removedNeighborhoods " + removedNeighborhoods);
+      removedNeighborhoods.forEach(neighborhoodReset);
+      removedVertices.clear();
+      removedNeighborhoods.clear();
+      return 0;
+   }
+
+   @Override
+   public int vertexLabel(int u) {
+      return vertexIndexF[u].getVertexLabel();
+   }
+
+   @Override
+   public IntArrayListView vertexLabels(int u) {
+      return null;
+   }
+
+   @Override
+   public void vertexLabels(int u, IntArrayListView view) {
+
    }
 
    protected void removeVertex(Vertex vertex) {
@@ -243,8 +562,10 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
          synchronized (neighborhood) {
             IntCursor cur = neighborhood.getNeighborVertices().cursor();
             while (cur.moveNext()) {
-               VertexNeighbourhood otherNeighborhood = vertexNeighborhoods[cur.elem()];
-               IntCollection edgeIds = otherNeighborhood.getEdgesWithNeighbourVertex(vertexId);
+               VertexNeighbourhood otherNeighborhood =
+                       vertexNeighborhoods[cur.elem()];
+               IntCollection edgeIds =
+                       otherNeighborhood.getEdgesWithNeighbourVertex(vertexId);
                IntCursor cur2 = edgeIds.cursor();
                while (cur2.moveNext()) {
                   synchronized (removedEdges) {
@@ -259,16 +580,12 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       }
    }
 
-   protected void removeEdge(int edgeId) {
-      removeEdge(getEdge(edgeId));
-   }
-
    protected void removeEdge(Edge edge) {
-     int edgeId = edge.getEdgeId();
-     synchronized (removedEdges) {
-        edgeIndexF[edgeId] = null;
-        removedEdges.put(edgeId, edge);
-     }
+      int edgeId = edge.getEdgeId();
+      synchronized (removedEdges) {
+         edgeIndexF[edgeId] = null;
+         removedEdges.put(edgeId, edge);
+      }
 
       int src = edge.getSourceId();
       int dst = edge.getDestinationId();
@@ -284,161 +601,26 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       }
    }
 
-   private void init(String name, boolean isEdgeLabelled, boolean isMultiGraph) {
-      this.name = name;
-      long start = 0;
-
-      if (LOG.isInfoEnabled()) {
-         start = System.currentTimeMillis();
-         LOG.info("Initializing graph," +
-               " id=" + id +
-               " name=" + name +
-               " isEdgeLabelled=" + isEdgeLabelled +
-               " isMultiGraph=" + isMultiGraph +
-               " class=" + getClass());
-      }
-
-      vertexIndexF = null;
-      edgeIndexF = null;
-
-      vertexNeighborhoods = null;
-      removedNeighborhoods = HashIntObjMaps.newMutableMap();
-      removedVertices = HashIntObjMaps.newMutableMap();
-      removedEdges = HashIntObjMaps.newMutableMap();
-
-      reset();
-
-      this.isEdgeLabelled = isEdgeLabelled;
-      this.isMultiGraph = isMultiGraph;
-
-      if (LOG.isInfoEnabled()) {
-         LOG.info("Done initializing graph," +
-               " id=" + id +
-               " name=" + name +
-               " isEdgeLabelled=" + isEdgeLabelled +
-               " isMultiGraph=" + isMultiGraph +
-               " class=" + getClass() +
-               " elapsed=" + (System.currentTimeMillis() - start) + " ms");
-      }
+   protected void addNeighborhood(int vertexId,
+                                  VertexNeighbourhood neighborhood) {
+      vertexNeighborhoods[vertexId] = neighborhood;
    }
 
-   public void init(Object path) throws IOException {
-      long start = 0;
-
-      if (LOG.isInfoEnabled()) {
-         LOG.info("Reading graph," +
-               " id=" + id +
-               " name=" + name +
-               " path=" + path +
-               " isEdgeLabelled=" + isEdgeLabelled +
-               " isMultiGraph=" + isMultiGraph +
-               " class=" + getClass());
-         start = System.currentTimeMillis();
-      }
-
-      if (path instanceof Path) {
-         Path filePath = (Path) path;
-         readFromFile(filePath);
-      } else if (path instanceof org.apache.hadoop.fs.Path) {
-         org.apache.hadoop.fs.Path hadoopPath = (org.apache.hadoop.fs.Path) path;
-         readFromHdfs(hadoopPath);
-      } else {
-         throw new RuntimeException("Invalid path: " + path);
-      }
-
-      buildSortedNeighborhood();      
-
-      if (LOG.isInfoEnabled()) {
-         LOG.info("Done reading graph," +
-               " id=" + id +
-               " name=" + name +
-               " path=" + path +
-               " isEdgeLabelled=" + isEdgeLabelled +
-               " isMultiGraph=" + isMultiGraph +
-               " class=" + getClass() +
-               " numVertices=" + numVertices +
-               " numEdges=" + numEdges +
-               " elapsed=" + (System.currentTimeMillis() - start));
-      }
-   }
-
-   @Override
-   public void buildSortedNeighborhood() {
-      // build sorted neighborhood for fast subgraph enumeration
-      for (int i = 0; i < vertexNeighborhoods.length; ++i) {
-         if (vertexNeighborhoods[i] != null) {
-            vertexNeighborhoods[i].buildSortedNeighborhood();
-            //LOG.info(vertexNeighborhoods[i]);
-         }
-      }
-   }
-
-   public void initProperties(Object path) throws IOException {
-      long start = 0;
-
-      if (LOG.isInfoEnabled()) {
-         LOG.info("Reading graph properties");
-         start = System.currentTimeMillis();
-      }
-
-      if (path instanceof Path) {
-         Path filePath = (Path) path;
-         readPropertiesFromFile(filePath);
-      } else if (path instanceof org.apache.hadoop.fs.Path) {
-         org.apache.hadoop.fs.Path hadoopPath = (org.apache.hadoop.fs.Path) path;
-         readPropertiesFromHdfs(hadoopPath);
-      } else {
-         throw new RuntimeException("Invalid path: " + path);
-      }
-
-      if (LOG.isInfoEnabled()) {
-         LOG.info("Properties read done in " +
-               (System.currentTimeMillis() - start) +
-               " numVertexProperties=" + numVertexLabels +
-               " numEdgeProperties=" + numEdgeLabels);
-      }
-   }
-
-   private void prepareStructures(int numVertices, int numEdges) {
-      ensureCanStoreNewVertices(numVertices);
-      ensureCanStoreNewEdges(numEdges);
-   }
-
-   @Override
-   public void reset() {
-      numVertices = 0;
-      numEdges = 0;
-      numVertexLabels = 0;
-      numEdgeLabels = 0;
-   }
-
-   private <T> T[] maybeExpandArray(T[] currArray, int maxId) {
-      int targetSize = maxId + 1;
-      T[] returnArray;
-
-      if (currArray == null) {
-         returnArray = (T[]) new Object[Math.max(targetSize, INITIAL_ARRAY_SIZE)];
-      } else if (currArray.length < targetSize) {
-         returnArray = Arrays.copyOf(currArray,
-               getSizeWithPaddingWithoutOverflow(targetSize, currArray.length));
-      } else {
-         returnArray = currArray;
-      }
-
-      return returnArray;
-   }
-
-   private void ensureCanStoreNewVertexLabel(int newMaxVertexLabelId) {
-      vertexProperties = maybeExpandArray(vertexProperties, newMaxVertexLabelId);
-   }
-   
-   private void ensureCanStoreNewEdgeLabel(int newMaxEdgeLabelId) {
-      edgeProperties = maybeExpandArray(edgeProperties, newMaxEdgeLabelId);
+   private void ensureCanStoreNewVertex() {
+      ensureCanStoreNewVertices(1);
    }
 
    private void ensureCanStoreNewVertices(int numVerticesToAdd) {
       int newMaxVertexId = numVertices + numVerticesToAdd;
       ensureCanStoreUpToVertex(newMaxVertexId);
+   }
+
+   protected Vertex createVertex(int id, int originalId, int label) {
+      Vertex vertex = new Vertex(id, originalId, label);
+      if (vertexProperties != null) {
+         vertex.setProperty(vertexProperties[label]);
+      }
+      return vertex;
    }
 
    private void ensureCanStoreUpToVertex(int maxVertexId) {
@@ -447,17 +629,39 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       if (vertexIndexF == null) {
          vertexIndexF = new Vertex[Math.max(targetSize, INITIAL_ARRAY_SIZE)];
       } else if (vertexIndexF.length < targetSize) {
-         vertexIndexF = Arrays.copyOf(vertexIndexF, getSizeWithPaddingWithoutOverflow(targetSize, vertexIndexF.length));
+         vertexIndexF = Arrays.copyOf(vertexIndexF,
+                 getSizeWithPaddingWithoutOverflow(targetSize,
+                         vertexIndexF.length));
       }
 
       if (vertexNeighborhoods == null) {
-         vertexNeighborhoods = new VertexNeighbourhood[Math.max(targetSize, INITIAL_ARRAY_SIZE)];
+         vertexNeighborhoods = new VertexNeighbourhood[Math.max(targetSize,
+                 INITIAL_ARRAY_SIZE)];
       } else if (vertexNeighborhoods.length < targetSize) {
-         vertexNeighborhoods = Arrays.copyOf(vertexNeighborhoods, getSizeWithPaddingWithoutOverflow(targetSize, vertexNeighborhoods.length));
+         vertexNeighborhoods = Arrays.copyOf(vertexNeighborhoods,
+                 getSizeWithPaddingWithoutOverflow(targetSize,
+                         vertexNeighborhoods.length));
       }
    }
 
-   private int getSizeWithPaddingWithoutOverflow(int targetSize, int currentSize) {
+   protected Edge createEdge(int srcId, int destId) {
+      return new Edge(srcId, destId);
+   }
+
+   private void ensureCanStoreNewEdge() {
+      ensureCanStoreNewEdges(1);
+   }
+
+   private VertexNeighbourhood createVertexNeighbourhood() {
+      if (!isMultiGraph) {
+         return new BasicVertexNeighbourhood(this);
+      } else {
+         return new MultiVertexNeighbourhood(this);
+      }
+   }
+
+   private int getSizeWithPaddingWithoutOverflow(int targetSize,
+                                                 int currentSize) {
       if (currentSize > targetSize) {
          return currentSize;
       }
@@ -481,196 +685,171 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       }
    }
 
-   private void ensureCanStoreNewVertex() {
-      ensureCanStoreNewVertices(1);
-   }
-
    private void ensureCanStoreNewEdges(int numEdgesToAdd) {
       if (edgeIndexF == null) {
          edgeIndexF = new Edge[Math.max(numEdgesToAdd, INITIAL_ARRAY_SIZE)];
       } else if (edgeIndexF.length < numEdges + numEdgesToAdd) {
          int targetSize = edgeIndexF.length + numEdgesToAdd;
-         edgeIndexF = Arrays.copyOf(edgeIndexF, getSizeWithPaddingWithoutOverflow(targetSize, edgeIndexF.length));
+         edgeIndexF = Arrays.copyOf(edgeIndexF,
+                 getSizeWithPaddingWithoutOverflow(targetSize,
+                         edgeIndexF.length));
       }
    }
 
-   private void ensureCanStoreNewEdge() {
-      ensureCanStoreNewEdges(1);
-   }
-
-   public BasicMainGraph(String name) {
-      this(name, false, false);
-   }
-
-   public BasicMainGraph(String name, boolean isEdgeLabelled, boolean isMultiGraph) {
-      init(name, isEdgeLabelled, isMultiGraph);
-   }
-
-   public BasicMainGraph(Path filePath, boolean isEdgeLabelled, boolean isMultiGraph)
-           throws IOException {
-      this(filePath.getFileName().toString(), isEdgeLabelled, isMultiGraph);
-   }
-
-   public BasicMainGraph(org.apache.hadoop.fs.Path hdfsPath, boolean isEdgeLabelled, boolean isMultiGraph)
-           throws IOException {
-      this(hdfsPath.getName(), isEdgeLabelled, isMultiGraph);
-   }
-
-   @Override
-   public boolean isNeighborVertex(int v1, int v2) {
-      VertexNeighbourhood v1Neighbourhood = vertexNeighborhoods[v1];
-      return v1Neighbourhood != null && v1Neighbourhood.isNeighbourVertex(v2);
-   }
-
-   protected void addNeighborhood(int vertexId, VertexNeighbourhood neighborhood) {
-      vertexNeighborhoods[vertexId] = neighborhood;
-   }
-
-   @Override
-   public MainGraph addVertex(Vertex vertex) {
-      if (vertex.getVertexId() == numVertices) {
-         ensureCanStoreNewVertex();
-         ++numVertices;
+   protected Edge createEdge(int srcId, int destId, int label) {
+      Edge edge = new LabelledEdge(srcId, destId, label);
+      if (edgeProperties != null) {
+         edge.setProperty(edgeProperties[label]);
       }
-      vertexIndexF[vertex.getVertexId()] = vertex;
-      return this;
+      return edge;
    }
 
-   @Override
-   public Vertex<V>[] getVertices() {
-      return vertexIndexF;
+   private void ensureCanStoreNewEdgeLabel(int newMaxEdgeLabelId) {
+      edgeProperties = maybeExpandArray(edgeProperties, newMaxEdgeLabelId);
    }
 
-   @Override
-   public Vertex<V> getVertex(int vertexId) {
-      return vertexIndexF[vertexId];
+   private void ensureCanStoreNewVertexLabel(int newMaxVertexLabelId) {
+      vertexProperties = maybeExpandArray(vertexProperties,
+              newMaxVertexLabelId);
    }
 
-   @Override
-   public int getNumberVertices() {
-      return numVertices;
+   public String getName() {
+      return name;
    }
 
-   @Override
-   public Edge<E>[] getEdges() {
-      return edgeIndexF;
-   }
+   public void init(Object path) throws IOException {
+      long start = 0;
 
-   @Override
-   public Edge<E> getEdge(int edgeId) {
-      return edgeIndexF[edgeId];
-   }
+      if (LOG.isInfoEnabled()) {
+         LOG.info("Reading graph," + " name=" + name + " path=" + path + " isEdgeLabelled=" + isEdgeLabelled + " isMultiGraph=" + isMultiGraph + " class=" + getClass());
+         start = System.currentTimeMillis();
+      }
 
-   @Override
-   public int getNumberEdges() {
-      return numEdges;
-   }
-
-   @Override
-   public ReclaimableIntCollection getEdgeIds(int v1, int v2) {
-      int minv;
-      int maxv;
-
-      // TODO: Change this for directed edges
-      if (v1 < v2) {
-         minv = v1;
-         maxv = v2;
+      if (path instanceof Path) {
+         Path filePath = (Path) path;
+         readFromFile(filePath);
+      } else if (path instanceof org.apache.hadoop.fs.Path) {
+         org.apache.hadoop.fs.Path hadoopPath =
+                 (org.apache.hadoop.fs.Path) path;
+         readFromHdfs(hadoopPath);
       } else {
-         minv = v2;
-         maxv = v1;
+         throw new RuntimeException("Invalid path: " + path);
       }
 
-      VertexNeighbourhood vertexNeighbourhood = this.vertexNeighborhoods[minv];
+      afterGraphUpdate();
 
-      return vertexNeighbourhood.getEdgesWithNeighbourVertex(maxv);
+      if (LOG.isInfoEnabled()) {
+         LOG.debug("Done reading graph," + " name=" + name + " "
+                 + "path=" + path + " isEdgeLabelled=" + isEdgeLabelled + " " + "isMultiGraph=" + isMultiGraph + " class=" + getClass() + " " + "numVertices=" + numVertices + " numEdges=" + numEdges + " " + "elapsed=" + (System.currentTimeMillis() - start));
+      }
    }
 
-   @Override
-   public void forEachEdgeId(int v1, int v2, IntConsumer intConsumer) {
-      int minv;
-      int maxv;
+   public void initProperties(Object path) throws IOException {
+      long start = 0;
 
-      // TODO: Change this for directed edges
-      if (v1 < v2) {
-         minv = v1;
-         maxv = v2;
+      if (LOG.isInfoEnabled()) {
+         LOG.debug("Reading graph properties");
+         start = System.currentTimeMillis();
+      }
+
+      if (path instanceof Path) {
+         Path filePath = (Path) path;
+         readPropertiesFromFile(filePath);
+      } else if (path instanceof org.apache.hadoop.fs.Path) {
+         org.apache.hadoop.fs.Path hadoopPath =
+                 (org.apache.hadoop.fs.Path) path;
+         readPropertiesFromHdfs(hadoopPath);
       } else {
-         minv = v2;
-         maxv = v1;
+         throw new RuntimeException("Invalid path: " + path);
       }
 
-      VertexNeighbourhood vertexNeighbourhood = this.vertexNeighborhoods[minv];
-
-      vertexNeighbourhood.forEachEdgeId(maxv, intConsumer);
+      if (LOG.isInfoEnabled()) {
+         LOG.debug("Properties read done in " + (System.currentTimeMillis() - start) + " numVertexProperties=" + numVertexLabels + " numEdgeProperties=" + numEdgeLabels);
+      }
    }
 
-   @Override
-   public MainGraph addEdge(Edge edge) {
-      // Assuming input graph contains all edges but we treat it as undirected
-      // TODO: What if input only contains one of the edges? Should we enforce
-      // this via a sanity check?
-      // TODO: Handle this when directed graphs
-      if (edge.getSourceId() > edge.getDestinationId()) {
-         return this;
+   private <T> T[] maybeExpandArray(T[] currArray, int maxId) {
+      int targetSize = maxId + 1;
+      T[] returnArray;
+
+      if (currArray == null) {
+         returnArray = (T[]) new Object[Math.max(targetSize,
+                 INITIAL_ARRAY_SIZE)];
+      } else if (currArray.length < targetSize) {
+         returnArray = Arrays.copyOf(currArray,
+                 getSizeWithPaddingWithoutOverflow(targetSize,
+                         currArray.length));
+      } else {
+         returnArray = currArray;
       }
 
-      if (edge.getEdgeId() == -1) {
-         edge.setEdgeId(numEdges);
-      }
-      //else if (edge.getEdgeId() != numEdges) {
-      //   throw new RuntimeException("Sanity check, edge with id " + edge.getEdgeId() + " added at position " + numEdges);
+      return returnArray;
+   }
+
+   protected Edge parseEdge(StringTokenizer tokenizer, int vertexId) {
+      int neighborId = Integer.parseInt(tokenizer.nextToken());
+      int neighborIdx = neighborId;
+
+      //int neighborIdx = vertexIdMap.get(neighborId);
+      //if (neighborIdx == -1) {
+      //   neighborIdx = vertexIdMap.size();
+      //   vertexIdMap.put(neighborId, neighborIdx);
+      //   addVertex(createVertex(neighborIdx, neighborId, -1));
       //}
 
-      if (edge.getEdgeId() == numEdges) {
-         ensureCanStoreNewEdge();
-         ++numEdges;
-      } else if (edge.getEdgeId() > numEdges) {
-         throw new RuntimeException("Sanity check, edge with id " + edge.getEdgeId() + " added at position " + numEdges);
+      Edge edge;
+
+      if (isEdgeLabelled) {
+         int edgeLabel = Integer.parseInt(tokenizer.nextToken());
+         edge = createEdge(vertexId, neighborIdx, edgeLabel);
+      } else {
+         edge = createEdge(vertexId, neighborIdx);
       }
 
-      ensureCanStoreUpToVertex(Math.max(edge.getSourceId(), edge.getDestinationId()));
-      edgeIndexF[edge.getEdgeId()] = edge;
+      addEdge(edge);
 
-      try {
-         VertexNeighbourhood vertexNeighbourhood = vertexNeighborhoods[edge.getSourceId()];
-
-         if (vertexNeighbourhood == null) {
-            vertexNeighbourhood = createVertexNeighbourhood();
-            vertexNeighborhoods[edge.getSourceId()] = vertexNeighbourhood;
-         }
-
-         vertexNeighbourhood.addEdge(edge.getDestinationId(), edge.getEdgeId());
-      } catch (ArrayIndexOutOfBoundsException e) {
-         LOG.error("Tried to access index " + edge.getSourceId() + " of array with size " + vertexNeighborhoods.length);
-         LOG.error("vertexIndexF.length=" + vertexIndexF.length);
-         LOG.error("vertexNeighborhoods.length=" + vertexNeighborhoods.length);
-         throw e;
-      }
-
-      try {
-         VertexNeighbourhood vertexNeighbourhood = vertexNeighborhoods[edge.getDestinationId()];
-
-         if (vertexNeighbourhood == null) {
-            vertexNeighbourhood = createVertexNeighbourhood();
-            vertexNeighborhoods[edge.getDestinationId()] = vertexNeighbourhood;
-         }
-
-         vertexNeighbourhood.addEdge(edge.getSourceId(), edge.getEdgeId());
-      } catch (ArrayIndexOutOfBoundsException e) {
-         LOG.error("Tried to access index " + edge.getDestinationId() + " of array with size " + vertexNeighborhoods.length);
-         LOG.error("vertexIndexF.length=" + vertexIndexF.length);
-         LOG.error("vertexNeighborhoods.length=" + vertexNeighborhoods.length);
-         throw e;
-      }
-
-      return this;
+      return edge;
    }
 
-   protected void readFromHdfs(org.apache.hadoop.fs.Path hdfsPath) throws IOException {
-      FileSystem fs = FileSystem.get(new org.apache.hadoop.conf.Configuration());
-      InputStream is = fs.open(hdfsPath);
-      readFromInputStream(is);
-      is.close();
+   protected E parseEdgeProperty(StringTokenizer tokenizer) {
+      return null;
+   }
+
+   protected Vertex parseVertex(StringTokenizer tokenizer) {
+      int vertexId = Integer.parseInt(tokenizer.nextToken());
+      int vertexLabel = parseVertexLabel(tokenizer);
+
+      int vertexIdx = vertexIdMap.get(vertexId);
+      if (vertexIdx == -1) {
+         //vertexIdx = vertexIdMap.size();
+         vertexIdx = vertexId;
+         //vertexIdMap.put(vertexId, vertexIdx);
+         Vertex vertex = createVertex(vertexIdx, vertexId, vertexLabel);
+         addVertex(vertex);
+         return vertex;
+      } else {
+         Vertex vertex = vertexIndexF[vertexIdx];
+         int currVertexLabel = vertex.getVertexLabel();
+         if (currVertexLabel == -1) {
+            vertex.setVertexLabel(vertexLabel);
+         } else if (currVertexLabel != vertexLabel) {
+            throw new RuntimeException("Invalid state vertexLabel=" + vertexLabel + " vertexId=" + vertexId + " vertexIdx=" + vertexIdx + " vertex=" + vertex + " numVertices=" + numVertices + " vertexIdMapSize=" + vertexIdMap.size());
+         }
+         return vertex;
+      }
+   }
+
+   protected int parseVertexLabel(StringTokenizer tokenizer) {
+      return Integer.parseInt(tokenizer.nextToken());
+   }
+
+   protected V parseVertexProperty(StringTokenizer tokenizer) {
+      return null;
+   }
+
+   private void prepareStructures(int numVertices, int numEdges) {
+      ensureCanStoreNewVertices(numVertices);
+      ensureCanStoreNewEdges(numEdges);
    }
 
    protected void readFromFile(Path filePath) throws IOException {
@@ -679,11 +858,64 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       is.close();
    }
 
-   protected void readPropertiesFromHdfs(org.apache.hadoop.fs.Path hdfsPath) throws IOException {
-      FileSystem fs = FileSystem.get(new org.apache.hadoop.conf.Configuration());
+   protected void readFromHdfs(org.apache.hadoop.fs.Path hdfsPath) throws IOException {
+      FileSystem fs =
+              FileSystem.get(new org.apache.hadoop.conf.Configuration());
       InputStream is = fs.open(hdfsPath);
-      readPropertiesFromInputStream(is);
+      readFromInputStream(is);
       is.close();
+   }
+
+   protected void readFromInputStream(InputStream is) {
+      try {
+         BufferedReader reader =
+                 new BufferedReader(new InputStreamReader(new BOMInputStream(is)));
+
+         String line = reader.readLine();
+         boolean firstLine = true;
+
+         while (line != null) {
+            StringTokenizer tokenizer = new StringTokenizer(line);
+
+            if (firstLine) {
+               firstLine = false;
+
+               if (line.startsWith("#")) {
+                  LOG.debug("Found hints regarding number of vertices and " + "edges");
+                  // Skip #
+                  tokenizer.nextToken();
+
+                  int numVertices = Integer.parseInt(tokenizer.nextToken());
+                  int numEdges = Integer.parseInt(tokenizer.nextToken());
+
+                  LOG.debug("Hinted numVertices=" + numVertices);
+                  LOG.debug("Hinted numEdges=" + numEdges);
+
+                  prepareStructures(numVertices, numEdges);
+
+                  line = reader.readLine();
+                  continue;
+               }
+            }
+
+            Vertex vertex = parseVertex(tokenizer);
+
+            int vertexId = vertex.getVertexId();
+
+            while (tokenizer.hasMoreTokens()) {
+               parseEdge(tokenizer, vertexId);
+               if (numEdges % 1e7 == 0) {
+                  LOG.debug("Stats numVertices=" + numVertices + " numEdges=" + numEdges);
+               }
+            }
+
+            line = reader.readLine();
+         }
+
+         reader.close();
+      } catch (IOException e) {
+         throw new RuntimeException(e);
+      }
    }
 
    protected void readPropertiesFromFile(Path filePath) throws IOException {
@@ -692,10 +924,18 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       is.close();
    }
 
+   protected void readPropertiesFromHdfs(org.apache.hadoop.fs.Path hdfsPath) throws IOException {
+      FileSystem fs =
+              FileSystem.get(new org.apache.hadoop.conf.Configuration());
+      InputStream is = fs.open(hdfsPath);
+      readPropertiesFromInputStream(is);
+      is.close();
+   }
+
    protected void readPropertiesFromInputStream(InputStream is) {
       try {
-         BufferedReader reader = new BufferedReader(
-               new InputStreamReader(new BOMInputStream(is)));
+         BufferedReader reader =
+                 new BufferedReader(new InputStreamReader(new BOMInputStream(is)));
 
          String line = reader.readLine();
 
@@ -730,134 +970,8 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
       }
    }
 
-   protected void readFromInputStream(InputStream is) {
-      try {
-         BufferedReader reader = new BufferedReader(
-               new InputStreamReader(new BOMInputStream(is)));
-
-         String line = reader.readLine();
-         boolean firstLine = true;
-
-         while (line != null) {
-            StringTokenizer tokenizer = new StringTokenizer(line);
-
-            if (firstLine) {
-               firstLine = false;
-
-               if (line.startsWith("#")) {
-                  LOG.info("Found hints regarding number of vertices and edges");
-                  // Skip #
-                  tokenizer.nextToken();
-
-                  int numVertices = Integer.parseInt(tokenizer.nextToken());
-                  int numEdges = Integer.parseInt(tokenizer.nextToken());
-
-                  LOG.info("Hinted numVertices=" + numVertices);
-                  LOG.info("Hinted numEdges=" + numEdges);
-
-                  prepareStructures(numVertices, numEdges);
-
-                  line = reader.readLine();
-                  continue;
-               }
-            }
-
-            Vertex vertex = parseVertex(tokenizer);
-
-            int vertexId = vertex.getVertexId();
-
-            while (tokenizer.hasMoreTokens()) {
-               parseEdge(tokenizer, vertexId);
-               if (numEdges % 1e7 == 0) {
-                  LOG.info("Stats numVertices=" + numVertices +
-                        " numEdges=" + numEdges);
-               }
-            }
-
-            line = reader.readLine();
-         }
-
-         reader.close();
-      } catch (IOException e) {
-         throw new RuntimeException(e);
-      }
-   }
-
-   protected Edge parseEdge(StringTokenizer tokenizer, int vertexId) {
-      int neighborId = Integer.parseInt(tokenizer.nextToken());
-      int neighborIdx = neighborId;
-
-      //int neighborIdx = vertexIdMap.get(neighborId);
-      //if (neighborIdx == -1) {
-      //   neighborIdx = vertexIdMap.size();
-      //   vertexIdMap.put(neighborId, neighborIdx);
-      //   addVertex(createVertex(neighborIdx, neighborId, -1));
-      //}
-
-      Edge edge;
-
-      if (isEdgeLabelled) {
-         int edgeLabel = Integer.parseInt(tokenizer.nextToken());
-         edge = createEdge(vertexId, neighborIdx, edgeLabel);
-      } else {
-         edge = createEdge(vertexId, neighborIdx);
-      }
-
-      addEdge(edge);
-
-      return edge;
-   }
-
-   protected Vertex parseVertex(StringTokenizer tokenizer) {
-      int vertexId = Integer.parseInt(tokenizer.nextToken());
-      int vertexLabel = parseVertexLabel(tokenizer);
-
-      int vertexIdx = vertexIdMap.get(vertexId);
-      if (vertexIdx == -1) {
-         //vertexIdx = vertexIdMap.size();
-         vertexIdx = vertexId;
-         //vertexIdMap.put(vertexId, vertexIdx);
-         Vertex vertex = createVertex(vertexIdx, vertexId, vertexLabel);
-         addVertex(vertex);
-         return vertex;
-      } else {
-         Vertex vertex = vertexIndexF[vertexIdx];
-         int currVertexLabel = vertex.getVertexLabel();
-         if (currVertexLabel == -1) {
-            vertex.setVertexLabel(vertexLabel);
-         } else if (currVertexLabel != vertexLabel) {
-            throw new RuntimeException("Invalid state vertexLabel=" +
-                  vertexLabel + " vertexId=" + vertexId +
-                  " vertexIdx=" + vertexIdx + " vertex=" + vertex +
-                  " numVertices=" + numVertices +
-                  " vertexIdMapSize=" + vertexIdMap.size());
-         }
-         return vertex;
-      }
-   }
-
-   protected int parseVertexLabel(StringTokenizer tokenizer) {
-      return Integer.parseInt(tokenizer.nextToken());
-   }
-
-   protected V parseVertexProperty(StringTokenizer tokenizer) {
-      return null;
-   }
-   
-   protected E parseEdgeProperty(StringTokenizer tokenizer) {
-      return null;
-   }
-
-   @Override
-   public String toString() {
-      return "Graph(id=" + id + ", name=" + name +
-         ", isEdgeLabelled=" + isEdgeLabelled +
-         ", isMultiGraph=" + isMultiGraph +
-         ", class=" + getClass() + ")";
-   }
-
-   public String toDetailedString() {
-      return "Vertices: " + Arrays.toString(vertexIndexF) + "\n Edges: " + Arrays.toString(edgeIndexF);
+   protected void removeEdge(int edgeId) {
+      removeEdge(getEdge(edgeId));
    }
 
    public String toDebugString() {
@@ -869,80 +983,12 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
    }
 
    @Override
-   public boolean areEdgesNeighbors(int edge1Id, int edge2Id) {
-      Edge edge1 = edgeIndexF[edge1Id];
-      Edge edge2 = edgeIndexF[edge2Id];
-
-      return edge1.neighborWith(edge2);
+   public String toString() {
+      return "BasicMainGraph(name=" + name + ", isEdgeLabelled=" + isEdgeLabelled + ", isMultiGraph=" + isMultiGraph + ", class=" + getClass() + ")";
    }
 
-   @Override
-   public boolean isNeighborEdge(int src1, int dest1, int edge2) {
-      int src2 = edgeIndexF[edge2].getSourceId();
-
-      if (src1 == src2) return true;
-
-      int dest2 = edgeIndexF[edge2].getDestinationId();
-
-      return (dest1 == src2 || dest1 == dest2 || src1 == dest2);
-   }
-
-   protected Vertex createVertex(int id, int originalId, int label) {
-      Vertex vertex = new Vertex(id, originalId, label);
-      if (vertexProperties != null) {
-         vertex.setProperty(vertexProperties[label]);
-      }
-      return vertex;
-   }
-
-   protected Edge createEdge(int srcId, int destId) {
-      return new Edge(srcId, destId);
-   }
-
-   protected Edge createEdge(int srcId, int destId, int label) {
-      Edge edge = new LabelledEdge(srcId, destId, label);
-      if (edgeProperties != null) {
-         edge.setProperty(edgeProperties[label]);
-      }
-      return edge;
-   }
-
-   private VertexNeighbourhood createVertexNeighbourhood() {
-      if (!isMultiGraph) {
-         return new BasicVertexNeighbourhood(this);
-      } else {
-         return new MultiVertexNeighbourhood(this);
-      }
-   }
-
-   @Override
-   public VertexNeighbourhood getVertexNeighbourhood(int vertexId) {
-      return vertexNeighborhoods[vertexId];
-   }
-
-   @Override
-   public IntCollection getVertexNeighbours(int vertexId) {
-      VertexNeighbourhood vertexNeighbourhood = getVertexNeighbourhood(vertexId);
-
-      if (vertexNeighbourhood == null) {
-         return null;
-      }
-
-      return vertexNeighbourhood.getNeighborVertices();
-   }
-
-   @Override
-   public boolean isEdgeLabelled() {
-      return isEdgeLabelled;
-   }
-
-   @Override
-   public boolean isMultiGraph() {
-      return isMultiGraph;
-   }
-
-   public String getName() {
-      return name;
+   public String toDetailedString() {
+      return "Vertices: " + Arrays.toString(vertexIndexF) + "\n Edges: " + Arrays.toString(edgeIndexF);
    }
 
    private class EdgeRemover implements IntConsumer {
@@ -951,7 +997,7 @@ public class BasicMainGraph<V,E> implements MainGraph<V,E> {
          BasicMainGraph.this.removeEdge(edgeId);
       }
    }
-   
+
    private class NeighborhoodReset implements IntObjConsumer<VertexNeighbourhood> {
       @Override
       public void accept(int vertexId, VertexNeighbourhood neighborhood) {

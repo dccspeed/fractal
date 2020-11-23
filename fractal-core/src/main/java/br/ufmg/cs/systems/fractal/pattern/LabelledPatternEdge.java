@@ -3,7 +3,6 @@ package br.ufmg.cs.systems.fractal.pattern;
 import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.LabelledEdge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgePool;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -30,11 +29,6 @@ public class LabelledPatternEdge extends PatternEdge {
         super(mainGraph, srcPos, srcLabel, destPos, destLabel);
 
         this.label = label;
-    }
-    
-    @Override
-    public void reclaim() {
-        PatternEdgePool.instance(true).reclaimObject(this);
     }
 
     @Override

@@ -1,67 +1,114 @@
 package br.ufmg.cs.systems.fractal.graph;
 
+import br.ufmg.cs.systems.fractal.computation.Computation;
+import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
+import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
+import br.ufmg.cs.systems.fractal.util.EdgePredicates;
+import br.ufmg.cs.systems.fractal.util.VertexPredicate;
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
-import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import com.koloboke.collect.IntCollection;
+import com.koloboke.function.IntIntConsumer;
+
 import java.util.function.IntConsumer;
+import java.util.function.IntPredicate;
 import java.util.function.Predicate;
 
-public interface MainGraph<V,E> {
-    int getId();
-    
-    void setId(int id);
+public interface MainGraph<V, E> {
+   MainGraph addEdge(Edge edge);
 
-    void reset();
+   void addEdge(int u, int v, int e);
 
-    boolean isNeighborVertex(int v1, int v2);
+   void addEdgeLabel(int e, int label);
 
-    MainGraph addVertex(Vertex vertex);
+   MainGraph addVertex(Vertex vertex);
 
-    Vertex[] getVertices();
+   /* Revised API */
+   /* update graph */
+   void addVertex(int u);
 
-    Vertex getVertex(int vertexId);
+   void addVertexLabel(int u, int label);
 
-    int getNumberVertices();
+   void afterGraphUpdate();
 
-    Edge[] getEdges();
+   boolean containsEdge(int e);
 
-    Edge getEdge(int edgeId);
+   boolean containsVertex(int u);
 
-    int getNumberEdges();
+   int edgeDst(int e);
 
-    ReclaimableIntCollection getEdgeIds(int v1, int v2);
+   int edgeLabel(int e);
 
-    MainGraph addEdge(Edge edge);
+   IntArrayListView edgeLabels(int e);
 
-    boolean areEdgesNeighbors(int edge1Id, int edge2Id);
+   void edgeLabels(int e, IntArrayListView view);
 
-    @Deprecated
-    boolean isNeighborEdge(int src1, int dest1, int edge2);
+   int edgeSrc(int e);
 
-    VertexNeighbourhood getVertexNeighbourhood(int vertexId);
+   int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag);
 
-    IntCollection getVertexNeighbours(int vertexId);
+   int filterEdges(Predicate<Edge<E>> epred);
 
-    boolean isEdgeLabelled();
+   int filterVertices(Predicate<Vertex<V>> vpred);
 
-    boolean isMultiGraph();
+   void forEachCommonEdgeLabels(IntArrayList edges, IntConsumer consumer);
 
-    void forEachEdgeId(int v1, int v2, IntConsumer intConsumer);
+   void forEachEdge(IntConsumer consumer);
 
-    int filterVertices(AtomicBitSetArray tag);
+   void forEachEdge(int u, int v, IntConsumer consumer);
 
-    int filterVertices(Predicate<Vertex<V>> vpred);
+   Edge getEdge(int edgeId);
 
-    int filterEdges(AtomicBitSetArray tag);
+   int getId();
 
-    int filterEdges(Predicate<Edge<E>> epred);
+   void validExtensionsPatternInducedLabeled(Computation computation,
+                                             Subgraph subgraph, IntArrayList intersectionVertexIdxs, IntArrayList differenceVertexIdxs, IntArrayList starts, IntArrayList ends, int vertexLowerBound, int vertexUpperBound, VertexPredicate vpred, EdgePredicates epreds, IntCollection result);
 
-    int undoVertexFilter();
-    
-    int undoEdgeFilter();
+   void validExtensionsPatternInduced(Computation computation,
+                                      Subgraph subgraph,
+                                      IntArrayList intersectionVertexIdxs,
+                                      IntArrayList differenceVertexIdxs,
+                                      IntArrayList starts, IntArrayList ends,
+                                      int vertexLowerBound,
+                                      int vertexUpperBound,
+                                      IntCollection result);
 
-    int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag);
+   Vertex getVertex(int vertexId);
 
-    void buildSortedNeighborhood();
+   VertexNeighbourhood getVertexNeighbourhood(int vertexId);
 
+   IntCollection getVertexNeighbours(int vertexId);
+
+   boolean isEdgeLabelled();
+
+   boolean isMultiGraph();
+
+   /* graph traversals */
+
+   void validExtensionsEdgeInduced(Computation computation, Subgraph subgraph,
+                                   IntCollection validExtensions);
+
+   void validExtensionsVertexInduced(Computation computation,
+                                     Subgraph subgraph,
+                                     IntCollection validExtensions);
+
+   IntArrayListView neighborhoodVertices(int u);
+
+   void neighborhoodVertices(int u, IntArrayListView view);
+
+   int numEdges();
+
+   /* query graph properties */
+   int numVertices();
+
+   int undoEdgeFilter();
+
+   int undoVertexFilter();
+
+   int vertexLabel(int u);
+
+   IntArrayListView vertexLabels(int u);
+
+   void vertexLabels(int u, IntArrayListView view);
 }

@@ -3,18 +3,25 @@ package br.ufmg.cs.systems.fractal.pattern;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import com.koloboke.collect.map.IntIntMap;
-import org.apache.hadoop.io.Writable;
 
 import java.io.Externalizable;
-import java.io.IOException;
 
-public interface Pattern extends Writable, Externalizable {
+public interface Pattern extends Externalizable {
     Pattern copy();
 
-    void init(Configuration config);
-    
-    void reset();
+   int getFirstVertexLabel();
+
+   void init(Configuration config);
+
+   void removeLastNEdges(int n);
+
+   PatternExplorationPlan explorationPlan();
+
+   void setExplorationPlan(PatternExplorationPlan explorationPlan);
+
+   void reset();
 
     void setSubgraph(Subgraph subgraph);
 
@@ -25,6 +32,8 @@ public interface Pattern extends Writable, Externalizable {
     boolean addEdge(PatternEdge patternEdge);
 
     int getNumberOfEdges();
+
+    boolean relabel(IntIntMap labeling);
 
     boolean turnCanonical();
 
@@ -42,15 +51,33 @@ public interface Pattern extends Writable, Externalizable {
 
     IntIntMap getCanonicalLabeling();
 
-    public boolean testSymmetryBreakerExt(Subgraph subgraph, int targetVertex);
+   ObjArrayList<IntArrayList> vsymmetryBreakerUpperBound();
 
-    public boolean testSymmetryBreakerPos(Subgraph subgraph, int pos);
-    
-    public int sbLowerBound(Subgraph subgraph, int pos);
+   ObjArrayList<IntArrayList> vsymmetryBreakerLowerBound();
 
-    public void readSymmetryBreakingConditions(String path) throws IOException;
-    
-    public Configuration getConfig();
+   void updateSymmetryBreaker();
+
+   void updateSymmetryBreakerVertexUnlabeled();
+
+   int sbUpperBound(Subgraph subgraph, int pos);
+
+   int sbLowerBound(Subgraph subgraph, int pos);
+
+   boolean sbValidOrdering(IntArrayList ordering);
+
+   boolean connectedValidOrdering(IntArrayList ordering);
+
+   void updateSymmetryBreaker(IntArrayList ordering);
+
+   boolean induced();
+
+    void setInduced(boolean induced);
+
+   boolean vertexLabeled();
+
+   void setVertexLabeled(boolean vertexLabeled);
+
+   Configuration getConfig();
 
     String toOutputString();
    

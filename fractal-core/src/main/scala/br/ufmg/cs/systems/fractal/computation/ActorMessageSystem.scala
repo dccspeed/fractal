@@ -9,7 +9,7 @@ import akka.dispatch.MessageDispatcher
 import akka.routing._
 import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph
-import br.ufmg.cs.systems.fractal.util.Logging
+import br.ufmg.cs.systems.fractal.util.{Logging, ThreadStats}
 import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjArrayList}
 import com.koloboke.collect.map.LongObjMap
 import com.koloboke.collect.map.hash.HashLongObjMaps

@@ -5,9 +5,8 @@ import br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.graph.MainGraphStore;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
-import br.ufmg.cs.systems.fractal.pattern.VICPattern;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
-import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
+import br.ufmg.cs.systems.fractal.util.ReflectionSerializationUtils;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.Logger;
 
@@ -22,21 +21,26 @@ public class Configuration implements Serializable {
    private static final Logger LOG = Logger.getLogger(Configuration.class);
 
    public static final boolean INSTRUMENTATION_ENABLED = false;
+   public static final String CONF_COLLECT_THREAD_STATS =
+           "fractal.collect.thread_stats";
+   public static final boolean CONF_COLLECT_THREAD_STATS_DEFAULT = false;
    public static final String CONF_MASTER_HOSTNAME = "fractal.master.hostname";
    public static final String CONF_MASTER_HOSTNAME_DEFAULT = "localhost";
-   public static final String CONF_TMP_DIR_DEFAULT = "/tmp/fractal";
    public static final String CONF_LOG_LEVEL = "fractal.log.level";
    public static final String CONF_LOG_LEVEL_DEFAULT = "app";
    public static final String CONF_MAINGRAPH_CLASS = "fractal.graph.class";
    public static final String CONF_MAINGRAPH_CLASS_DEFAULT =
-           "br.ufmg.cs.systems.fractal.graph.SuccinctMainGraph";
+           "br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph";
    public static final String CONF_MAINGRAPH_PATH = "fractal.graph.location";
    public static final String CONF_MAINGRAPH_PATH_DEFAULT = null;
    public static final String CONF_MAINGRAPH_LOCAL = "fractal.graph.local";
    public static final boolean CONF_MAINGRAPH_LOCAL_DEFAULT = false;
-   public static final String CONF_MAINGRAPH_EDGE_LABELLED =
-           "fractal.graph.edge_labelled";
-   public static final boolean CONF_MAINGRAPH_EDGE_LABELLED_DEFAULT = false;
+   public static final String CONF_MAINGRAPH_EDGE_LABELED =
+           "fractal.graph.edge_labeled";
+   public static final boolean CONF_MAINGRAPH_EDGE_LABELED_DEFAULT = false;
+   public static final String CONF_MAINGRAPH_VERTEX_LABELED =
+           "fractal.graph.vertex_labeled";
+   public static final boolean CONF_MAINGRAPH_VERTEX_LABELED_DEFAULT = true;
    public static final String CONF_MAINGRAPH_MULTIGRAPH =
            "fractal.graph.multigraph";
    public static final boolean CONF_MAINGRAPH_MULTIGRAPH_DEFAULT = false;
@@ -70,24 +74,26 @@ public class Configuration implements Serializable {
    private transient Class<? extends Computation> computationClass;
    private transient Class<? extends Subgraph> subgraphClass;
    private transient Class<? extends SubgraphEnumerator> subgraphEnumClass;
-   private transient boolean isGraphEdgeLabelled;
+   private transient boolean isGraphEdgeLabeled;
+   private transient boolean isGraphVertexLabeled;
 
    public Configuration() {
    }
 
    public <O extends Subgraph> Computation<O> createComputation() {
-      return ReflectionUtils.newInstance(computationClass);
+      return ReflectionSerializationUtils.newInstance(computationClass);
    }
 
    private MainGraph createMainGraph() {
       String path = getMainGraphPath();
+      LOG.info(mainGraphClass);
       MainGraph graph;
       try {
          Constructor<? extends MainGraph> constructor;
          constructor = mainGraphClass
                  .getConstructor(String.class, boolean.class, boolean.class);
          graph = constructor
-                 .newInstance(path, isGraphEdgeLabelled, isGraphMulti);
+                 .newInstance(path, isGraphEdgeLabeled, isGraphMulti);
       } catch (NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException e) {
          throw new RuntimeException("Could not create main graph", e);
       }
@@ -96,7 +102,7 @@ public class Configuration implements Serializable {
    }
 
    public Pattern createPattern() {
-      Pattern pattern = ReflectionUtils.newInstance(getPatternClass());
+      Pattern pattern = ReflectionSerializationUtils.newInstance(getPatternClass());
       pattern.init(this);
       return pattern;
    }
@@ -110,13 +116,13 @@ public class Configuration implements Serializable {
    }
 
    public <S extends Subgraph> S createSubgraph() {
-      S subgraph = (S) ReflectionUtils.newInstance(subgraphClass);
+      S subgraph = (S) ReflectionSerializationUtils.newInstance(subgraphClass);
       subgraph.init(this);
       return subgraph;
    }
 
    public <S extends Subgraph> S createSubgraph(Class<S> subgraphClass) {
-      S subgraph = (S) ReflectionUtils.newInstance(subgraphClass);
+      S subgraph = (S) ReflectionSerializationUtils.newInstance(subgraphClass);
       subgraph.init(this);
       return subgraph;
    }
@@ -126,10 +132,10 @@ public class Configuration implements Serializable {
       boolean bypass = computation.shouldBypass();
       SubgraphEnumerator<O> senum;
       if (!bypass) {
-         senum = (SubgraphEnumerator<O>) ReflectionUtils
+         senum = (SubgraphEnumerator<O>) ReflectionSerializationUtils
                  .newInstance(subgraphEnumClass);
       } else {
-         senum = (SubgraphEnumerator<O>) ReflectionUtils.newInstance(
+         senum = (SubgraphEnumerator<O>) ReflectionSerializationUtils.newInstance(
                  br.ufmg.cs.systems.fractal.computation.BypassSubgraphEnumerator.class);
       }
       senum.init(computation.getConfig(), computation);
@@ -241,58 +247,19 @@ public class Configuration implements Serializable {
    }
 
    public void initialize() {
-      initialize(false);
+      throw new UnsupportedOperationException();
    }
 
    public void initialize(boolean isMaster) {
-      if (initialized) {
-         return;
-      }
-
-      LOG.info("Initializing Configuration...");
-
-      infoPeriod = getLong(INFO_PERIOD, INFO_PERIOD_DEFAULT_MS);
-
-      mainGraphClass =
-              (Class<? extends MainGraph>) getClass(CONF_MAINGRAPH_CLASS,
-                      CONF_MAINGRAPH_CLASS_DEFAULT);
-
-      isGraphEdgeLabelled = getBoolean(CONF_MAINGRAPH_EDGE_LABELLED,
-              CONF_MAINGRAPH_EDGE_LABELLED_DEFAULT);
-
-      isGraphMulti = getBoolean(CONF_MAINGRAPH_MULTIGRAPH,
-              CONF_MAINGRAPH_MULTIGRAPH_DEFAULT);
-
-      patternClass = (Class<? extends Pattern>) getClass(CONF_PATTERN_CLASS,
-              CONF_PATTERN_CLASS_DEFAULT);
-
-      // create (empty) graph
-      setMainGraph(getOrCreateMainGraph());
-
-      // TODO: Make this more flexible
-      if (isGraphEdgeLabelled || isGraphMulti) {
-         patternClass = VICPattern.class;
-      }
-
-      if (computationClass == null) {
-         computationClass =
-                 (Class<? extends Computation>) getClass(CONF_COMPUTATION_CLASS,
-                         CONF_COMPUTATION_CLASS_DEFAULT);
-      }
-
-      Computation computation = createComputation();
-      computation.initAggregations(this);
-
-      if (!isMainGraphRead()) {
-         readMainGraph();
-      }
-
-      initialized = true;
-      LOG.info("Configuration initialized");
+      throw new UnsupportedOperationException();
    }
 
-   public boolean isGraphEdgeLabelled() {
-      return isGraphEdgeLabelled;
+   public boolean isGraphEdgeLabeled() {
+      return isGraphEdgeLabeled;
+   }
+
+   public boolean isGraphVertexLabeled() {
+      return isGraphVertexLabeled;
    }
 
    public boolean isInitialized() {
@@ -353,8 +320,12 @@ public class Configuration implements Serializable {
       this.computationClass = computationClass;
    }
 
-   public void setIsGraphEdgeLabelled(boolean isGraphEdgeLabelled) {
-      this.isGraphEdgeLabelled = isGraphEdgeLabelled;
+   public void setIsGraphEdgeLabeled(boolean isGraphEdgeLabeled) {
+      this.isGraphEdgeLabeled = isGraphEdgeLabeled;
+   }
+
+   public void setIsGraphVertexLabeled(boolean isGraphVertexLabeled) {
+      this.isGraphVertexLabeled = isGraphVertexLabeled;
    }
 
    public void setMainGraphClass(Class<? extends MainGraph> graphClass) {
@@ -378,6 +349,9 @@ public class Configuration implements Serializable {
       return getBoolean(CONF_WS_EXTERNAL, CONF_WS_MODE_EXTERNAL_DEFAULT);
    }
 
-
+   public boolean collectThreadStats() {
+      return getBoolean(
+              CONF_COLLECT_THREAD_STATS, CONF_COLLECT_THREAD_STATS_DEFAULT);
+   }
 }
 

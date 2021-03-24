@@ -19,7 +19,7 @@ public class VertexInducedComputationFilteringM<S extends VertexInducedSubgraph>
 
    @Override
    public long processCompute(SubgraphEnumerator<S> subgraphEnumerator) {
-      if (filter(subgraph)) {
+      if (filter_FILTERING_PRIMITIVE(subgraph)) {
          nextComputation.compute();
       }
       return 0;

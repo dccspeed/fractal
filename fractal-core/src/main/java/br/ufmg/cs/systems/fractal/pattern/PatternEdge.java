@@ -26,7 +26,6 @@ public class PatternEdge implements Comparable<PatternEdge> {
 
    public PatternEdge(MainGraph mainGraph,
                       int srcPos, int srcLabel, int destPos, int destLabel) {
-      // this.mainGraph = mainGraph;
       this.srcPos = srcPos;
       this.srcLabel = srcLabel;
       this.destPos = destPos;
@@ -34,7 +33,6 @@ public class PatternEdge implements Comparable<PatternEdge> {
    }
 
    public void setFromOther(PatternEdge edge) {
-      // this.mainGraph = edge.mainGraph;
       setSrcPos(edge.getSrcPos());
       setSrcLabel(edge.getSrcLabel());
 
@@ -42,33 +40,7 @@ public class PatternEdge implements Comparable<PatternEdge> {
       setDestLabel(edge.getDestLabel());
    }
 
-   public void setFromEdge(MainGraph mainGraph, Edge edge, int srcPos, int dstPos) {
-      setFromEdge(mainGraph, edge, srcPos, dstPos, edge.getSourceId());
-   }
-
-   public void setFromEdge(MainGraph mainGraph, Edge edge, int srcPos, int dstPos, int srcId) {
-      // this.mainGraph = mainGraph;
-
-      int srcVertexId = edge.getSourceId();
-      int dstVertexId = edge.getDestinationId();
-
-      Vertex srcVertex = mainGraph.getVertex(srcVertexId);
-      Vertex dstVertex = mainGraph.getVertex(dstVertexId);
-
-      setSrcLabel(srcVertex.getVertexLabel());
-      setDestLabel(dstVertex.getVertexLabel());
-
-      if (srcId != srcVertexId) {
-         invert();
-      }
-
-      setSrcPos(srcPos);
-      setDestPos(dstPos);
-   }
-
    public void setFromEdge(MainGraph mainGraph, int edgeId, int srcPos, int dstPos, int srcId) {
-      // this.mainGraph = mainGraph;
-
       int srcVertexId = mainGraph.edgeSrc(edgeId);
       int dstVertexId = mainGraph.edgeDst(edgeId);
 
@@ -129,17 +101,7 @@ public class PatternEdge implements Comparable<PatternEdge> {
    }
 
    public int getLabel() {
-      return 1;
-      //int firstLabel, secondLabel;
-      //if (srcLabel < destLabel) {
-      //   firstLabel = srcLabel;
-      //   secondLabel = destLabel;
-      //} else {
-      //   firstLabel = destLabel;
-      //   secondLabel = srcLabel;
-      //}
-
-      //return 10 * firstLabel + secondLabel;
+      return 0;
    }
 
    public String toString() {

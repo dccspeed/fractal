@@ -3,15 +3,11 @@ package br.ufmg.cs.systems.fractal.aggregation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.ProducerConsumerSignaling;
-import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
+import br.ufmg.cs.systems.fractal.util.ReflectionSerializationUtils;
 import com.koloboke.collect.hash.HashConfig;
 import com.koloboke.collect.map.LongObjMap;
-import com.koloboke.collect.map.ObjLongMap;
 import com.koloboke.collect.map.hash.HashLongObjMap;
 import com.koloboke.collect.map.hash.HashLongObjMaps;
-import com.koloboke.collect.map.hash.HashObjLongMap;
-import com.koloboke.collect.map.hash.HashObjLongMaps;
-import com.koloboke.function.ObjLongToLongFunction;
 import org.apache.log4j.Logger;
 
 import java.io.Serializable;
@@ -39,7 +35,7 @@ public abstract class LongObjSubgraphAggregation
       if (existing != null) {
          reduce(existing, value);
       } else {
-         keyValueMap.put(key, ReflectionUtils.clone(value));
+         keyValueMap.put(key, ReflectionSerializationUtils.clone(value));
          if (keyValueMap.size() > MAX_SIZE) {
             // wait until map is consumed
             notifyWorkProduced();

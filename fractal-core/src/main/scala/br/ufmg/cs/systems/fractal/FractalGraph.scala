@@ -1,6 +1,7 @@
 package br.ufmg.cs.systems.fractal
 
 import java.net.InetAddress
+import java.nio.file.Paths
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.IntConsumer
@@ -9,10 +10,12 @@ import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.conf.Configuration.CONF_MASTER_HOSTNAME
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplications
-import br.ufmg.cs.systems.fractal.graph.BasicMainGraph
+import br.ufmg.cs.systems.fractal.graph.{BasicMainGraph, UnlabeledMainGraph}
 import br.ufmg.cs.systems.fractal.pattern._
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util._
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
+import org.apache.hadoop.fs.Path
 
 //import scala.collection.mutable.Map
 import scala.reflect.ClassTag
@@ -70,7 +73,7 @@ case class FractalGraph
       config.set ("input_graph_local", local)
       config.set ("input_graph_class", "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
       config.setSubgraphClass (computation.getSubgraphClass())
-      config.initialize()
+      config.initialize(isMaster = false)
       val subgraph = config.createSubgraph[EdgeInducedSubgraph]
 
       val graph = config.getMainGraph[BasicMainGraph[_,_]]
@@ -197,7 +200,6 @@ case class FractalGraph
    }
 
    def set(key: String, value: Any): FractalGraph = {
-      //confs.update (key, value)
       this.copy(confs = confs.updated(key, value))
    }
 
@@ -212,3 +214,4 @@ object FractalGraph {
       new BuiltInApplications(fgraph)
    }
 }
+

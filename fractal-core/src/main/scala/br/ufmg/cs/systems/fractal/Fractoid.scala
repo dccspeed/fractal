@@ -61,7 +61,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
       private var subgraphAggregation: SubgraphAggregation[S] = _
 
       override def apply(s: S, c: Computation[S]): Unit = {
-         subgraphAggregation.aggregate(s)
+         subgraphAggregation.aggregate_AGGREGATION_PRIMITIVE(s)
       }
 
       override def init(c: Computation[S]): Unit = {
@@ -119,7 +119,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
       val longSubgraphAggregation = new LongSubgraphAggregation[S] {
          override def reduce(v1: Long, v2: Long): Long = _reduce(v1, v2)
 
-         override def aggregate(subgraph: S): Unit = map(_value(subgraph))
+         override def aggregate_AGGREGATION_PRIMITIVE(subgraph: S): Unit = map(_value(subgraph))
 
          override def defaultValue(): Long = _defaultValue
       }
@@ -153,7 +153,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
       val longSubgraphAggregation = new LongSubgraphAggregation[S] {
          override def reduce(v1: Long, v2: Long): Long = _reduce(v1, v2)
 
-         override def aggregate(subgraph: S): Unit = map(_value(subgraph))
+         override def aggregate_AGGREGATION_PRIMITIVE(subgraph: S): Unit = map(_value(subgraph))
 
          override def defaultValue(): Long = _defaultValue
       }
@@ -227,7 +227,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
       val objLongSubgraphAggregation = new ObjLongSubgraphAggregation[S, K] {
          override def reduce(v1: Long, v2: Long): Long = _reduce(v1, v2)
 
-         override def aggregate(subgraph: S): Unit = {
+         override def aggregate_AGGREGATION_PRIMITIVE(subgraph: S): Unit = {
             map(_key(subgraph), _value(subgraph))
          }
 
@@ -283,7 +283,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
             ObjLongSubgraphAggregation[S, Pattern] {
          override def reduce(v1: Long, v2: Long): Long = _reduce(v1, v2)
 
-         override def aggregate(subgraph: S): Unit = {
+         override def aggregate_AGGREGATION_PRIMITIVE(subgraph: S): Unit = {
             map(_key(subgraph), _value(subgraph))
          }
 
@@ -348,7 +348,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
 
          override def reduce(v1: Long, v2: Long): Long = _reduce(v1, v2)
 
-         override def aggregate(subgraph: S): Unit = {
+         override def aggregate_AGGREGATION_PRIMITIVE(subgraph: S): Unit = {
             map(_key(subgraph), _value(subgraph))
          }
 
@@ -416,7 +416,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
             _reduce(existingValue, otherValue)
          }
 
-         override def aggregate(subgraph: S): Unit = {
+         override def aggregate_AGGREGATION_PRIMITIVE(subgraph: S): Unit = {
             map(_key(subgraph), _value(subgraph))
          }
       }
@@ -479,7 +479,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
             _reduce(existingValue, otherValue)
          }
 
-         override def aggregate(subgraph: S): Unit = {
+         override def aggregate_AGGREGATION_PRIMITIVE(subgraph: S): Unit = {
             map(_key(subgraph), _value(subgraph))
          }
       }
@@ -566,7 +566,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
    : RDD[(Long, Long)] = {
 
       val longLongSubgraphAggregation = new LongLongSubgraphAggregation[S] {
-         override def aggregate(subgraph: S): Unit = {
+         override def aggregate_AGGREGATION_PRIMITIVE(subgraph: S): Unit = {
             map(_key(subgraph), _value(subgraph))
          }
 
@@ -621,7 +621,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
             _reduce(v1, v2)
          }
 
-         override def aggregate(subgraph: S): Unit = {
+         override def aggregate_AGGREGATION_PRIMITIVE(subgraph: S): Unit = {
             map(_key(subgraph), _value(subgraph))
          }
       }

@@ -51,7 +51,7 @@ OPTION:
    num_workers=1|2|3|...                   'Number of workers'                                     Default: 1
    worker_cores=1|2|3|...                  'Number of cores per worker'                            Default: 1
    worker_memory=512m|1g|2g|...            'Workers memory'                                        Default: 2g
-   input_format=al|el|sc                   'al: adjacency list; el: edge list; sc: fast reading'   Default: al
+   labeling=n|v|e|ve                       'None, vertices, edges, vertices and edges'             Default: n
    comm=scratch|graphred                   'Execution strategy'                                    Default: scratch
    spark_master=local[1]|local[2]|yarn|... 'Spark master URL'                                      Default: local[worker_cores]
    deploy_mode=server|client               'Spark deploy mode'                                     Default: client
@@ -366,7 +366,7 @@ num_workers=${num_workers:-1}
 worker_cores=${worker_cores:-1}
 spark_master=${spark_master:-local[${worker_cores}]}
 worker_memory=${worker_memory:-2g}
-input_format=${input_format:-sc}
+labeling=${labeling:-ve}
 comm=${comm:-scratch}
 total_cores=$((num_workers * worker_cores))
 deploy_mode=${deploy_mode:-client}
@@ -375,7 +375,7 @@ jars=${jars:-""}
 app_class=${app_class:-br.ufmg.cs.systems.fractal.FractalSparkRunner}
 packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties\""
-args=${args:-"$input_format $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $fraction $periodicthreshold $configs"}
+args=${args:-"$labeling $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $fraction $periodicthreshold $configs"}
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\

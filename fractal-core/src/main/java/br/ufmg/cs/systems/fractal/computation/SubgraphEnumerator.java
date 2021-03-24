@@ -30,7 +30,7 @@ public class SubgraphEnumerator<S extends Subgraph> {
     * This method is used to generate the set of extensions in preparation for
     * extension routines.
     */
-   public synchronized void computeExtensions() {
+   public synchronized void computeExtensions_EXTENSION_PRIMITIVE() {
       extensions.clear();
       subgraph.computeExtensions(computation, extensions);
       this.extensionsSize = this.extensions.size();
@@ -39,7 +39,7 @@ public class SubgraphEnumerator<S extends Subgraph> {
       this.extensionsIdx.set(0);
    }
 
-   public synchronized void computeFirstLevelExtensions() {
+   public synchronized void computeFirstLevelExtensions_EXTENSION_PRIMITIVE() {
       this.extensions.clear();
       this.subgraph.computeFirstLevelExtensions(computation, extensions);
       this.extensionsSize = this.extensions.size();
@@ -56,7 +56,7 @@ public class SubgraphEnumerator<S extends Subgraph> {
       this.extensionsIdx.set(0);
    }
 
-   public boolean extend() {
+   public boolean extend_EXTENSION_PRIMITIVE() {
       int eidx = extensionsIdx.getAndIncrement();
       if (eidx < extensionsSize) {
          while (subgraph.getNumWords() > prefixSize) subgraph.removeLastWord();

@@ -42,5 +42,12 @@ trait Logging {
 }
 
 object Logging {
+   private val log = getLogger("Logging")
    def getLogger(name: String) = Logger.getLogger(name)
+   def logApp(msg: String) : Unit = {
+      if (log.isEnabledFor(FractalAppLogLevel.APP)) {
+         log.log(FractalAppLogLevel.APP, msg)
+      }
+   }
+
 }

@@ -81,10 +81,10 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
    }
 
    @Override
-   public void computeExtensions() {
+   public void computeExtensions_EXTENSION_PRIMITIVE() {
       int numVertices = subgraph.getNumVertices();
       if (numVertices == 0) {
-         super.computeExtensions();
+         super.computeExtensions_EXTENSION_PRIMITIVE();
          return;
       }
 
@@ -181,10 +181,10 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
    }
 
    @Override
-   public boolean extend() {
-      if (getPrefix().size() == 0) return super.extend();
+   public boolean extend_EXTENSION_PRIMITIVE() {
+      if (getPrefix().size() == 0) return super.extend_EXTENSION_PRIMITIVE();
 
-      if (super.extend()) {
+      if (super.extend_EXTENSION_PRIMITIVE()) {
          if (computation.nextComputation() == null) return true;
          MaximalCliquesEnumerator<S> nextEnumerator =
                  (MaximalCliquesEnumerator<S>) computation.nextComputation().getSubgraphEnumerator();

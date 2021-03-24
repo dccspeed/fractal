@@ -29,6 +29,8 @@ public abstract class BasicComputation<S extends Subgraph>
    private transient long expansionCandidates;
    private transient long canonicalSubgraphs;
    private transient long validSubgraphs;
+   private transient long internalWorkSteals;
+   private transient long externalWorkSteals;
 
    @Override
    public void addCanonicalSubgraphs(long inc) {
@@ -57,13 +59,33 @@ public abstract class BasicComputation<S extends Subgraph>
    }
 
    @Override
+   public long getInternalWorkSteals() {
+      return internalWorkSteals;
+   }
+
+   @Override
+   public long getExternalWorkSteals() {
+      return externalWorkSteals;
+   }
+
+   @Override
+   public void addInternalWorkSteals(long inc) {
+      this.internalWorkSteals += inc;
+   }
+
+   @Override
+   public void addExternalWorkSteals(long inc) {
+      this.externalWorkSteals += inc;
+   }
+
+   @Override
    public void compute() {
-      subgraphEnumerator.computeExtensions();
+      subgraphEnumerator.computeExtensions_EXTENSION_PRIMITIVE();
       processCompute(subgraphEnumerator);
    }
 
    @Override
-   public boolean filter(S subgraph) {
+   public boolean filter_FILTERING_PRIMITIVE(S subgraph) {
       return true;
    }
 

@@ -1,12 +1,10 @@
 package br.ufmg.cs.systems.fractal.pattern;
 
 import br.ufmg.cs.systems.fractal.conf.Configuration;
-import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import br.ufmg.cs.systems.fractal.graph.Vertex;
 import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgeThreadUnsafePool;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
-import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
+import br.ufmg.cs.systems.fractal.util.ReflectionSerializationUtils;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.IntCollectionAddConsumer;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
@@ -18,7 +16,6 @@ import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMapFactory;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
 import com.koloboke.collect.set.IntSet;
-import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 
 import java.io.*;
@@ -58,13 +55,10 @@ public abstract class BasicPattern implements Pattern {
    private int numAddedEdgesFromPrevious;
    // Isomorphisms {{
    private VertexPositionEquivalences vertexPositionEquivalences;
-   // }}
-   private EdgePositionEquivalences edgePositionEquivalences;
    private IntIntMap canonicalLabelling;
    private ObjArrayList<IntArrayList> vsymmetryBreakerLowerBound;
    private ObjArrayList<IntArrayList> vsymmetryBreakerUpperBound;
    // Others {{
-   //private PatternEdgePool patternEdgePool;
    private PatternEdgeThreadUnsafePool patternEdgePool;
    private PatternExplorationPlan explorationPlan;
    // }}
@@ -219,15 +213,6 @@ public abstract class BasicPattern implements Pattern {
       return patternEdge;
    }
 
-   protected PatternEdge createPatternEdge(Edge edge, int srcPos, int dstPos, int srcId) {
-      PatternEdge patternEdge = patternEdgePool.createObject();
-
-      patternEdge.setFromEdge(getConfig().getMainGraph(),
-              edge, srcPos, dstPos, srcId);
-
-      return patternEdge;
-   }
-
    private void ensureCanStoreNewEdges(int numAddedEdgesFromPrevious) {
       int newNumEdges = edges.size() + numAddedEdgesFromPrevious;
 
@@ -243,9 +228,7 @@ public abstract class BasicPattern implements Pattern {
 
    @Override
    public int hashCode() {
-      // TODO
-      return //edges.isEmpty() ? mainGraph.getVertex(vertices.getUnchecked(0)).getVertexLabel() :
-              edges.hashCode();
+      return edges.isEmpty() ? firstVertexLabel : edges.hashCode();
    }
 
    @Override
@@ -274,7 +257,7 @@ public abstract class BasicPattern implements Pattern {
 
       configuration = config;
 
-      edgeLabeled = config.isGraphEdgeLabelled();
+      edgeLabeled = config.isGraphEdgeLabeled();
 
       if (edges == null) {
          edges = createPatternEdgeArrayList(edgeLabeled);
@@ -467,29 +450,6 @@ public abstract class BasicPattern implements Pattern {
       }
 
       return vertexPositionEquivalences;
-   }
-
-   @Override
-   public EdgePositionEquivalences getEdgePositionEquivalences() {
-      return getEdgePositionEquivalences(null);
-   }
-
-   @Override
-   public EdgePositionEquivalences getEdgePositionEquivalences(IntArrayList edgeLabels) {
-      if (dirtyEdgePositionEquivalences) {
-         synchronized (this) {
-            if (dirtyEdgePositionEquivalences) {
-               if (edgePositionEquivalences == null) {
-                  edgePositionEquivalences = new EdgePositionEquivalences();
-               }
-               edgePositionEquivalences.setNumEdges(getNumberOfEdges());
-               edgePositionEquivalences.clear();
-               fillEdgePositionEquivalences(edgePositionEquivalences, edgeLabels);
-               dirtyEdgePositionEquivalences = false;
-            }
-         }
-      }
-      return edgePositionEquivalences;
    }
 
    @Override
@@ -763,10 +723,6 @@ public abstract class BasicPattern implements Pattern {
 
       return vsymmetryBreaker;
    }
-
-   protected abstract void fillEdgePositionEquivalences(
-           EdgePositionEquivalences edgePositionEquivalences,
-           IntArrayList edgeLabels);
 
    protected abstract void fillVertexPositionEquivalences(
            VertexPositionEquivalences vertexPositionEquivalences,
@@ -1054,7 +1010,7 @@ public abstract class BasicPattern implements Pattern {
       boolean hasExplorationPlan = dataInput.readBoolean();
       if (hasExplorationPlan) {
          try {
-            explorationPlan = ReflectionUtils.newInstance(
+            explorationPlan = ReflectionSerializationUtils.newInstance(
                     (Class<? extends PatternExplorationPlan>) Class.forName(dataInput.readUTF())
             );
          } catch (ClassNotFoundException e) {
@@ -1080,5 +1036,10 @@ public abstract class BasicPattern implements Pattern {
          throw new RuntimeException("Only allowed for single-vertex patterns");
       }
       return firstVertexLabel;
+   }
+
+   @Override
+   public boolean edgeLabeled() {
+      return edgeLabeled;
    }
 }

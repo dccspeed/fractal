@@ -21,9 +21,17 @@ public interface Computation<S extends Subgraph> extends Serializable {
 
    void addValidSubgraphs(long inc);
 
+   long getInternalWorkSteals();
+
+   long getExternalWorkSteals();
+
+   void addInternalWorkSteals(long inc);
+
+   void addExternalWorkSteals(long inc);
+
    void compute();
 
-   boolean filter(S Subgraph);
+   boolean filter_FILTERING_PRIMITIVE(S Subgraph);
 
    long getNumCanonicalExtensions();
 

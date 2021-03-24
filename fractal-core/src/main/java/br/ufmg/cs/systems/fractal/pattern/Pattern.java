@@ -44,12 +44,8 @@ public interface Pattern extends Externalizable {
     VertexPositionEquivalences getVertexPositionEquivalences();
     
     VertexPositionEquivalences getVertexPositionEquivalences(IntArrayList vertexLabels);
-    
-    EdgePositionEquivalences getEdgePositionEquivalences();
-    
-    EdgePositionEquivalences getEdgePositionEquivalences(IntArrayList edgeLabels);
 
-    IntIntMap getCanonicalLabeling();
+   IntIntMap getCanonicalLabeling();
 
    ObjArrayList<IntArrayList> vsymmetryBreakerUpperBound();
 
@@ -74,6 +70,8 @@ public interface Pattern extends Externalizable {
     void setInduced(boolean induced);
 
    boolean vertexLabeled();
+
+   boolean edgeLabeled();
 
    void setVertexLabeled(boolean vertexLabeled);
 

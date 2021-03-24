@@ -6,7 +6,6 @@ import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 
 import java.util.Random;
-import java.util.concurrent.ThreadLocalRandom;
 
 /*
  * Visits a fraction of subgraphs uniformly at random.
@@ -50,8 +49,8 @@ public class SamplingEnumerator<S extends Subgraph> extends SubgraphEnumerator<S
    }
 
    @Override
-   public void computeExtensions() {
-      super.computeExtensions();
+   public void computeExtensions_EXTENSION_PRIMITIVE() {
+      super.computeExtensions_EXTENSION_PRIMITIVE();
       if (getPrefix().size() == 0) return;
 
       sampledExtensions.clear();

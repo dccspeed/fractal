@@ -8,11 +8,12 @@ import akka.actor._
 import br.ufmg.cs.systems.fractal.aggregation._
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
-import br.ufmg.cs.systems.fractal.util.Logging
+import br.ufmg.cs.systems.fractal.util.{Logging, ThreadStats}
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList
 import com.koloboke.collect.map._
 import com.koloboke.collect.map.hash.{HashIntIntMaps, HashIntObjMaps}
 import org.apache.spark.TaskContext
+import org.apache.spark.util.CollectionAccumulator
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, ExecutionContextExecutorService, Future}
 
@@ -21,7 +22,9 @@ class SparkFromScratchEngine[S <: Subgraph]
    val partitionId: Int,
    val step: Int,
    val computation: Computation[S],
-   val configuration: SparkConfiguration) extends SparkEngine[S] {
+   val configuration: SparkConfiguration,
+   val threadStatusAccum: CollectionAccumulator[ThreadStats])
+   extends SparkEngine[S] {
 
    @transient var slaveActorRef: ActorRef = _
 
@@ -112,6 +115,24 @@ class SparkFromScratchEngine[S <: Subgraph]
          s" compute_workstealing_timeline ${computationWorkStealingTimeStart} " +
          s"${computationWorkStealingTimeEnd}")
 
+      var comp = computation
+      while (comp != null) {
+         val d = comp.getDepth
+         logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+            s" id=${partitionId} depth=${d}" +
+            s" extensions_valid ${comp.getNumValidExtensions}")
+         logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+            s" id=${partitionId} depth=${d}" +
+            s" extensions_canonical ${comp.getNumCanonicalExtensions}")
+         logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+            s" id=${partitionId} depth=${d}" +
+            s" internal_work_steals ${comp.getInternalWorkSteals}")
+         logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+            s" id=${partitionId} depth=${d}" +
+            s" external_work_steals ${comp.getExternalWorkSteals}")
+         comp = comp.nextComputation()
+      }
+
       if (Configuration.INSTRUMENTATION_ENABLED) {
          var comp = computation
          while (comp != null) {
@@ -122,12 +143,6 @@ class SparkFromScratchEngine[S <: Subgraph]
             logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
                s" id=${partitionId} depth=${d}" +
                s" extensions_unique ${comp.getNumUniqueExtensions}")
-            logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
-               s" id=${partitionId} depth=${d}" +
-               s" extensions_valid ${comp.getNumValidExtensions}")
-            logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
-               s" id=${partitionId} depth=${d}" +
-               s" extensions_canonical ${comp.getNumCanonicalExtensions}")
             comp = comp.nextComputation()
          }
       }
@@ -138,6 +153,11 @@ class SparkFromScratchEngine[S <: Subgraph]
       if (configuration.externalWsEnabled()) {
          slaveActorRef ! Terminate
          slaveActorRef = null
+      }
+
+      if (threadStatusAccum != null) {
+         val threadStatus = new ThreadStats(computation)
+         threadStatusAccum.add(threadStatus)
       }
 
       if (configuration.wsEnabled()) {
@@ -151,14 +171,14 @@ class SparkFromScratchEngine[S <: Subgraph]
       computationTimeStart = System.nanoTime()
 
       val subgraphEnumerator = computation.getSubgraphEnumerator
-      subgraphEnumerator.computeFirstLevelExtensions()
+      subgraphEnumerator.computeFirstLevelExtensions_EXTENSION_PRIMITIVE()
       computation.processCompute(subgraphEnumerator)
 
       logInfo(s"WorkStealingStart step=${step} stageId=${stageId}" +
          s" id=${partitionId}")
       computationWorkStealingTimeStart = System.nanoTime()
       val workStealingSystem = new WorkStealingSystem[S](computation)
-      workStealingSystem.workStealingCompute(computation)
+      workStealingSystem.workStealingCompute_WORK_STEALING(computation)
       computationWorkStealingTimeEnd = System.nanoTime()
 
       computationTimeEnd = System.nanoTime()
@@ -309,5 +329,19 @@ class SparkFromScratchEngine[S <: Subgraph]
 
       longObjIterator
    }
+
+   override def getComputationTimeStart: Long = computationTimeStart
+
+   override def getComputationTimeEnd: Long = computationTimeEnd
+
+   override def getInitTimeStart: Long = initTimeStart
+
+   override def getInitTimeEnd: Long = initTimeEnd
+
+   override def getComputationWorkStealingTimeStart: Long =
+      computationWorkStealingTimeStart
+
+   override def getComputationWorkStealingTimeEnd: Long =
+      computationWorkStealingTimeEnd
 }
 

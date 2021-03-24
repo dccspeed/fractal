@@ -9,7 +9,7 @@ import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.ScalaFractalFuncs.CustomSubgraphCallback
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
-import br.ufmg.cs.systems.fractal.util.{Logging, ReflectionUtils, SubgraphCallback}
+import br.ufmg.cs.systems.fractal.util.{Logging, ReflectionSerializationUtils, SubgraphCallback}
 import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -487,7 +487,9 @@ object PatternMatchingPFMCVC extends ApplicationRunner {
    : Unit = {
 
       val pattern = new FractalGraph(
-         subgraphPath, fractalGraph.fractalContext).asPattern
+         subgraphPath, fractalGraph.fractalContext,
+         graphClass = "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
+         .asPattern
 
       val fracs = fractalGraph
          .set("num_partitions", numPartitions)
@@ -515,7 +517,9 @@ object PatternMatchingSamplePF extends ApplicationRunner {
              numPartitions: Int, explorationSteps: Int, subgraphPath: String,
              fraction: Double): Unit = {
       val pattern = new FractalGraph(
-         subgraphPath, fractalGraph.fractalContext).asPattern
+         subgraphPath, fractalGraph.fractalContext,
+         graphClass = "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
+         .asPattern
 
       val frac = fractalGraph
          .set("num_partitions", numPartitions)
@@ -540,7 +544,9 @@ object PatternMatchingInducedSamplePF extends ApplicationRunner {
              numPartitions: Int, explorationSteps: Int, subgraphPath: String,
              fraction: Double): Unit = {
       val pattern = new FractalGraph(
-         subgraphPath, fractalGraph.fractalContext).asPattern
+         subgraphPath, fractalGraph.fractalContext,
+         graphClass = "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
+         .asPattern
 
       // induced pattern
       pattern.setInduced(true)
@@ -568,7 +574,9 @@ object PatternMatchingPF extends ApplicationRunner {
              numPartitions: Int, explorationSteps: Int, subgraphPath: String)
    : Unit = {
       val pattern = new FractalGraph(
-         subgraphPath, fractalGraph.fractalContext).asPattern
+         subgraphPath, fractalGraph.fractalContext,
+         graphClass = "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
+         .asPattern
 
       val frac = fractalGraph
          .set("num_partitions", numPartitions)
@@ -591,7 +599,9 @@ object PatternMatchingInducedPF extends ApplicationRunner {
              numPartitions: Int, explorationSteps: Int, subgraphPath: String)
    : Unit = {
       val pattern = new FractalGraph(
-         subgraphPath, fractalGraph.fractalContext).asPattern
+         subgraphPath, fractalGraph.fractalContext,
+         graphClass = "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
+         .asPattern
 
       // induced pattern
       pattern.setInduced(true)
@@ -728,10 +738,14 @@ object FractalSparkRunner extends Logging {
       }
 
       val graphClass = nextArg match {
-         case "sc" =>
-            "br.ufmg.cs.systems.fractal.graph.SuccinctMainGraph"
-         case "al" =>
-            "br.ufmg.cs.systems.fractal.graph.BasicMainGraph"
+         case "n" =>
+            "br.ufmg.cs.systems.fractal.graph.UnlabeledMainGraph"
+         case "v" =>
+            "br.ufmg.cs.systems.fractal.graph.VLabeledMainGraph"
+         case "e" =>
+            "br.ufmg.cs.systems.fractal.graph.ELabeledMainGraph"
+         case "ve" =>
+            "br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph"
          case other =>
             throw new RuntimeException(s"Input graph format '${other}' is invalid")
       }

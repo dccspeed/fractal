@@ -277,16 +277,6 @@ public class BasicMainGraph<V, E> implements MainGraph<V, E> {
    }
 
    @Override
-   public IntArrayListView edgeLabels(int e) {
-      return null;
-   }
-
-   @Override
-   public void edgeLabels(int e, IntArrayListView view) {
-
-   }
-
-   @Override
    public int edgeSrc(int e) {
       return edgeIndexF[e].getSourceId();
    }
@@ -535,16 +525,6 @@ public class BasicMainGraph<V, E> implements MainGraph<V, E> {
    @Override
    public int vertexLabel(int u) {
       return vertexIndexF[u].getVertexLabel();
-   }
-
-   @Override
-   public IntArrayListView vertexLabels(int u) {
-      return null;
-   }
-
-   @Override
-   public void vertexLabels(int u, IntArrayListView view) {
-
    }
 
    protected void removeVertex(Vertex vertex) {

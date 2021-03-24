@@ -13,10 +13,8 @@ import org.apache.spark.SparkContext
  * Starting point for Fractal execution engine (currently Spark)
  * @param sc Spark context
  * @param logLevel log level: "error", "warn", "info"
- * @param tmpDir temporary directory to store fractal data/metadata
  */
-class FractalContext(sc: SparkContext, logLevel: String = "warn",
-                     tmpDir: String = Configuration.CONF_TMP_DIR_DEFAULT)
+class FractalContext(sc: SparkContext, logLevel: String = "warn")
    extends Logging {
 
    {

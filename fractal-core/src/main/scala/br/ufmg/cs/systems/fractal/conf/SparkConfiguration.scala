@@ -64,6 +64,9 @@ case class SparkConfiguration(confs: Map[String, Any])
          case None =>
       }
 
+      // collect thread stats
+      updateIfExists("collect_thread_stats", CONF_COLLECT_THREAD_STATS)
+
       // log level
       updateIfExists("log_level", CONF_LOG_LEVEL)
 
@@ -88,7 +91,8 @@ case class SparkConfiguration(confs: Map[String, Any])
       updateIfExists("input_graph_class", CONF_MAINGRAPH_CLASS)
       updateIfExists("input_graph_path", CONF_MAINGRAPH_PATH)
       updateIfExists("input_graph_local", CONF_MAINGRAPH_LOCAL)
-      updateIfExists("edge_labelled", CONF_MAINGRAPH_EDGE_LABELLED)
+      updateIfExists("edge_labeled", CONF_MAINGRAPH_EDGE_LABELED)
+      updateIfExists("vertex_labeled", CONF_MAINGRAPH_VERTEX_LABELED)
 
       // multigraph
       updateIfExists("multigraph", CONF_MAINGRAPH_MULTIGRAPH)
@@ -210,8 +214,11 @@ case class SparkConfiguration(confs: Map[String, Any])
             asInstanceOf[Class[_ <: MainGraph[_, _]]]
       )
 
-      setIsGraphEdgeLabelled(getBoolean(CONF_MAINGRAPH_EDGE_LABELLED,
-         CONF_MAINGRAPH_EDGE_LABELLED_DEFAULT))
+      setIsGraphEdgeLabeled(getBoolean(CONF_MAINGRAPH_EDGE_LABELED,
+         CONF_MAINGRAPH_EDGE_LABELED_DEFAULT))
+
+      setIsGraphVertexLabeled(getBoolean(CONF_MAINGRAPH_VERTEX_LABELED,
+         CONF_MAINGRAPH_VERTEX_LABELED_DEFAULT))
 
       setComputationClass(
          getClass(CONF_COMPUTATION_CLASS, CONF_COMPUTATION_CLASS_DEFAULT).

@@ -1,8 +1,7 @@
 package br.ufmg.cs.systems.fractal
 
-import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph,
-   VertexInducedSubgraph}
-import br.ufmg.cs.systems.fractal.util.Logging
+import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph, VertexInducedSubgraph}
+import br.ufmg.cs.systems.fractal.util.{Logging, ThreadStatsStore}
 import br.ufmg.cs.systems.fractal.util.ScalaFractalFuncs.CustomSubgraphCallback
 import org.apache.spark.{SparkConf, SparkContext}
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
@@ -102,15 +101,15 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       fc = new FractalContext(sc, logLevel)
 
       cubeGraph = fc.textFile("../data/cube.sc",
-         graphClass = "br.ufmg.cs.systems.fractal.graph.SuccinctMainGraph")
+         graphClass = "br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph")
 
       citeseerSingleLabelGraph = fc.textFile(
          "../data/citeseer-single-label.sc",
-         graphClass = "br.ufmg.cs.systems.fractal.graph.SuccinctMainGraph")
+         graphClass = "br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph")
 
       citeseerGraph = fc.textFile(
          "../data/citeseer.sc",
-         graphClass = "br.ufmg.cs.systems.fractal.graph.SuccinctMainGraph")
+         graphClass = "br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph")
    }
 
    /** stop spark context */

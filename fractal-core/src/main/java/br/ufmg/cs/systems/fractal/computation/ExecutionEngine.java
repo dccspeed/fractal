@@ -22,4 +22,13 @@ public interface ExecutionEngine<S extends Subgraph> {
    Primitive[] primitives();
 
    ActorRef slaveActor();
+
+   long getComputationTimeStart();
+   long getComputationTimeEnd();
+
+   long getInitTimeStart();
+   long getInitTimeEnd();
+
+   long getComputationWorkStealingTimeStart();
+   long getComputationWorkStealingTimeEnd();
 }

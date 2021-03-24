@@ -7,10 +7,11 @@ import akka.actor._
 import br.ufmg.cs.systems.fractal.aggregation._
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
-import br.ufmg.cs.systems.fractal.util.{Logging, ProcessComputeFunc}
+import br.ufmg.cs.systems.fractal.util.{Logging, ProcessComputeFunc, ThreadStats}
 import br.ufmg.cs.systems.fractal.{Fractoid, Primitive}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
+import org.apache.spark.util.CollectionAccumulator
 import spire.ClassTag
 
 /**
@@ -26,7 +27,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
 
    def config: SparkConfiguration = configBc.value
 
-   var masterActorRef: ActorRef = _
+   private var masterActorRef: ActorRef = _
 
    def this(frac: Fractoid[S]) {
       this(frac.step, frac.configBc, frac.computationContainer)
@@ -94,7 +95,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
          s" Original computation: ${originalContainer}")
 
       // we will contruct the pipeline in this var
-      var cc = originalContainer.withComputationLabel("last_step_begins")
+      var cc = originalContainer
 
       cc = {
          def withCustomFuncs(cc: ComputationContainer[S], depth: Int)
@@ -106,20 +107,21 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
                cc.primitive match {
                   case Primitive.E =>
                      if (depth == 0) {
-                        val extensionFuncFirst = getProcessComputeFuncFirst()
+                        val extensionFuncFirst = new ExtensionPrimitiveFirst[S]
                         cc.shallowCopy(
                            processComputeOpt = Option(extensionFuncFirst),
                            nextComputationOpt = Option(ncc),
                            processOpt = None)
                      } else {
-                        val extensionFuncMiddle = getProcessComputeFuncMiddle()
+                        val extensionFuncMiddle = new
+                              ExtensionPrimitiveMiddle[S]
                         cc.shallowCopy(
                            processComputeOpt = Option(extensionFuncMiddle),
                            nextComputationOpt = Option(ncc),
                            processOpt = None)
                      }
                   case Primitive.F =>
-                     val filterFunc = getProcessComputeFuncFilter()
+                     val filterFunc = new FilterPrimitive[S]
                      cc.shallowCopy(
                         processComputeOpt = Option(filterFunc),
                         nextComputationOpt = Option(ncc),
@@ -133,17 +135,17 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
                cc.primitive match {
                   case Primitive.E =>
                      if (depth == 0) {
-                        val extensionFuncFirstLast =
-                           getProcessComputeFuncFirstLast()
+                        val extensionFuncFirstLast = new
+                              ExtensionPrimitiveFirstLast[S]
                         cc.shallowCopy(
                            processComputeOpt = Option(extensionFuncFirstLast))
                      } else {
-                        val extensionFuncLast = getProcessComputeFuncLast()
+                        val extensionFuncLast = new ExtensionPrimitiveLast[S]
                         cc.shallowCopy(
                            processComputeOpt = Option(extensionFuncLast))
                      }
                   case Primitive.F =>
-                     val filterFuncLast = getProcessComputeFuncFilterLast()
+                     val filterFuncLast = new FilterPrimitiveLast[S]
                      cc.shallowCopy(
                         processComputeOpt = Option(filterFuncLast))
                   case other =>
@@ -175,169 +177,140 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
       logInfo(s"TaskSize ${taskData} " +
          s"${SparkConfiguration.serialize(taskData).length}")
 
+      // create accumulator for thread stats if this is allowed
+      val threadStatsAccum: CollectionAccumulator[ThreadStats] =
+         if (config.collectThreadStats()) {
+            sc.collectionAccumulator[ThreadStats]("THREAD_STATS")
+         } else {
+            null
+         }
+
       stepRDD.mapPartitionsWithIndex { (idx, _) =>
          _configBc.value.initializeWithTag(isMaster = false)
          val execEngine = new SparkFromScratchEngine[S](
             partitionId = idx,
             step = _step,
             computation = _computation,
-            configuration = _configBc.value
+            configuration = _configBc.value,
+            threadStatsAccum // null means 'do not collect thread stats'
          )
 
          Iterator[SparkEngine[S]](execEngine)
       }
    }
+}
 
-   def getProcessComputeFuncFilterLast(): ProcessComputeFunc[S] = {
-      new ProcessComputeFunc[S] with Logging {
-         override def apply(enum: SubgraphEnumerator[S],
-                            c: Computation[S]): Long = {
-            val subgraph = enum.getSubgraph
-            var ret = 0L
-            if (c.filter(subgraph)) {
-               c.process(subgraph)
+class FilterPrimitiveLast[S <: Subgraph] extends ProcessComputeFunc[S] {
+   override def toString = "FL"
 
-               if (Configuration.INSTRUMENTATION_ENABLED) {
-                  c.addValidSubgraphs(1)
-               }
-
-               ret = 1L
-            } else {
-               ret = 0L
-            }
-
-            if (Configuration.INSTRUMENTATION_ENABLED) {
-               c.addCanonicalSubgraphs(1)
-            }
-
-            ret
-         }
-
-         override def toString = "FL"
+   override def apply(enum: SubgraphEnumerator[S], c: Computation[S]): Long = {
+      val subgraph = enum.getSubgraph
+      if (c.filter_FILTERING_PRIMITIVE(subgraph)) {
+         AggregationPrimitive(c, subgraph)
+         c.addValidSubgraphs(1)
       }
+
+      c.addCanonicalSubgraphs(1)
+
+      0L
    }
 
-   def getProcessComputeFuncFilter(): ProcessComputeFunc[S] = {
+}
 
-      new ProcessComputeFunc[S] with Logging {
 
-         override def apply(enum: SubgraphEnumerator[S],
-                            c: Computation[S]): Long = {
-            var ret = 0L
-            val subgraph = enum.getSubgraph
-            if (c.filter(subgraph)) {
+class FilterPrimitive[S <: Subgraph] extends ProcessComputeFunc[S] {
+   override def toString = "F"
 
-               if (Configuration.INSTRUMENTATION_ENABLED) {
-                  c.addValidSubgraphs(1)
-               }
-
-               c.nextComputation().compute()
-            }
-
-            if (Configuration.INSTRUMENTATION_ENABLED) {
-               c.addCanonicalSubgraphs(1)
-            }
-
-            ret
-         }
-
-         override def toString = "F"
+   override def apply(enum: SubgraphEnumerator[S],
+                      c: Computation[S]): Long = {
+      val subgraph = enum.getSubgraph
+      if (c.filter_FILTERING_PRIMITIVE(subgraph)) {
+         c.addValidSubgraphs(1)
+         c.nextComputation().compute()
       }
+
+      c.addCanonicalSubgraphs(1)
+
+      0L
    }
 
-   def getProcessComputeFuncMiddle(): ProcessComputeFunc[S] = {
-      new ProcessComputeFunc[S] with Logging {
-         override def toString = "EM"
+}
 
-         def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
-            var ret = 0L
-            val nextComp = c.nextComputation()
+class ExtensionPrimitiveMiddle[S <: Subgraph] extends ProcessComputeFunc[S] {
 
-            while (iter.extend()) {
-               if (Configuration.INSTRUMENTATION_ENABLED) {
-                  c.addCanonicalSubgraphs(1)
-                  c.addValidSubgraphs(1)
-               }
+   override def toString = "EM"
 
-               nextComp.compute()
-            }
+   def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
+      val nextComp = c.nextComputation()
+      var numSubgraphs = 0L
 
-            ret
-         }
+      while (iter.extend_EXTENSION_PRIMITIVE()) {
+         numSubgraphs += 1
+         nextComp.compute()
       }
+
+      c.addCanonicalSubgraphs(numSubgraphs)
+      c.addValidSubgraphs(numSubgraphs)
+
+      0L
    }
+}
 
-   def getProcessComputeFuncFirst(): ProcessComputeFunc[S] = {
-      new ProcessComputeFunc[S] with Logging {
+class ExtensionPrimitiveFirst[S <: Subgraph] extends ProcessComputeFunc[S] {
 
-         def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
-            var ret = 0L
-            val nextComp = c.nextComputation()
-            while (iter.extend()) {
-               if (Configuration.INSTRUMENTATION_ENABLED) {
-                  c.addCanonicalSubgraphs(1)
-                  c.addValidSubgraphs(1)
-               }
+   override def toString = "EF"
 
-               nextComp.compute()
-            }
+   def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
+      val nextComp = c.nextComputation()
+      var numSubgraphs = 0L
 
-            ret
-         }
+      while (iter.extend_EXTENSION_PRIMITIVE()) {
+         numSubgraphs += 1
+         nextComp.compute()
       }
+
+      c.addCanonicalSubgraphs(numSubgraphs)
+      c.addValidSubgraphs(numSubgraphs)
+
+      0L
    }
+}
 
-   def getProcessComputeFuncFirstLast(): ProcessComputeFunc[S] = {
-      new ProcessComputeFunc[S] with Logging {
-         def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
-            val subgraph = iter.getSubgraph
-            val extensions = iter.getExtensions
-            val numExtensions = extensions.size()
-            //var i = 0
-            //while (i < numExtensions) {
-            //   subgraph.addWord(extensions.getu(i))
-            //   c.process(subgraph)
-            //   subgraph.removeLastWord()
-            //   i += 1
-            //}
+class ExtensionPrimitiveFirstLast[S <: Subgraph] extends
+   ProcessComputeFunc[S] {
 
-            while (iter.extend()) c.process(subgraph)
+   override def toString = "EFL"
 
-            if (Configuration.INSTRUMENTATION_ENABLED) {
-               c.addValidSubgraphs(numExtensions)
-               c.addCanonicalSubgraphs(numExtensions)
-            }
-            0
-         }
-      }
+   def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
+      val subgraph = iter.getSubgraph
+
+      while (iter.extend_EXTENSION_PRIMITIVE()) AggregationPrimitive(c, subgraph)
+
+      val numExtensions = iter.getExtensions.size()
+      c.addValidSubgraphs(numExtensions)
+      c.addCanonicalSubgraphs(numExtensions)
+
+      0L
    }
+}
 
-   def getProcessComputeFuncLast(): ProcessComputeFunc[S] = {
-      new ProcessComputeFunc[S] with Logging {
+class ExtensionPrimitiveLast[S <: Subgraph] extends ProcessComputeFunc[S] {
 
-         override def toString = "EL"
+   override def toString = "EL"
 
-         def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
-            val subgraph = iter.getSubgraph
-            val extensions = iter.getExtensions
-            val numExtensions = extensions.size()
-            //var i = 0
-            //while (i < numExtensions) {
-            //   subgraph.addWord(extensions.getu(i))
-            //   c.process(subgraph)
-            //   subgraph.removeLastWord()
-            //   i += 1
-            //}
+   def apply(iter: SubgraphEnumerator[S], c: Computation[S]): Long = {
+      val subgraph = iter.getSubgraph
 
-            while (iter.extend()) c.process(subgraph)
+      while (iter.extend_EXTENSION_PRIMITIVE()) AggregationPrimitive(c, subgraph)
 
-            if (Configuration.INSTRUMENTATION_ENABLED) {
-               c.addValidSubgraphs(numExtensions)
-               c.addCanonicalSubgraphs(numExtensions)
-            }
+      val numExtensions = iter.getExtensions.size()
+      c.addValidSubgraphs(numExtensions)
+      c.addCanonicalSubgraphs(numExtensions)
 
-            0
-         }
-      }
+      0L
    }
+}
+
+object AggregationPrimitive {
+   def apply[S <: Subgraph](c: Computation[S], s: S) = c.process(s)
 }

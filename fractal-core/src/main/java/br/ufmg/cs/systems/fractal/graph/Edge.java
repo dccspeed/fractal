@@ -4,6 +4,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
+@Deprecated
 public class Edge<E> implements java.io.Serializable {
     public static final int DEFAULT_EDGE_ID = -1;
 

@@ -1,4 +1,7 @@
-/*
+/**
+ * Special acknowledgement to Tommi Junttila for changing the license of his
+ * canonical labeling software. This code is derived from it.
+ *
  * @(#)Graph.java
  *
  * Copyright 2007-2010 by Tommi Junttila.
@@ -8,6 +11,7 @@
 package fi.tkk.ics.jbliss;
 
 import br.ufmg.cs.systems.fractal.pattern.JBlissPattern;
+import br.ufmg.cs.systems.fractal.pattern.LabelledPatternEdge;
 import br.ufmg.cs.systems.fractal.pattern.PatternEdge;
 import br.ufmg.cs.systems.fractal.pattern.PatternEdgeArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
@@ -65,7 +69,6 @@ public class Graph<V extends Comparable> {
    protected native void _find_automorphisms(long true_bliss, Reporter r);
    public static native int[] _canonical_labeling(long true_bliss, Reporter r);
 
-
    /**
     * Create a new undirected graph with no vertices or edges.
     */
@@ -73,12 +76,81 @@ public class Graph<V extends Comparable> {
       this.pattern = pattern;
    }
 
-   private long createBliss() {
+   private long createBlissVertexEdgeLabeled() {
+      int numVertices = pattern.getNumberOfVertices();
+      int numEdges = pattern.getNumberOfEdges();
+      IntArrayList vertexLabels = new IntArrayList(numVertices);
+
+      if (numVertices == 1) {
+         vertexLabels.add(pattern.getFirstVertexLabel());
+         return createBlissVertexLabeled(vertexLabels);
+      }
+
+      // add original vertices
+      for (int i = 0; i < numVertices; ++i) {
+         vertexLabels.add(-1);
+      }
+
+      // add new vertices to account for edge labels
+      for (int i = 0; i < numEdges; ++i) {
+         vertexLabels.add(-1);
+      }
+
+      // set original vertex labels
+      PatternEdgeArrayList edges = pattern.getEdges();
+      for (int i = 0; i < edges.size(); ++i) {
+         PatternEdge pedge = edges.getu(i);
+         vertexLabels.setu(pedge.getSrcPos(), pedge.getSrcLabel());
+         vertexLabels.setu(pedge.getDestPos(), pedge.getDestLabel());
+      }
+
+      // set new vertex labels representing edge labels
+      for (int i = 0; i < numEdges; ++i) {
+         LabelledPatternEdge pedge = (LabelledPatternEdge) edges.getu(i);
+         vertexLabels.setu(numVertices + i, pedge.getLabel());
+      }
+
+      return createBlissVertexEdgeLabeled(vertexLabels);
+   }
+
+   private long createBlissVertexEdgeLabeled(IntArrayList vertexLabels) {
+      int numVertices = pattern.getNumberOfVertices();
+      PatternEdgeArrayList edges = pattern.getEdges();
+      long bliss = create();
+      assert bliss != 0;
+
+      // add vertices to bliss
+      IntCursor labelCursor = vertexLabels.cursor();
+      while (labelCursor.moveNext()) {
+         _add_vertex(bliss, labelCursor.elem());
+      }
+
+      // for each edge, we add two edges
+      ObjCursor<PatternEdge> edgeCursor = edges.cursor();
+      int newVertexId = numVertices;
+      while (edgeCursor.moveNext()) {
+         PatternEdge edge = edgeCursor.elem();
+
+         if (edge.getSrcPos() >= numVertices || edge.getDestPos() >= numVertices) {
+            throw new RuntimeException("Wrong (possibly old?) pattern edge " +
+                    "found. Src (" + edge.getSrcPos() + "), Dst (" + edge.getDestPos() + ") or both are higher than numVertices (" + numVertices + ")" +
+                    " " + pattern + " vertices=" + pattern.getVertices());
+         }
+
+         _add_edge(bliss, edge.getSrcPos(), newVertexId);
+         _add_edge(bliss, newVertexId, edge.getDestPos());
+         ++newVertexId;
+      }
+
+      return bliss;
+   }
+
+   private long createBlissVertexLabeled() {
       int numVertices = pattern.getNumberOfVertices();
       IntArrayList vertexLabels = new IntArrayList(numVertices);
       if (numVertices == 1) {
          vertexLabels.add(pattern.getFirstVertexLabel());
-         return createBliss(vertexLabels);
+         return createBlissVertexLabeled(vertexLabels);
       }
 
       for (int i = 0; i < numVertices; ++i) {
@@ -92,53 +164,10 @@ public class Graph<V extends Comparable> {
          vertexLabels.setu(pedge.getDestPos(), pedge.getDestLabel());
       }
 
-      return createBliss(vertexLabels);
+      return createBlissVertexLabeled(vertexLabels);
    }
 
-   private long createEdgeBliss() {
-      PatternEdgeArrayList edges = pattern.getEdges();
-      int numEdges = edges.size();
-      IntArrayList edgeLabels = new IntArrayList(numEdges);
-
-      ObjCursor<PatternEdge> edgeCursor = edges.cursor();
-      while (edgeCursor.moveNext()) {
-         edgeLabels.add(edgeCursor.elem().getLabel());
-      }
-
-      return createEdgeBliss(edgeLabels);
-   }
-
-   private long createEdgeBliss(IntArrayList edgeLabels) {
-      long bliss = create();
-      assert bliss != 0;
-
-      IntCursor labelCursor = edgeLabels.cursor();
-      while (labelCursor.moveNext()) {
-         _add_vertex(bliss, labelCursor.elem());
-      }
-
-      int numEdges = edgeLabels.size();
-      PatternEdgeArrayList edges = pattern.getEdges();
-
-      for (int i = 0; i < numEdges; ++i) {
-         PatternEdge edge1 = edges.get(i);
-         for (int j = i + 1; j < numEdges; ++j) {
-            PatternEdge edge2 = edges.get(j);
-
-            if (edge1.getSrcPos() == edge2.getSrcPos() ||
-                    edge1.getSrcPos() == edge2.getDestPos() ||
-                    edge1.getDestPos() == edge2.getSrcPos() ||
-                    edge1.getDestPos() == edge2.getDestPos()) {
-               _add_edge(bliss, i, j);
-            }
-         }
-      }
-
-      return bliss;
-
-   }
-
-   private long createBliss(IntArrayList vertexLabels) {
+   private long createBlissVertexLabeled(IntArrayList vertexLabels) {
       int numVertices = vertexLabels.size();
       PatternEdgeArrayList edges = pattern.getEdges();
 
@@ -172,34 +201,17 @@ public class Graph<V extends Comparable> {
          return;
       }
 
-      long bliss = createBliss(vertexLabels);
+      long bliss = createBlissVertexLabeled(vertexLabels);
       _reporter = reporter;
       _reporter_param = reporter_param;
       _find_automorphisms(bliss, _reporter);
       destroy(bliss);
       _reporter = null;
       _reporter_param = null;
-   }
-
-   public void findEdgeAutomorphisms(Reporter reporter, Object reporter_param, IntArrayList edgeLabels) {
-      if (edgeLabels == null) {
-         findEdgeAutomorphisms(reporter, reporter_param);
-         return;
-      }
-
-      long bliss = createEdgeBliss(edgeLabels);
-      _reporter = reporter;
-      _reporter_param = reporter_param;
-      isVertexIsomorphism = false;
-      _find_automorphisms(bliss, _reporter);
-      destroy(bliss);
-      _reporter = null;
-      _reporter_param = null;
-      isVertexIsomorphism = true;
    }
 
    public void findAutomorphisms(Reporter reporter, Object reporter_param) {
-      long bliss = createBliss();
+      long bliss = createBlissVertexLabeled();
 
       _reporter = reporter;
       _reporter_param = reporter_param;
@@ -207,28 +219,25 @@ public class Graph<V extends Comparable> {
       destroy(bliss);
       _reporter = null;
       _reporter_param = null;
-   }
-
-   public void findEdgeAutomorphisms(Reporter reporter, Object reporter_param) {
-      long bliss = createEdgeBliss();
-
-      _reporter = reporter;
-      _reporter_param = reporter_param;
-      isVertexIsomorphism = false;
-      _find_automorphisms(bliss, _reporter);
-      destroy(bliss);
-      _reporter = null;
-      _reporter_param = null;
-      isVertexIsomorphism = true;
    }
 
    public void fillCanonicalLabeling(IntIntMap canonicalLabelling) {
-      fillCanonicalLabeling(null, null, canonicalLabelling);
+      long bliss;
+      if (pattern.edgeLabeled()) {
+         bliss = createBlissVertexEdgeLabeled();
+      } else {
+         bliss = createBlissVertexLabeled();
+      }
+
+      fillCanonicalLabeling(null, null, canonicalLabelling, bliss);
    }
 
-   public void fillCanonicalLabeling(Reporter reporter, Object reporter_param, IntIntMap canonicalLabellling) {
+   public void fillCanonicalLabeling(Reporter reporter,
+                                     Object reporter_param,
+                                     IntIntMap canonicalLabellling,
+                                     long bliss) {
+
       int numVertices = pattern.getNumberOfVertices();
-      long bliss = createBliss();
 
       _reporter = reporter;
       _reporter_param = reporter_param;
@@ -236,7 +245,6 @@ public class Graph<V extends Comparable> {
       destroy(bliss);
 
       canonicalLabellling.clear();
-
       for (int i = 0; i < numVertices; ++i) {
          canonicalLabellling.put(i, cf[i]);
       }

@@ -40,10 +40,6 @@ public interface MainGraph<V, E> {
 
    int edgeLabel(int e);
 
-   IntArrayListView edgeLabels(int e);
-
-   void edgeLabels(int e, IntArrayListView view);
-
    int edgeSrc(int e);
 
    int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag);
@@ -108,7 +104,4 @@ public interface MainGraph<V, E> {
 
    int vertexLabel(int u);
 
-   IntArrayListView vertexLabels(int u);
-
-   void vertexLabels(int u, IntArrayListView view);
 }

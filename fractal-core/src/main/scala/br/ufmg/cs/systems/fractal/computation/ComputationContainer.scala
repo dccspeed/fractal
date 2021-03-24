@@ -210,7 +210,7 @@ case class EComputationContainer [E <: EdgeInducedSubgraph]
    private var _nextComputation: Computation[E] = _
 
    override def process(e: E): Unit = _process (e, this)
-   override def filter(e: E): Boolean = _filter (e, this)
+   override def filter_FILTERING_PRIMITIVE(e: E): Boolean = _filter (e, this)
    override def init(config: Configuration): Unit = _init (config, this)
    override def initAggregations(config: Configuration): Unit =
       _initAggregations (config, this)
@@ -421,7 +421,7 @@ case class EComputationContainer [E <: EdgeInducedSubgraph]
             }
       }
       _filter =  filterOpt
-         .getOrElse ((e: E, c: Computation[E]) => super.filter(e))
+         .getOrElse ((e: E, c: Computation[E]) => super.filter_FILTERING_PRIMITIVE(e))
       _process = processOpt
          .getOrElse ((e: E, c: Computation[E]) => super.process (e))
       _pattern = patternOpt.getOrElse(null)
@@ -455,7 +455,7 @@ case class VComputationContainer [E <: VertexInducedSubgraph]
    private var _nextComputation: Computation[E] = _
 
    override def process(e: E): Unit = _process (e, this)
-   override def filter(e: E): Boolean = _filter (e, this)
+   override def filter_FILTERING_PRIMITIVE(e: E): Boolean = _filter (e, this)
    override def init(config: Configuration): Unit = _init (config, this)
    override def initAggregations(config: Configuration): Unit =
       _initAggregations (config, this)
@@ -666,7 +666,7 @@ case class VComputationContainer [E <: VertexInducedSubgraph]
             }
       }
       _filter =  filterOpt
-         .getOrElse ((e: E, c: Computation[E]) => super.filter(e))
+         .getOrElse ((e: E, c: Computation[E]) => super.filter_FILTERING_PRIMITIVE(e))
       _process = processOpt
          .getOrElse ((e: E, c: Computation[E]) => super.process (e))
       _pattern = patternOpt.getOrElse(null)
@@ -703,7 +703,7 @@ case class VEComputationContainer [S <: PatternInducedSubgraph](
    private var _nextComputation: Computation[S] = _
 
    override def process(e: S): Unit = _process (e, this)
-   override def filter(e: S): Boolean = _filter (e, this)
+   override def filter_FILTERING_PRIMITIVE(e: S): Boolean = _filter (e, this)
    override def init(config: Configuration): Unit = {
       _patternInit(config, this)
       _init (config, this)
@@ -931,7 +931,7 @@ case class VEComputationContainer [S <: PatternInducedSubgraph](
          }
       }
       _filter =  filterOpt
-         .getOrElse ((e: S, c: Computation[S]) => super.filter(e))
+         .getOrElse ((e: S, c: Computation[S]) => super.filter_FILTERING_PRIMITIVE(e))
       _process = processOpt
          .getOrElse ((e: S, c: Computation[S]) => super.process (e))
       _pattern = patternOpt.getOrElse(null)

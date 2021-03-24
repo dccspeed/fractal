@@ -44,7 +44,9 @@ dependencies {
     compile 'org.apache.spark:spark-core_2.11:2.4.3'
     
     compile 'org.apache.spark:spark-graphx_2.11:2.4.3'
-    
+
+    compile 'org.apache.spark:spark-mllib_2.11:2.4.3'
+
     compile 'com.koloboke:koloboke-api-jdk8:1.0.0'
     
     compile 'com.koloboke:koloboke-impl-jdk8:1.0.0'

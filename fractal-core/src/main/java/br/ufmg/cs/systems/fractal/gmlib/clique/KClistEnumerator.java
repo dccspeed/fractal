@@ -53,18 +53,18 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
    }
 
    @Override
-   public void computeExtensions() {
+   public void computeExtensions_EXTENSION_PRIMITIVE() {
       if (subgraph.getNumWords() > 0) {
          newExtensions(dag.keySet());
       } else {
-         super.computeExtensions();
+         super.computeExtensions_EXTENSION_PRIMITIVE();
       }
    }
 
    @Override
-   public boolean extend() {
+   public boolean extend_EXTENSION_PRIMITIVE() {
 
-      if (super.extend()) {
+      if (super.extend_EXTENSION_PRIMITIVE()) {
          if (computation.nextComputation() == null) return true;
 
          KClistEnumerator<S> nextEnumerator =

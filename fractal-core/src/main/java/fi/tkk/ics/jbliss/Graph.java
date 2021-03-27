@@ -14,13 +14,13 @@ import br.ufmg.cs.systems.fractal.pattern.JBlissPattern;
 import br.ufmg.cs.systems.fractal.pattern.LabelledPatternEdge;
 import br.ufmg.cs.systems.fractal.pattern.PatternEdge;
 import br.ufmg.cs.systems.fractal.pattern.PatternEdgeArrayList;
+import br.ufmg.cs.systems.fractal.util.FractalNativeUtils;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.ObjCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
-import cz.adamh.utils.NativeUtils;
 import org.apache.commons.lang3.SystemUtils;
 import sun.misc.Unsafe;
 
@@ -266,21 +266,21 @@ public class Graph<V extends Comparable> {
 
          if (SystemUtils.IS_OS_MAC || SystemUtils.IS_OS_MAC_OSX) {
             if (systemBits == 64) {
-               NativeUtils.loadLibraryFromJar("/libjbliss-mac.so");
+               FractalNativeUtils.loadNativeLibFromJar("libjbliss-mac.so");
             } else {
                throw new UnsupportedOperationException("Library not compiled for MAC " + systemBits + " bits");
             }
          }
          else if (SystemUtils.IS_OS_LINUX) {
             if (systemBits == 64) {
-               NativeUtils.loadLibraryFromJar("/libjbliss-linux.so");
+               FractalNativeUtils.loadNativeLibFromJar("libjbliss-linux.so");
             } else {
                throw new UnsupportedOperationException("Library not compiled for Linux " + systemBits + " bits");
             }
          }
          else if (SystemUtils.IS_OS_WINDOWS) {
             if (systemBits == 64) {
-               NativeUtils.loadLibraryFromJar("/libjbliss-win.dll");
+               FractalNativeUtils.loadNativeLibFromJar("libjbliss-win.dll");
             } else {
                throw new UnsupportedOperationException("Library not compiled for Windows " + systemBits + " bits");
             }

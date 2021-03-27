@@ -16,9 +16,13 @@ import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMapFactory;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
 import com.koloboke.collect.set.IntSet;
+import com.koloboke.collect.set.ObjSet;
+import com.koloboke.collect.set.hash.HashIntSets;
+import com.koloboke.collect.set.hash.HashObjSets;
 import org.apache.log4j.Logger;
 
 import java.io.*;
+import java.util.Iterator;
 
 public abstract class BasicPattern implements Pattern {
    private static final Logger LOG = Logger.getLogger(BasicPattern.class);
@@ -359,7 +363,7 @@ public abstract class BasicPattern implements Pattern {
       }
 
       if (allEqual) {
-         edges.sort();
+         //edges.sort();
          return false;
       }
 
@@ -1042,4 +1046,5 @@ public abstract class BasicPattern implements Pattern {
    public boolean edgeLabeled() {
       return edgeLabeled;
    }
+
 }

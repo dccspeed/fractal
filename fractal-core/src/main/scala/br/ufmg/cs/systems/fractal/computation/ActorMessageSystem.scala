@@ -155,6 +155,19 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
          "max_valid_subgraphs", Long.MaxValue)
    }
 
+   private def terminateSlaves(): Unit = {
+      // send termination messages to all known slaves
+      var i = 0
+      while (i < slaves.length) {
+         val s = slaves(i)
+         if (s != null) {
+            logInfo(s"Sending termination message to ${s} (id=${i})")
+            s ! Terminate
+         }
+         i += 1
+      }
+   }
+
    def receive = {
       case HelloMaster(partitionId, slaveRef) =>
          if (slaves(partitionId) == null) {
@@ -226,16 +239,7 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
                s"Reached the limit of ${maxValidSubgraphs} valid subgraphs." +
                   s" Terminating slaves=${slaves.mkString(",")}")
 
-            // send termination messages to all known slaves
-            var i = 0
-            while (i < slaves.length) {
-               val s = slaves(i)
-               if (s != null) {
-                  logInfo(s"Sending termination message to ${s} (id=${i})")
-                  s ! Terminate
-               }
-               i += 1
-            }
+            terminateSlaves()
          }
 
       case Reset =>

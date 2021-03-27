@@ -1,21 +1,19 @@
 package br.ufmg.cs.systems.fractal.computation
 
 import java.io.Serializable
-import java.util.concurrent.atomic._
-import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue, Executors, ThreadFactory}
+import java.util.concurrent.{Executors, ThreadFactory}
 
 import akka.actor._
+import br.ufmg.cs.systems.fractal
+import br.ufmg.cs.systems.fractal.Primitive
 import br.ufmg.cs.systems.fractal.aggregation._
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
-import br.ufmg.cs.systems.fractal.util.{Logging, ThreadStats}
-import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList
-import com.koloboke.collect.map._
-import com.koloboke.collect.map.hash.{HashIntIntMaps, HashIntObjMaps}
-import org.apache.spark.TaskContext
+import br.ufmg.cs.systems.fractal.util.ThreadStats
+import one.profiler.{AsyncProfiler, Events}
 import org.apache.spark.util.CollectionAccumulator
 
-import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, ExecutionContextExecutorService, Future}
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService, Future}
 
 class SparkFromScratchEngine[S <: Subgraph]
 (
@@ -114,6 +112,11 @@ class SparkFromScratchEngine[S <: Subgraph]
          s" id=${partitionId}" +
          s" compute_workstealing_timeline ${computationWorkStealingTimeStart} " +
          s"${computationWorkStealingTimeEnd}")
+      logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+         s" id=${partitionId}" +
+         s" subgraph_throughput" +
+         s" ${computation.lastComputation().getNumValidExtensions / computeElapsedTime}")
+
 
       var comp = computation
       while (comp != null) {

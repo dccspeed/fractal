@@ -374,13 +374,15 @@ log_level=${log_level:-info}
 jars=${jars:-""}
 app_class=${app_class:-br.ufmg.cs.systems.fractal.FractalSparkRunner}
 packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
-extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties\""
+extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties ${PROFILER_OPTIONS}\""
 args=${args:-"$labeling $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $fraction $periodicthreshold $configs"}
+
+echo ${PROFILER_OPTIONS}
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\
    --driver-memory $master_memory \\
-   --conf spark.driver.extraJavaOptions=$extrajavaoptions \\
+   --driver-java-options "${extrajavaoptions}" \\
    --conf spark.executor.extraJavaOptions=$extrajavaoptions \\
    --conf spark.ui.enabled=false \\
    --num-executors $num_workers \\

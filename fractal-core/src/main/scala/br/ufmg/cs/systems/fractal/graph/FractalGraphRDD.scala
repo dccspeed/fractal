@@ -1,33 +1,53 @@
 package br.ufmg.cs.systems.fractal.graph
 
-import java.util
-
-import br.ufmg.cs.systems.fractal.{FractalContext, FractalGraph}
-import br.ufmg.cs.systems.fractal.graph.GraphConverter.fromFileToGraphX
 import br.ufmg.cs.systems.fractal.util.Logging
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
-import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool
-import org.apache.hadoop.io.UTF8.Comparator
-import org.apache.hadoop.io.compress.GzipCodec
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.{HashPartitioner, Partitioner, SparkConf, SparkContext}
-import org.apache.spark.graphx.Graph
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
+import org.apache.spark.{Partitioner, SparkConf, SparkContext}
 
+/**
+ * Raw format is a collection of strings with the following format:
+ *    first line is "numVertices numEdges"
+ *    other lines represent adjancecy lists:
+ *       vertexData edge1Data edge2Data ...
+ *          vertexData := vertexLabel1,vertexLabel2,...
+ *          edgeData := neighborId,edgeId,edgeLabel1,edgeLabel2,...
+ *
+ * In-place format is a collection of int arrays with the following format:
+ *    [vertexId,numEdges,vertexDataPtx,edge1DataPtx,edge2DataPtx,...,
+ *    vertexData1,vertexData2,...,edge1Data1,edge1Data2,...,edge2Data1,...]
+ *
+ *    Vertex data contains vertexLabel1,vertexLabel2,...
+ *    Edge data contains neighborId,edgeId,edgeLabel1,edgeLabel2,...
+ *
+ * @param numVertices
+ * @param numEdges
+ * @param adjListsRDD
+ */
 class FractalGraphRDD(val numVertices: Int, val numEdges: Int,
                       val adjListsRDD: RDD[IntArrayList]) extends Logging {
    import FractalGraphRDD._
 
-   def sc: SparkContext = adjListsRDD.sparkContext
+   private def sc: SparkContext = adjListsRDD.sparkContext
 
+   /**
+    * Make this RDD ready for output writing in Fractal graph format
+    * @return RDD of strings representing each line of the graph file
+    */
    private def toRawGraphRDD: RDD[String] = {
       val _numVertices = numVertices
       val _numEdges = numEdges
 
       val rawGraphRDD = adjListsRDD
+
+         // map serialized format to string format
          .map(adjListArray => {
             getLineFromAdjListInPlace(adjListArray)
          })
+
+         // add number of vertices and edges as first line
          .mapPartitionsWithIndex((idx, iter) => {
             if (idx == 0) Iterator(s"${_numVertices} ${_numEdges}") ++ iter
             else iter
@@ -36,7 +56,13 @@ class FractalGraphRDD(val numVertices: Int, val numEdges: Int,
       rawGraphRDD
    }
 
+   /**
+    * Change the ordering of this graph
+    * @param ordering Integer array representing the ordering
+    * @return new fractal graph with vertices AND edges reordered
+    */
    def applyOrdering(ordering: IntArrayList): FractalGraphRDD = {
+      // sanity check to see if the ordering is valid for this graph
       if (ordering.size() != numVertices) {
          throw new RuntimeException(s"Ordering must have ${numVertices} items.")
       } else {
@@ -50,14 +76,14 @@ class FractalGraphRDD(val numVertices: Int, val numEdges: Int,
          }
       }
 
-      val orderingBc = sc.broadcast(ordering)
-
       // 1. remap only vertices and reorder adjlists
+      val orderingBc = sc.broadcast(ordering)
       val sortedAdjListsRDD = adjListsRDD
             .map(adjListArray => remapAdjList(adjListArray, orderingBc.value))
             .sortBy(adjListArray => adjListArray.get(0))
+            .persist(StorageLevel.DISK_ONLY)
 
-      // 2. number of upper edges per partition
+      // 2. number of upper edges per partition: edges (u,v); u < v
       val numNeighborsAbove = sortedAdjListsRDD
          .mapPartitions(iter => {
             var numNeighborsBelowVertexId = 0
@@ -74,20 +100,20 @@ class FractalGraphRDD(val numVertices: Int, val numEdges: Int,
                   i += 1
                }
             }
-
             Iterator(numEdgesTotal - numNeighborsBelowVertexId)
          })
          .collect()
 
+      // cumulative number of upper edges per adjacency list, we need this to
+      // remap edge ids to contiguous and in order space
       var i = 1
       while (i < numNeighborsAbove.length) {
          numNeighborsAbove(i) += numNeighborsAbove(i - 1)
          i += 1
       }
 
-      val numNeighborsAboveBc = sc.broadcast(numNeighborsAbove)
-
       // 3. remap upper edges
+      val numNeighborsAboveBc = sc.broadcast(numNeighborsAbove)
       val semiRemappedEdgesRDD = sortedAdjListsRDD
          .mapPartitionsWithIndex((idx, iter) => {
             var nextEdgeId = if (idx == 0) 0 else numNeighborsAboveBc.value(idx - 1)
@@ -123,10 +149,9 @@ class FractalGraphRDD(val numVertices: Int, val numEdges: Int,
          })
          .collect()
 
+      // graph partitioner make sure lower edges are sent to the right place
       val vertexIdBoundsBc = sc.broadcast(vertexIdBounds)
-
-
-
+      val rangePartitionerAdjLists = new GraphPartitioner(vertexIdBoundsBc)
 
       val rightJoinAdjListRDD = semiRemappedEdgesRDD
          .mapPartitions(iter => {
@@ -146,9 +171,11 @@ class FractalGraphRDD(val numVertices: Int, val numEdges: Int,
                tuples.iterator
             })
          })
-         .partitionBy(new GraphPartitioner(
-            semiRemappedEdgesRDD.getNumPartitions, vertexIdBoundsBc))
+         .partitionBy(rangePartitionerAdjLists)
 
+      // final remap: fix edge ids of edges (u,v); u > v
+      // we zip partitions because the second RDD is already partitioned
+      // according to the same ranges (adjacency list ranges)
       val joinedAdjListsRDD = semiRemappedEdgesRDD
          .zipPartitions(rightJoinAdjListRDD, preservesPartitioning = true)(
             (iter1, iter2) => {
@@ -174,27 +201,27 @@ class FractalGraphRDD(val numVertices: Int, val numEdges: Int,
       new FractalGraphRDD(numVertices, numEdges, joinedAdjListsRDD)
    }
 
+   /**
+    * Output this graph to disk using Fractal graph format
+    * @param path
+    */
    def saveAsTextFile(path: String): Unit = toRawGraphRDD.saveAsTextFile(path)
 }
 
+/**
+ * This companion contains several auxiliary methods for accessing the graph
+ * RDD using the in-place format
+ */
 object FractalGraphRDD {
    def apply(sc: SparkContext, path: String): FractalGraphRDD = {
-      val rawGraphRDD = sc.textFile(path, 10)
-      val numVertices = getNumVertices(rawGraphRDD)
-      val numEdges = getNumEdges(rawGraphRDD)
+      val rawGraphRDD = sc.textFile(path)
+      val toks = rawGraphRDD.first().split(" ")
+      val numVertices = toks(0).toInt
+      val numEdges = toks(1).toInt
       val adjListsRDD: RDD[IntArrayList] = getAdjLists(rawGraphRDD)
       new FractalGraphRDD(numVertices, numEdges, adjListsRDD)
    }
 
-   private def getNumVertices(rawGraphRDD: RDD[String]): Int = {
-      rawGraphRDD.first().split(" ")(0).toInt
-   }
-
-   private def getNumEdges(rawGraphRDD: RDD[String]): Int = {
-      rawGraphRDD.first().split(" ")(1).toInt
-   }
-
-   // vid,nvlabel,vlabel,...,nedges,(uid,eid,nelabels,elabel, ...),...
    private def getAdjLists(rawGraphRDD: RDD[String]): RDD[IntArrayList] = {
       rawGraphRDD
          .mapPartitionsWithIndex((idx, iter) => {
@@ -208,8 +235,6 @@ object FractalGraphRDD {
          })
    }
 
-
-   // format: vertexId,numEdges,vertexDataPtx,edge1DataPtx,edge2DataPtx,...
    private def getAdjListInPlace(vertexId: Int, line: String): IntArrayList = {
       val adjListArray = new IntArrayList()
       val lineToks = line.split(" ")
@@ -474,47 +499,41 @@ object FractalGraphRDD {
       //   s" edgeId=${getEdgeIdInPlace(adjList, 0)}")
 
 
-      val fc = new FractalContext(sc, logLevel = "info")
-      val fg = fc.textFile(outputPath, local = true)
+      //val fc = new FractalContext(sc, logLevel = "info")
+      //val fg = fc.textFile(outputPath, local = true)
 
-      val motifs = fg.motifsSF(3)
+      //val motifs = fg.motifsSF(3)
 
-      val motifsArray = motifs.collect()
+      //val motifsArray = motifs.collect()
 
-      println(s"${motifsArray.mkString("\n")}")
+      //println(s"${motifsArray.mkString("\n")}")
 
-      fc.stop()
+      //fc.stop()
       sc.stop()
    }
 }
 
-class GraphPartitioner(_numPartitions: Int,
-                       val vertexIdBoundsBc: Broadcast[Array[(Int,Int)]])
+/**
+ * Splits adjacency lists by vertex range
+ * @param vertexIdBoundsBc broadcast containing partition ranges, in order
+ */
+private class GraphPartitioner(val vertexIdBoundsBc: Broadcast[Array[(Int,Int)]])
    extends Partitioner {
 
-   override def numPartitions: Int = _numPartitions
+   override val numPartitions: Int = vertexIdBoundsBc.value.size
 
    override def getPartition(key: Any): Int = {
       val keyAsInt = key.hashCode()
       find(keyAsInt, 0, numPartitions)
    }
 
-   private def vertexIdBounds = vertexIdBoundsBc.value
+   private def vertexIdBounds: Array[(Int, Int)] = vertexIdBoundsBc.value
 
    private def find(key: Int, from: Int, to: Int): Int = {
-      var i = 0
-      while (i < vertexIdBounds.length) {
-         val (low, high) = vertexIdBounds(i)
-         if (key >= low && key <= high) return i
-         i += 1
-      }
-
-      throw new RuntimeException
-      //val idx = (from + to) / 2
-      //val (low, high) = vertexIdBounds(idx)
-      //if (key >= low && key <= high) return idx
-
-      //if (key < low) find(key, from, idx)
-      //else find(key, idx + 1, to)
+      val idx = (from + to) / 2
+      val (low, high) = vertexIdBounds(idx)
+      if (key >= low && key <= high) return idx
+      if (key < low) find(key, from, idx)
+      else find(key, idx + 1, to)
    }
 }

@@ -97,3 +97,10 @@ the dataset ```data/citeseer-single-label.sc```:
 ```
 args=data/citeseer-single-label.sc app_class=br.ufmg.cs.systems.fractal.apps.MyMotifsApp ./bin/fractal-custom-app.sh
 ```
+
+## External software acknowledgements
+
+The following open-source projects are used in Fractal:
+
+- [Bliss](http://www.tcs.hut.fi/Software/bliss/)
+- [AsyncProfiler](https://github.com/jvm-profiling-tools/async-profiler)

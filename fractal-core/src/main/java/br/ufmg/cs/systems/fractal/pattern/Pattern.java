@@ -5,6 +5,7 @@ import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import com.koloboke.collect.map.IntIntMap;
+import com.koloboke.collect.set.ObjSet;
 
 import java.io.Externalizable;
 

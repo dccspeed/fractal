@@ -8,17 +8,41 @@ import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntIntMapPool;
+import com.koloboke.collect.ObjCursor;
 import com.koloboke.collect.map.IntIntMap;
+import com.koloboke.collect.map.hash.HashIntIntMaps;
 import com.koloboke.collect.map.hash.HashObjObjMap;
 import com.koloboke.collect.map.hash.HashObjObjMaps;
+import com.koloboke.collect.set.ObjSet;
 import com.koloboke.collect.set.hash.HashObjSet;
 import com.koloboke.collect.set.hash.HashObjSets;
+import org.apache.hadoop.hdfs.DFSClient;
 import org.apache.log4j.Logger;
 
 import java.util.Iterator;
 
 public class PatternUtils {
    private static final Logger LOG = Logger.getLogger(PatternUtils.class);
+
+   private static final ThreadLocal<Configuration> configThreadLocal =
+           ThreadLocal.withInitial(() -> {
+              Configuration config = new Configuration();
+              config.setSubgraphClass(VertexInducedSubgraph.class);
+              config.setMainGraphClass(BasicMainGraph.class);
+              config.setPatternClass(JBlissPattern.class);
+              return config;
+           });
+
+   private static final ThreadLocal<MainGraph> graphThreadLocal =
+           ThreadLocal.withInitial(() -> {
+              Configuration config = configThreadLocal.get();
+              MainGraph graph = config.getOrCreateMainGraph();
+              config.setMainGraph(graph);
+              return graph;
+           });
+
+   private static final ThreadLocal<VertexInducedSubgraph> vsubgraph =
+           ThreadLocal.withInitial(() -> configThreadLocal.get().createSubgraph());
 
    /**
     * Generates all canonical patterns obtained from *pattern* by extending
@@ -348,5 +372,79 @@ public class PatternUtils {
       for (int u = 0; u < graph.numVertices(); ++u) subgraph.addWord(u);
 
       return subgraph.quickPattern();
+   }
+
+   public static ObjSet<Pattern> quickPatterns(Pattern pattern) {
+         int numVertices = pattern.getNumberOfVertices();
+         int numEdges = pattern.getNumberOfEdges();
+         IntArrayList vertices = new IntArrayList();
+         IntArrayList edges = new IntArrayList();
+         for (int u = 0; u < numVertices; ++u) vertices.add(u);
+         for (int e = 0; e < numEdges; ++e) edges.add(e);
+
+         Iterator<IntArrayList> orderings = vertices.permutations();
+
+         ObjSet<Pattern> patterns = HashObjSets.newMutableSet();
+         ObjSet<Pattern> quickPatterns = HashObjSets.newMutableSet();
+         IntIntMap relabeling = HashIntIntMaps.newMutableMap();
+
+         // vertex permutation
+         while (orderings.hasNext()) {
+            IntArrayList ordering = orderings.next();
+            relabeling.clear();
+            for (int i = 0; i < ordering.size(); ++i) {
+               relabeling.put(i, ordering.get(i));
+            }
+
+            Pattern newPattern = pattern.copy();
+            newPattern.relabel(relabeling);
+            newPattern.getEdges().sort();
+            patterns.add(newPattern);
+         }
+
+         Iterator<IntArrayList> edgeOrderings = edges.permutations();
+
+         while (edgeOrderings.hasNext()) {
+            IntArrayList edgeOrdering = edgeOrderings.next();
+            // edge permutation
+            ObjCursor<Pattern> cur = patterns.cursor();
+            while (cur.moveNext()) {
+               Pattern relabeledPattern = cur.elem();
+               Pattern newPattern = relabeledPattern.copy();
+
+               for (int i = 0; i < edgeOrdering.size(); ++i) {
+                  int targetEdgeIdx = edgeOrdering.get(i);
+                  PatternEdge targetEdge = relabeledPattern.getEdges().get(targetEdgeIdx);
+                  newPattern.getEdges().get(i).setFromOther(targetEdge);
+               }
+
+               LOG.info(relabeledPattern + " " + newPattern + " " + edgeOrdering);
+
+               boolean validOrdering = true;
+               PatternEdgeArrayList newPatternEdges = newPattern.getEdges();
+               PatternEdge firstEdge = newPatternEdges.get(0);
+
+               if (firstEdge.getSrcPos() != 0 || firstEdge.getDestPos() != 1) {
+                  validOrdering = false;
+               } else {
+                  int lastVisitedVertex = 1;
+                  for (int i = 1; i < newPatternEdges.size(); ++i) {
+                     PatternEdge nextEdge = newPatternEdges.get(i);
+                     int src = nextEdge.getSrcPos();
+                     int dst = nextEdge.getDestPos();
+                     if (src > lastVisitedVertex || dst > lastVisitedVertex + 1) {
+                        validOrdering = false;
+                        break;
+                     }
+                  }
+               }
+
+               if (validOrdering) quickPatterns.add(newPattern);
+
+            }
+         }
+
+         return quickPatterns;
+
    }
 }

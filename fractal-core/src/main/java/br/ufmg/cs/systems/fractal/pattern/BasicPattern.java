@@ -11,6 +11,7 @@ import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntSetPool;
 import com.koloboke.collect.IntCursor;
+import com.koloboke.collect.ObjCursor;
 import com.koloboke.collect.map.IntIntCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMapFactory;
@@ -817,16 +818,16 @@ public abstract class BasicPattern implements Pattern {
       ensureCanStoreNewVertices(numVerticesAddedFromPrevious);
       ensureCanStoreNewEdges(numAddedEdgesFromPrevious);
 
-      IntArrayList SubgraphVertices = subgraph.getVertices();
+      IntArrayList subgraphVertices = subgraph.getVertices();
       int numVerticesInSubgraph = subgraph.getNumVertices();
       for (int i = (numVerticesInSubgraph - numVerticesAddedFromPrevious); i < numVerticesInSubgraph; ++i) {
-         addVertex(SubgraphVertices.getu(i));
+         addVertex(subgraphVertices.getu(i));
       }
 
-      IntArrayList SubgraphEdges = subgraph.getEdges();
+      IntArrayList subgraphEdges = subgraph.getEdges();
       int numEdgesInSubgraph = subgraph.getNumEdges();
       for (int i = (numEdgesInSubgraph - numAddedEdgesFromPrevious); i < numEdgesInSubgraph; ++i) {
-         addEdge(SubgraphEdges.getu(i));
+         addEdge(subgraphEdges.getu(i));
       }
 
       updateUsedSubgraphIncremental(subgraph);
@@ -1046,5 +1047,4 @@ public abstract class BasicPattern implements Pattern {
    public boolean edgeLabeled() {
       return edgeLabeled;
    }
-
 }

@@ -10,6 +10,7 @@ import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util._
 import org.apache.spark.SparkContext
+import org.apache.spark.api.python.{PythonRDD, SerDeUtil}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 
@@ -578,7 +579,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
       val longLongRDD = aggregationLongLong(longLongSubgraphAggregation)
          .reduceByKey(_reduce)
 
-      longLongRDD
+     longLongRDD
    }
 
    /**

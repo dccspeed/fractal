@@ -1,6 +1,5 @@
 package br.ufmg.cs.systems.fractal.util;
 
-import br.ufmg.cs.systems.fractal.computation.BasicComputation;
 import org.apache.log4j.Logger;
 
 import java.io.*;

@@ -2,8 +2,10 @@ package br.ufmg.cs.systems.fractal.subgraph;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
+import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import com.koloboke.collect.set.hash.HashIntSet;
 import com.koloboke.collect.set.hash.HashIntSets;
 import org.apache.log4j.Logger;
@@ -89,6 +91,7 @@ public class VertexInducedSubgraph extends BasicSubgraph {
       int numPartitions = computation.getNumberPartitions();
       int myPartitionId = computation.getPartitionId();
 
+      // round-robin
       for (int u = myPartitionId; u < totalNumWords; u += numPartitions) {
          extensions.add(u);
       }

@@ -1,6 +1,7 @@
 package br.ufmg.cs.systems.fractal.subgraph;
 
 import br.ufmg.cs.systems.fractal.conf.Configuration;
+import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import org.apache.log4j.Logger;
@@ -49,6 +50,11 @@ public abstract class BasicSubgraph implements Subgraph {
    @Override
    public Configuration getConfig() {
       return configuration;
+   }
+
+   @Override
+   public MainGraph getMainGraph() {
+      return configuration.getMainGraph();
    }
 
    @Override

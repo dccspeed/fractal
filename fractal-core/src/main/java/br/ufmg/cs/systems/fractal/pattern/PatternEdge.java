@@ -4,11 +4,9 @@ import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.graph.Vertex;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
+import java.io.*;
 
-public class PatternEdge implements Comparable<PatternEdge> {
+public class PatternEdge implements Comparable<PatternEdge>, Externalizable {
 
    /// protected MainGraph mainGraph;
    private int srcPos;
@@ -142,7 +140,6 @@ public class PatternEdge implements Comparable<PatternEdge> {
       result = 31 * result + srcLabel;
       result = 31 * result + destPos;
       result = 31 * result + destLabel;
-      //result = 31 * result + (isForward ? 1 : 0);
       return result;
    }
 
@@ -173,5 +170,22 @@ public class PatternEdge implements Comparable<PatternEdge> {
       }
 
       return result;
+   }
+
+   @Override
+   public void writeExternal(ObjectOutput objectOutput) throws IOException {
+      objectOutput.writeInt(srcPos);
+      objectOutput.writeInt(srcLabel);
+      objectOutput.writeInt(destPos);
+      objectOutput.writeInt(destLabel);
+   }
+
+   @Override
+   public void readExternal(ObjectInput objectInput)
+           throws IOException, ClassNotFoundException {
+      srcPos = objectInput.readInt();
+      srcLabel = objectInput.readInt();
+      destPos = objectInput.readInt();
+      destLabel = objectInput.readInt();
    }
 }

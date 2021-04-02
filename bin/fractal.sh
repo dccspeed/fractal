@@ -23,6 +23,8 @@ cliquess="${cliquess}|cliques_sf"
 cliquess="${cliquess}|maximal_cliques_quick_sf"
 cliquess="${cliquess}|maximal_cliques_pf"
 
+quasicliquess="quasi_cliques_sf"
+
 fsms="fsm_sf"
 fsms="${fsms}|fsm_pf"
 fsms="${fsms}|fsm_pf_mcvc"
@@ -37,7 +39,7 @@ temporals="periodic_subgraphs_induced_sf"
 temporals="${temporals}|periodic_subgraphs_induced_pf"
 temporals="${temporals}|periodic_subgraphs_induced_pf_mcvc"
 
-apps="${gqueryings}|${motifss}|${cliquess}|${fsms}|${subgraphlisting}|${temporals}${extras}"
+apps="${gqueryings}|${motifss}|${cliquess}|${quasicliquess}|${fsms}|${subgraphlisting}|${temporals}${extras}"
 
 usage="
 APPS_AVAILABLE
@@ -247,6 +249,16 @@ ALGOPTION for '$app':
 ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
+	;;
+
+	quasi_cliques_sf)
+	required="inputgraph steps mindensity"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   mindensity=<between 0 and 1>            'Minimum density for quasi cliques'"
 	;;
 
 	pattern_matching_pf_mcvc)

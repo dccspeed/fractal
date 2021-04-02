@@ -87,9 +87,6 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
    override def execEnginesRDD: RDD[SparkEngine[S]] = {
       init(originalContainer)
 
-      logInfo(s"${this} Computation starting from ${stepRDD}," +
-         s", StorageLevel=${stepRDD.getStorageLevel}")
-
       // save original container, i.e., without parents' computations
       logInfo(s"From scratch computation (${this})." +
          s" Original computation: ${originalContainer}")
@@ -214,9 +211,7 @@ class FilterPrimitiveLast[S <: Subgraph] extends ProcessComputeFunc[S] {
 
       0L
    }
-
 }
-
 
 class FilterPrimitive[S <: Subgraph] extends ProcessComputeFunc[S] {
    override def toString = "F"

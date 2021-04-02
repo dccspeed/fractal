@@ -7,13 +7,6 @@ else
 	echo "info: FRACTAL_HOME is set to $FRACTAL_HOME"
 fi
 
-if [ -z $JVM_PROFILER_HOME ]; then
-	echo "JVM_PROFILER_HOME is unset"
-	exit 1
-else
-	echo "info: JVM_PROFILER_HOME is set to $JVM_PROFILER_HOME"
-fi
-
 required="file event"
 
 for argname in $required; do
@@ -28,5 +21,7 @@ done
 interval=${interval:-10000000}
 include=${include:-'*'}
 
-export PROFILER_OPTIONS="-agentpath:$JVM_PROFILER_HOME/build/libasyncProfiler.so=start,file=${file},event=${event},include=${include},interval=${interval},framebuf=5000000,traces=2000000000,flat=5000"
+profnativelib="$FRACTAL_HOME/fractal-core/src/main/resources/libasyncProfiler.so"
+
+export PROFILER_OPTIONS="-agentpath:${profnativelib}=start,file=${file},event=${event},include=${include},interval=${interval},framebuf=5000000,traces=2000000000,flat=5000"
 $FRACTAL_HOME/bin/fractal.sh "$@"

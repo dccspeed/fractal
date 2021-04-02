@@ -11,6 +11,7 @@ import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntSetPool;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.IntSet;
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.RemoteIterator;

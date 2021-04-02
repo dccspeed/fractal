@@ -367,7 +367,17 @@ object QuasiCliquesSF extends ApplicationRunner {
    def apply(fractalGraph: FractalGraph, commStrategy: String,
              numPartitions: Int, explorationSteps: Int, minDensity: Double)
    : Unit = {
-      // TODO
+      val numVertices = explorationSteps + 1
+      val frac = fractalGraph
+         .set("num_partitions", numPartitions)
+         .set("comm_strategy", commStrategy)
+         .quasiCliquesSF(numVertices, minDensity)
+
+      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
+         frac.aggregationCount
+      }
+
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 

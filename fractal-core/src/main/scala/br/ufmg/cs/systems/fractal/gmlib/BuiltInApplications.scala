@@ -4,6 +4,7 @@ import br.ufmg.cs.systems.fractal.computation.Computation
 import br.ufmg.cs.systems.fractal.gmlib.fsm.{FSMPF, FSMPFMCVC, FSMSF, MinImageSupport}
 import br.ufmg.cs.systems.fractal.gmlib.motifs.{MotifsPF, MotifsPFMCVC, MotifsSF}
 import br.ufmg.cs.systems.fractal.gmlib.periodic.{InducedPeriodicSubgraphsPF, InducedPeriodicSubgraphsPFMCVC, InducedPeriodicSubgraphsSF}
+import br.ufmg.cs.systems.fractal.gmlib.quasicliques.QuasiCliquesSF
 import br.ufmg.cs.systems.fractal.graph.MainGraph
 import br.ufmg.cs.systems.fractal.pattern._
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
@@ -358,6 +359,50 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
    }
 
    /**
+    * Subgraph querying (pattern matching) using edge-by-edge exploration
+    * @param pattern representing the subgraphs structure
+    * @return new fractoid
+    */
+   def patternMatchingSF(pattern: Pattern): Fractoid[EdgeInducedSubgraph] = {
+      // get all possible quick patterns from 'pattern'
+      val quickPatterns = PatternUtils.quickPatterns(pattern)
+      val numEdges = pattern.getNumberOfEdges
+
+      // build allowed edges on each enumeration depth
+      val patternEdgesMaps = new Array[Set[PatternEdge]](numEdges)
+      var i = 0
+      while (i < patternEdgesMaps.length) {
+         var patternEdgeSet = Set.empty[PatternEdge]
+         val cur = quickPatterns.cursor()
+         while (cur.moveNext()) {
+            patternEdgeSet += cur.elem().getEdges.get(i)
+         }
+         patternEdgesMaps(i) = patternEdgeSet
+         i += 1
+      }
+
+      // broadcast this map for filtering
+      val sc = self.fractalContext.sparkContext
+      val patternEdgeMapsBc = sc.broadcast(patternEdgesMaps)
+
+      // filtering function: last edge must exist in the map
+      val edgeFiilterFunc
+      : (EdgeInducedSubgraph, Computation[EdgeInducedSubgraph]) => Boolean =
+         (s,c) => {
+            val quickPattern = s.quickPattern()
+            val numEdges = quickPattern.getNumberOfEdges
+            val patternEdge = quickPattern.getEdges.getLast
+            patternEdgeMapsBc.value(numEdges - 1).contains(patternEdge)
+         }
+
+      val frac = self.efractoid
+         .expand(1)
+         .filter(edgeFiilterFunc)
+
+      frac
+   }
+
+   /**
     * Match pattern using Minimum Connected Vertex Cover (MCVC) strategy
     * TODO: these fractoids returned use a simple callback as last process
     * steps and thus, it is not safe to grow this workflow
@@ -415,40 +460,14 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
 
    /**
     * Vertex-induced implementation of quasi-cliques
-    * @param numSteps maximum number of steps
+    * @param numVertices number of vertices
     * @param minDensity density of edges between 0 and 1.
     * @return Fractoid with the initial state for quasi-cliques
     */
-   def quasiCliques(
-                      numSteps: Int,
+   def quasiCliquesSF(numVertices: Int,
                       minDensity: Double): Fractoid[VertexInducedSubgraph] = {
-
-      if (numSteps < 1) {
-         throw new RuntimeException(
-            "Quasi-Cliques: numSteps should be at least 1.")
-      }
-
-      // if the quasi-cliques size is bounded by *maxSize* we can actually set min
-      // bounds for density at each position, the idea is that if this minimum
-      // value is not met in given position, it will be impossible for
-      // *minDensity* e reached later on
-      val maxDensity = (numSteps + 1) * numSteps / 2.0
-      val cummDensities = new Array[Double](numSteps + 1)
-      cummDensities(cummDensities.length - 1) = 0.0
-      var i = cummDensities.length - 2
-      while (i >= 0) {
-         cummDensities(i) = cummDensities(i + 1) + (i + 1) / maxDensity
-         i -= 1
-      }
-
-      logInfo(s"QuasiCliques: maxDensity=${maxDensity}" +
-         s" cummDensities=${cummDensities.mkString(",")}")
-
-      self.vfractoid.
-         expand(1).
-         filter((e,c) => (e.getNumEdges() / maxDensity) +
-            cummDensities(e.getNumVertices() - 1) >= minDensity).
-         explore(numSteps)
+      val app = new QuasiCliquesSF(numVertices, minDensity)
+      app.apply(self)
    }
 
    /**

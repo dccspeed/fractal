@@ -418,7 +418,6 @@ public class PatternUtils {
                   newPattern.getEdges().get(i).setFromOther(targetEdge);
                }
 
-               LOG.info(relabeledPattern + " " + newPattern + " " + edgeOrdering);
 
                boolean validOrdering = true;
                PatternEdgeArrayList newPatternEdges = newPattern.getEdges();
@@ -435,9 +434,15 @@ public class PatternUtils {
                      if (src > lastVisitedVertex || dst > lastVisitedVertex + 1) {
                         validOrdering = false;
                         break;
+                     } else if (dst == lastVisitedVertex + 1) {
+                        lastVisitedVertex++;
                      }
                   }
                }
+
+               //LOG.info(relabeledPattern + " " + newPattern + " "
+               //        + edgeOrdering +
+               //        " " + validOrdering);
 
                if (validOrdering) quickPatterns.add(newPattern);
 

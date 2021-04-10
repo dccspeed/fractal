@@ -18,6 +18,8 @@ public interface Pattern extends Externalizable {
 
    void removeLastNEdges(int n);
 
+   void removeLastNVertices(int n);
+
    PatternExplorationPlan explorationPlan();
 
    void setExplorationPlan(PatternExplorationPlan explorationPlan);

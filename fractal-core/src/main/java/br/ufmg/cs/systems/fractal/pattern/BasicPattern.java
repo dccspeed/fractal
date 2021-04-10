@@ -744,7 +744,8 @@ public abstract class BasicPattern implements Pattern {
       }
    }
 
-   private void removeLastNVertices(int n) {
+   @Override
+   public void removeLastNVertices(int n) {
       int targetI = vertices.size() - n;
 
       for (int i = vertices.size() - 1; i >= targetI; --i) {

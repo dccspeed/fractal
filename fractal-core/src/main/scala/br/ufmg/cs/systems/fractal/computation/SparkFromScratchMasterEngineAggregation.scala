@@ -22,8 +22,8 @@ import spire.ClassTag
 class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
 (
    val step: Int,
-   configBc: Broadcast[SparkConfiguration],
-   originalContainer: ComputationContainer[S]) extends SparkMasterEngine[S] {
+   val configBc: Broadcast[SparkConfiguration],
+   val originalContainer: ComputationContainer[S]) extends SparkMasterEngine[S] {
 
    def config: SparkConfiguration = configBc.value
 
@@ -307,5 +307,7 @@ class ExtensionPrimitiveLast[S <: Subgraph] extends ProcessComputeFunc[S] {
 }
 
 object AggregationPrimitive {
-   def apply[S <: Subgraph](c: Computation[S], s: S) = c.process(s)
+   def apply[S <: Subgraph](c: Computation[S], s: S): Unit = {
+      c.process(s)
+   }
 }

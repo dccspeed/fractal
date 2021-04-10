@@ -364,26 +364,36 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * @return new fractoid
     */
    def patternMatchingSF(pattern: Pattern): Fractoid[EdgeInducedSubgraph] = {
-      // get all possible quick patterns from 'pattern'
-      val quickPatterns = PatternUtils.quickPatterns(pattern)
       val numEdges = pattern.getNumberOfEdges
+      val quickPatterns = PatternUtils.quickPatterns(pattern)
+      val quickPatternsPerLevel = new Array[Set[Pattern]](numEdges)
 
-      // build allowed edges on each enumeration depth
-      val patternEdgesMaps = new Array[Set[PatternEdge]](numEdges)
       var i = 0
-      while (i < patternEdgesMaps.length) {
-         var patternEdgeSet = Set.empty[PatternEdge]
-         val cur = quickPatterns.cursor()
-         while (cur.moveNext()) {
-            patternEdgeSet += cur.elem().getEdges.get(i)
-         }
-         patternEdgesMaps(i) = patternEdgeSet
+      while (i < numEdges) {
+         quickPatternsPerLevel(i) = Set.empty[Pattern]
          i += 1
       }
 
-      // broadcast this map for filtering
+      val cur = quickPatterns.cursor()
+      while (cur.moveNext()) {
+         var pattern = cur.elem()
+         i = numEdges - 1
+         while (i >= 0) {
+            quickPatternsPerLevel(i) += pattern
+            pattern = pattern.copy()
+            pattern.removeLastNEdges(1)
+            i -= 1
+         }
+      }
+
+      i = 0
+      while (i < numEdges) {
+         logApp(s"QuickPatterns ${quickPatternsPerLevel(i)}")
+         i += 1
+      }
+
       val sc = self.fractalContext.sparkContext
-      val patternEdgeMapsBc = sc.broadcast(patternEdgesMaps)
+      val quickPatternsPerLevelBc = sc.broadcast(quickPatternsPerLevel)
 
       // filtering function: last edge must exist in the map
       val edgeFiilterFunc
@@ -391,8 +401,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
          (s,c) => {
             val quickPattern = s.quickPattern()
             val numEdges = quickPattern.getNumberOfEdges
-            val patternEdge = quickPattern.getEdges.getLast
-            patternEdgeMapsBc.value(numEdges - 1).contains(patternEdge)
+            quickPatternsPerLevelBc.value(numEdges - 1).contains(quickPattern)
          }
 
       val frac = self.efractoid

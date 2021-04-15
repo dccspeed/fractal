@@ -31,4 +31,10 @@ public interface ExecutionEngine<S extends Subgraph> {
 
    long getComputationWorkStealingTimeStart();
    long getComputationWorkStealingTimeEnd();
+
+   ExecutionEngine getNextEngine();
+
+   ExecutionEngine getPreviousEngine();
+
+   void initialWorkCompute();
 }

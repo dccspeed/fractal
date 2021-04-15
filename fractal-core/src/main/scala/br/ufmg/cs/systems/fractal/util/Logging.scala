@@ -17,7 +17,7 @@ trait Logging {
       log.info (msg)
    }
 
-   protected def logWarning(msg: => String): Unit = if (log.isEnabledFor(Level.WARN)) {
+   protected def logWarn(msg: => String): Unit = if (log.isEnabledFor(Level.WARN)) {
       log.warn (msg)
    }
 
@@ -47,6 +47,12 @@ object Logging {
    def logApp(msg: String) : Unit = {
       if (log.isEnabledFor(FractalAppLogLevel.APP)) {
          log.log(FractalAppLogLevel.APP, msg)
+      }
+   }
+
+   def logWarn(msg: String) : Unit = {
+      if (log.isEnabledFor(Level.WARN)) {
+         log.log(Level.WARN, msg)
       }
    }
 

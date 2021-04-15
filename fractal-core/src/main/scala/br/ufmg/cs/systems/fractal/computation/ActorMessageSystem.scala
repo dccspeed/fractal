@@ -342,7 +342,7 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
          sendIdentifyRequest()
 
       case other =>
-         logWarning(s"${self} is not ready. Ignoring message: ${other}.")
+         logWarn(s"${self} is not ready. Ignoring message: ${other}.")
    }
 
    def active(actor: ActorRef): Actor.Receive = {
@@ -587,14 +587,14 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
       case Retry(msg, dest) =>
          if (unackMessages.containsKey(msg.seqNum)) {
             sendMsgWithRetransmission(msg, dest)
-            logWarning(s"Retrying message ${msg}")
+            logWarn(s"Retrying message ${msg}")
          }
 
       case ReceiveTimeout =>
       // nothing
 
       case other =>
-         logWarning(s"${self} is not ready. Ignoring message: ${other}.")
+         logWarn(s"${self} is not ready. Ignoring message: ${other}.")
    }
 
    private def addToOutbox(msg: StealWorkResponse): Unit = {

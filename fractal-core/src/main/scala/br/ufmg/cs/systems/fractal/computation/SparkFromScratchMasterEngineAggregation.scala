@@ -9,10 +9,12 @@ import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.{Logging, ProcessComputeFunc, ThreadStats}
 import br.ufmg.cs.systems.fractal.{Fractoid, Primitive}
+import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.apache.spark.util.CollectionAccumulator
-import spire.ClassTag
+
+import scala.reflect.ClassTag
 
 /**
  * Underlying engine that runs the fractal master.
@@ -20,19 +22,43 @@ import spire.ClassTag
  * SparkContext.
  */
 class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
-(
-   val step: Int,
-   val configBc: Broadcast[SparkConfiguration],
-   val originalContainer: ComputationContainer[S]) extends SparkMasterEngine[S] {
+(fractoid: Fractoid[S]) extends SparkMasterEngine[S] {
 
-   def config: SparkConfiguration = configBc.value
+   import SparkFromScratchMasterEngineAggregation._
+
+   val step: Int = fractoid.step
+
+   val originalContainer: ComputationContainer[S] = fractoid.computationContainer
+
+   val configBc: Broadcast[SparkConfiguration] = fractoid.configBc
+
+   val config: SparkConfiguration = configBc.value
+
+   override val sc: SparkContext = fractoid.sparkContext
+
+   // get current fractoid, going backwards building engine data for each
+   // partial workflow
+   val engineDataArray: Array[EngineData] = {
+      var engineDataList = List.empty[EngineData]
+
+      var currFrac: Fractoid[_ <: Subgraph] = fractoid
+      while (currFrac != null) {
+         val step = currFrac.step
+         val configBc = currFrac.configBc
+         val computationContainer =
+            getFixedContainer(currFrac.computationContainer)
+         val data: EngineData = (step, configBc, computationContainer)
+         engineDataList = data :: engineDataList
+         currFrac = currFrac.parent
+      }
+
+      engineDataList.toArray
+   }
 
    private var masterActorRef: ActorRef = _
 
-   def this(frac: Fractoid[S]) {
-      this(frac.step, frac.configBc, frac.computationContainer)
-      sc = frac.sparkContext
-   }
+   val fixedContainer: ComputationContainer[S] =
+      SparkFromScratchMasterEngineAggregation.getFixedContainer(originalContainer)
 
    override def init(originalContainer: Computation[S]): Unit = {
       val start = System.currentTimeMillis
@@ -89,11 +115,109 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
 
       // save original container, i.e., without parents' computations
       logInfo(s"From scratch computation (${this})." +
-         s" Original computation: ${originalContainer}")
+         s" Original computation: ${originalContainer}" +
+         s" Fixed computation: ${fixedContainer}")
 
+      // local val used for clean serialization
+      val _engineDataArray = engineDataArray
+
+      // create accumulator for thread stats if this is allowed
+      val threadStatsAccum: CollectionAccumulator[ThreadStats] =
+         if (config.collectThreadStats()) {
+            sc.collectionAccumulator[ThreadStats]("THREAD_STATS")
+         } else {
+            null
+         }
+
+      stepRDD.mapPartitionsWithIndex { (idx, _) =>
+         val enginesArray = getEnginesArray(idx, threadStatsAccum,
+            _engineDataArray)
+         val execEngine = enginesArray.last
+            .asInstanceOf[SparkFromScratchEngine[S]]
+
+         Iterator[SparkEngine[S]](execEngine)
+      }
+   }
+}
+
+object SparkFromScratchMasterEngineAggregation {
+
+   // engine data is: fractal step + configuration as broadcast var +
+   // computation container representing this partial workflow
+   private type EngineData =
+      (Int,Broadcast[SparkConfiguration],ComputationContainer[_ <: Subgraph])
+
+   /**
+    * Get array of execution engines from engines data
+    * @param idx partition id (thread id)
+    * @param threadStatsAccum optional thread stats accumulator
+    * @param engineDataArray engines data
+    * @return array of engines, each representing a partial workflow
+    */
+   private def getEnginesArray(idx: Int,
+                               threadStatsAccum: CollectionAccumulator[ThreadStats],
+                               engineDataArray: Array[EngineData])
+   : Array[SparkFromScratchEngine[_ <: Subgraph]] = {
+
+      val numEngines = engineDataArray.length
+      val enginesArray = new Array[SparkFromScratchEngine[_ <: Subgraph]](numEngines)
+
+      // auxiliar function used to create engines with proper typing
+      def createEngine[R <: Subgraph](step: Int,
+                                      configBc: Broadcast[SparkConfiguration],
+                                      computation: ComputationContainer[R])
+      : SparkFromScratchEngine[R] = {
+         configBc.value.initializeWithTag(isMaster = false)
+         val execEngine = new SparkFromScratchEngine[R](
+            partitionId = idx,
+            step = step,
+            computation = computation,
+            configuration = configBc.value,
+            threadStatsAccum // null means 'do not collect thread stats'
+         )
+
+         execEngine
+      }
+
+      // create engines from data
+      var i = 0
+      while (i < numEngines) {
+         val (step, configBc, computation) = engineDataArray(i)
+         enginesArray(i) = createEngine(step, configBc, computation)
+         i += 1
+      }
+
+      // chain engines -- preivous and next
+      i = 0
+      while (i < numEngines) {
+         val previous: SparkFromScratchEngine[_ <: Subgraph] =
+            if (i == 0) null else enginesArray(i - 1)
+
+         val next: SparkFromScratchEngine[_ <: Subgraph] =
+            if (i == numEngines - 1) null else enginesArray(i + 1)
+
+         val engine = enginesArray(i)
+         engine.setPreviousEngine(previous)
+         engine.setNextEngine(next)
+
+         i += 1
+      }
+
+      enginesArray
+   }
+
+   /**
+    * Fix container with proper process functions -- this method analyses the
+    * workflow of computations and determines which process function should
+    * be used based on each primitive
+    * @param originalContainer simplified container from fractoid
+    * @tparam S subgraph type
+    * @return new container ready for shipping and execution
+    */
+   private def getFixedContainer[S <: Subgraph]
+   (originalContainer: ComputationContainer[S]): ComputationContainer[S] = {
       // we will contruct the pipeline in this var
       var cc = originalContainer
-
       cc = {
          def withCustomFuncs(cc: ComputationContainer[S], depth: Int)
          : ComputationContainer[S] = cc.nextComputationOpt match {
@@ -151,52 +275,20 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
                }
          }
 
-         cc = withCustomFuncs(cc, 0).withComputationLabel("first_computation")
+         cc = withCustomFuncs(cc, 0)
+            .withComputationLabel("first_computation")
          cc.setDepth(0)
          cc
       }
 
-      logInfo(s"From scratch computation (${this}). Final computation: ${cc}")
-
-      logInfo(s"SparkConfiguration estimated size = " +
-         s"${SparkConfiguration.serialize(config).length} bytes." +
-         s" ${config}")
-
-      /**
-       * Local vars for clean serialization
-       */
-      val _step = step
-      val _configBc = configBc
-      val _computation = cc
-
-      val taskData = _computation
-
-      logInfo(s"TaskSize ${taskData} " +
-         s"${SparkConfiguration.serialize(taskData).length}")
-
-      // create accumulator for thread stats if this is allowed
-      val threadStatsAccum: CollectionAccumulator[ThreadStats] =
-         if (config.collectThreadStats()) {
-            sc.collectionAccumulator[ThreadStats]("THREAD_STATS")
-         } else {
-            null
-         }
-
-      stepRDD.mapPartitionsWithIndex { (idx, _) =>
-         _configBc.value.initializeWithTag(isMaster = false)
-         val execEngine = new SparkFromScratchEngine[S](
-            partitionId = idx,
-            step = _step,
-            computation = _computation,
-            configuration = _configBc.value,
-            threadStatsAccum // null means 'do not collect thread stats'
-         )
-
-         Iterator[SparkEngine[S]](execEngine)
-      }
+      cc
    }
 }
 
+/**
+ * Filtering primitive if last computation
+ * @tparam S subgraph type
+ */
 class FilterPrimitiveLast[S <: Subgraph] extends ProcessComputeFunc[S] {
    override def toString = "FL"
 
@@ -213,6 +305,10 @@ class FilterPrimitiveLast[S <: Subgraph] extends ProcessComputeFunc[S] {
    }
 }
 
+/**
+ * Filtering primitive if not last computation
+ * @tparam S subgraph type
+ */
 class FilterPrimitive[S <: Subgraph] extends ProcessComputeFunc[S] {
    override def toString = "F"
 
@@ -231,6 +327,10 @@ class FilterPrimitive[S <: Subgraph] extends ProcessComputeFunc[S] {
 
 }
 
+/**
+ * Extension primitive if not first AND not last computation
+ * @tparam S subgraph type
+ */
 class ExtensionPrimitiveMiddle[S <: Subgraph] extends ProcessComputeFunc[S] {
 
    override def toString = "EM"
@@ -251,6 +351,10 @@ class ExtensionPrimitiveMiddle[S <: Subgraph] extends ProcessComputeFunc[S] {
    }
 }
 
+/**
+ * Extension primitive if first computation
+ * @tparam S subgraph type
+ */
 class ExtensionPrimitiveFirst[S <: Subgraph] extends ProcessComputeFunc[S] {
 
    override def toString = "EF"
@@ -271,6 +375,10 @@ class ExtensionPrimitiveFirst[S <: Subgraph] extends ProcessComputeFunc[S] {
    }
 }
 
+/**
+ * Extension primitive if first AND last computation
+ * @tparam S subgraph type
+ */
 class ExtensionPrimitiveFirstLast[S <: Subgraph] extends
    ProcessComputeFunc[S] {
 
@@ -289,6 +397,10 @@ class ExtensionPrimitiveFirstLast[S <: Subgraph] extends
    }
 }
 
+/**
+ * Extension primitive if not first but last computation
+ * @tparam S subgraph type
+ */
 class ExtensionPrimitiveLast[S <: Subgraph] extends ProcessComputeFunc[S] {
 
    override def toString = "EL"
@@ -306,6 +418,10 @@ class ExtensionPrimitiveLast[S <: Subgraph] extends ProcessComputeFunc[S] {
    }
 }
 
+/**
+ * Aggregation primitive -- always applied in the last computation of the
+ * fractal step
+ */
 object AggregationPrimitive {
    def apply[S <: Subgraph](c: Computation[S], s: S): Unit = {
       c.process(s)

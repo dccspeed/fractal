@@ -25,13 +25,14 @@ case class Fractoid[S <: Subgraph : ClassTag]
    step: Int,
    configBc: Broadcast[SparkConfiguration],
    computationContainer: ComputationContainer[S],
-   pattern: Pattern
+   pattern: Pattern,
+   parent: Fractoid[_ <: Subgraph]
 ) extends Logging {
 
    def this(fractalGraph: FractalGraph, config: SparkConfiguration) = {
       this(fractalGraph, Fractoid.nextStepId,
          fractalGraph.fractalContext.sparkContext.broadcast(config),
-         null, null)
+         null, null, null)
    }
 
    def fractalContext: FractalContext = fractalGraph.fractalContext
@@ -765,6 +766,143 @@ case class Fractoid[S <: Subgraph : ClassTag]
       result
    }
 
+   /**
+    * Switch to edge-induced fractoid using built-in converter
+    * @return Edge-induced fractoid
+    */
+   def efractoid: Fractoid[EdgeInducedSubgraph] = {
+      val converter = Fractoid.builtInConverterSelector[S,EdgeInducedSubgraph]
+      efractoid(converter)
+   }
+
+   /**
+    * Switch to edge-induced fractoid using custom converter
+    * @param convertionFunc function mapping to edge-induced subgraphs
+    * @return Edg-induced fractoid
+    */
+   def efractoid(convertionFunc: (S,Computation[S],EdgeInducedSubgraph,Computation[EdgeInducedSubgraph]) => Unit)
+   : Fractoid[EdgeInducedSubgraph] = {
+
+      val converter = new SubgraphConverter[S,EdgeInducedSubgraph] {
+         private var nextEngine: SparkFromScratchEngine[EdgeInducedSubgraph] = _
+         private var nextSubgraph: EdgeInducedSubgraph = _
+         private var nextComputation: Computation[EdgeInducedSubgraph] = _
+
+         override def convert(subgraphIn: S,
+                              computationIn: Computation[S],
+                              subgraphOut: EdgeInducedSubgraph,
+                              computationOut: Computation[EdgeInducedSubgraph])
+         : Unit = {
+            convertionFunc.apply(subgraphIn, computationIn,
+               subgraphOut, computationOut)
+         }
+
+         override def apply(subgraph: S,
+                            computation: Computation[S]): Unit = {
+            convert(subgraph, computation, nextSubgraph, nextComputation)
+            // next engine compute
+            nextEngine.initialWorkCompute()
+         }
+
+         override def init(computation: Computation[S]): Unit = {
+            nextEngine = computation.getExecutionEngine.getNextEngine
+               .asInstanceOf[SparkFromScratchEngine[EdgeInducedSubgraph]]
+            nextComputation = nextEngine.computation
+            nextSubgraph = nextEngine.computation.getSubgraphEnumerator
+               .getSubgraph
+         }
+      }
+
+      efractoid(converter)
+   }
+
+   /**
+    * Switch to edge-induced fractoid using provided converter
+    * @param converter subgraph converter mapping to edge-induced subgraph
+    * @return edge-induced fractoid
+    */
+   private def efractoid(converter: SubgraphConverter[S,EdgeInducedSubgraph])
+   : Fractoid[EdgeInducedSubgraph] = {
+      val thisWithConverter = withNextStepId
+         .withInitAggregations(c => converter.init(c))
+         .withProcess((s, c) => converter.apply(s, c))
+
+      val efrac = fractalGraph.efractoid.withNextStepId
+         .copy(parent = thisWithConverter)
+
+      efrac
+   }
+
+   /**
+    * Switch to vertex-induced fractoid using built-in converter
+    * @return Vertex-induced fractoid
+    */
+   def vfractoid: Fractoid[VertexInducedSubgraph] = {
+      val converter = Fractoid.builtInConverterSelector[S,VertexInducedSubgraph]
+      vfractoid(converter)
+   }
+
+   /**
+    * Switch to vertex-induced fractoid using custom converter
+    * @param convertionFunc function mapping to vertex-induced subgraphs
+    * @return Vertex-induced fractoid
+    */
+   def vifractoid
+   (convertionFunc
+    : (S,Computation[S],VertexInducedSubgraph, Computation[VertexInducedSubgraph]) => Unit)
+   : Fractoid[VertexInducedSubgraph] = {
+
+      val converter = new SubgraphConverter[S,VertexInducedSubgraph] {
+         private var nextEngine: SparkFromScratchEngine[VertexInducedSubgraph] = _
+         private var nextSubgraph: VertexInducedSubgraph = _
+         private var nextComputation: Computation[VertexInducedSubgraph] = _
+
+         override def convert(subgraphIn: S,
+                              computationIn: Computation[S],
+                              subgraphOut: VertexInducedSubgraph,
+                              computationOut: Computation[VertexInducedSubgraph])
+         : Unit = {
+            convertionFunc.apply(subgraphIn, computationIn,
+               subgraphOut, computationOut)
+         }
+
+         override def apply(subgraph: S,
+                            computation: Computation[S]): Unit = {
+            convert(subgraph, computation, nextSubgraph, nextComputation)
+            // next engine compute
+            nextEngine.initialWorkCompute()
+         }
+
+         override def init(computation: Computation[S]): Unit = {
+            nextEngine = computation.getExecutionEngine.getNextEngine
+               .asInstanceOf[SparkFromScratchEngine[VertexInducedSubgraph]]
+            nextComputation = nextEngine.computation
+            nextSubgraph = nextEngine.computation.getSubgraphEnumerator
+               .getSubgraph
+         }
+      }
+
+      vfractoid(converter)
+   }
+
+   /**
+    * Switch to vertex-induced fractoid using provided converter
+    * @param converter subgraph converter mapping to vertex-induced subgraph
+    * @return vertex-induced fractoid
+    */
+   private def vfractoid(converter: SubgraphConverter[S,VertexInducedSubgraph])
+   : Fractoid[VertexInducedSubgraph] = {
+      val thisWithConverter = withNextStepId
+         .withInitAggregations(c => converter.init(c))
+         .withProcess((s, c) => converter.apply(s, c))
+
+      val vfrac = fractalGraph.vfractoid.withNextStepId
+         .copy(parent = thisWithConverter)
+
+      vfrac
+   }
+
+
    /** **** Fractal Scala API: ComputationContainer ******/
 
    /**
@@ -835,9 +973,11 @@ case class Fractoid[S <: Subgraph : ClassTag]
    }
 
    override def toString: String = {
-      s"Fractoid(" +
-         s"step=${step}," +
-         s" computation=${computationContainer}" +
+      val className = classTag[S].runtimeClass.getSimpleName
+      s"Fractoid${className}(" +
+         s"step=${step}" +
+         s",primitives=${primitives.mkString("-")}" +
+         s",parent=${parent}" +
          s")"
    }
 }
@@ -867,5 +1007,25 @@ object Fractoid {
       }
 
       computation.asInstanceOf[ComputationContainer[S]]
+   }
+
+   private def builtInConverterSelector
+   [IN <: Subgraph : ClassTag, OUT <: Subgraph : ClassTag]
+   : SubgraphConverter[IN, OUT] = {
+      val inRuntimeClass = classTag[IN].runtimeClass
+      val outRuntimeClass = classTag[OUT].runtimeClass
+
+      if (inRuntimeClass.isAssignableFrom(classOf[PatternInducedSubgraph])
+          && outRuntimeClass.isAssignableFrom(classOf[EdgeInducedSubgraph])) {
+         new PatternInducedEdgeInducedSubgraphConverter()
+            .asInstanceOf[SubgraphConverter[IN,OUT]]
+      } else if (inRuntimeClass.isAssignableFrom(classOf[PatternInducedSubgraph])
+         && outRuntimeClass.isAssignableFrom(classOf[VertexInducedSubgraph])) {
+         new PatternInducedVertexInducedSubgraphConverter()
+            .asInstanceOf[SubgraphConverter[IN, OUT]]
+      } else {
+         throw new RuntimeException(s"Built-in converter between " +
+            s"${inRuntimeClass} and ${outRuntimeClass} not known.")
+      }
    }
 }

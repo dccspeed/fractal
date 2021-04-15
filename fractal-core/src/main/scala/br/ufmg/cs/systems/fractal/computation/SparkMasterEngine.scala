@@ -17,7 +17,8 @@ import scala.reflect.ClassTag
 trait SparkMasterEngine[S <: Subgraph] extends Logging {
 
    val step: Int
-   var sc: SparkContext = _
+
+   def sc: SparkContext
 
    def config: SparkConfiguration
 

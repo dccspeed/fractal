@@ -9,7 +9,7 @@ import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 import scala.io.Source
 
 class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
-   private val numPartitions: Int = 20
+   private val numPartitions: Int = 8
    private val appName: String = "fractal-test"
    private val logLevel: String = "warn"
 

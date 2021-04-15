@@ -932,6 +932,12 @@ public class IntArrayList implements ReclaimableIntCollection, Externalizable {
       return view;
    }
 
+   public void swap(int i, int j) {
+      int elem = backingArray[i];
+      backingArray[i] = backingArray[j];
+      backingArray[j] = elem;
+   }
+
    private class IntAdderConsumer implements IntConsumer {
       @Override
 

@@ -19,6 +19,7 @@ import org.apache.hadoop.fs.Path
 
 //import scala.collection.mutable.Map
 import scala.reflect.ClassTag
+import scala.reflect.classTag
 
 /**
  * Graph used as starting point of Fractal application workflows

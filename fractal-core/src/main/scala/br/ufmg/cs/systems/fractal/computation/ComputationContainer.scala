@@ -237,7 +237,7 @@ case class EComputationContainer [E <: EdgeInducedSubgraph]
    }
 
    def shallowCopy(
-                     primitive: Primitive = Primitive.None,
+                     primitive: Primitive = primitive,
                      computationLabelOpt: Option[String] =
                      computationLabelOpt,
                      patternOpt: Option[Pattern] =

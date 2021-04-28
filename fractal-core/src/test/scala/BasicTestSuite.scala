@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal
 
+import br.ufmg.cs.systems.fractal.computation.SamplingEnumerator
 import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.Logging
 import br.ufmg.cs.systems.fractal.util.ScalaFractalFuncs.CustomSubgraphCallback
@@ -290,9 +291,12 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
       // 50% estimate
       val fraction = 0.5
+      val senumClass = classOf[SamplingEnumerator[PatternInducedSubgraph]]
+      val fractionKey = "sampling_fraction"
       val sample = citeseerSingleLabelGraph
-         .spfractoid(triangle.asPattern, fraction).
-         expand(3)
+         .set(fractionKey, fraction)
+         .pfractoid(triangle.asPattern)
+         .expand(3, senumClass)
       val estimate = sample.aggregationCount / fraction
 
       // error
@@ -319,9 +323,12 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
       // 10% estimate
       val fraction = 0.1
+      val senumClass = classOf[SamplingEnumerator[PatternInducedSubgraph]]
+      val fractionKey = "sampling_fraction"
       val sample = citeseerSingleLabelGraph
-         .spfractoid(square.asPattern, fraction).
-         expand(4)
+         .set(fractionKey, fraction)
+         .pfractoid(square.asPattern)
+         .expand(4, senumClass)
       val estimate = sample.aggregationCount / fraction
 
       // error

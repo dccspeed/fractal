@@ -57,14 +57,22 @@ case class FractalGraph
       _config
    }
 
-   private val vfractoidRoot: Fractoid[VertexInducedSubgraph] =
+   private val vfractoidRoot: Fractoid[VertexInducedSubgraph] = {
       newFractoid[VertexInducedSubgraph]
+   }
 
-   private val efractoidRoot: Fractoid[EdgeInducedSubgraph] =
+   private val vfractoidRootNoEdgeUpdate: Fractoid[VertexInducedSubgraph] = {
+      newFractoid[VertexInducedSubgraphNoEdgeUpdate]
+         .asInstanceOf[Fractoid[VertexInducedSubgraph]]
+   }
+
+   private val efractoidRoot: Fractoid[EdgeInducedSubgraph] = {
       newFractoid[EdgeInducedSubgraph]
+   }
 
-   private val pfractoidRoot: Fractoid[PatternInducedSubgraph] =
+   private val pfractoidRoot: Fractoid[PatternInducedSubgraph] = {
       newFractoid[PatternInducedSubgraph]
+   }
 
    def asPattern: Pattern = {
       val computation: Computation[EdgeInducedSubgraph] =
@@ -73,7 +81,7 @@ case class FractalGraph
       config.set ("input_graph_path", path)
       config.set ("input_graph_local", local)
       config.set ("input_graph_class", "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
-      config.setSubgraphClass (computation.getSubgraphClass())
+      config.setSubgraphClass(computation.getSubgraphClass())
       config.initialize(isMaster = false)
       val subgraph = config.createSubgraph[EdgeInducedSubgraph]
 
@@ -119,47 +127,18 @@ case class FractalGraph
    }
 
    /**
-    * Edge-induced fractoid without a process function and with sampling
-    * @return Fractoid with the initial state of edge-induced computation
-    */
-   def sefractoid(fraction: Double): Fractoid[EdgeInducedSubgraph] = {
-      val FRACTION_KEY = "sampling_fraction"
-      val enumeratorKey = "subgraph_enumerator"
-      val enumeratorClass =
-         "br.ufmg.cs.systems.fractal.computation.SamplingEnumerator"
-
-      logInfo(s"Sampling fractoid uniformly at random: fraction=${fraction}" +
-         s" fractoid=${this}")
-
-      set(enumeratorKey, enumeratorClass)
-         .set(FRACTION_KEY, fraction)
-         .efractoid
-   }
-
-   /**
-    * Creates a vertex-induced Fractoid with a process function
+    * Creates a vertex-induced Fractoid
     * @return Fractoid with the initial state of vertex-induced computation
     */
    def vfractoid: Fractoid[VertexInducedSubgraph] = {
       vfractoidRoot
    }
-
    /**
-    * Vertex-induced fractoid without a process function and with sampling
+    * Creates a vertex-induced Fractoid without edge update
     * @return Fractoid with the initial state of vertex-induced computation
     */
-   def svfractoid(fraction: Double): Fractoid[VertexInducedSubgraph] = {
-      val FRACTION_KEY = "sampling_fraction"
-      val enumeratorKey = "subgraph_enumerator"
-      val enumeratorClass =
-         "br.ufmg.cs.systems.fractal.computation.SamplingEnumerator"
-
-      logInfo(s"Sampling fractoid uniformly at random: fraction=${fraction}" +
-         s" fractoid=${this}")
-
-      set(enumeratorKey, enumeratorClass)
-         .set(FRACTION_KEY, fraction)
-         .vfractoid
+   def vfractoidNoEdgeUpdate: Fractoid[VertexInducedSubgraph] = {
+      vfractoidRootNoEdgeUpdate
    }
 
    /**
@@ -179,25 +158,6 @@ case class FractalGraph
       pfractoidRoot.copy(
          pattern = patternWithPlan
       )
-   }
-
-   /**
-    * Pattern-induced fractoid without a process function and with sampling
-    * @return Fractoid with the initial state of pattern-induced computation
-    */
-   def spfractoid(pattern: Pattern,
-                  fraction: Double): Fractoid[PatternInducedSubgraph] = {
-      val FRACTION_KEY = "sampling_fraction"
-      val enumeratorKey = "subgraph_enumerator"
-      val enumeratorClass =
-         "br.ufmg.cs.systems.fractal.computation.SamplingEnumerator"
-
-      logInfo(s"Sampling fractoid uniformly at random: fraction=${fraction}" +
-         s" fractoid=${this}")
-
-      set(enumeratorKey, enumeratorClass)
-         .set(FRACTION_KEY, fraction)
-         .pfractoid(pattern)
    }
 
    def set(key: String, value: Any): FractalGraph = {

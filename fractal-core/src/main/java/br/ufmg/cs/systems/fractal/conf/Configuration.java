@@ -127,21 +127,6 @@ public class Configuration implements Serializable {
       return subgraph;
    }
 
-   public <O extends Subgraph> SubgraphEnumerator<O> createSubgraphEnumerator(
-           Computation<O> computation) {
-      boolean bypass = computation.shouldBypass();
-      SubgraphEnumerator<O> senum;
-      if (!bypass) {
-         senum = (SubgraphEnumerator<O>) ReflectionSerializationUtils
-                 .newInstance(subgraphEnumClass);
-      } else {
-         senum = (SubgraphEnumerator<O>) ReflectionSerializationUtils.newInstance(
-                 br.ufmg.cs.systems.fractal.computation.BypassSubgraphEnumerator.class);
-      }
-      senum.init(computation.getConfig(), computation);
-      return senum;
-   }
-
    public Class<?> getClass(String key, String defaultValue) {
       try {
          return Class.forName(getString(key, defaultValue));

@@ -41,6 +41,8 @@ public interface Computation<S extends Subgraph> extends Serializable {
 
    ExecutionEngine<S> getExecutionEngine();
 
+   Class<? extends SubgraphEnumerator<S>> getSubgraphEnumeratorClass();
+
    void setExecutionEngine(ExecutionEngine<S> executionEngine);
 
    long getNumExtensions();
@@ -85,6 +87,4 @@ public interface Computation<S extends Subgraph> extends Serializable {
    int setDepth(int depth);
 
    void setSubgraph(S subgraph);
-
-   boolean shouldBypass();
 }

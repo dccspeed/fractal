@@ -4,6 +4,7 @@ import java.io.Serializable
 import java.util.concurrent.atomic.AtomicInteger
 
 import br.ufmg.cs.systems.fractal.aggregation._
+import br.ufmg.cs.systems.fractal.callback.{EdgeInducedVertexInducedSubgraphConverter, PatternInducedEdgeInducedSubgraphConverter, PatternInducedVertexInducedSubgraphConverter, SubgraphCallback, SubgraphConverter, VertexInducedPatternducedSubgraphConverter}
 import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
 import br.ufmg.cs.systems.fractal.pattern.Pattern
@@ -700,9 +701,11 @@ case class Fractoid[S <: Subgraph : ClassTag]
       }
    }
 
+   /**
+    * Called for the first expand call in this fractoid (bootstrap)
+    * @return new fractoid
+    */
    private def withFirstComputation: Fractoid[S] = {
-      //this.copy(config = config.withNewComputation(
-      //   Fractoid.createFirstComputation(pattern)))
       this.copy(computationContainer = Fractoid.createFirstComputation(pattern))
    }
 
@@ -725,6 +728,18 @@ case class Fractoid[S <: Subgraph : ClassTag]
     * @return new result
     */
    def expand(n: Int): Fractoid[S] = {
+      expand(n, null)
+   }
+
+   /**
+    * Perform *n* expansion iterations using custom subgraph enumerator
+    *
+    * @param n number of expansions
+    * @param senumClass subgraph enumerator class
+    * @return new result
+    */
+   def expand(n: Int, senumClass: Class[_ <: SubgraphEnumerator[S]])
+   : Fractoid[S] = {
       logInfo(s"Expand fractoid=${this} n=${n}")
       // base step, no effect
       if (n == 0) return this
@@ -734,19 +749,21 @@ case class Fractoid[S <: Subgraph : ClassTag]
       // first computation, create a new computation
       if (computationContainer == null) {
          stepResult = withFirstComputation
+            .withSubgraphEnumeratorClass(senumClass)
          logInfo(
-            s"ExpandNewComputation(n=${n}): before=${this} after=${stepResult}")
+            s"ExpandNewComputation(n=${n}): before=${this}" +
+               s" after=${stepResult} senumClass=${senumClass}")
       } else {
-         val expandComp = emptyComputation(Primitive.E).
-            withShouldBypass(false)
+         val expandComp = emptyComputation(Primitive.E)
+            .withSubgraphEnumeratorClass(senumClass)
          stepResult = handleNextResult(expandComp)
          logInfo(
             s"ExpandAppendComputation(n=${n}): before=${this} " +
-               s"after=${stepResult}")
+               s"after=${stepResult} senumClass=${senumClass}")
       }
 
       // recursive call
-      stepResult.expand(n - 1)
+      stepResult.expand(n - 1, senumClass)
    }
 
    /**
@@ -758,9 +775,10 @@ case class Fractoid[S <: Subgraph : ClassTag]
     */
    def filter(filter: (S, Computation[S]) => Boolean): Fractoid[S] = {
       //ClosureCleaner.clean(filter)
-      val filterComp = emptyComputation(Primitive.F).
-         withShouldBypass(true).
-         withFilter(filter)
+      val senumClass = classOf[BypassSubgraphEnumerator[S]]
+      val filterComp = emptyComputation(Primitive.F)
+         .withSubgraphEnumeratorClass(senumClass)
+         .withFilter(filter)
       val result = handleNextResult(filterComp)
       logInfo(s"Filter before: ${this} after: ${result}")
       result
@@ -847,7 +865,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
     * @param convertionFunc function mapping to vertex-induced subgraphs
     * @return Vertex-induced fractoid
     */
-   def vifractoid
+   def vfractoid
    (convertionFunc
     : (S,Computation[S],VertexInducedSubgraph, Computation[VertexInducedSubgraph]) => Unit)
    : Fractoid[VertexInducedSubgraph] = {
@@ -902,6 +920,77 @@ case class Fractoid[S <: Subgraph : ClassTag]
       vfrac
    }
 
+   /**
+    * Switch to pattern-induced fractoid using built-in converter
+    * @return pattern-induced fractoid
+    */
+   def pfractoid(pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
+      val converter = Fractoid.builtInConverterSelector[S,PatternInducedSubgraph]
+      pfractoid(pattern, converter)
+   }
+
+   /**
+    * Switch to pattern-induced fractoid using custom converter
+    * @param convertionFunc function mapping to pattern-induced subgraphs
+    * @return pattern-induced fractoid
+    */
+   def pfractoid
+   (pattern: Pattern, convertionFunc
+    : (S,Computation[S],PatternInducedSubgraph, Computation[PatternInducedSubgraph]) =>  Unit)
+   : Fractoid[PatternInducedSubgraph] = {
+
+      val converter = new SubgraphConverter[S,PatternInducedSubgraph] {
+         private var nextEngine: SparkFromScratchEngine[PatternInducedSubgraph] = _
+         private var nextSubgraph: PatternInducedSubgraph = _
+         private var nextComputation: Computation[PatternInducedSubgraph] = _
+
+         override def convert(subgraphIn: S,
+                              computationIn: Computation[S],
+                              subgraphOut: PatternInducedSubgraph,
+                              computationOut: Computation[PatternInducedSubgraph])
+         : Unit = {
+            convertionFunc.apply(subgraphIn, computationIn,
+               subgraphOut, computationOut)
+         }
+
+         override def apply(subgraph: S,
+                            computation: Computation[S]): Unit = {
+            convert(subgraph, computation, nextSubgraph, nextComputation)
+            // next engine compute
+            nextEngine.initialWorkCompute()
+         }
+
+         override def init(computation: Computation[S]): Unit = {
+            nextEngine = computation.getExecutionEngine.getNextEngine
+               .asInstanceOf[SparkFromScratchEngine[PatternInducedSubgraph]]
+            nextComputation = nextEngine.computation
+            nextSubgraph = nextEngine.computation.getSubgraphEnumerator
+               .getSubgraph
+         }
+      }
+
+      pfractoid(pattern, converter)
+   }
+
+   /**
+    * Switch to pattern-induced fractoid using provided converter
+    * @param converter subgraph converter mapping to pattern-induced subgraph
+    * @return pattern-induced fractoid
+    */
+   private def pfractoid(pattern: Pattern,
+                         converter: SubgraphConverter[S,PatternInducedSubgraph])
+   : Fractoid[PatternInducedSubgraph] = {
+      val thisWithConverter = withNextStepId
+         .withInitAggregations(c => converter.init(c))
+         .withProcess((s, c) => converter.apply(s, c))
+
+      val pfrac = fractalGraph
+         .pfractoid(pattern)
+         .withNextStepId
+         .copy(parent = thisWithConverter)
+
+      pfrac
+   }
 
    /** **** Fractal Scala API: ComputationContainer ******/
 
@@ -953,9 +1042,12 @@ case class Fractoid[S <: Subgraph : ClassTag]
       initRes
    }
 
-   private def withShouldBypass(bypass: Boolean): Fractoid[S] = {
+   private def withSubgraphEnumeratorClass
+   (senumClass: Class[_ <: SubgraphEnumerator[S]]): Fractoid[S] = {
+      if (senumClass == null) return this.copy()
       val newComp = computationContainer.withNewFunctions(
-         shouldBypassOpt = Option(bypass))
+         subgraphEnumeratorClassOpt = Option(senumClass)
+      )
       this.copy(computationContainer = newComp)
    }
 
@@ -990,15 +1082,16 @@ object Fractoid {
    private def createFirstComputation[S <: Subgraph : ClassTag]
    (pattern: Pattern = null): ComputationContainer[S] = {
       val computation = {
-         val sclass = classTag[S].runtimeClass
-         if (sclass == classOf[VertexInducedSubgraph]) {
+         val sclass = classTag[S].runtimeClass.asInstanceOf[Class[S]]
+         if (classOf[VertexInducedSubgraph].isAssignableFrom(sclass)) {
             new VComputationContainer(processOpt = Option(null),
-               primitive = Primitive.E)
+               primitive = Primitive.E,
+               subgraphClassOpt = Option(sclass))
          } else if (sclass == classOf[EdgeInducedSubgraph]) {
             new EComputationContainer(processOpt = Option(null),
                primitive = Primitive.E)
          } else if (sclass == classOf[PatternInducedSubgraph]) {
-            new VEComputationContainer(processOpt = Option(null),
+            new PComputationContainer(processOpt = Option(null),
                patternOpt = Option(pattern),
                primitive = Primitive.E)
          } else {
@@ -1019,11 +1112,27 @@ object Fractoid {
           && outRuntimeClass.isAssignableFrom(classOf[EdgeInducedSubgraph])) {
          new PatternInducedEdgeInducedSubgraphConverter()
             .asInstanceOf[SubgraphConverter[IN,OUT]]
-      } else if (inRuntimeClass.isAssignableFrom(classOf[PatternInducedSubgraph])
+      }
+
+      else if (inRuntimeClass.isAssignableFrom(classOf[PatternInducedSubgraph])
          && outRuntimeClass.isAssignableFrom(classOf[VertexInducedSubgraph])) {
          new PatternInducedVertexInducedSubgraphConverter()
             .asInstanceOf[SubgraphConverter[IN, OUT]]
-      } else {
+      }
+
+      else if (inRuntimeClass.isAssignableFrom(classOf[EdgeInducedSubgraph])
+         && outRuntimeClass.isAssignableFrom(classOf[VertexInducedSubgraph])) {
+         new EdgeInducedVertexInducedSubgraphConverter()
+            .asInstanceOf[SubgraphConverter[IN, OUT]]
+      }
+
+      else if (classOf[VertexInducedSubgraph].isAssignableFrom(inRuntimeClass)
+         && outRuntimeClass.isAssignableFrom(classOf[PatternInducedSubgraph])) {
+         new VertexInducedPatternducedSubgraphConverter()
+            .asInstanceOf[SubgraphConverter[IN, OUT]]
+      }
+
+      else {
          throw new RuntimeException(s"Built-in converter between " +
             s"${inRuntimeClass} and ${outRuntimeClass} not known.")
       }

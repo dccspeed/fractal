@@ -276,7 +276,6 @@ object SparkFromScratchMasterEngineAggregation {
          }
 
          cc = withCustomFuncs(cc, 0)
-            .withComputationLabel("first_computation")
          cc.setDepth(0)
          cc
       }

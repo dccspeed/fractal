@@ -3,13 +3,14 @@ package br.ufmg.cs.systems.fractal
 import java.util.function.BiPredicate
 
 import br.ufmg.cs.systems.fractal.aggregation.{LongLongSubgraphAggregation, ObjLongSubgraphAggregation, SubgraphAggregation}
-import br.ufmg.cs.systems.fractal.computation.Computation
+import br.ufmg.cs.systems.fractal.callback.SubgraphCallback
+import br.ufmg.cs.systems.fractal.computation.{Computation, SamplingEnumerator}
 import br.ufmg.cs.systems.fractal.gmlib.periodic.InducedPeriodicSubgraphsPFMCVC
 import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.ScalaFractalFuncs.CustomSubgraphCallback
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
-import br.ufmg.cs.systems.fractal.util.{Logging, ReflectionSerializationUtils, SubgraphCallback}
+import br.ufmg.cs.systems.fractal.util.{Logging, ReflectionSerializationUtils}
 import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -128,11 +129,16 @@ object InducedSubgraphsListingSampleSF extends ApplicationRunner {
                       numPartitions: Int, explorationSteps: Int,
                       fraction: Double): Unit = {
 
+      val fractionKey = "sampling_fraction"
+      val senumClass = classOf[SamplingEnumerator[VertexInducedSubgraph]]
+
       val (numSugbraphs, elapsed) = FractalSparkRunner.time {
          fractalGraph
             .set("num_partitions", numPartitions)
             .set("comm_strategy", commStrategy)
-            .svfractoid(fraction).expand(1)
+            .set(fractionKey, fraction)
+            .vfractoid
+            .expand(1, senumClass)
             .explore(explorationSteps)
             .aggregationCount
       }

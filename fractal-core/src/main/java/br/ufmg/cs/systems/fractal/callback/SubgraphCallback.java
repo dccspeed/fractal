@@ -1,4 +1,4 @@
-package br.ufmg.cs.systems.fractal.util;
+package br.ufmg.cs.systems.fractal.callback;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph;

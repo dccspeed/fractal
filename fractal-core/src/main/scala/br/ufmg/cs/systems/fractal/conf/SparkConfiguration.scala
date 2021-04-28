@@ -8,6 +8,7 @@ import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.conf.Configuration._
 import br.ufmg.cs.systems.fractal.graph._
 import br.ufmg.cs.systems.fractal.pattern.Pattern
+import br.ufmg.cs.systems.fractal.subgraph.Subgraph
 import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray
 import br.ufmg.cs.systems.fractal.util.Logging
 
@@ -100,6 +101,7 @@ case class SparkConfiguration(confs: Map[String, Any])
 
    var tagApplied = false
 
+   // todo: remove graph filter
    def initializeWithTag(isMaster: Boolean): Unit = synchronized {
       initialize(isMaster)
       if (!tagApplied) {

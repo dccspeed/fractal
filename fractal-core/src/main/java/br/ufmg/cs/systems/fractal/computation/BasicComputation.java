@@ -5,6 +5,7 @@ import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
+import br.ufmg.cs.systems.fractal.util.ReflectionSerializationUtils;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import org.apache.log4j.Logger;
 
@@ -161,7 +162,10 @@ public abstract class BasicComputation<S extends Subgraph>
    public void init(Configuration config) {
       configuration = config;
       mainGraph = configuration.getMainGraph();
-      subgraphEnumerator = configuration.createSubgraphEnumerator(this);
+      subgraphEnumerator = ReflectionSerializationUtils.newInstance(
+              getSubgraphEnumeratorClass()
+      );
+      subgraphEnumerator.init(config, this);
       lastComputation = this;
       nextComputation = nextComputation();
       while (lastComputation.nextComputation() != null) {
@@ -223,12 +227,16 @@ public abstract class BasicComputation<S extends Subgraph>
       this.subgraph = subgraph;
    }
 
-   @Override
    public boolean shouldBypass() {
       return false;
    }
 
    public MainGraph getMainGraph() {
       return mainGraph;
+   }
+
+   @Override
+   public Class<? extends SubgraphEnumerator<S>> getSubgraphEnumeratorClass() {
+      return null;
    }
 }

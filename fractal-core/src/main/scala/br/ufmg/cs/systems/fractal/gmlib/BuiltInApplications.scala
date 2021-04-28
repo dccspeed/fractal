@@ -1,6 +1,7 @@
 package br.ufmg.cs.systems.fractal.gmlib
 
-import br.ufmg.cs.systems.fractal.computation.Computation
+import br.ufmg.cs.systems.fractal.computation.{Computation, SamplingEnumerator}
+import br.ufmg.cs.systems.fractal.gmlib.clique.{KClistEnumerator, MaximalCliquesEnumerator}
 import br.ufmg.cs.systems.fractal.gmlib.fsm.{FSMPF, FSMPFMCVC, FSMSF, MinImageSupport}
 import br.ufmg.cs.systems.fractal.gmlib.motifs.{MotifsPF, MotifsPFMCVC, MotifsSF}
 import br.ufmg.cs.systems.fractal.gmlib.periodic.{InducedPeriodicSubgraphsPF, InducedPeriodicSubgraphsPFMCVC, InducedPeriodicSubgraphsSF}
@@ -10,7 +11,7 @@ import br.ufmg.cs.systems.fractal.pattern._
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.collection.ObjSet
 import br.ufmg.cs.systems.fractal.util.pool.{IntArrayListPool, IntArrayListViewPool}
-import br.ufmg.cs.systems.fractal.util.{Logging, SubgraphCallback, Utils}
+import br.ufmg.cs.systems.fractal.util.{Logging, Utils}
 import br.ufmg.cs.systems.fractal.{FSMSF, FractalGraph, Fractoid}
 import org.apache.spark.rdd.RDD
 
@@ -200,8 +201,12 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     */
    def motifsSampleSF(numVertices: Int, fraction: Double)
    : RDD[(Pattern,Long)] = {
-      self.svfractoid(fraction).expand(numVertices).
-         aggregationCanonicalPatternLong(
+      val senumClass = classOf[SamplingEnumerator[VertexInducedSubgraph]]
+      val fractionKey = "sampling_fraction"
+      self.set(fractionKey, fraction)
+         .vfractoid
+         .expand(numVertices, senumClass)
+         .aggregationCanonicalPatternLong(
             s => s.quickPattern(), 0, _ => 1L, _ + _)
    }
 
@@ -223,7 +228,10 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     */
    def cliquesKClistSF(numVertices: Int): Fractoid[VertexInducedSubgraph] = {
       val enumClass = "br.ufmg.cs.systems.fractal.gmlib.clique.KClistEnumerator"
-      self.set("subgraph_enumerator", enumClass).vfractoid.expand(numVertices)
+      val senumClass = classOf[KClistEnumerator[VertexInducedSubgraph]]
+      self.set("subgraph_enumerator", enumClass).set("clique_size", numVertices)
+         .vfractoidNoEdgeUpdate
+         .expand(numVertices, senumClass)
    }
 
    /**
@@ -312,10 +320,11 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
    def maximalCliquesQuickSF(maxNumVertices: Int)
    : Fractoid[VertexInducedSubgraph] = {
       val enumClass = "br.ufmg.cs.systems.fractal.gmlib.clique.MaximalCliquesEnumerator"
+      val senumClass = classOf[MaximalCliquesEnumerator[VertexInducedSubgraph]]
       self.set("subgraph_enumerator", enumClass).vfractoid
          // explore one step further to ensure that *maxNumVertices* sized
          // cliques are considered
-         .expand(maxNumVertices + 1)
+         .expand(maxNumVertices + 1, senumClass)
    }
 
    /**
@@ -464,7 +473,9 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     */
    def patternMatchingPF(pattern: Pattern, fraction: Double): Fractoid[PatternInducedSubgraph] = {
       logInfo (s"Querying fraction=${fraction} of pattern ${pattern} in ${this}.")
-      self.spfractoid(pattern, fraction).expand(1)
+      val fractionKey = "sampling_fraction"
+      val senumClass = classOf[SamplingEnumerator[PatternInducedSubgraph]]
+      self.set(fractionKey, fraction).pfractoid(pattern).expand(1, senumClass)
    }
 
    /**

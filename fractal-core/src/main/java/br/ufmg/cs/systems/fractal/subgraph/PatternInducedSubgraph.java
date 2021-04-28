@@ -8,7 +8,7 @@ import br.ufmg.cs.systems.fractal.pattern.PatternEdge;
 import br.ufmg.cs.systems.fractal.pattern.PatternEdgeArrayList;
 import br.ufmg.cs.systems.fractal.pattern.PatternExplorationPlan;
 import br.ufmg.cs.systems.fractal.util.EdgePredicates;
-import br.ufmg.cs.systems.fractal.util.SubgraphCallback;
+import br.ufmg.cs.systems.fractal.callback.SubgraphCallback;
 import br.ufmg.cs.systems.fractal.util.Utils;
 import br.ufmg.cs.systems.fractal.util.VertexPredicate;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
@@ -387,7 +387,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
 
    @Override
    public void computeExtensions(Computation computation,
-                                          IntArrayList extensions) {
+                                 IntArrayList extensions) {
       int numVertices = getNumVertices();
       Pattern pattern = computation.getPattern();
       PatternExplorationPlan explorationPlan = pattern.explorationPlan();

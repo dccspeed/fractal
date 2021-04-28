@@ -106,10 +106,6 @@ public class VertexInducedSubgraph extends BasicSubgraph {
 
    @Override
    public void removeLastWord() {
-      if (getNumVertices() == 0) {
-         return;
-      }
-
       vertices.removeLast();
       int numEdgesToRemove = numEdgesAddedWithWord.pop();
       edges.removeLast(numEdgesToRemove);

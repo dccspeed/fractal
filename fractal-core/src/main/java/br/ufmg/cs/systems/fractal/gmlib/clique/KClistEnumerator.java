@@ -9,6 +9,7 @@ import br.ufmg.cs.systems.fractal.util.Utils;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
+import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.map.IntObjCursor;
 import com.koloboke.collect.map.IntObjMap;
 import com.koloboke.collect.map.hash.HashIntObjMaps;
@@ -25,11 +26,16 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
    // used to inspect graph neighborhoods
    private IntArrayListView neighborhood;
 
+   private IntCollection dagExtensions;
+
+   private int cliqueSize;
+
    @Override
    public void init(Configuration config, Computation<S> computation) {
       dag = HashIntObjMaps.newMutableMap();
       dagCleaner = new DagCleaner();
       neighborhood = new IntArrayListView();
+      cliqueSize = config.getInteger("clique_size", -1);
    }
 
    @Override
@@ -43,19 +49,26 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
       extendFromGraph(computation.getConfig().getMainGraph(), neighborhood,
               dag, vertices.get(0));
 
-      for (int i = 1; i < vertices.size(); ++i) {
-         aux = currentDag;
-         currentDag = dag;
-         dag = aux;
-         dag.clear();
-         extendFromDag(currentDag, dag, vertices.get(i));
+      int numVertices = vertices.size();
+
+      for (int i = 1; i < numVertices; ++i) {
+         if (numVertices < cliqueSize - 1) {
+            aux = currentDag;
+            currentDag = dag;
+            dag = aux;
+            dag.clear();
+            extendFromDag(currentDag, dag, vertices.get(i));
+            dagExtensions = dag.keySet();
+         } else {
+            dagExtensions = currentDag.get(vertices.get(i));
+         }
       }
    }
 
    @Override
    public void computeExtensions_EXTENSION_PRIMITIVE() {
       if (subgraph.getNumWords() > 0) {
-         newExtensions(dag.keySet());
+         newExtensions(dagExtensions);
       } else {
          super.computeExtensions_EXTENSION_PRIMITIVE();
       }
@@ -65,7 +78,9 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
    public boolean extend_EXTENSION_PRIMITIVE() {
 
       if (super.extend_EXTENSION_PRIMITIVE()) {
-         if (computation.nextComputation() == null) return true;
+         if (computation.nextComputation() == null) {
+            return true;
+         }
 
          KClistEnumerator<S> nextEnumerator =
                  (KClistEnumerator<S>) computation.nextComputation().getSubgraphEnumerator();
@@ -73,12 +88,22 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
 
          nextEnumerator.clearDag();
 
-         if (subgraph.getNumVertices() == 1) {
+         int numVertices = subgraph.getNumVertices();
+
+         IntCollection nextDagExtensions;
+
+         if (numVertices == 1) {
             extendFromGraph(subgraph.getConfig().getMainGraph(), neighborhood,
                     nextEnumerator.dag, u);
-         } else {
+            nextDagExtensions = nextEnumerator.dag.keySet();
+         } else if (numVertices < cliqueSize - 1) {
             extendFromDag(dag, nextEnumerator.dag, u);
+            nextDagExtensions = nextEnumerator.dag.keySet();
+         } else {
+            nextDagExtensions = dag.get(u);
          }
+
+         nextEnumerator.dagExtensions = nextDagExtensions;
          return true;
       }
       return false;
@@ -89,7 +114,8 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
     * @param u vertex being added to the current subgraph
     */
    public static void extendFromDag(IntObjMap<IntArrayList> currentDag,
-                                    IntObjMap<IntArrayList> dag, int u) {
+                                    IntObjMap<IntArrayList> dag,
+                                    int u) {
       IntArrayList orderedVertices = currentDag.get(u);
 
       if (orderedVertices == null) {
@@ -102,9 +128,8 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
          int v = orderedVertices.getu(i);
          IntArrayList orderedVertices2 = currentDag.get(v);
          IntArrayList target = IntArrayListPool.instance().createObject();
-         Utils.sintersect(orderedVertices, orderedVertices2,
-                 i + 1, orderedVertices.size(),
-                 0, orderedVertices2.size(), target);
+         Utils.sintersect(orderedVertices, orderedVertices2, i + 1,
+                 orderedVertices.size(), 0, orderedVertices2.size(), target);
          dag.put(v, target);
       }
    }

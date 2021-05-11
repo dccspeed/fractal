@@ -125,9 +125,12 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
     * @return an array with a minimum connected vertex cover
     */
    public static ObjArrayList<IntArrayList> minimumConnectedVertexCover(Pattern pattern) {
+      int numVertices = pattern.getNumberOfVertices();
+      IntArrayList vertices = new IntArrayList(numVertices);
+      for (int u = 0; u < numVertices; ++u) vertices.add(u);
       ObjArrayList<IntArrayList> minCovers = new ObjArrayList<>();
       for (int numCoverVertices = 1; numCoverVertices <= pattern.getNumberOfVertices(); numCoverVertices++) {
-         Iterator<IntArrayList> covers = pattern.getVertices().combinations(numCoverVertices);
+         Iterator<IntArrayList> covers = vertices.combinations(numCoverVertices);
          while (covers.hasNext()) {
             IntArrayList coverCandidate = covers.next();
             Iterator<IntArrayList> iter = coverCandidate.permutations();

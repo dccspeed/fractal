@@ -2,8 +2,8 @@ package br.ufmg.cs.systems.fractal.graph;
 
 public class UnlabeledMainGraph extends VELabeledMainGraph {
 
-   public UnlabeledMainGraph(String name, boolean isEdgeLabelled,
-                            boolean isMultiGraph) {
+   public UnlabeledMainGraph() {
+
    }
 
    @Override

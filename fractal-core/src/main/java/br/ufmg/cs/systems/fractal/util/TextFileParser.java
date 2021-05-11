@@ -22,9 +22,32 @@ public class TextFileParser {
       return endOfStream;
    }
 
+   public boolean skipNewLine() throws IOException {
+      byte c = read();
+      if (c == '\n') {
+         return true;
+      } else {
+         bufferPointer--;
+         return false;
+      }
+   }
+
+   public void skipOnlyBlank() throws IOException {
+      byte c;
+      boolean _newLine;
+
+      do {
+         c = read();
+      } while (!endOfStream && c != '\n' && c <= ' ');
+
+      // first non blank character
+      if (c == '\n') bufferPointer--;
+   }
+
    public boolean skipBlank() throws IOException {
       byte c;
       boolean _newLine;
+
       do {
          c = read();
       } while (!endOfStream && c <= ' ');
@@ -115,6 +138,10 @@ public class TextFileParser {
       byte c = buffer[bufferPointer++];
       if (c == '\n') newLine = true;
       return c;
+   }
+
+   public byte lookup() {
+      return buffer[bufferPointer];
    }
 
    public void close() throws IOException {

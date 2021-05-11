@@ -227,9 +227,8 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * @return Fractoid with the cliques computation
     */
    def cliquesKClistSF(numVertices: Int): Fractoid[VertexInducedSubgraph] = {
-      val enumClass = "br.ufmg.cs.systems.fractal.gmlib.clique.KClistEnumerator"
       val senumClass = classOf[KClistEnumerator[VertexInducedSubgraph]]
-      self.set("subgraph_enumerator", enumClass).set("clique_size", numVertices)
+      self.set("clique_size", numVertices)
          .vfractoidNoEdgeUpdate
          .expand(numVertices, senumClass)
    }
@@ -249,7 +248,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       val isMaximal = (s: PatternInducedSubgraph,
          c: Computation[PatternInducedSubgraph]) => {
          val vertices = s.getVertices
-         val graph = c.getConfig.getMainGraph[MainGraph[_,_]]
+         val graph = c.getConfig.getMainGraph
          val neighborhood = IntArrayListViewPool.instance().createObject()
          var intersectionEmpty = false
 
@@ -306,6 +305,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
 
          // extend to next clique
          val newEdges = (0 until pattern.getNumberOfVertices).toArray
+         //pattern = PatternUtils.addVertex(pattern, newEdges:_*)
          pattern = PatternUtils.addVertex(pattern, newEdges:_*)
       }
    }
@@ -319,9 +319,8 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     */
    def maximalCliquesQuickSF(maxNumVertices: Int)
    : Fractoid[VertexInducedSubgraph] = {
-      val enumClass = "br.ufmg.cs.systems.fractal.gmlib.clique.MaximalCliquesEnumerator"
       val senumClass = classOf[MaximalCliquesEnumerator[VertexInducedSubgraph]]
-      self.set("subgraph_enumerator", enumClass).vfractoid
+      self.vfractoid
          // explore one step further to ensure that *maxNumVertices* sized
          // cliques are considered
          .expand(maxNumVertices + 1, senumClass)

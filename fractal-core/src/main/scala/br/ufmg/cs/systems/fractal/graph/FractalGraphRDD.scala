@@ -8,6 +8,8 @@ import org.apache.spark.storage.StorageLevel
 import org.apache.spark.{Partitioner, SparkConf, SparkContext}
 
 /**
+ * TODO: Graph format has changed, fix this
+ *
  * Raw format is a collection of strings with the following format:
  *    first line is "numVertices numEdges"
  *    other lines represent adjancecy lists:

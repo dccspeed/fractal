@@ -1,12 +1,9 @@
 package br.ufmg.cs.systems.fractal.pattern;
 
 import br.ufmg.cs.systems.fractal.conf.Configuration;
-import br.ufmg.cs.systems.fractal.graph.BasicMainGraph;
-import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import br.ufmg.cs.systems.fractal.subgraph.EdgeInducedSubgraph;
-import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
+import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgePool;
+import br.ufmg.cs.systems.fractal.util.TextFileParser;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
-import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntIntMapPool;
 import com.koloboke.collect.ObjCursor;
 import com.koloboke.collect.map.IntIntMap;
@@ -16,33 +13,23 @@ import com.koloboke.collect.map.hash.HashObjObjMaps;
 import com.koloboke.collect.set.ObjSet;
 import com.koloboke.collect.set.hash.HashObjSet;
 import com.koloboke.collect.set.hash.HashObjSets;
-import org.apache.hadoop.hdfs.DFSClient;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.log4j.Logger;
 
+import javax.xml.soap.Text;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Iterator;
 
 public class PatternUtils {
    private static final Logger LOG = Logger.getLogger(PatternUtils.class);
 
-   private static final ThreadLocal<Configuration> configThreadLocal =
-           ThreadLocal.withInitial(() -> {
-              Configuration config = new Configuration();
-              config.setSubgraphClass(VertexInducedSubgraph.class);
-              config.setMainGraphClass(BasicMainGraph.class);
-              config.setPatternClass(JBlissPattern.class);
-              return config;
-           });
-
-   private static final ThreadLocal<MainGraph> graphThreadLocal =
-           ThreadLocal.withInitial(() -> {
-              Configuration config = configThreadLocal.get();
-              MainGraph graph = config.getOrCreateMainGraph();
-              config.setMainGraph(graph);
-              return graph;
-           });
-
-   private static final ThreadLocal<VertexInducedSubgraph> vsubgraph =
-           ThreadLocal.withInitial(() -> configThreadLocal.get().createSubgraph());
+   private static final Configuration configuration;
+   static {
+      configuration = new Configuration();
+      configuration.setPatternClass(JBlissPattern.class);
+   }
 
    /**
     * Generates all canonical patterns obtained from *pattern* by extending
@@ -56,6 +43,8 @@ public class PatternUtils {
       HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
       IntArrayList vertexPositions = new IntArrayList(pattern.getNumberOfVertices());
       int newPosition = pattern.getNumberOfVertices();
+      PatternEdgePool edgePool =
+              PatternEdgePool.instance(pattern.edgeLabeled());
 
       // create vertex positions
       for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
@@ -67,32 +56,29 @@ public class PatternUtils {
          Iterator<IntArrayList> connectionPatternsIter = vertexPositions.combinations(n);
          while (connectionPatternsIter.hasNext()) {
             IntArrayList connectionPattern = connectionPatternsIter.next();
-            Configuration config = createConfig();
-            MainGraph graph = createGraph(config, pattern);
-            graph.addVertex(newPosition);
-            graph.addVertexLabel(newPosition, vertexLabel);
+            Pattern newPattern = pattern.copy();
+            newPattern.addVertexStandalone(vertexLabel);
 
             // add connection pattern edges to temp graph
             for (int i = 0; i < connectionPattern.size(); ++i) {
                int u = connectionPattern.get(i);
-               graph.addEdge(u, newPosition, graph.numEdges());
+               PatternEdge edge = edgePool.createObject();
+               edge.setSrcPos(u);
+               edge.setDestPos(newPosition);
+               newPattern.addEdge(edge);
             }
 
-            // create vertex induced subgraph representing the temp graph (with all of its vertices and edges)
-            VertexInducedSubgraph subgraph = (VertexInducedSubgraph) config.createSubgraph();
-            for (int u = 0; u < graph.numVertices(); ++u) subgraph.addWord(u);
-
-            // get new quick pattern from subgraph, turn canonical (canonical labeling) and add to the resulting set to
-            // remove duplicates
-            Pattern newPattern = subgraph.quickPattern();
             newPattern.turnCanonical();
             newPatterns.add(newPattern);
-
+            //if (!newPatterns.add(newPattern)) {
+            //   edgePool.reclaimObjects(newPattern.getEdges());
+            //}
          }
       }
 
       return newPatterns;
    }
+
 
    /**
     * Generates all canonical patterns obtained from *pattern* by extending one edge from it
@@ -104,12 +90,19 @@ public class PatternUtils {
                                                   int vertexLabel) {
       HashObjObjMap<Pattern,Pattern> quickMap = HashObjObjMaps.newMutableMap();
       HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
-
-      LOG.debug("ExtendingByEdge " + pattern + " numVertices=" + pattern.getNumberOfVertices());
+      PatternEdgePool edgePool =
+              PatternEdgePool.instance(pattern.edgeLabeled());
+      int numVertices = pattern.getNumberOfVertices();
+      IntArrayList vertexLabels = new IntArrayList(numVertices);
+      for (int i = 0; i < numVertices; ++i) vertexLabels.add(-1);
+      for (PatternEdge edge : pattern.getEdges()) {
+         vertexLabels.setu(edge.getSrcPos(), edge.getSrcLabel());
+         vertexLabels.setu(edge.getDestPos(), edge.getDestLabel());
+      }
 
       // patterns with internal edges
-      for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
-         for (int v = u + 1; v < pattern.getNumberOfVertices(); ++v) {
+      for (int u = 0; u < numVertices; ++u) {
+         for (int v = u + 1; v < numVertices; ++v) {
             // check if this edge already exists
             boolean edgeExists = false;
             for (PatternEdge pedge : pattern.getEdges()) {
@@ -122,18 +115,13 @@ public class PatternUtils {
 
             if (edgeExists) continue;
 
-            Configuration config = createConfig();
-            config.setSubgraphClass(EdgeInducedSubgraph.class);
-            MainGraph graph = createGraph(config, pattern);
-            graph.addEdge(u, v, graph.numEdges());
-
-            // create vertex induced subgraph representing the temp graph (with all of its vertices and edges)
-            EdgeInducedSubgraph subgraph = (EdgeInducedSubgraph) config.createSubgraph();
-            for (int w = 0; w < graph.numEdges(); ++w) subgraph.addWord(w);
-
-            // get new quick pattern from subgraph, turn canonical (canonical labeling) and add to the resulting set to
-            // remove duplicates
-            Pattern newPattern = subgraph.quickPattern();
+            Pattern newPattern = pattern.copy();
+            PatternEdge edge = edgePool.createObject();
+            edge.setSrcPos(u);
+            edge.setSrcLabel(vertexLabels.getu(u));
+            edge.setDestPos(v);
+            edge.setDestLabel(vertexLabels.getu(v));
+            newPattern.addEdgeStandalone(edge);
             Pattern canonicalPattern = newPattern.copy();
             canonicalPattern.turnCanonical();
             if (!quickMap.containsKey(canonicalPattern)) {
@@ -147,20 +135,14 @@ public class PatternUtils {
       // patterns with external edges
       int v = pattern.getNumberOfVertices();
       for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
-         Configuration config = createConfig();
-         config.setSubgraphClass(EdgeInducedSubgraph.class);
-         MainGraph graph = createGraph(config, pattern);
-         graph.addVertex(pattern.getNumberOfVertices());
-         graph.addVertexLabel(pattern.getNumberOfVertices(), vertexLabel);
-         graph.addEdge(u, v, graph.numEdges());
-
-         // create vertex induced subgraph representing the temp graph (with all of its vertices and edges)
-         EdgeInducedSubgraph subgraph = (EdgeInducedSubgraph) config.createSubgraph();
-         for (int w = 0; w < graph.numEdges(); ++w) subgraph.addWord(w);
-
-         // get new quick pattern from subgraph, turn canonical (canonical labeling) and add to the resulting set to
-         // remove duplicates
-         Pattern newPattern = subgraph.quickPattern();
+         Pattern newPattern = pattern.copy();
+         newPattern.addVertexStandalone(vertexLabel);
+         PatternEdge edge = edgePool.createObject();
+         edge.setSrcPos(u);
+         edge.setSrcLabel(vertexLabels.getu(u));
+         edge.setDestPos(v);
+         edge.setDestLabel(vertexLabel);
+         newPattern.addEdgeStandalone(edge);
          Pattern canonicalPattern = newPattern.copy();
          canonicalPattern.turnCanonical();
          if (!quickMap.containsKey(canonicalPattern)) {
@@ -169,115 +151,33 @@ public class PatternUtils {
          }
       }
 
-      LOG.debug("ExtendingByEdge newPatterns=" + newPatterns);
-
       return newPatterns;
    }
 
 
-   /**
-    * Creates minimal configurations for isolated pattern handling
-    *
-    * @return new configuration
-    */
-   public static Configuration createConfig() {
-      Configuration config = new Configuration();
-      config.setSubgraphClass(VertexInducedSubgraph.class);
-      config.setMainGraphClass(BasicMainGraph.class);
-      config.setPatternClass(JBlissPattern.class);
-      return config;
-   }
-
-   /**
-    * Creates an empty graph containing exactly the same vertices and edges from *pattern*
-    *
-    * @param config  existing configuration
-    * @param pattern pattern to use as template
-    * @return new graph
-    */
-   private static MainGraph createGraph(Configuration config, Pattern pattern) {
-      MainGraph graph = createGraph(config);
-      IntArrayList vertexLabels = new IntArrayList(pattern.getNumberOfVertices());
-
-      // add pattern vertices
-      for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
-         graph.addVertex(u);
-         vertexLabels.add(1);
-      }
-
-      // add pattern edges and edge labels
-      for (int e = 0; e < pattern.getNumberOfEdges(); ++e) {
-         PatternEdge pedge = pattern.getEdges().getu(e);
-         graph.addEdge(pedge.getSrcPos(), pedge.getDestPos(), e);
-         //graph.addEdgeLabel(e, pedge.getLabel()); // TODO: handle edge label
-         vertexLabels.set(pedge.getSrcPos(), pedge.getSrcLabel());
-         vertexLabels.set(pedge.getDestPos(), pedge.getDestLabel());
-      }
-
-      // add vertex labels
-      for (int u = 0; u < vertexLabels.size(); ++u) {
-         graph.addVertexLabel(u, vertexLabels.get(u));
-      }
-
-      return graph;
-   }
-
-   /**
-    * Creates an empty graph
-    *
-    * @param config existing configuration
-    * @return new graph
-    */
-   private static MainGraph createGraph(Configuration config) {
-      MainGraph graph = config.getOrCreateMainGraph();
-      config.setMainGraph(graph);
-      return graph;
-   }
-
-   /**
-    * Generates a single vertex unlabeled pattern
-    *
-    * @return new pattern
-    */
    public static Pattern singleVertexPattern() {
-      Configuration config = createConfig();
-      MainGraph graph = createGraph(config);
-      graph.addVertex(0);
-      VertexInducedSubgraph subgraph = (VertexInducedSubgraph) config.createSubgraph();
-      subgraph.addWord(0);
-      return subgraph.quickPattern();
+      Pattern pattern = configuration.createPattern();
+      pattern.addVertexStandalone();
+      return pattern;
    }
 
-   /**
-    * Generates a single vertex labeled pattern
-    *
-    * @return new pattern
-    */
    public static Pattern singleVertexPattern(int vertexLabel) {
-      Configuration config = createConfig();
-      MainGraph graph = createGraph(config);
-      graph.addVertex(0);
-      graph.addVertexLabel(0, vertexLabel);
-      VertexInducedSubgraph subgraph = (VertexInducedSubgraph) config.createSubgraph();
-      subgraph.addWord(0);
-      return subgraph.quickPattern();
+      Pattern pattern = configuration.createPattern();
+      pattern.addVertexStandalone(vertexLabel);
+      return pattern;
    }
 
-   /**
-    * Generates a single edge unlabeled pattern
-    *
-    * @return new pattern
-    */
    public static Pattern singleEdgePattern() {
-      Configuration config = createConfig();
-      config.setSubgraphClass(EdgeInducedSubgraph.class);
-      MainGraph graph = createGraph(config);
-      graph.addVertex(0);
-      graph.addVertex(1);
-      graph.addEdge(0, 1, graph.numEdges());
-      EdgeInducedSubgraph subgraph = (EdgeInducedSubgraph) config.createSubgraph();
-      subgraph.addWord(0);
-      return subgraph.quickPattern();
+      Pattern pattern = configuration.createPattern();
+      pattern.addVertexStandalone();
+      pattern.addVertexStandalone();
+      PatternEdge edge = PatternEdgePool.instance(false).createObject();
+      edge.setSrcPos(0);
+      edge.setSrcLabel(1);
+      edge.setDestPos(1);
+      edge.setDestLabel(1);
+      pattern.addEdgeStandalone(edge);
+      return pattern;
    }
 
    /**
@@ -286,7 +186,8 @@ public class PatternUtils {
     * @param pattern pattern to be modified in-place
     */
    public static void increasingPositions(Pattern pattern) {
-      if (pattern.getNumberOfVertices() == 1) return;
+      int numVertices = pattern.getNumberOfVertices();
+      if (numVertices == 1) return;
       IntIntMap labeling = IntIntMapPool.instance().createObject();
       int i, j, src, dst;
       PatternEdge pedge = null;
@@ -328,50 +229,25 @@ public class PatternUtils {
       pattern.relabel(labeling);
       pattern.getEdges().sort();
 
-      ///**
-      // * Maps the edges according to the new labeling
-      // */
-      //for (i = 0; i < pattern.getNumberOfEdges(); ++i) {
-      //   pedge = pattern.getEdges().get(i);
-      //   int newSrc = labeling.get(pedge.getSrcPos());
-      //   int newDst = labeling.get(pedge.getDestPos());
-      //   pedge.setSrcPos(newSrc);
-      //   pedge.setDestPos(newDst);
-      //   if (newSrc > newDst) pedge.invert();
-      //}
-
-      /**
-       * Pre-compute the symmetry breaking of this pattern
-       */
       LOG.debug("AfterReordering pattern=" + pattern + " labeling=" + labeling);
 
       IntIntMapPool.instance().reclaimObject(labeling);
    }
 
-   /**
-    * Add a vertex and its edges to *pattern*, returning the new pattern
-    *
-    * @param pattern the existing pattern
-    * @param sources the edge sources representing edges with the new vertex
-    * @return new pattern
-    */
    public static Pattern addVertex(Pattern pattern, int... sources) {
-      Configuration config = pattern.getConfig();
-      MainGraph graph = config.getMainGraph();
-      int numVertices = pattern.getNumberOfVertices();
-
-      graph.addVertex(numVertices);
+      boolean areEdgesLabeled = pattern.edgeLabeled();
+      PatternEdgePool edgePool = PatternEdgePool.instance(areEdgesLabeled);
+      Pattern newPattern = pattern.copy();
+      newPattern.addVertexStandalone();
+      int dst = pattern.getNumberOfVertices();
       for (int src : sources) {
-         if (src >= numVertices) {
-            throw new RuntimeException("Vertex source does not exists in pattern with " + numVertices + " vertices");
-         }
-         graph.addEdge(src, numVertices, graph.numEdges());
+         PatternEdge edge = edgePool.createObject();
+         edge.setSrcPos(src);
+         edge.setDestPos(dst);
+         newPattern.addEdgeStandalone(edge);
       }
 
-      VertexInducedSubgraph subgraph = (VertexInducedSubgraph) config.createSubgraph();
-      for (int u = 0; u < graph.numVertices(); ++u) subgraph.addWord(u);
-
-      return subgraph.quickPattern();
+      return newPattern;
    }
 
    public static ObjSet<Pattern> quickPatterns(Pattern pattern) {
@@ -451,5 +327,144 @@ public class PatternUtils {
 
          return quickPatterns;
 
+   }
+
+   public static Pattern fromFS(String patternDirPath) throws IOException {
+      Pattern pattern = configuration.createPattern();
+      FileSystem fs = FileSystem.get(new org.apache.hadoop.conf.Configuration());
+
+      // files
+      String metadataFilePath = patternDirPath + "/metadata";
+      String edgesFilePath = patternDirPath + "/edges";
+      String vlabelsFilePath = patternDirPath + "/vlabels";
+      String elabelsFilePath = patternDirPath + "/elabels";
+
+      Path hadoopPath;
+
+      // metadata
+      int numVertices, numEdges;
+      hadoopPath = new Path(metadataFilePath);
+      if (fs.exists(hadoopPath)) {
+         InputStream is = null;
+         try {
+            is = fs.open(hadoopPath);
+            TextFileParser stream = new TextFileParser(is);
+            numVertices = stream.nextInt();
+            numEdges = stream.nextInt();
+         } finally {
+            if (is != null) is.close();
+         }
+      } else {
+         throw new RuntimeException("Metadata file must exist.");
+      }
+
+      // vlabels
+      IntArrayList vlabels = new IntArrayList();
+      boolean hasVlabels;
+      hadoopPath = new Path(vlabelsFilePath);
+      if (fs.exists(hadoopPath)) {
+         hasVlabels = true;
+         InputStream is = null;
+         try {
+            is = fs.open(hadoopPath);
+            TextFileParser stream = new TextFileParser(is);
+            for (int u = 0; u < numVertices; ++u) {
+               while (!stream.skipNewLine()) {
+                  vlabels.add(stream.nextInt());
+               }
+            }
+         } finally {
+            if (is != null) is.close();
+         }
+
+         if (vlabels.size() != numVertices) {
+            throw new RuntimeException("Number of vertex labels differ.");
+         }
+
+      } else {
+         hasVlabels = false;
+      }
+
+      if (hasVlabels) {
+         for (int u = 0; u < numVertices; ++u) {
+            pattern.addVertexStandalone(vlabels.getu(u));
+         }
+      } else {
+         for (int u = 0; u < numVertices; ++u) {
+            pattern.addVertexStandalone();
+         }
+      }
+
+      // elabels
+      IntArrayList elabels = new IntArrayList();
+      boolean hasElabels;
+      hadoopPath = new Path(elabelsFilePath);
+      if (fs.exists(hadoopPath)) {
+         hasElabels = true;
+         InputStream is = null;
+         try {
+            is = fs.open(hadoopPath);
+            TextFileParser stream = new TextFileParser(is);
+            for (int e = 0; e < numEdges; ++e) {
+               while (!stream.skipNewLine()) {
+                  elabels.add(stream.nextInt());
+               }
+            }
+         } finally {
+            if (is != null) is.close();
+         }
+
+         if (elabels.size() != numEdges) {
+            throw new RuntimeException("Number of edge labels differ.");
+         }
+
+      } else {
+         hasElabels = false;
+      }
+
+      // edge list
+      hadoopPath = new Path(edgesFilePath);
+      if (fs.exists(hadoopPath)) {
+         InputStream is = null;
+         try {
+            is = fs.open(hadoopPath);
+            TextFileParser stream = new TextFileParser(is);
+            for (int e = 0; e < numEdges; ++e) {
+               while (!stream.skipNewLine()) {
+                  int src = stream.nextInt();
+                  int dst = stream.nextInt();
+
+                  if (src < 0 || dst >= numVertices
+                          || dst < 0 || dst >= numVertices) {
+                     throw new RuntimeException("Invalid edge: " + src + " " + dst);
+                  }
+
+                  PatternEdge edge =
+                          PatternEdgePool.instance(hasElabels).createObject();
+
+                  int srcLabel = hasVlabels ? vlabels.getu(src) : 1;
+                  int dstLabel = hasVlabels ? vlabels.getu(dst) : 1;
+                  edge.setSrcPos(src);
+                  edge.setDestPos(dst);
+                  edge.setSrcLabel(srcLabel);
+                  edge.setDestLabel(dstLabel);
+
+                  pattern.addEdgeStandalone(edge);
+               }
+            }
+         } finally {
+            if (is != null) is.close();
+         }
+      } else {
+         throw new RuntimeException("Missing edges file");
+      }
+
+      pattern.setVertexLabeled(hasVlabels);
+      pattern.setEdgeLabeled(hasElabels);
+      pattern.setInduced(false);
+
+      LOG.info(pattern + " " + vlabels + " " + elabels + " ");
+
+      return pattern;
    }
 }

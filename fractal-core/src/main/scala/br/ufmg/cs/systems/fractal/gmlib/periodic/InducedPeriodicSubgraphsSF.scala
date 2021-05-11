@@ -121,7 +121,7 @@ class InducedPeriodicSubgraphsSF(periodicThreshold: Int)
    (s: VertexInducedSubgraph, c: Computation[VertexInducedSubgraph])
    : Boolean = {
       if (s.getNumVertices == 1) return true
-      val graph = c.getConfig.getMainGraph[MainGraph[_,_]]
+      val graph = c.getConfig.getMainGraph
       periodicTime.clear()
       graph.forEachCommonEdgeLabels(s.getEdges, consumer)
       isPeriodic(periodicTime, periodicThreshold)

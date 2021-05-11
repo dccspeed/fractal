@@ -22,6 +22,7 @@ import com.koloboke.collect.set.hash.HashIntSets;
 import com.koloboke.collect.set.hash.HashObjSets;
 import org.apache.log4j.Logger;
 
+import javax.annotation.OverridingMethodsMustInvokeSuper;
 import java.io.*;
 import java.util.Iterator;
 
@@ -187,6 +188,22 @@ public abstract class BasicPattern implements Pattern {
       return pos;
    }
 
+   @Override
+   public void addVertexStandalone(int vlabel) {
+      int vertex = vertices.size();
+      vertices.add(vertex);
+
+      if (vertex == 0) {
+         firstVertexLabel = vlabel;
+      }
+   }
+
+   @Override
+   public void addVertexStandalone() {
+      int vertex = vertices.size();
+      vertices.add(vertex);
+   }
+
    /**
     * Can do incremental only if the last word is different.
     *
@@ -330,6 +347,7 @@ public abstract class BasicPattern implements Pattern {
       return addEdge(patternEdge);
    }
 
+   @Override
    public boolean addEdge(PatternEdge edge) {
       // TODO: Remove when we have directed edges
       if (edge.getSrcPos() > edge.getDestPos()) {
@@ -341,6 +359,20 @@ public abstract class BasicPattern implements Pattern {
       setDirty();
 
       return true;
+   }
+
+   @Override
+   public void addEdgeStandalone(PatternEdge edge) {
+      int numVertices = getNumberOfVertices();
+      int src = edge.getSrcPos();
+      if (src >= numVertices) throw new RuntimeException();
+
+      int dst = edge.getDestPos();
+      if (dst >= numVertices) throw new RuntimeException();
+
+      if (src > dst) edge.invert();
+
+      edges.add(edge);
    }
 
    @Override
@@ -646,6 +678,11 @@ public abstract class BasicPattern implements Pattern {
    @Override
    public void setVertexLabeled(boolean vertexLabeled) {
       this.vertexLabeled = vertexLabeled;
+   }
+
+   @Override
+   public void setEdgeLabeled(boolean edgeLabeled) {
+      this.edgeLabeled = edgeLabeled;
    }
 
    @Override
@@ -959,7 +996,6 @@ public abstract class BasicPattern implements Pattern {
       } else {
          dataOutput.writeBoolean(false);
       }
-
    }
 
    public void readFields(DataInput dataInput) throws IOException {

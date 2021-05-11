@@ -85,9 +85,6 @@ case class SparkConfiguration(confs: Map[String, Any])
       updateIfExists("ws_external", CONF_WS_EXTERNAL)
       updateIfExists("ws_external_batchsize", CONF_WS_EXTERNAL_BATCHSIZE)
 
-      // enumerator class
-      updateIfExists("subgraph_enumerator", CONF_ENUMERATOR_CLASS)
-
       // input
       updateIfExists("input_graph_class", CONF_MAINGRAPH_CLASS)
       updateIfExists("input_graph_path", CONF_MAINGRAPH_PATH)
@@ -97,83 +94,13 @@ case class SparkConfiguration(confs: Map[String, Any])
 
       // multigraph
       updateIfExists("multigraph", CONF_MAINGRAPH_MULTIGRAPH)
+
+      // edge filtering predicate
+      updateIfExists("edge_filtering_predicate", CONF_MAINGRAPH_EDGE_FILTERING_PREDICATE)
    }
 
-   var tagApplied = false
-
-   // todo: remove graph filter
    def initializeWithTag(isMaster: Boolean): Unit = synchronized {
       initialize(isMaster)
-      if (!tagApplied) {
-
-         val startTag = System.currentTimeMillis
-
-         val ret = (confs.get("vtag"), confs.get("etag")) match {
-            case (Some(vtag: AtomicBitSetArray), Some(
-            etag: AtomicBitSetArray)) =>
-               tagApplied = true
-               getMainGraph[MainGraph[_, _]].filter(vtag, etag)
-
-            case other =>
-               0
-         }
-
-         val elapsedTag = System.currentTimeMillis - startTag
-
-         if (ret > 0) {
-            logInfo(s"GraphTagging took ${elapsedTag} return=${ret}")
-         }
-
-         val startFilter = System.currentTimeMillis
-
-         //if (!confs.contains("vfilter")) {
-         getMainGraph[MainGraph[_, _]].undoVertexFilter()
-         //}
-
-         //if (!confs.contains("efilter")) {
-         getMainGraph[MainGraph[_, _]].undoEdgeFilter()
-         //}
-
-         def filterVertices[V, E](graph: MainGraph[V, E],
-                                  vpred: Predicate[_]): Int = {
-            graph.filterVertices(vpred.asInstanceOf[Predicate[Vertex[V]]])
-         }
-
-         val removedVertices = confs.get("vfilter") match {
-            case Some(vpred: Predicate[_]) =>
-               tagApplied = true
-               filterVertices(getMainGraph[MainGraph[_, _]], vpred)
-
-            case other =>
-               0
-         }
-
-         def filterEdges[V, E](graph: MainGraph[V, E],
-                               epred: Predicate[_]): Int = {
-            graph.filterEdges(epred.asInstanceOf[Predicate[Edge[E]]])
-         }
-
-         val removedEdges = confs.get("efilter") match {
-            case Some(epred: Predicate[_]) =>
-               tagApplied = true
-               filterEdges(getMainGraph[MainGraph[_, _]], epred)
-
-            case other =>
-               0
-         }
-
-         val elapsedFilter = System.currentTimeMillis - startFilter
-
-         if (removedVertices + removedEdges > 0) {
-            logInfo(s"GraphFiltering took ${elapsedFilter} ms" +
-               s" removedVertices=${removedVertices} " +
-               s"removedEdges=${removedEdges}")
-         }
-
-         if (ret + removedVertices + removedEdges > 0) {
-            getMainGraph[MainGraph[_, _]].afterGraphUpdate()
-         }
-      }
    }
 
    /**
@@ -197,7 +124,13 @@ case class SparkConfiguration(confs: Map[String, Any])
       }
 
       if (!isMaster && !isMainGraphRead()) {
-         setGraph()
+         //setGraph()
+         mainGraph.synchronized {
+            if (!isMainGraphRead) {
+               logInfo("MainGraph is empty, gonna try reading it")
+               readMainGraph()
+            }
+         }
       }
    }
 
@@ -213,7 +146,7 @@ case class SparkConfiguration(confs: Map[String, Any])
       // common configs
       setMainGraphClass(
          getClass(CONF_MAINGRAPH_CLASS, CONF_MAINGRAPH_CLASS_DEFAULT).
-            asInstanceOf[Class[_ <: MainGraph[_, _]]]
+            asInstanceOf[Class[_ <: MainGraph]]
       )
 
       setIsGraphEdgeLabeled(getBoolean(CONF_MAINGRAPH_EDGE_LABELED,
@@ -232,31 +165,15 @@ case class SparkConfiguration(confs: Map[String, Any])
             asInstanceOf[Class[_ <: Pattern]]
       )
 
-      setSubgraphEnumClass(
-         getClass(CONF_ENUMERATOR_CLASS, CONF_ENUMERATOR_CLASS_DEFAULT).
-            asInstanceOf[Class[_ <: SubgraphEnumerator[_]]]
-      )
-
       isGraphMulti = getBoolean(CONF_MAINGRAPH_MULTIGRAPH,
          CONF_MAINGRAPH_MULTIGRAPH_DEFAULT)
 
+      setEdgeFilteringPredicate(
+         getValue(CONF_MAINGRAPH_EDGE_FILTERING_PREDICATE, null)
+            .asInstanceOf[EdgeFilteringPredicate]
+      )
+
       initialized = true
-   }
-
-   private def setGraph(): Boolean = {
-      var graphRead = false
-
-      // in case of the mainGraph is empty (no vertices and no edges), we try to
-      // read it
-      getMainGraph[MainGraph[_, _]].synchronized {
-         if (!isMainGraphRead) {
-            logInfo("MainGraph is empty, gonna try reading it")
-            readMainGraph()
-            graphRead = true
-         }
-      }
-
-      graphRead
    }
 
    def getValue(key: String, defaultValue: Any): Any = confs.get(key) match {

@@ -1,25 +1,19 @@
 package br.ufmg.cs.systems.fractal
 
-import java.net.InetAddress
-import java.nio.file.Paths
-import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.IntConsumer
 
 import br.ufmg.cs.systems.fractal.computation._
-import br.ufmg.cs.systems.fractal.conf.Configuration.CONF_MASTER_HOSTNAME
-import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
+import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplications
-import br.ufmg.cs.systems.fractal.graph.{BasicMainGraph, UnlabeledMainGraph}
+import br.ufmg.cs.systems.fractal.graph.EdgeFilteringPredicate
 import br.ufmg.cs.systems.fractal.pattern._
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util._
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
-import org.apache.hadoop.fs.Path
 
 //import scala.collection.mutable.Map
 import scala.reflect.ClassTag
-import scala.reflect.classTag
 
 /**
  * Graph used as starting point of Fractal application workflows
@@ -35,7 +29,8 @@ case class FractalGraph
  local: Boolean,
  fc: FractalContext,
  confs: Map[String, Any],
- logLevel: String) extends Logging {
+ logLevel: String,
+ edgePredicate: EdgeFilteringPredicate) extends Logging {
 
    private val config: SparkConfiguration = {
       val _config = new SparkConfiguration
@@ -53,6 +48,10 @@ case class FractalGraph
          fractalContext.sparkContext.defaultParallelism).intValue()
 
       _config.set("num_partitions", numPartitions)
+
+      if (edgePredicate != null) {
+         _config.set("edge_filtering_predicate", edgePredicate)
+      }
 
       _config
    }
@@ -74,42 +73,15 @@ case class FractalGraph
       newFractoid[PatternInducedSubgraph]
    }
 
-   def asPattern: Pattern = {
-      val computation: Computation[EdgeInducedSubgraph] =
-          new EComputationContainer()
-      val config = new SparkConfiguration
-      config.set ("input_graph_path", path)
-      config.set ("input_graph_local", local)
-      config.set ("input_graph_class", "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
-      config.setSubgraphClass(computation.getSubgraphClass())
-      config.initialize(isMaster = false)
-      val subgraph = config.createSubgraph[EdgeInducedSubgraph]
-
-      val graph = config.getMainGraph[BasicMainGraph[_,_]]
-      graph.forEachEdge(new IntConsumer {
-         override def accept(e: Int): Unit = subgraph.addWord(e)
-      })
-
-      val pattern = config.createPattern().asInstanceOf[BasicPattern]
-      pattern.setSubgraph(subgraph)
-
-      pattern
-   }
-
    def fractalContext: FractalContext = fc
 
-   def this(path: String, fc: FractalContext) = {
-      this (path, Configuration.CONF_MAINGRAPH_CLASS_DEFAULT,
-         false, fc, Map.empty, "warn")
-   }
-
    def this(path: String, fc: FractalContext, graphClass: String) = {
-      this (path, graphClass, false, fc, Map.empty, "warn")
+      this (path, graphClass, false, fc, Map.empty, "warn", null)
    }
 
    def this(path: String, graphClass: String,
             fc: FractalContext, logLevel: String) = {
-      this (path, graphClass, false, fc, Map.empty, logLevel)
+      this (path, graphClass, false, fc, Map.empty, logLevel, null)
    }
 
    private def newFractoid[S <: Subgraph : ClassTag]: Fractoid[S] = {
@@ -162,6 +134,34 @@ case class FractalGraph
 
    def set(key: String, value: Any): FractalGraph = {
       this.copy(confs = confs.updated(key, value))
+   }
+
+   def filterEdges
+   (edgeFilterFunc: (Int,IntArrayList,Int,IntArrayList,Int,IntArrayList) => Boolean)
+   : FractalGraph
+   = {
+      val currEdgePredicate = edgePredicate
+
+      val newEdgePredicate = if (currEdgePredicate == null) {
+         new EdgeFilteringPredicate {
+            override def test(u: Int, uLabels: IntArrayList,
+                              v: Int, vLabels: IntArrayList,
+                              e: Int, eLabels: IntArrayList): Boolean = {
+               edgeFilterFunc(u, uLabels, v, vLabels, e, eLabels)
+            }
+         }
+      } else {
+         new EdgeFilteringPredicate {
+            override def test(u: Int, uLabels: IntArrayList,
+                              v: Int, vLabels: IntArrayList,
+                              e: Int, eLabels: IntArrayList): Boolean = {
+               currEdgePredicate.test(u, uLabels, v, vLabels, e, eLabels) &&
+                  edgeFilterFunc(u, uLabels, v, vLabels, e, eLabels)
+            }
+         }
+      }
+
+      this.copy(edgePredicate = newEdgePredicate)
    }
 
    override def toString(): String = s"FractalGraph(${path})"

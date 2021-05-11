@@ -14,6 +14,10 @@ public interface Pattern extends Externalizable {
 
    int getFirstVertexLabel();
 
+   void addVertexStandalone(int vlabel);
+
+   void addVertexStandalone();
+
    void init(Configuration config);
 
    void removeLastNEdges(int n);
@@ -34,7 +38,9 @@ public interface Pattern extends Externalizable {
 
     boolean addEdge(PatternEdge patternEdge);
 
-    int getNumberOfEdges();
+   void addEdgeStandalone(PatternEdge edge);
+
+   int getNumberOfEdges();
 
     boolean relabel(IntIntMap labeling);
 
@@ -77,6 +83,8 @@ public interface Pattern extends Externalizable {
    boolean edgeLabeled();
 
    void setVertexLabeled(boolean vertexLabeled);
+
+   void setEdgeLabeled(boolean edgeLabeled);
 
    Configuration getConfig();
 

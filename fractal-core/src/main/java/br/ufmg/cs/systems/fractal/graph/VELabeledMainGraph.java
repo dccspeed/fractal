@@ -4,14 +4,12 @@ import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.*;
-import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntSetPool;
 import com.koloboke.collect.IntCollection;
 import com.koloboke.collect.set.IntSet;
-import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.RemoteIterator;
@@ -22,11 +20,10 @@ import java.io.InputStream;
 import java.io.SequenceInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntConsumer;
-import java.util.function.Predicate;
 
 public class VELabeledMainGraph implements MainGraph {
    private static final Logger LOG = Logger.getLogger(VELabeledMainGraph.class);
@@ -45,6 +42,7 @@ public class VELabeledMainGraph implements MainGraph {
 
    /* Succinct graph representation */
    protected int numEdges;
+   protected int numValidEdges;
    protected int numVertices;
    protected IntArrayList vertexNeighborhoodIdx;
    protected IntArrayList vertexNeighborhoods; // by default, sorted
@@ -61,36 +59,13 @@ public class VELabeledMainGraph implements MainGraph {
    /* Auxiliary */
    protected IntArrayListPool intArrayListPool;
 
+   /* Filtering */
+   protected EdgeFilteringPredicate edgePredicate;
+   protected IntArrayListView uLabelsView;
+   protected IntArrayListView vLabelsView;
+   protected IntArrayListView eLabelsView;
+
    public VELabeledMainGraph() {
-   }
-
-   public VELabeledMainGraph(String name) {
-      this(name, false, false);
-   }
-
-   public VELabeledMainGraph(String name, boolean isEdgeLabelled,
-                             boolean isMultiGraph) {
-      init(name, isEdgeLabelled, isMultiGraph);
-   }
-
-   private void init(String name, boolean isEdgeLabelled,
-                     boolean isMultiGraph) {
-   }
-
-   public VELabeledMainGraph(Path filePath, boolean isEdgeLabelled,
-                             boolean isMultiGraph) throws IOException {
-      this(filePath.getFileName().toString(), isEdgeLabelled, isMultiGraph);
-   }
-
-   public VELabeledMainGraph(org.apache.hadoop.fs.Path hdfsPath,
-                             boolean isEdgeLabelled, boolean isMultiGraph)
-           throws IOException {
-      this(hdfsPath.getName(), isEdgeLabelled, isMultiGraph);
-   }
-
-   @Override
-   public MainGraph addEdge(Edge edge) {
-      throw new UnsupportedOperationException();
    }
 
    @Override
@@ -109,11 +84,6 @@ public class VELabeledMainGraph implements MainGraph {
    }
 
    @Override
-   public MainGraph addVertex(Vertex vertex) {
-      throw new UnsupportedOperationException();
-   }
-
-   @Override
    public void addVertex(int u) {
       vertexNeighborhoodIdx.add(vertexNeighborhoods.size());
    }
@@ -121,21 +91,6 @@ public class VELabeledMainGraph implements MainGraph {
    @Override
    public void addVertexLabel(int u, int label) {
       vertexLabels.add(label);
-   }
-
-   @Override
-   public void afterGraphUpdate() {
-      throw new UnsupportedOperationException();
-   }
-
-   @Override
-   public boolean containsEdge(int e) {
-      return e < numEdges;
-   }
-
-   @Override
-   public boolean containsVertex(int u) {
-      return u < numVertices;
    }
 
    @Override
@@ -151,21 +106,6 @@ public class VELabeledMainGraph implements MainGraph {
    @Override
    public int edgeSrc(int e) {
       return edgeSrcs.get(e);
-   }
-
-   @Override
-   public int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag) {
-      throw new UnsupportedOperationException();
-   }
-
-   @Override
-   public int filterEdges(Predicate epred) {
-      throw new UnsupportedOperationException();
-   }
-
-   @Override
-   public int filterVertices(Predicate vpred) {
-      throw new UnsupportedOperationException();
    }
 
    @Override
@@ -254,16 +194,6 @@ public class VELabeledMainGraph implements MainGraph {
       } else {
          forEachEdgeId(v, u, startIdxv, endIdxv, consumer);
       }
-   }
-
-   @Override
-   public Edge getEdge(int edgeId) {
-      throw new UnsupportedOperationException();
-   }
-
-   @Override
-   public int getId() {
-      return id;
    }
 
    @Override
@@ -507,31 +437,6 @@ public class VELabeledMainGraph implements MainGraph {
    }
 
    @Override
-   public Vertex getVertex(int vertexId) {
-      throw new UnsupportedOperationException();
-   }
-
-   @Override
-   public VertexNeighbourhood getVertexNeighbourhood(int vertexId) {
-      throw new UnsupportedOperationException();
-   }
-
-   @Override
-   public IntCollection getVertexNeighbours(int vertexId) {
-      throw new UnsupportedOperationException();
-   }
-
-   @Override
-   public boolean isEdgeLabelled() {
-      throw new UnsupportedOperationException();
-   }
-
-   @Override
-   public boolean isMultiGraph() {
-      throw new UnsupportedOperationException();
-   }
-
-   @Override
    public void validExtensionsEdgeInduced(Computation computation,
                                           Subgraph subgraph,
                                           IntCollection validExtensions) {
@@ -673,18 +578,13 @@ public class VELabeledMainGraph implements MainGraph {
    }
 
    @Override
+   public int numValidEdges() {
+      return numValidEdges;
+   }
+
+   @Override
    public int numVertices() {
       return numVertices;
-   }
-
-   @Override
-   public int undoEdgeFilter() {
-      return 0;
-   }
-
-   @Override
-   public int undoVertexFilter() {
-      return 0;
    }
 
    @Override
@@ -715,20 +615,66 @@ public class VELabeledMainGraph implements MainGraph {
       }
    }
 
-   public void init(Object path) throws IOException {
+   @Override
+   public void init(Configuration configuration) throws IOException {
       intArrayListPool = IntArrayListPool.instance();
-
+      edgePredicate = configuration.getEdgeFilteringPredicate();
       long start = System.currentTimeMillis();
 
-      if (path instanceof Path) {
-         Path filePath = (Path) path;
-         readFromFile(filePath);
-      } else if (path instanceof org.apache.hadoop.fs.Path) {
-         org.apache.hadoop.fs.Path hadoopPath =
-                 (org.apache.hadoop.fs.Path) path;
-         readFromHdfs(hadoopPath);
+      boolean useLocalGraph = configuration.isLocalGraph();
+      String graphPath = configuration.getMainGraphPath();
+      String metadataGraphPath = graphPath + "/metadata";
+      String vlabelsGraphPath = graphPath + "/vlabels";
+      String elabelsGraphPath = graphPath + "/elabels";
+      String adjListsGraphPath = graphPath + "/adjlists";
+
+      if (useLocalGraph) {
+         Path graphFilePath = Paths.get(graphPath);
+         readFromFile(graphFilePath);
       } else {
-         throw new RuntimeException("Invalid path: " + path);
+         //org.apache.hadoop.fs.Path hadoopPath =
+         //        new org.apache.hadoop.fs.Path(graphPath);
+         //InputStream is = readFromHdfs(hadoopPath);
+         //readFromInputStream(is);
+
+         org.apache.hadoop.fs.Path metadataHadoopPath;
+         org.apache.hadoop.fs.Path vlabelsHadoopPath;
+         org.apache.hadoop.fs.Path elabelsHadoopPath;
+         org.apache.hadoop.fs.Path adjListsHadoopPath;
+
+         InputStream metadataIs = null;
+         InputStream vlabelsIs = null;
+         InputStream elabelsIs = null;
+         InputStream adjListsIs = null;
+
+         try {
+            metadataHadoopPath =
+                    new org.apache.hadoop.fs.Path(metadataGraphPath);
+            metadataIs = getInputStream(metadataHadoopPath);
+            readMetadataFromInputStream(metadataIs);
+
+            vlabelsHadoopPath =
+                    new org.apache.hadoop.fs.Path(vlabelsGraphPath);
+            vlabelsIs = getInputStream(vlabelsHadoopPath);
+            readVertexLabelsFromInputStream(vlabelsIs);
+
+            elabelsHadoopPath =
+                    new org.apache.hadoop.fs.Path(elabelsGraphPath);
+            elabelsIs = getInputStream(elabelsHadoopPath);
+            readEdgeLabelsFromInputStream(elabelsIs);
+
+            adjListsHadoopPath =
+                    new org.apache.hadoop.fs.Path(adjListsGraphPath);
+            adjListsIs = getInputStream(adjListsHadoopPath);
+            readAdjacencyListsFromInputStream(adjListsIs);
+
+         } finally {
+            if (metadataIs != null) metadataIs.close();
+            if (vlabelsIs != null) vlabelsIs.close();
+            if (elabelsIs != null) elabelsIs.close();
+            if (adjListsIs != null) adjListsIs.close();
+         }
+
       }
 
       LOG.info("vertexNeighborhoodIdx " + vertexNeighborhoodIdx.size());
@@ -745,20 +691,19 @@ public class VELabeledMainGraph implements MainGraph {
       LOG.info("GraphReading took " + elapsed + " ms");
    }
 
-   public void initProperties(Object path) throws IOException {
-
-   }
-
    protected void readFromFile(Path filePath) throws IOException {
       InputStream is = Files.newInputStream(filePath);
       readFromInputStream(is);
       is.close();
    }
 
-   protected void readFromHdfs(org.apache.hadoop.fs.Path hdfsPath)
+   protected InputStream getInputStream(org.apache.hadoop.fs.Path hdfsPath)
            throws IOException {
+
       FileSystem fs =
               FileSystem.get(new org.apache.hadoop.conf.Configuration());
+
+      if (!fs.exists(hdfsPath)) return null;
 
       InputStream is = null;
 
@@ -812,9 +757,122 @@ public class VELabeledMainGraph implements MainGraph {
          }
       }
 
-      readFromInputStream(is);
-      is.close();
+      return is;
    }
+
+   private void readMetadataFromInputStream(InputStream is) {
+      LOG.info("Reading metadata from input stream: " + is);
+      try {
+         TextFileParser stream = new TextFileParser(is);
+
+         numVertices = stream.nextInt();
+         numEdges = stream.nextInt();
+         numValidEdges = 0;
+
+         vertexNeighborhoodIdx = new IntArrayList(numVertices + 1);
+         vertexNeighborhoods = new IntArrayList(numEdges * 2);
+         edgeNeighborhoods = new IntArrayList(numEdges * 2);
+         edgeSrcs = new IntArrayList(numEdges);
+         edgeDsts = new IntArrayList(numEdges);
+
+         vertexLabelsIdx = new IntArrayList(numVertices + 1);
+         vertexLabels = new IntArrayList(numVertices); // at least
+
+         edgeLabelsIdx = new IntArrayList(numEdges + 1);
+         edgeLabels = new IntArrayList(numEdges); // at least
+
+         uLabelsView = new IntArrayListView();
+         vLabelsView = new IntArrayListView();
+         eLabelsView = new IntArrayListView();
+
+      } catch (IOException e) {
+         throw new RuntimeException(e);
+      }
+   }
+
+   private void readAdjacencyListsFromInputStream(InputStream is) {
+      LOG.info("Reading adjacency lists from input stream: " + is);
+      try {
+         TextFileParser stream = new TextFileParser(is);
+         int u, v, e;
+         for (u = 0; u < numVertices; ++u) {
+            addVertex(u);
+
+            int n = 0;
+
+            while (!stream.skipNewLine()) {
+               ++n;
+               // read neighbor v
+               v = stream.nextInt();
+               // read edge id of neighbor v
+               if (stream.read() != ',') {
+                  throw new RuntimeException("Invalid format, expecting edge " +
+                          "id after neighbor id");
+               }
+
+               e = stream.nextInt();
+               addEdge(u, v, e);
+
+               if (!isEdgeValid(u, v, e)) {
+                  vertexNeighborhoods.removeLast();
+                  edgeNeighborhoods.removeLast();
+               }
+            }
+         }
+
+         // for convenience
+         vertexNeighborhoodIdx.add(vertexNeighborhoods.size());
+
+      } catch (IOException e) {
+         throw new RuntimeException(e);
+      }
+   }
+
+   private void readVertexLabelsFromInputStream(InputStream is) {
+      LOG.info("Reading vertex labels from input stream: " + is);
+      try {
+         TextFileParser stream = new TextFileParser(is);
+         int u, ulabel;
+         for (u = 0; u < numVertices; ++u) {
+            // read labels of vertex u
+            vertexLabelsIdx.add(vertexLabels.size());
+            while (!stream.skipNewLine()) {
+               ulabel = stream.nextInt();
+               addVertexLabel(u, ulabel);
+            }
+         }
+
+         // for convenience
+         vertexLabelsIdx.add(vertexLabels.size());
+
+      } catch (IOException e) {
+         throw new RuntimeException(e);
+      }
+   }
+
+   private void readEdgeLabelsFromInputStream(InputStream is) {
+      LOG.info("Reading edge labels from input stream: " + is);
+      try {
+         TextFileParser stream = new TextFileParser(is);
+         int e, elabel;
+
+         for (e = 0; e < numEdges; ++e) {
+            edgeLabelsIdx.add(edgeLabels.size());
+            do {
+               elabel = stream.nextInt();
+               addEdgeLabel(e, elabel);
+            } while (stream.read() == ',');
+         }
+
+         // for convenience
+         edgeLabelsIdx.add(edgeLabels.size());
+
+      } catch (IOException e) {
+         throw new RuntimeException(e);
+      }
+   }
+
+
 
    private void readFromInputStream(InputStream is) {
       LOG.info("Reading from input stream: " + is);
@@ -825,6 +883,7 @@ public class VELabeledMainGraph implements MainGraph {
 
          numVertices = stream.nextInt();
          numEdges = stream.nextInt();
+         numValidEdges = 0;
 
          vertexNeighborhoodIdx = new IntArrayList(numVertices + 1);
          vertexNeighborhoods = new IntArrayList(numEdges * 2);
@@ -856,6 +915,7 @@ public class VELabeledMainGraph implements MainGraph {
                   throw new RuntimeException("Invalid format, expecting edge " +
                           "id after neighbor id");
                }
+
                e = stream.nextInt();
                addEdge(u, v, e);
 
@@ -875,6 +935,12 @@ public class VELabeledMainGraph implements MainGraph {
                if (u < v && !edgeHasLabel) {
                   addEdgeLabel(e, 1);
                }
+
+               if (!isEdgeValid(u, v, e)) {
+                  // fix
+                  vertexNeighborhoods.removeLast();
+                  edgeNeighborhoods.removeLast();
+               }
             }
          }
 
@@ -886,6 +952,26 @@ public class VELabeledMainGraph implements MainGraph {
       } catch (IOException e) {
          throw new RuntimeException(e);
       }
+   }
+
+   @Override
+   public boolean isEdgeValid(int e) {
+      return isEdgeValid(edgeSrcs.getu(e), edgeDsts.getu(e), e);
+   }
+
+   private boolean isEdgeValid(int u, int v, int e) {
+      if (edgePredicate == null) return true;
+
+      uLabelsView.set(vertexLabels, vertexLabelsIdx.getu(u),
+              vertexLabelsIdx.getu(u + 1));
+      vLabelsView.set(vertexLabels, vertexLabelsIdx.getu(v),
+              vertexLabelsIdx.getu(v + 1));
+      eLabelsView.set(edgeLabels, edgeLabelsIdx.getu(e),
+              edgeLabelsIdx.getu(e + 1));
+
+      LOG.info(uLabelsView + " " + vLabelsView + " " + eLabelsView);
+
+      return edgePredicate.test(u, uLabelsView, v, vLabelsView, e, eLabelsView);
    }
 
    private class DefaultEdgePredicate extends EdgePredicate {

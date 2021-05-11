@@ -32,6 +32,7 @@ fsms="${fsms}|fsm_pf_mcvc"
 gqueryings="pattern_matching_pf_mcvc"
 gqueryings="${gqueryings}|pattern_matching_pf"
 gqueryings="${gqueryings}|pattern_matching_induced_pf"
+gqueryings="${gqueryings}|pattern_matching_induced_pf_mcvc"
 gqueryings="${gqueryings}|pattern_matching_sample_pf"
 gqueryings="${gqueryings}|pattern_matching_induced_sample_pf"
 
@@ -282,6 +283,16 @@ ALGOPTION for '$app':
 	;;
 
 	pattern_matching_induced_pf)
+	required="inputgraph steps query"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
+	;;
+
+	pattern_matching_induced_pf_mcvc)
 	required="inputgraph steps query"
         appusage="
 

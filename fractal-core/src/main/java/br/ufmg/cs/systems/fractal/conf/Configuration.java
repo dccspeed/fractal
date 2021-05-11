@@ -1,21 +1,16 @@
 package br.ufmg.cs.systems.fractal.conf;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
-import br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator;
+import br.ufmg.cs.systems.fractal.graph.EdgeFilteringPredicate;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.graph.MainGraphStore;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.ReflectionSerializationUtils;
-import org.apache.hadoop.fs.Path;
 import org.apache.log4j.Logger;
 
 import java.io.IOException;
 import java.io.Serializable;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.nio.file.Paths;
 
 public class Configuration implements Serializable {
    private static final Logger LOG = Logger.getLogger(Configuration.class);
@@ -54,10 +49,6 @@ public class Configuration implements Serializable {
    public static final String CONF_PATTERN_CLASS = "fractal.pattern.class";
    public static final String CONF_PATTERN_CLASS_DEFAULT =
            "br.ufmg.cs.systems.fractal.pattern.JBlissPattern";
-   public static final String CONF_ENUMERATOR_CLASS =
-           "fractal.enumerator.class";
-   public static final String CONF_ENUMERATOR_CLASS_DEFAULT =
-           "br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator";
    public static final String CONF_WS_EXTERNAL_BATCHSIZE =
            "fractal.ws.external.batchsize";
    public static final int CONF_WS_EXTERNAL_BATCHSIZE_DEFAULT = 10;
@@ -65,6 +56,8 @@ public class Configuration implements Serializable {
    public static final boolean CONF_WS_MODE_INTERNAL_DEFAULT = true;
    public static final String CONF_WS_EXTERNAL = "fractal.ws.mode.external";
    public static final boolean CONF_WS_MODE_EXTERNAL_DEFAULT = true;
+   public static final String CONF_MAINGRAPH_EDGE_FILTERING_PREDICATE =
+           "fractal.maingraph.edge.filtering.predicate";
    protected transient long infoPeriod;
    protected transient MainGraph mainGraph;
    protected transient boolean initialized = false;
@@ -73,9 +66,9 @@ public class Configuration implements Serializable {
    private transient Class<? extends Pattern> patternClass;
    private transient Class<? extends Computation> computationClass;
    private transient Class<? extends Subgraph> subgraphClass;
-   private transient Class<? extends SubgraphEnumerator> subgraphEnumClass;
    private transient boolean isGraphEdgeLabeled;
    private transient boolean isGraphVertexLabeled;
+   private transient EdgeFilteringPredicate edgePredicate;
 
    public Configuration() {
    }
@@ -85,20 +78,7 @@ public class Configuration implements Serializable {
    }
 
    private MainGraph createMainGraph() {
-      String path = getMainGraphPath();
-      LOG.info(mainGraphClass);
-      MainGraph graph;
-      try {
-         Constructor<? extends MainGraph> constructor;
-         constructor = mainGraphClass
-                 .getConstructor(String.class, boolean.class, boolean.class);
-         graph = constructor
-                 .newInstance(path, isGraphEdgeLabeled, isGraphMulti);
-      } catch (NoSuchMethodException | IllegalAccessException | InstantiationException | InvocationTargetException e) {
-         throw new RuntimeException("Could not create main graph", e);
-      }
-
-      return graph;
+      return ReflectionSerializationUtils.newInstance(mainGraphClass);
    }
 
    public Pattern createPattern() {
@@ -163,20 +143,12 @@ public class Configuration implements Serializable {
       return getString(CONF_MAINGRAPH_PATH, CONF_MAINGRAPH_PATH_DEFAULT);
    }
 
-   public String getMainGraphPropertiesPath() {
-      return getMainGraphPath() + ".prop";
-   }
-
    public String getMasterHostname() {
       return getString(CONF_MASTER_HOSTNAME, CONF_MASTER_HOSTNAME_DEFAULT);
    }
 
    public int getNumEdges() {
       return getMainGraph().numEdges();
-   }
-
-   public int getNumVertices() {
-      return getMainGraph().numVertices();
    }
 
    public Class<? extends Subgraph> getSubgraphClass() {
@@ -187,8 +159,8 @@ public class Configuration implements Serializable {
       this.subgraphClass = SubgraphClass;
    }
 
-   public <G extends MainGraph> G getMainGraph() {
-      return (G) mainGraph;
+   public MainGraph getMainGraph() {
+      return mainGraph;
    }
 
    public <G extends MainGraph> void setMainGraph(G mainGraph) {
@@ -202,7 +174,8 @@ public class Configuration implements Serializable {
    }
 
    public MainGraph getOrCreateMainGraph() {
-      String path = getMainGraphPath();
+      //String path = getMainGraphPath();
+      String path = getMainGraphKey();
       MainGraph graph;
 
       if (path == null) {
@@ -239,6 +212,10 @@ public class Configuration implements Serializable {
       throw new UnsupportedOperationException();
    }
 
+   public boolean isGraphMulti() {
+      return isGraphMulti;
+   }
+
    public boolean isGraphEdgeLabeled() {
       return isGraphEdgeLabeled;
    }
@@ -260,43 +237,15 @@ public class Configuration implements Serializable {
       return defaultValue;
    }
 
-   protected void readMainGraph() {
-      boolean useLocalGraph =
-              getBoolean(CONF_MAINGRAPH_LOCAL, CONF_MAINGRAPH_LOCAL_DEFAULT);
+   public boolean isLocalGraph() {
+      return getBoolean(CONF_MAINGRAPH_LOCAL, CONF_MAINGRAPH_LOCAL_DEFAULT);
+   }
 
-      // maybe read properties
+   public void readMainGraph() {
       try {
-         Method initProperties =
-                 mainGraphClass.getMethod("initProperties", Object.class);
-
-         if (useLocalGraph) {
-            initProperties
-                    .invoke(mainGraph, Paths.get(getMainGraphPropertiesPath()));
-         } else {
-            initProperties
-                    .invoke(mainGraph, new Path(getMainGraphPropertiesPath()));
-         }
-      } catch (NoSuchMethodException | IllegalAccessException e) {
-         throw new RuntimeException("Could not read graph properties", e);
-      } catch (InvocationTargetException e) {
-         if (e.getTargetException() instanceof IOException) {
-            LOG.info("Graph properties file not found: " +
-                    getMainGraphPropertiesPath());
-         } else {
-            throw new RuntimeException("Could not read graph properties", e);
-         }
-      }
-
-      try {
-         Method init = mainGraphClass.getMethod("init", Object.class);
-
-         if (useLocalGraph) {
-            init.invoke(mainGraph, Paths.get(getMainGraphPath()));
-         } else {
-            init.invoke(mainGraph, new Path(getMainGraphPath()));
-         }
-      } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException e) {
-         throw new RuntimeException("Could not read main graph", e);
+         mainGraph.init(this);
+      } catch (IOException e) {
+         throw new RuntimeException(e);
       }
    }
 
@@ -317,11 +266,6 @@ public class Configuration implements Serializable {
       mainGraphClass = graphClass;
    }
 
-   public void setSubgraphEnumClass(
-           Class<? extends SubgraphEnumerator> subgraphEnumClass) {
-      this.subgraphEnumClass = subgraphEnumClass;
-   }
-
    public boolean wsEnabled() {
       return internalWsEnabled() || externalWsEnabled();
    }
@@ -337,6 +281,23 @@ public class Configuration implements Serializable {
    public boolean collectThreadStats() {
       return getBoolean(
               CONF_COLLECT_THREAD_STATS, CONF_COLLECT_THREAD_STATS_DEFAULT);
+   }
+
+   public EdgeFilteringPredicate getEdgeFilteringPredicate() {
+      return edgePredicate;
+   }
+
+   public void setEdgeFilteringPredicate(EdgeFilteringPredicate edgePredicate) {
+      this.edgePredicate = edgePredicate;
+   }
+
+   private String getMainGraphKey() {
+      String mainGraphPath = getMainGraphPath();
+      if (mainGraphPath == null) return null;
+      EdgeFilteringPredicate edgePredicate = getEdgeFilteringPredicate();
+      String mainGraphClassStr = mainGraphClass.getName();
+      if (edgePredicate == null) return mainGraphPath + "-" + mainGraphClassStr;
+      else return mainGraphPath + "-" + mainGraphClassStr + "-" + edgePredicate.getId();
    }
 }
 

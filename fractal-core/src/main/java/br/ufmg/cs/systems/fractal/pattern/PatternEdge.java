@@ -1,8 +1,6 @@
 package br.ufmg.cs.systems.fractal.pattern;
 
-import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import br.ufmg.cs.systems.fractal.graph.Vertex;
 
 import java.io.*;
 

@@ -120,6 +120,15 @@ public final class IntArrayListView extends IntArrayList{
    }
 
    @Override
+   public boolean contains(int elem) {
+      for (int i = offset; i < offset + numElements; ++i) {
+         if (backingArray[i] == elem) return true;
+      }
+
+      return false;
+   }
+
+   @Override
    public String toString() {
       return "view" + super.toString();
    }

@@ -21,30 +21,39 @@ public class VertexInducedPatternducedSubgraphConverter
    @Override
    public void apply(VertexInducedSubgraph subgraph,
                      Computation<VertexInducedSubgraph> computation) {
-      int numVertices = subgraph.getNumVertices();
+      IntArrayList vertices = subgraph.getVertices();
+      int numVertices = vertices.size();
       int target1 = 0;
       int target2 = 1;
       verticesBackup.clear();
-      verticesBackup.addAll(subgraph.getVertices());
-      int aux1 = verticesBackup.getu(target1);
-      int aux2 = verticesBackup.getu(target2);
+      verticesBackup.addAll(vertices);
       for (int i = 0; i < numVertices; ++i) {
-         int v1 = verticesBackup.getu(i);
          for (int j = i + 1; j < numVertices; ++j) {
-            int v2 = verticesBackup.getu(j);
-
-            verticesBackup.setu(target1, v1);
-            verticesBackup.setu(target2, v2);
-            verticesBackup.setu(i, aux1);
-            verticesBackup.setu(j, aux2);
+            //verticesBackup.swap(target1, i);
+            //verticesBackup.swap(target2, j);
+            verticesBackup.setu(target1, vertices.getu(i));
+            verticesBackup.setu(target2, vertices.getu(j));
+            verticesBackup.setu(i, vertices.getu(target1));
+            verticesBackup.setu(j, vertices.getu(target2));
 
             convert(subgraph, computation, nextSubgraph, nextComputation);
             nextEngine.initialWorkCompute();
 
-            verticesBackup.setu(i, v1);
-            verticesBackup.setu(j, v2);
-            verticesBackup.setu(target1, aux1);
-            verticesBackup.setu(target2, aux2);
+            //verticesBackup.swap(target1, i);
+            //verticesBackup.swap(target2, j);
+
+            verticesBackup.setu(target1, vertices.getu(target1));
+            verticesBackup.setu(target2, vertices.getu(target2));
+            verticesBackup.setu(i, vertices.getu(i));
+            verticesBackup.setu(j, vertices.getu(j));
+
+
+            verticesBackup.clear();
+            verticesBackup.addAll(vertices);
+
+            //if (!subgraph.getVertices().equals(verticesBackup)) {
+            //   throw new RuntimeException();
+            //}
          }
       }
       //convert(subgraph, computation, nextSubgraph, nextComputation);

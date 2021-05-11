@@ -1,6 +1,7 @@
 package br.ufmg.cs.systems.fractal
 
 import br.ufmg.cs.systems.fractal.computation.SamplingEnumerator
+import br.ufmg.cs.systems.fractal.pattern.PatternUtils
 import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.Logging
 import br.ufmg.cs.systems.fractal.util.ScalaFractalFuncs.CustomSubgraphCallback
@@ -101,15 +102,19 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       sc.setLogLevel(logLevel)
       fc = new FractalContext(sc, logLevel)
 
-      cubeGraph = fc.textFile("../data/cube.sc",
+      cubeGraph = fc.textFile(
+         //"../data/cube.sc",
+         "../data/cube",
          graphClass = "br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph")
 
       citeseerSingleLabelGraph = fc.textFile(
-         "../data/citeseer-single-label.sc",
-         graphClass = "br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph")
+         //"../data/citeseer-single-label.sc",
+         "../data/citeseer",
+         graphClass = "br.ufmg.cs.systems.fractal.graph.UnlabeledMainGraph")
 
       citeseerGraph = fc.textFile(
-         "../data/citeseer.sc",
+         //"../data/citeseer.sc",
+         "../data/citeseer",
          graphClass = "br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph")
    }
 
@@ -187,19 +192,15 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       cubeGraph.set("num_partitions", numPartitions)
 
       // triangles
-      val triangle = new FractalGraph("../data/triangle-test.graph",
-         cubeGraph.fractalContext,
-         "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
-      val trianglesFrac = cubeGraph.patternMatchingPF(triangle.asPattern).
+      val trianglePattern = PatternUtils.fromFS("../data/test/triangle")
+      val trianglesFrac = cubeGraph.patternMatchingPF(trianglePattern).
          explore(2)
       val numTriangles = trianglesFrac.aggregationCount
       assert(numTriangles == numSubgraph("triangles"))
 
       // squares
-      val square = new FractalGraph("../data/square-test.graph",
-         cubeGraph.fractalContext,
-         "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
-      val squaresFrac = cubeGraph.patternMatchingPF(square.asPattern).
+      val squarePattern = PatternUtils.fromFS("../data/test/square")
+      val squaresFrac = cubeGraph.patternMatchingPF(squarePattern).
          explore(3)
       val numSquares = squaresFrac.aggregationCount
       assert(numSquares == numSubgraph("squares"))
@@ -279,10 +280,9 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       val gt1 = citeseerSingleLabelGraph.cliquesSF(3).aggregationCount
 
       // ground-truth 2: triangle querying
-      val triangle = new FractalGraph("../data/triangle-test.graph", fc,
-         "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
+      val trianglePattern = PatternUtils.fromFS("../data/test/triangle")
       val trianglesFrac = citeseerSingleLabelGraph
-         .patternMatchingPF(triangle.asPattern).
+         .patternMatchingPF(trianglePattern).
          explore(2)
       val gt2 = trianglesFrac.aggregationCount
 
@@ -295,7 +295,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       val fractionKey = "sampling_fraction"
       val sample = citeseerSingleLabelGraph
          .set(fractionKey, fraction)
-         .pfractoid(triangle.asPattern)
+         .pfractoid(trianglePattern)
          .expand(3, senumClass)
       val estimate = sample.aggregationCount / fraction
 
@@ -314,11 +314,10 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       citeseerSingleLabelGraph.set("num_partitions", numPartitions)
 
       // ground-truth: square querying
-      val square = new FractalGraph("../data/q2-square.graph", fc,
-         "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
-      val squares = citeseerSingleLabelGraph.patternMatchingPF(square.asPattern)
-         .
-            explore(3)
+      val squarePattern = PatternUtils.fromFS("../data/test/square")
+      squarePattern.setVertexLabeled(false);
+      val squares = citeseerSingleLabelGraph.patternMatchingPF(squarePattern)
+         .explore(3)
       val gt = squares.aggregationCount
 
       // 10% estimate
@@ -327,7 +326,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       val fractionKey = "sampling_fraction"
       val sample = citeseerSingleLabelGraph
          .set(fractionKey, fraction)
-         .pfractoid(square.asPattern)
+         .pfractoid(squarePattern)
          .expand(4, senumClass)
       val estimate = sample.aggregationCount / fraction
 
@@ -380,19 +379,17 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
          citeseerSingleLabelGraph.set("num_partitions", numPartitions)
 
-         val queryGraph = new FractalGraph(s"../data/${query}.graph",
-            citeseerSingleLabelGraph.fractalContext,
-            "br.ufmg.cs.systems.fractal.graph.BasicMainGraph")
-
+         val queryGraphPattern = PatternUtils.fromFS(
+            s"../data/queries/${query}")
          val gqueryingFrac = citeseerSingleLabelGraph
-            .patternMatchingPF(queryGraph.asPattern)
+            .patternMatchingPF(queryGraphPattern)
             .explore(numVertices - 1)
 
          assert(gqueryingFrac.aggregationCount == numSubgraphs,
             s"query=${query} numVertices=${numVertices}")
 
          val queryPartialResults = citeseerSingleLabelGraph
-            .patternMatchingPFMCVC(queryGraph.asPattern)
+            .patternMatchingPFMCVC(queryGraphPattern)
          var totalNumSubgraphs = 0L
          for (queryPartialResult <- queryPartialResults) {
             totalNumSubgraphs += queryPartialResult

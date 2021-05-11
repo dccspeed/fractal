@@ -72,7 +72,7 @@ class QuasiCliquesSF(maxNumVertices: Int, minDensity: Double)
 
    private lazy val vertexSet: IntSet = HashIntSets.newMutableSet()
 
-   private def distanceNeighbors(g: MainGraph[_,_], u: Int, d: Int): Unit = {
+   private def distanceNeighbors(g: MainGraph, u: Int, d: Int): Unit = {
       if (d == 0) return
       val neighbors = g.neighborhoodVertices(u)
       var i = 0

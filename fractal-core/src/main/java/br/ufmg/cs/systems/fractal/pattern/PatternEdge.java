@@ -40,8 +40,8 @@ public class PatternEdge implements Comparable<PatternEdge>, Externalizable {
       int srcVertexId = mainGraph.edgeSrc(edgeId);
       int dstVertexId = mainGraph.edgeDst(edgeId);
 
-      int srcVertexLabel = mainGraph.vertexLabel(srcVertexId);
-      int dstVertexLabel = mainGraph.vertexLabel(dstVertexId);
+      int srcVertexLabel = mainGraph.firstVertexLabel(srcVertexId);
+      int dstVertexLabel = mainGraph.firstVertexLabel(dstVertexId);
 
       setSrcLabel(srcVertexLabel);
       setDestLabel(dstVertexLabel);

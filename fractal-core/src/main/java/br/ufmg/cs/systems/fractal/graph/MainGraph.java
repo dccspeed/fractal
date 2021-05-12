@@ -13,32 +13,43 @@ import java.io.IOException;
 import java.util.function.IntConsumer;
 
 public interface MainGraph {
-   void addEdge(int u, int v, int e);
-
-   void addEdgeLabel(int e, int label);
-
-   void addVertex(int u);
-
-   void addVertexLabel(int u, int label);
-
-   int edgeDst(int e);
-
-   int edgeLabel(int e);
-
-   int edgeSrc(int e);
-
-   void forEachCommonEdgeLabels(IntArrayList edges, IntConsumer consumer);
-
-   void forEachEdge(IntConsumer consumer);
-
-   void forEachEdge(int u, int v, IntConsumer consumer);
-
    void init(Configuration configuration) throws IOException;
+
+   int numVertices();
+
+   int numEdges();
 
    boolean isEdgeValid(int e);
 
+   int edgeSrc(int e);
+
+   int edgeDst(int e);
+
+   int firstEdgeLabel(int e);
+
+   int firstVertexLabel(int u);
+
+   void forEachEdge(int u, int v, IntConsumer consumer);
+
+   IntArrayListView neighborhoodVertices(int u);
+
+   void neighborhoodVertices(int u, IntArrayListView view);
+
+   void forEachCommonEdgeLabels(IntArrayList edges, IntConsumer consumer);
+
+   // Canonical subgraph enumeration
+
    void validExtensionsPatternInducedLabeled(Computation computation,
-                                             Subgraph subgraph, IntArrayList intersectionVertexIdxs, IntArrayList differenceVertexIdxs, IntArrayList starts, IntArrayList ends, int vertexLowerBound, int vertexUpperBound, VertexPredicate vpred, EdgePredicates epreds, IntCollection result);
+                                             Subgraph subgraph,
+                                             IntArrayList intersectionVertexIdxs,
+                                             IntArrayList differenceVertexIdxs,
+                                             IntArrayList starts,
+                                             IntArrayList ends,
+                                             int vertexLowerBound,
+                                             int vertexUpperBound,
+                                             VertexPredicate vpred,
+                                             EdgePredicates epreds,
+                                             IntCollection result);
 
    void validExtensionsPatternInduced(Computation computation,
                                       Subgraph subgraph,
@@ -49,8 +60,6 @@ public interface MainGraph {
                                       int vertexUpperBound,
                                       IntCollection result);
 
-   /* graph traversals */
-
    void validExtensionsEdgeInduced(Computation computation, Subgraph subgraph,
                                    IntCollection validExtensions);
 
@@ -58,16 +67,5 @@ public interface MainGraph {
                                      Subgraph subgraph,
                                      IntCollection validExtensions);
 
-   IntArrayListView neighborhoodVertices(int u);
-
-   void neighborhoodVertices(int u, IntArrayListView view);
-
-   int numEdges();
-
-   int numValidEdges();
-
-   int numVertices();
-
-   int vertexLabel(int u);
 
 }

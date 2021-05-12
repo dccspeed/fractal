@@ -28,7 +28,7 @@ public class LabelledPatternEdge extends PatternEdge {
     @Override
     public void setFromEdge(MainGraph mainGraph, int edgeId, int srcPos, int dstPos, int srcId) {
         super.setFromEdge(mainGraph, edgeId, srcPos, dstPos, srcId);
-        label = mainGraph.edgeLabel(edgeId);
+        label = mainGraph.firstEdgeLabel(edgeId);
     }
 
     @Override

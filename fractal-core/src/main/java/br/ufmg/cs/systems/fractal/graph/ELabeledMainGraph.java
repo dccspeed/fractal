@@ -7,7 +7,7 @@ public class ELabeledMainGraph extends VELabeledMainGraph {
    }
 
    @Override
-   public int vertexLabel(int u) {
+   public int firstVertexLabel(int u) {
       return 1;
    }
 }

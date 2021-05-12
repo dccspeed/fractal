@@ -19,7 +19,7 @@ public class EdgePredicate implements IntPredicate, Externalizable {
 
    @Override
    public boolean test(int e) {
-      return graph.edgeLabel(e) == edgeLabel;
+      return graph.firstEdgeLabel(e) == edgeLabel;
    }
 
    public void write(DataOutput out) throws IOException {

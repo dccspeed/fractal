@@ -38,7 +38,7 @@ class FractalContext(sc: SparkContext, logLevel: String = "warn")
     * @param local specifies whether this path is in the local fs or not
     * @return fractal graph
     */
-   def textFile (path: String,
+   def textFile(path: String,
                  graphClass: String = Configuration.CONF_MAINGRAPH_CLASS_DEFAULT,
                  local: Boolean = false): FractalGraph = {
       new FractalGraph(path, graphClass, this, logLevel)

@@ -76,8 +76,8 @@ public class PatternInducedSubgraph extends BasicSubgraph {
          for (int i = 0; i < patternEdges.size(); ++i) {
             PatternEdge pedge = patternEdges.getu(i);
             pedge.setSrcLabel(
-                    graph.vertexLabel(patternVertices.getu(pedge.getSrcPos())));
-            pedge.setDestLabel(graph.vertexLabel(
+                    graph.firstVertexLabel(patternVertices.getu(pedge.getSrcPos())));
+            pedge.setDestLabel(graph.firstVertexLabel(
                     patternVertices.getu(pedge.getDestPos())));
          }
 

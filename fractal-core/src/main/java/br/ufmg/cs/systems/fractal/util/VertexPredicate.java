@@ -22,7 +22,7 @@ public class VertexPredicate implements IntPredicate, Externalizable {
 
    @Override
    public boolean test(int u) {
-      return graph.vertexLabel(u) == vertexLabel;
+      return graph.firstVertexLabel(u) == vertexLabel;
    }
 
    public void write(DataOutput out) throws IOException {

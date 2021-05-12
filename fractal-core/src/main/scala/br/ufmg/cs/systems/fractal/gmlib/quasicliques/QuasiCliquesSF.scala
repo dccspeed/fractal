@@ -24,6 +24,8 @@ class QuasiCliquesSF(maxNumVertices: Int, minDensity: Double)
    private val vertexDegrees = new IntArrayList(maxNumVertices)
    private val targetDegree = Math.ceil(minDensity * (maxNumVertices - 1))
 
+   private val neighbors = new IntArrayListView()
+
    /**
     * Check if current subgraph is quasi-clique or can become a quasi-clique
     * @param subgraph subgraph
@@ -74,7 +76,7 @@ class QuasiCliquesSF(maxNumVertices: Int, minDensity: Double)
 
    private def distanceNeighbors(g: MainGraph, u: Int, d: Int): Unit = {
       if (d == 0) return
-      val neighbors = g.neighborhoodVertices(u)
+      g.neighborhoodVertices(u, neighbors)
       var i = 0
       while (i < neighbors.size()) {
          val v = neighbors.getu(i)

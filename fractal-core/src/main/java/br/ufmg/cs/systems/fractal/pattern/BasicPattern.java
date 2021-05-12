@@ -11,20 +11,14 @@ import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntSetPool;
 import com.koloboke.collect.IntCursor;
-import com.koloboke.collect.ObjCursor;
 import com.koloboke.collect.map.IntIntCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMapFactory;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
 import com.koloboke.collect.set.IntSet;
-import com.koloboke.collect.set.ObjSet;
-import com.koloboke.collect.set.hash.HashIntSets;
-import com.koloboke.collect.set.hash.HashObjSets;
 import org.apache.log4j.Logger;
 
-import javax.annotation.OverridingMethodsMustInvokeSuper;
 import java.io.*;
-import java.util.Iterator;
 
 public abstract class BasicPattern implements Pattern {
    private static final Logger LOG = Logger.getLogger(BasicPattern.class);
@@ -174,7 +168,7 @@ public abstract class BasicPattern implements Pattern {
 
       // this is only to be used for single-vertex patterns
       if (vertices.isEmpty()) {
-         firstVertexLabel = getMainGraph().vertexLabel(vertexId);
+         firstVertexLabel = getMainGraph().firstVertexLabel(vertexId);
       }
 
       int pos = vertexPositions.get(vertexId);

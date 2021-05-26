@@ -19,14 +19,12 @@ import scala.reflect.ClassTag
  * Graph used as starting point of Fractal application workflows
  * @param path graph path (file:// or hdfs://)
  * @param graphClass graph implementation
- * @param local path is local
  * @param fc fractal context
  * @param logLevel logging verbosity
  */
 case class FractalGraph
 (path: String,
  graphClass: String,
- local: Boolean,
  fc: FractalContext,
  confs: Map[String, Any],
  logLevel: String,
@@ -40,7 +38,6 @@ case class FractalGraph
       }
 
       _config.set ("input_graph_path", path)
-      _config.set ("input_graph_local", local)
       _config.set ("input_graph_class", graphClass)
       _config.set ("log_level", logLevel)
 
@@ -76,12 +73,12 @@ case class FractalGraph
    def fractalContext: FractalContext = fc
 
    def this(path: String, fc: FractalContext, graphClass: String) = {
-      this (path, graphClass, false, fc, Map.empty, "warn", null)
+      this (path, graphClass, fc, Map.empty, "warn", null)
    }
 
    def this(path: String, graphClass: String,
             fc: FractalContext, logLevel: String) = {
-      this (path, graphClass, false, fc, Map.empty, logLevel, null)
+      this (path, graphClass, fc, Map.empty, logLevel, null)
    }
 
    private def newFractoid[S <: Subgraph : ClassTag]: Fractoid[S] = {

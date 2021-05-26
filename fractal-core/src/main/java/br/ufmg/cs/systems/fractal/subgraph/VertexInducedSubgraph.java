@@ -100,15 +100,15 @@ public class VertexInducedSubgraph extends BasicSubgraph {
    @Override
    public void addWord(int word) {
       super.addWord(word);
-      updateEdges(word, vertices.size());
+      //updateEdges(word, vertices.size());
       vertices.add(word);
    }
 
    @Override
    public void removeLastWord() {
       vertices.removeLast();
-      int numEdgesToRemove = numEdgesAddedWithWord.pop();
-      edges.removeLast(numEdgesToRemove);
+      //int numEdgesToRemove = numEdgesAddedWithWord.pop();
+      //edges.removeLast(numEdgesToRemove);
 
       super.removeLastWord();
    }

@@ -60,12 +60,24 @@ public class VELabeledMainGraph implements MainGraph {
    public VELabeledMainGraph() {
    }
 
-   private void addEdge(int u, int v, int e) {
-      vertexNeighborhoods.add(v);
-      edgeNeighborhoods.add(e);
-      if (u < v) {
-         edgeSrcs.add(u);
-         edgeDsts.add(v);
+   private final void addEdge(int u, int v, int e) {
+      if (u < v) { // first time seeing this edge
+         if (isEdgeValid(u, v, e)) { // valid
+            vertexNeighborhoods.add(v);
+            edgeNeighborhoods.add(e);
+            edgeSrcs.add(u);
+            edgeDsts.add(v);
+         } else { // invalid
+            edgeSrcs.add(-1);
+            edgeDsts.add(v);
+         }
+      } else { // second time seeing this edge
+         if (edgePredicate == null || edgeSrcs.getu(e) != -1) { // valid
+            vertexNeighborhoods.add(v);
+            edgeNeighborhoods.add(e);
+         } else { // invalid
+            edgeSrcs.setu(e, v); // fix edge source (consistency)
+         }
       }
    }
 
@@ -770,11 +782,6 @@ public class VELabeledMainGraph implements MainGraph {
 
                e = stream.nextInt();
                addEdge(u, v, e);
-
-               if (!isEdgeValid(u, v, e)) {
-                  vertexNeighborhoods.removeLast();
-                  edgeNeighborhoods.removeLast();
-               }
             }
          }
 
@@ -787,8 +794,8 @@ public class VELabeledMainGraph implements MainGraph {
 
       // sanity check
       if (vertexNeighborhoodIdx.size() != numVertices + 1
-              || vertexNeighborhoods.size() != numEdges*2
-              || edgeNeighborhoods.size() != numEdges*2
+              //|| vertexNeighborhoods.size() != numEdges*2
+              //|| edgeNeighborhoods.size() != numEdges*2
               || edgeSrcs.size() != numEdges
               || edgeDsts.size() != numEdges) {
          throw new RuntimeException("Issue reading adjacency lists.");
@@ -864,14 +871,26 @@ public class VELabeledMainGraph implements MainGraph {
    private final boolean isEdgeValid(int u, int v, int e) {
       if (edgePredicate == null) return true;
 
-      uLabelsView.set(vertexLabels, vertexLabelsIdx.getu(u),
-              vertexLabelsIdx.getu(u + 1));
-      vLabelsView.set(vertexLabels, vertexLabelsIdx.getu(v),
-              vertexLabelsIdx.getu(v + 1));
-      eLabelsView.set(edgeLabels, edgeLabelsIdx.getu(e),
-              edgeLabelsIdx.getu(e + 1));
+      IntArrayListView ulabels, vLabels, eLabels;
+      ulabels = vLabels = eLabels = null;
 
-      return edgePredicate.test(u, uLabelsView, v, vLabelsView, e, eLabelsView);
+      if (vertexLabels != null) {
+         uLabelsView.set(vertexLabels, vertexLabelsIdx.getu(u),
+                 vertexLabelsIdx.getu(u + 1));
+         vLabelsView.set(vertexLabels, vertexLabelsIdx.getu(v),
+                 vertexLabelsIdx.getu(v + 1));
+
+         ulabels = uLabelsView;
+         vLabels = vLabelsView;
+      }
+
+      if (edgeLabels != null) {
+         eLabelsView.set(edgeLabels, edgeLabelsIdx.getu(e),
+                 edgeLabelsIdx.getu(e + 1));
+         eLabels = eLabelsView;
+      }
+
+      return edgePredicate.test(u, ulabels, v, vLabels, e, eLabels);
    }
 
    private class DefaultEdgePredicate extends EdgePredicate {

@@ -2,14 +2,11 @@ package br.ufmg.cs.systems.fractal.conf
 
 import java.io._
 import java.net.InetAddress
-import java.util.function.Predicate
 
 import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.conf.Configuration._
 import br.ufmg.cs.systems.fractal.graph._
 import br.ufmg.cs.systems.fractal.pattern.Pattern
-import br.ufmg.cs.systems.fractal.subgraph.Subgraph
-import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray
 import br.ufmg.cs.systems.fractal.util.Logging
 
 import scala.collection.mutable.Map
@@ -88,7 +85,6 @@ case class SparkConfiguration(confs: Map[String, Any])
       // input
       updateIfExists("input_graph_class", CONF_MAINGRAPH_CLASS)
       updateIfExists("input_graph_path", CONF_MAINGRAPH_PATH)
-      updateIfExists("input_graph_local", CONF_MAINGRAPH_LOCAL)
       updateIfExists("edge_labeled", CONF_MAINGRAPH_EDGE_LABELED)
       updateIfExists("vertex_labeled", CONF_MAINGRAPH_VERTEX_LABELED)
 

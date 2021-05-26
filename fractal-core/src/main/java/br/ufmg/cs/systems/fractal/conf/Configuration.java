@@ -29,7 +29,6 @@ public class Configuration implements Serializable {
    public static final String CONF_MAINGRAPH_PATH = "fractal.graph.location";
    public static final String CONF_MAINGRAPH_PATH_DEFAULT = null;
    public static final String CONF_MAINGRAPH_LOCAL = "fractal.graph.local";
-   public static final boolean CONF_MAINGRAPH_LOCAL_DEFAULT = false;
    public static final String CONF_MAINGRAPH_EDGE_LABELED =
            "fractal.graph.edge_labeled";
    public static final boolean CONF_MAINGRAPH_EDGE_LABELED_DEFAULT = false;
@@ -73,10 +72,6 @@ public class Configuration implements Serializable {
    public Configuration() {
    }
 
-   public <O extends Subgraph> Computation<O> createComputation() {
-      return ReflectionSerializationUtils.newInstance(computationClass);
-   }
-
    private MainGraph createMainGraph() {
       return ReflectionSerializationUtils.newInstance(mainGraphClass);
    }
@@ -93,12 +88,6 @@ public class Configuration implements Serializable {
 
    public void setPatternClass(Class<? extends Pattern> patternClass) {
       this.patternClass = patternClass;
-   }
-
-   public <S extends Subgraph> S createSubgraph() {
-      S subgraph = (S) ReflectionSerializationUtils.newInstance(subgraphClass);
-      subgraph.init(this);
-      return subgraph;
    }
 
    public <S extends Subgraph> S createSubgraph(Class<S> subgraphClass) {
@@ -204,10 +193,6 @@ public class Configuration implements Serializable {
       return defaultValue;
    }
 
-   public void initialize() {
-      throw new UnsupportedOperationException();
-   }
-
    public void initialize(boolean isMaster) {
       throw new UnsupportedOperationException();
    }
@@ -235,10 +220,6 @@ public class Configuration implements Serializable {
 
    public Boolean getBoolean(String key, Boolean defaultValue) {
       return defaultValue;
-   }
-
-   public boolean isLocalGraph() {
-      return getBoolean(CONF_MAINGRAPH_LOCAL, CONF_MAINGRAPH_LOCAL_DEFAULT);
    }
 
    public void readMainGraph() {

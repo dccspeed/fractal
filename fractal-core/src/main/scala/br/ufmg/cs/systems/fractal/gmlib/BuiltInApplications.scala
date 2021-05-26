@@ -2,7 +2,7 @@ package br.ufmg.cs.systems.fractal.gmlib
 
 import br.ufmg.cs.systems.fractal.computation.{Computation, SamplingEnumerator}
 import br.ufmg.cs.systems.fractal.gmlib.clique.{KClistEnumerator, MaximalCliquesEnumerator}
-import br.ufmg.cs.systems.fractal.gmlib.fsm.{FSMPF, FSMPFMCVC, FSMSF, MinImageSupport}
+import br.ufmg.cs.systems.fractal.gmlib.fsm.{FSMHybrid, FSMPF, FSMPFMCVC, FSMSF, MinImageSupport}
 import br.ufmg.cs.systems.fractal.gmlib.motifs.{MotifsPF, MotifsPFMCVC, MotifsSF}
 import br.ufmg.cs.systems.fractal.gmlib.periodic.{InducedPeriodicSubgraphsPF, InducedPeriodicSubgraphsPFMCVC, InducedPeriodicSubgraphsSF}
 import br.ufmg.cs.systems.fractal.gmlib.quasicliques.QuasiCliquesSF
@@ -366,6 +366,12 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       app.apply(self)
    }
 
+   def fsmHybrid(support: Int, maxNumEdges: Int)
+   : RDD[(Pattern,MinImageSupport)] = {
+      val app = new FSMHybrid(support, maxNumEdges)
+      app.apply(self)
+   }
+
    /**
     * Subgraph querying (pattern matching) using edge-by-edge exploration
     * @param pattern representing the subgraphs structure
@@ -404,7 +410,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       val quickPatternsPerLevelBc = sc.broadcast(quickPatternsPerLevel)
 
       // filtering function: last edge must exist in the map
-      val edgeFiilterFunc
+      val edgeFilterFunc
       : (EdgeInducedSubgraph, Computation[EdgeInducedSubgraph]) => Boolean =
          (s,c) => {
             val quickPattern = s.quickPattern()
@@ -414,7 +420,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
 
       val frac = self.efractoid
          .expand(1)
-         .filter(edgeFiilterFunc)
+         .filter(edgeFilterFunc)
 
       frac
    }

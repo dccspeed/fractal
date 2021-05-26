@@ -495,6 +495,42 @@ object FSMPFMCVC extends ApplicationRunner {
    }
 }
 
+object FSMHybrid extends ApplicationRunner {
+   val appid: String = "fsm_hybrid"
+
+   def apply(fractalGraph: FractalGraph, commStrategy: String,
+             numPartitions: Int, explorationSteps: Int, minSupport: Int)
+   : Unit = {
+
+      // we create the fractoid inside the timer because there is actual work
+      // being done to obtain the RDD
+      val (patternsSupportsRDD, elapsed) = FractalSparkRunner.time {
+         val patternsSupportsRDD = fractalGraph
+            .set("num_partitions", numPartitions)
+            .set("comm_strategy", commStrategy)
+            .fsmHybrid(minSupport, explorationSteps + 1)
+         patternsSupportsRDD.cache()
+         patternsSupportsRDD.foreachPartition(_ => {}) // materialize
+         patternsSupportsRDD
+      }
+
+      var numSubgraphs = 0L
+      var numPatterns = 0L
+      val iter = patternsSupportsRDD.toLocalIterator
+      while (iter.hasNext) {
+         val (pattern, support) = iter.next()
+         logApp(s"PatternSupport ${pattern} ${support}")
+         numSubgraphs += support.getNumSubgraphsAggregated
+         numPatterns += 1
+      }
+
+      patternsSupportsRDD.unpersist()
+
+      logApp(s"numSubgraphs=${numSubgraphs}" +
+         s" numPatterns=${numPatterns} elapsed=${elapsed}")
+   }
+}
+
 object PatternMatchingInducedPFMCVC extends ApplicationRunner {
    val appid: String = "pattern_matching_induced_pf_mcvc"
 
@@ -639,6 +675,28 @@ object PatternMatchingInducedPF extends ApplicationRunner {
          .set("comm_strategy", commStrategy)
          .patternMatchingPF(pattern)
          .explore(pattern.getNumberOfVertices - 1)
+
+      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
+         frac.aggregationCount
+      }
+
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+   }
+}
+
+object PatternMatchingSF extends ApplicationRunner {
+   val appid: String = "pattern_matching_sf"
+
+   def apply(fractalGraph: FractalGraph, commStrategy: String,
+             numPartitions: Int, explorationSteps: Int, subgraphPath: String)
+   : Unit = {
+      val pattern = PatternUtils.fromFS(subgraphPath)
+
+      val frac = fractalGraph
+         .set("num_partitions", numPartitions)
+         .set("comm_strategy", commStrategy)
+         .patternMatchingSF(pattern)
+         .explore(pattern.getNumberOfEdges - 1)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
          frac.aggregationCount
@@ -906,6 +964,12 @@ object FractalSparkRunner extends Logging {
             FSMPFMCVC(fractalGraph, commStrategy, numPartitions, explorationSteps,
                support)
 
+         case FSMHybrid.appid =>
+            val support = nextArg.toInt
+            setRemainingConfigs()
+            FSMHybrid(fractalGraph, commStrategy, numPartitions,
+               explorationSteps, support)
+
          case PatternMatchingPFMCVC.appid =>
             val subgraphPath = nextArg
             setRemainingConfigs()
@@ -943,6 +1007,12 @@ object FractalSparkRunner extends Logging {
             setRemainingConfigs()
             PatternMatchingInducedSamplePF(fractalGraph, commStrategy,
                numPartitions, explorationSteps, subgraphPath, fraction)
+
+         case PatternMatchingSF.appid =>
+            val subgraphPath = nextArg
+            setRemainingConfigs()
+            PatternMatchingSF(fractalGraph, commStrategy,
+               numPartitions, explorationSteps, subgraphPath)
 
          case PeriodicSubgraphsInducedSF.appid =>
             val periodicThreshold = nextArg.toInt

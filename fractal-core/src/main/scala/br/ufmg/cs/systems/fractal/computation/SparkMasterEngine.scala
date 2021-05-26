@@ -24,7 +24,9 @@ trait SparkMasterEngine[S <: Subgraph] extends Logging {
 
    var stepRDD: RDD[Unit] = _
 
-   def init(computation: Computation[S]): Unit = {
+   def computation: Computation[S]
+
+   def init(): Unit = {
       if (!config.isInitialized()) {
          config.initialize(isMaster = true)
       }
@@ -32,13 +34,6 @@ trait SparkMasterEngine[S <: Subgraph] extends Logging {
       // set log level
       logInfo(s"Setting num_partitions to " +
          s"${config.getInteger("num_partitions", sc.defaultParallelism)}")
-
-      // master must know aggregators metadata
-      var currComp = computation
-      while (currComp != null) {
-         currComp.initAggregations(config)
-         currComp = currComp.nextComputation()
-      }
 
       // set initial state
       stepRDD = sc.makeRDD(Seq.empty[Unit], numPartitions)

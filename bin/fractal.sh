@@ -28,8 +28,10 @@ quasicliquess="quasi_cliques_sf"
 fsms="fsm_sf"
 fsms="${fsms}|fsm_pf"
 fsms="${fsms}|fsm_pf_mcvc"
+fsms="${fsms}|fsm_hybrid"
 
 gqueryings="pattern_matching_pf_mcvc"
+gqueryings="${gqueryings}|pattern_matching_sf"
 gqueryings="${gqueryings}|pattern_matching_pf"
 gqueryings="${gqueryings}|pattern_matching_induced_pf"
 gqueryings="${gqueryings}|pattern_matching_induced_pf_mcvc"
@@ -114,6 +116,16 @@ ALGOPTION for '$app':
 	;;
 
 	fsm_pf_mcvc)
+	required="inputgraph steps fsmsupp"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
+	;;
+
+	fsm_hybrid)
 	required="inputgraph steps fsmsupp"
         appusage="
 
@@ -263,6 +275,16 @@ ALGOPTION for '$app':
 	;;
 
 	pattern_matching_pf_mcvc)
+	required="inputgraph steps query"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
+	;;
+
+	pattern_matching_sf)
 	required="inputgraph steps query"
         appusage="
 

@@ -63,13 +63,13 @@ class SparkFromScratchEngine[S <: Subgraph]
       super.init()
 
       // actor
-      if (configuration.externalWsEnabled()) {
+      if (previous == null && configuration.externalWsEnabled()) {
          slaveActorRef = ActorMessageSystem.createActor(this)
          logInfo(s"StartedSlaveActor step=${step} stageId=${stageId}" +
             s" id=${partitionId} ${slaveActorRef}")
       }
 
-      if (configuration.wsEnabled()) {
+      if (previous == null && configuration.wsEnabled()) {
          LocalComputationStore.createComputationsMap(this)
          LocalComputationStore.registerComputation(computation)
       }
@@ -152,7 +152,7 @@ class SparkFromScratchEngine[S <: Subgraph]
       // clear-up resources
       if (executionContext != null) executionContext.shutdown()
 
-      if (configuration.externalWsEnabled()) {
+      if (previous == null && configuration.externalWsEnabled()) {
          slaveActorRef ! Terminate
          slaveActorRef = null
       }
@@ -162,7 +162,7 @@ class SparkFromScratchEngine[S <: Subgraph]
          threadStatusAccum.add(threadStatus)
       }
 
-      if (configuration.wsEnabled()) {
+      if (previous == null && configuration.wsEnabled()) {
          LocalComputationStore.unregisterComputation(this)
       }
    }

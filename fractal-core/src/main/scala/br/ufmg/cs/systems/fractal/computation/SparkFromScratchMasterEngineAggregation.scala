@@ -30,11 +30,22 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
 
    val originalContainer: ComputationContainer[S] = fractoid.computationContainer
 
+   val computation: Computation[S] =
+      originalContainer.asInstanceOf[Computation[S]]
+
    val configBc: Broadcast[SparkConfiguration] = fractoid.configBc
 
    val config: SparkConfiguration = configBc.value
 
    override val sc: SparkContext = fractoid.sparkContext
+
+   val parent: SparkFromScratchMasterEngineAggregation[_ <: Subgraph] = {
+      if (fractoid.parent != null) {
+         new SparkFromScratchMasterEngineAggregation(fractoid.parent)
+      } else {
+         null
+      }
+   }
 
    // get current fractoid, going backwards building engine data for each
    // partial workflow
@@ -60,10 +71,11 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
    val fixedContainer: ComputationContainer[S] =
       SparkFromScratchMasterEngineAggregation.getFixedContainer(originalContainer)
 
-   override def init(originalContainer: Computation[S]): Unit = {
+   override def init(): Unit = {
       val start = System.currentTimeMillis
+      if (parent != null) parent.init()
 
-      super.init(originalContainer)
+      super.init()
 
       // coordinator actor
       masterActorRef = ActorMessageSystem.createActor(this)
@@ -111,7 +123,7 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
    }
 
    override def execEnginesRDD: RDD[SparkEngine[S]] = {
-      init(originalContainer)
+      init()
 
       // save original container, i.e., without parents' computations
       logInfo(s"From scratch computation (${this})." +

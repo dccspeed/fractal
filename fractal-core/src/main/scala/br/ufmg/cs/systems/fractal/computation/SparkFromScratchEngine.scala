@@ -11,6 +11,7 @@ import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.{ReflectionSerializationUtils, ThreadStats}
 import one.profiler.{AsyncProfiler, Events}
+import org.apache.spark.TaskContext
 import org.apache.spark.util.CollectionAccumulator
 
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService, Future}
@@ -46,10 +47,10 @@ class SparkFromScratchEngine[S <: Subgraph]
    private def ensureExecutionContext(): Unit = {
       if (executionContext != null) return
       // executor service
-      val threadName = Thread.currentThread().getName
+      val engine = this
       val threadFactory = new ThreadFactory {
          override def newThread(runnable: Runnable): Thread = {
-            new Thread(runnable, s"FractalWorkerThread(${threadName})")
+            new FractalWorkerThread(runnable, engine)
          }
       }
 
@@ -380,3 +381,20 @@ class SparkFromScratchEngine[S <: Subgraph]
    }
 }
 
+class FractalWorkerThread(r: Runnable,
+                          engine: SparkFromScratchEngine[_ <: Subgraph])
+   extends Thread(r, s"FractalWorkerThread(${Thread.currentThread().getName})") {
+
+   def getEngine(): SparkFromScratchEngine[_ <: Subgraph] = engine
+}
+
+object SparkFromScratchEngine {
+   def getStageId: Int = {
+      val t = Thread.currentThread()
+      if (t.isInstanceOf[FractalWorkerThread]) {
+         t.asInstanceOf[FractalWorkerThread].getEngine().stageId
+      } else {
+         TaskContext.get().stageId()
+      }
+   }
+}

@@ -132,7 +132,7 @@ class InducedPeriodicSubgraphsPF
     * @param c computation
     * @return
     */
-   private def periodicFilter
+   def periodicFilter
    (s: PatternInducedSubgraph, c: Computation[PatternInducedSubgraph])
    : Boolean = {
       if (s.getNumVertices == 1) return true

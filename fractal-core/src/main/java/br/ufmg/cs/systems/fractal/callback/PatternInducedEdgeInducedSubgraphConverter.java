@@ -35,7 +35,7 @@ public class PatternInducedEdgeInducedSubgraphConverter
    }
 
    @Override
-   public void convert(PatternInducedSubgraph psubgraph,
+   public boolean convert(PatternInducedSubgraph psubgraph,
                        Computation<PatternInducedSubgraph> pcomputation,
                        EdgeInducedSubgraph esubgraph,
                        Computation<EdgeInducedSubgraph> ecomputation) {
@@ -80,6 +80,8 @@ public class PatternInducedEdgeInducedSubgraphConverter
       }
 
       for (int i = 0; i < numEdges; ++i) esubgraph.addWord(edges.getu(i));
+
+      return false;
    }
 
    private boolean areEdgesNeighbors(int e1, int e2) {

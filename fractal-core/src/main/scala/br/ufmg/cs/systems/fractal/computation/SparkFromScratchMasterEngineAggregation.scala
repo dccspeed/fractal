@@ -22,9 +22,11 @@ import scala.reflect.ClassTag
  * SparkContext.
  */
 class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
-(fractoid: Fractoid[S]) extends SparkMasterEngine[S] {
+(_fractoid: Fractoid[S]) extends SparkMasterEngine[S] {
 
    import SparkFromScratchMasterEngineAggregation._
+
+   val fractoid: Fractoid[S] = _fractoid.withNextStepId
 
    val step: Int = fractoid.step
 

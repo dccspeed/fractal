@@ -8,6 +8,8 @@ import br.ufmg.cs.systems.fractal.pattern.PatternEdge;
 import br.ufmg.cs.systems.fractal.pattern.PatternEdgeArrayList;
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
 import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph;
+import br.ufmg.cs.systems.fractal.util.Logging;
+import br.ufmg.cs.systems.fractal.util.Logging$;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import com.koloboke.collect.map.IntIntMap;
@@ -55,7 +57,7 @@ public class PatternInducedVertexInducedSubgraphConverter
    }
 
    @Override
-   public void convert(PatternInducedSubgraph psubgraph,
+   public boolean convert(PatternInducedSubgraph psubgraph,
                        Computation<PatternInducedSubgraph> pcomputation,
                        VertexInducedSubgraph vsubgraph,
                        Computation<VertexInducedSubgraph> vcomputation) {
@@ -103,6 +105,8 @@ public class PatternInducedVertexInducedSubgraphConverter
       for (int i = 0; i < numVertices; ++i) {
          vsubgraph.addWord(verticesAux.getu(i));
       }
+
+      return false;
    }
 
    /**

@@ -718,15 +718,8 @@ object PeriodicSubgraphsInducedPF extends ApplicationRunner {
       var numSubgraphs = 0L
       val callback: (Pattern, Fractoid[PatternInducedSubgraph]) => Unit =
          (pattern, frac) => {
-            Future(frac.aggregationCount)(ec).onComplete {
-               case Success(value) =>
-                  numSubgraphs += value
-               case Failure(exception) =>
-                  throw exception
-            }(ec)
-            //numSubgraphs += frac.aggregationCount
+            numSubgraphs += frac.aggregationCount
          }
-
 
       val (_, elapsed) = FractalSparkRunner.time {
          fractalGraph
@@ -800,6 +793,39 @@ object PeriodicSubgraphsInducedSF extends ApplicationRunner {
       }
 
       logApp(s" numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+   }
+}
+
+
+object InducedSubgraphSearchLabelsSF extends ApplicationRunner {
+   val appid: String = "induced_subgraph_search_labels_sf"
+
+   def apply(fractalGraph: FractalGraph, commStrategy: String,
+             numPartitions: Int, explorationSteps: Int,
+             labelsSet: Set[Int], gfiltering: Boolean): Unit = {
+
+      val fg = if (gfiltering) {
+         fractalGraph.filterEdges(
+            (u,uLabels,v,vLabels,e,eLabels) => {
+               labelsSet.contains(uLabels.getu(0)) &&
+                  labelsSet.contains(vLabels.getu(0))
+            })
+      } else {
+         fractalGraph
+      }
+
+      val frac = fg
+         .set("num_partitions", numPartitions)
+         .set("comm_strategy", commStrategy)
+         .inducedSubgraphSearchLabelsSF(labelsSet)
+         .explore(explorationSteps)
+
+      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
+         frac.aggregationCount
+      }
+
+      logApp(s"labelsSet=${labelsSet} gfiltering=${gfiltering}" +
+         s" numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
@@ -1031,6 +1057,13 @@ object FractalSparkRunner extends Logging {
             setRemainingConfigs()
             PeriodicSubgraphsInducedPFMCVC(fractalGraph, commStrategy,
                numPartitions, explorationSteps, periodicThreshold)
+
+         case InducedSubgraphSearchLabelsSF.appid =>
+            val labelsSet = nextArg.split(",").map(str => str.trim.toInt).toSet
+            val gfiltering = nextArg.toBoolean
+            setRemainingConfigs()
+            InducedSubgraphSearchLabelsSF(fractalGraph, commStrategy,
+               numPartitions, explorationSteps, labelsSet, gfiltering)
 
          case appName =>
             throw new RuntimeException(s"Unknown app: ${appName}")

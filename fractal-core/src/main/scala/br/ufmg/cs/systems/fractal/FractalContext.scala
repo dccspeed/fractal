@@ -1,10 +1,13 @@
 package br.ufmg.cs.systems.fractal
 
-import br.ufmg.cs.systems.fractal.computation.ActorMessageSystem
+import br.ufmg.cs.systems.fractal.computation.{ActorMessageSystem, LocalComputationStore}
 import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.graph.MainGraphStore
+import br.ufmg.cs.systems.fractal.subgraph.Subgraph
 import br.ufmg.cs.systems.fractal.util.Logging
 import org.apache.spark.SparkContext
+
+import scala.concurrent.Future
 
 /**
  * Starting point for Fractal execution engine (currently Spark)
@@ -28,6 +31,14 @@ class FractalContext(sc: SparkContext, logLevel: String = "warn")
 
    def sparkContext: SparkContext = sc
 
+   def submitFractalSteps[S <: Subgraph, T]
+   (fractoids: Seq[Fractoid[S]],
+    callback: Fractoid[S] => T): Future[Seq[T]] = {
+      import scala.concurrent.ExecutionContext.Implicits.global
+      val futures = fractoids.map(fractoid => Future(callback(fractoid)))
+      Future.sequence(futures)
+   }
+
    /**
     * Read graph from text file
     * @param path
@@ -46,5 +57,6 @@ class FractalContext(sc: SparkContext, logLevel: String = "warn")
    def stop() = {
       ActorMessageSystem.shutdown()
       MainGraphStore.shutdown()
+      LocalComputationStore.shutdown()
    }
 }

@@ -1,6 +1,7 @@
 package br.ufmg.cs.systems.fractal.gmlib.fsm
 
 import br.ufmg.cs.systems.fractal.FractalGraph
+import br.ufmg.cs.systems.fractal.computation.{LocalComputationStore, SparkFromScratchEngine}
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplication
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternUtilsRDD}
 import br.ufmg.cs.systems.fractal.subgraph.EdgeInducedSubgraph
@@ -54,7 +55,7 @@ class FSMHybrid(minSupport: Int, maxNumEdges: Int)
                canonicalPattern)
             (canonicalPattern, supp)
          }
-         .reduceByKey((s1,s2) => {s1.aggregate(s2); s1})
+         .reduceByKey((s1,s2) => {aggregate(s1, s2); s1})
    }
 
    /**
@@ -89,7 +90,7 @@ class FSMHybrid(minSupport: Int, maxNumEdges: Int)
                   canonicalPattern)
                (canonicalPattern, supp)
             }
-            .reduceByKey((s1,s2) => {s1.aggregate(s2); s1})
+            .reduceByKey((s1,s2) => {aggregate(s1, s2); s1})
 
          canonicalPatternsSupportsRDDs = rdd :: canonicalPatternsSupportsRDDs
          rdd
@@ -108,39 +109,27 @@ class FSMHybrid(minSupport: Int, maxNumEdges: Int)
          !frequentPatternsSupportsRDD.isEmpty()
 
       while (continue) {
+         logApp(s"Extending ${numEdges}-edge frequent patterns.")
 
          // get valid candidate patterns extended from previous step
          val validCandPatternsRDD = frequentPatternsSupportsRDD.keys
-
          var canonicalPatternsSupportsRDDs = List.empty[PatternsSupports]
-
          val iter = PatternUtilsRDD.localIterator(validCandPatternsRDD)
-         val frequentPatterns: ObjSet[Pattern] = HashObjSets.newMutableSet()
+
          while (iter.hasNext) {
             val patternWithoutPlan = iter.next()
             val canonicalPattern = patternWithoutPlan.copy()
             canonicalPattern.turnCanonical()
-
-            if (!frequentPatterns.contains(canonicalPattern)) {
-               // patterns -> supports
-               val canonicalPatternsSupportsRDD = {
-                  patternWithoutPlan.setVertexLabeled(true)
-                  val pattern = getPatternWithPlan(patternWithoutPlan)
-                  val rdd = canonicalPatternsSupports(fg, pattern).cache()
-                  canonicalPatternsSupportsRDDs = rdd :: canonicalPatternsSupportsRDDs
-                  rdd
-               }
-
-               val frequentRDD = frequentPatternsSupports(canonicalPatternsSupportsRDD).keys
-               val localIter = PatternUtilsRDD.localIterator(frequentRDD)
-               while (localIter.hasNext) frequentPatterns.add(localIter.next())
-            }
+            patternWithoutPlan.setVertexLabeled(true)
+            val pattern = getPatternWithPlan(patternWithoutPlan)
+            val rdd = canonicalPatternsSupports(fg, pattern)//.cache()
+            canonicalPatternsSupportsRDDs = rdd :: canonicalPatternsSupportsRDDs
          }
 
          frequentPatternsSupportsRDD = frequentPatternsSupports(
             sc.union(canonicalPatternsSupportsRDDs)
                .reduceByKey((s1,s2) => {
-                  s1.aggregate(s2)
+                  aggregate(s1,s2)
                   s1
                })
          ).cache()

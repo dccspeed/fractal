@@ -1,6 +1,6 @@
 package br.ufmg.cs.systems.fractal.gmlib
 
-import br.ufmg.cs.systems.fractal.computation.{Computation, SamplingEnumerator}
+import br.ufmg.cs.systems.fractal.computation.{Computation, RandomWalkEnumerator, SamplingEnumerator}
 import br.ufmg.cs.systems.fractal.gmlib.clique.{KClistEnumerator, MaximalCliquesEnumerator}
 import br.ufmg.cs.systems.fractal.gmlib.fsm.{FSMHybrid, FSMPF, FSMPFMCVC, FSMSF, MinImageSupport}
 import br.ufmg.cs.systems.fractal.gmlib.motifs.{MotifsPF, MotifsPFMCVC, MotifsSF}
@@ -436,7 +436,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
    : Array[Fractoid[PatternInducedSubgraph]] = {
       logInfo(s"PatternBeforePlan ${pattern}")
 
-      val newPatterns = PatternExplorationPlanMCVC.apply(pattern)
+      val newPatterns = PatternExplorationPlanMCVCVgroups.apply(pattern)
       val partialResults = new Array[Fractoid[PatternInducedSubgraph]](newPatterns.size())
 
       var i = 0
@@ -539,5 +539,57 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       val app = new InducedPeriodicSubgraphsPFMCVC(periodicity,
          numVertices, callback)
       app.apply(self)
+   }
+
+   /**
+    * Finds induced subgraphs containing only given labels
+    * @param labelsSet target labels
+    * @return fractoid representing the computation
+    */
+   def inducedSubgraphSearchLabelsSF(labelsSet: Set[Int])
+   : Fractoid[VertexInducedSubgraph] = {
+      val labelFilter
+      : (VertexInducedSubgraph, Computation[VertexInducedSubgraph]) => Boolean =
+         (s,c) => {
+            val graph = s.getMainGraph
+            val vertices = s.getVertices
+            val numVertices = vertices.size()
+            var valid = true
+            var i = 0
+            while (valid && i < numVertices) {
+               val u = vertices.getu(i)
+               if (!labelsSet.contains(graph.firstVertexLabel(u))) {
+                  valid = false
+               }
+               i += 1
+            }
+            valid
+         }
+
+     self.vfractoid.expand(1).filter(labelFilter)
+   }
+
+   /**
+    * Attempt to extract a set of canonical patterns draw from *numSamples*
+    * subgraph samples with *numVertices* vertices.
+    * @param numSamples
+    * @param numVertices
+    * @return a collection of canonical patterns
+    */
+   def getPatternsFromSamples
+   (numSamples: Int, numVertices: Int, seed: Long = 1L): RDD[Pattern] = {
+      val numThreads = if (self.numPartitions > numSamples) 1 else self.numPartitions
+      val samplesPerThread = Math.max(numSamples / numThreads, 1)
+      val patternsRDD = self
+         .set("samples_per_thread", samplesPerThread)
+         .set("random_walk_seed", seed)
+         .set("num_partitions", numThreads)
+         .vfractoid
+         .expand(numVertices, classOf[RandomWalkEnumerator[VertexInducedSubgraph]])
+         .aggregationCanonicalPatternLong(
+            s => s.quickPattern(), 0L, s => 0L, (v,_) => v)
+         .keys
+
+      patternsRDD
    }
 }

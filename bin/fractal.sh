@@ -42,7 +42,9 @@ temporals="periodic_subgraphs_induced_sf"
 temporals="${temporals}|periodic_subgraphs_induced_pf"
 temporals="${temporals}|periodic_subgraphs_induced_pf_mcvc"
 
-apps="${gqueryings}|${motifss}|${cliquess}|${quasicliquess}|${fsms}|${subgraphlisting}|${temporals}${extras}"
+subgraphsearch="induced_subgraph_search_labels_sf"
+
+apps="${gqueryings}|${motifss}|${cliquess}|${quasicliquess}|${fsms}|${subgraphlisting}|${temporals}|${subgraphsearch}|${extras}"
 
 usage="
 APPS_AVAILABLE
@@ -386,6 +388,18 @@ ALGOPTION for '$app':
    periodicthreshold=2|3|4|...             'Periodic threshold: indicates how many times subgraphs must occur with an arbitrary periodicity'"
 	;;
 
+
+	induced_subgraph_search_labels_sf)
+	required="inputgraph steps labelsset gfiltering"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   labelsset=l1,l2,...,ln                  'Labels set: allowed labels for subgraphs'
+   gfiltering=true|false                   'Graph filtering: whether input graph should be filtered before enumeration'"
+	;;
+
 	*)
 	echo "Invalid application: ${app}"
   printf "$usage\n"
@@ -420,7 +434,7 @@ jars=${jars:-""}
 app_class=${app_class:-br.ufmg.cs.systems.fractal.FractalSparkRunner}
 packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties ${PROFILER_OPTIONS}\""
-args=${args:-"$labeling $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $fraction $periodicthreshold $configs"}
+args=${args:-"$labeling $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $keywords $mindensity $query $fraction $periodicthreshold $labelsset $gfiltering $configs"}
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\

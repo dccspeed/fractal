@@ -130,14 +130,16 @@ public class PatternInducedSubgraph extends BasicSubgraph {
        * Maybe change the minimum cover match order to reflect the new ordering
        */
       if (nextOrdering - 1 >= 0) {
-         verticesBackup.clear();
-         verticesBackup.addAll(vertices);
+         //verticesBackup.clear();
+         //verticesBackup.addAll(vertices);
          IntArrayList previousOrdering =
                  explorationPlan.ordering(nextOrdering - 1);
          IntArrayList ordering = explorationPlan.ordering(nextOrdering);
          for (int j = 0; j < ordering.size(); ++j) {
+            //vertices.setu(previousOrdering.getu(j),
+            //        verticesBackup.getu(ordering.getu(j)));
             vertices.setu(previousOrdering.getu(j),
-                    verticesBackup.getu(ordering.getu(j)));
+                    originalVertices.getu(ordering.getu(j)));
          }
       }
 
@@ -331,13 +333,14 @@ public class PatternInducedSubgraph extends BasicSubgraph {
 
    private void ensureEdges(Pattern pattern) {
       int numVertices = getNumVertices();
+      edges.clear();
 
       PatternExplorationPlan explorationPlan = pattern.explorationPlan();
-      int edgeIdx = 0;
+      //int edgeIdx = 0;
       for (int u = 1; u < numVertices; ++u) {
          IntArrayList edgesIdxs = explorationPlan.vertexEdges(u);
-         edgeIdx += edgesIdxs.size();
-         if (edgeIdx > edges.size()) {
+         //edgeIdx += edgesIdxs.size();
+         //if (edgeIdx > edges.size()) {
             // add edges
             for (int i = 0; i < edgesIdxs.size(); ++i) {
                PatternEdge pedge = pattern.getEdges().getu(edgesIdxs.getu(i));
@@ -346,11 +349,11 @@ public class PatternInducedSubgraph extends BasicSubgraph {
                                vertices.getu(pedge.getDestPos()),
                                updateEdgesConsumer);
             }
-         }
+         //}
       }
 
       // remove old edges, if any
-      edges.removeLast(edges.size() - edgeIdx);
+      //edges.removeLast(edges.size() - edgeIdx);
    }
 
    @Override

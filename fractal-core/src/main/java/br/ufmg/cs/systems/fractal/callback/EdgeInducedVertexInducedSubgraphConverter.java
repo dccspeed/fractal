@@ -57,7 +57,7 @@ public class EdgeInducedVertexInducedSubgraphConverter
    }
 
    @Override
-   public void convert(EdgeInducedSubgraph esubgraph,
+   public boolean convert(EdgeInducedSubgraph esubgraph,
                        Computation<EdgeInducedSubgraph> ecomputation,
                        VertexInducedSubgraph vsubgraph,
                        Computation<VertexInducedSubgraph> vcomputation) {
@@ -107,6 +107,8 @@ public class EdgeInducedVertexInducedSubgraphConverter
       for (int i = 0; i < numVertices; ++i) {
          vsubgraph.addWord(verticesAux.getu(i));
       }
+
+      return false;
    }
 
    /**

@@ -42,6 +42,7 @@ public class PatternUtils {
                                                     int vertexLabel) {
       HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
       IntArrayList vertexPositions = new IntArrayList(pattern.getNumberOfVertices());
+      IntArrayList vertexLabels = new IntArrayList(pattern.getNumberOfVertices());
       int newPosition = pattern.getNumberOfVertices();
       PatternEdgePool edgePool =
               PatternEdgePool.instance(pattern.edgeLabeled());
@@ -49,6 +50,16 @@ public class PatternUtils {
       // create vertex positions
       for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
          vertexPositions.add(u);
+         vertexLabels.add(-1);
+      }
+
+      vertexLabels.set(0, pattern.getFirstVertexLabel());
+
+      for (PatternEdge pedge : pattern.getEdges()) {
+         int src = pedge.getSrcPos();
+         int dst = pedge.getDestPos();
+         vertexLabels.set(src, pedge.getSrcLabel());
+         vertexLabels.set(dst, pedge.getDestLabel());
       }
 
       // generate all connection patterns
@@ -64,7 +75,9 @@ public class PatternUtils {
                int u = connectionPattern.get(i);
                PatternEdge edge = edgePool.createObject();
                edge.setSrcPos(u);
+               edge.setSrcLabel(vertexLabels.get(u));
                edge.setDestPos(newPosition);
+               edge.setDestLabel(vertexLabel);
                newPattern.addEdge(edge);
             }
 

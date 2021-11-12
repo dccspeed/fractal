@@ -53,6 +53,8 @@ case class FractalGraph
       _config
    }
 
+   def numPartitions: Int = config.numPartitions
+
    private val vfractoidRoot: Fractoid[VertexInducedSubgraph] = {
       newFractoid[VertexInducedSubgraph]
    }

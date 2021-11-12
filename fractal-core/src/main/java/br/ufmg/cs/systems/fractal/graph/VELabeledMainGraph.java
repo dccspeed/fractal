@@ -150,6 +150,7 @@ public class VELabeledMainGraph implements MainGraph {
       int to1 = edgeLabelsIdx.getu(e1 + 1);
       int from2 = edgeLabelsIdx.getu(e2);
       int to2 = edgeLabelsIdx.getu(e2 + 1);
+      result.clear();
       Utils.sintersect(edgeLabels, edgeLabels, from1, to1, from2, to2, result);
 
       for (int i = 2; i < numEdges - 1; ++i) {
@@ -159,6 +160,7 @@ public class VELabeledMainGraph implements MainGraph {
          e1 = edges.getu(i);
          from1 = edgeLabelsIdx.getu(e1);
          to1 = edgeLabelsIdx.getu(e1 + 1);
+         result.clear();
          Utils.sintersect(previous, edgeLabels, 0, previous.size(), from1, to1,
                  result);
       }
@@ -632,11 +634,15 @@ public class VELabeledMainGraph implements MainGraph {
 
          vlabelsHadoopPath = new Path(vlabelsGraphPath);
          vlabelsIs = getInputStream(vlabelsHadoopPath);
-         readVertexLabelsFromInputStream(vlabelsIs);
+         if (vlabelsIs != null) {
+            readVertexLabelsFromInputStream(vlabelsIs);
+         }
 
          elabelsHadoopPath = new Path(elabelsGraphPath);
          elabelsIs = getInputStream(elabelsHadoopPath);
-         readEdgeLabelsFromInputStream(elabelsIs);
+         if (elabelsIs != null) {
+            readEdgeLabelsFromInputStream(elabelsIs);
+         }
 
          adjListsHadoopPath = new Path(adjListsGraphPath);
          adjListsIs = getInputStream(adjListsHadoopPath);

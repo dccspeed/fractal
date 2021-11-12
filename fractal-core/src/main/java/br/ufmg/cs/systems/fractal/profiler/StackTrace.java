@@ -4,6 +4,8 @@ import br.ufmg.cs.systems.fractal.Primitive;
 import br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator;
 import org.apache.log4j.Logger;
 
+import java.util.Arrays;
+
 public class StackTrace {
    private static final Logger LOG = Logger.getLogger(StackTrace.class);
 
@@ -73,6 +75,6 @@ public class StackTrace {
       return "StackTrace(time=" + time + ",percentage=" + percentage +
               ",samples=" + samples + ",size=" + stack.length +
               ",primitive=" + primitive +
-              ",topStack=" + stack[0] + ")";
+              ",stack=" + Arrays.toString(stack) + ")";
    }
 }

@@ -198,6 +198,7 @@ public class IntArrayList implements ReclaimableIntCollection, Externalizable {
    }
 
    public void setFrom(IntCollection collection) {
+      if (collection == this) return;
       ensureCapacity(collection.size());
       clear();
       collection.forEach(intAdder);

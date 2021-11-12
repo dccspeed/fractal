@@ -674,7 +674,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
     *
     * @return fractoid with unique step id
     */
-   private def withNextStepId: Fractoid[S] = {
+   private[fractal] def withNextStepId: Fractoid[S] = {
       this.copy(step = Fractoid.nextStepId)
    }
 
@@ -798,7 +798,8 @@ case class Fractoid[S <: Subgraph : ClassTag]
     * @param convertionFunc function mapping to edge-induced subgraphs
     * @return Edg-induced fractoid
     */
-   def efractoid(convertionFunc: (S,Computation[S],EdgeInducedSubgraph,Computation[EdgeInducedSubgraph]) => Unit)
+   def efractoid
+   (convertionFunc: (S,Computation[S],EdgeInducedSubgraph,Computation[EdgeInducedSubgraph]) => Boolean)
    : Fractoid[EdgeInducedSubgraph] = {
 
       val converter = new SubgraphConverter[S,EdgeInducedSubgraph] {
@@ -810,7 +811,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
                               computationIn: Computation[S],
                               subgraphOut: EdgeInducedSubgraph,
                               computationOut: Computation[EdgeInducedSubgraph])
-         : Unit = {
+         : Boolean = {
             convertionFunc.apply(subgraphIn, computationIn,
                subgraphOut, computationOut)
          }
@@ -867,7 +868,8 @@ case class Fractoid[S <: Subgraph : ClassTag]
     */
    def vfractoid
    (convertionFunc
-    : (S,Computation[S],VertexInducedSubgraph, Computation[VertexInducedSubgraph]) => Unit)
+    : (S,Computation[S],VertexInducedSubgraph,
+      Computation[VertexInducedSubgraph]) => Boolean)
    : Fractoid[VertexInducedSubgraph] = {
 
       val converter = new SubgraphConverter[S,VertexInducedSubgraph] {
@@ -879,7 +881,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
                               computationIn: Computation[S],
                               subgraphOut: VertexInducedSubgraph,
                               computationOut: Computation[VertexInducedSubgraph])
-         : Unit = {
+         : Boolean = {
             convertionFunc.apply(subgraphIn, computationIn,
                subgraphOut, computationOut)
          }
@@ -936,7 +938,8 @@ case class Fractoid[S <: Subgraph : ClassTag]
     */
    def pfractoid
    (pattern: Pattern, convertionFunc
-    : (S,Computation[S],PatternInducedSubgraph, Computation[PatternInducedSubgraph]) =>  Unit)
+    : (S,Computation[S],PatternInducedSubgraph,
+      Computation[PatternInducedSubgraph]) =>  Boolean)
    : Fractoid[PatternInducedSubgraph] = {
 
       val converter = new SubgraphConverter[S,PatternInducedSubgraph] {
@@ -948,7 +951,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
                               computationIn: Computation[S],
                               subgraphOut: PatternInducedSubgraph,
                               computationOut: Computation[PatternInducedSubgraph])
-         : Unit = {
+         : Boolean = {
             convertionFunc.apply(subgraphIn, computationIn,
                subgraphOut, computationOut)
          }

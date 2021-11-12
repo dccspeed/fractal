@@ -72,6 +72,7 @@ public abstract class BasicPattern implements Pattern {
       edgeLabeled = basicPattern.edgeLabeled;
       induced = basicPattern.induced;
       vertexLabeled = basicPattern.vertexLabeled;
+      firstVertexLabel = basicPattern.firstVertexLabel;
 
       edges = createPatternEdgeArrayList(edgeLabeled);
 
@@ -703,7 +704,6 @@ public abstract class BasicPattern implements Pattern {
          }
          sb.append("],vlabels=" + vlabels + ",elabels=" + elabels);
          return sb.toString();
-         //return StringUtils.join(edges, ",");
       } else if (getNumberOfVertices() == 1) {
          return "O(" + firstVertexLabel + ")";
       } else {
@@ -1068,9 +1068,6 @@ public abstract class BasicPattern implements Pattern {
 
    @Override
    public int getFirstVertexLabel() {
-      if (vertices.size() != 1) {
-         throw new RuntimeException("Only allowed for single-vertex patterns");
-      }
       return firstVertexLabel;
    }
 

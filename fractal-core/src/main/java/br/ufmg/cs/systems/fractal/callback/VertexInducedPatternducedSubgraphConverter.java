@@ -70,7 +70,7 @@ public class VertexInducedPatternducedSubgraphConverter
    }
 
    @Override
-   public void convert(VertexInducedSubgraph vsubgraph,
+   public boolean convert(VertexInducedSubgraph vsubgraph,
                        Computation<VertexInducedSubgraph> vcomputation,
                        PatternInducedSubgraph psubgraph,
                        Computation<PatternInducedSubgraph> pcomputation) {
@@ -81,5 +81,7 @@ public class VertexInducedPatternducedSubgraphConverter
       for (int i = 0; i < numVertices; ++i) {
          psubgraph.addWord(vertices.getu(i));
       }
+
+      return false;
    }
 }

@@ -86,6 +86,8 @@ public class PatternExplorationPlan implements Externalizable {
 
       reset(pattern);
 
+      vertexPredicates.get(0).setLabel(pattern.getFirstVertexLabel());
+
       for (PatternEdge pedge : pattern.getEdges()) {
          intersectionIdxs.get(pedge.getDestPos()).add(pedge.getSrcPos());
          vertexPredicates.get(pedge.getDestPos()).setLabel(pedge.getDestLabel());

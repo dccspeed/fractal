@@ -5,6 +5,7 @@ import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
+import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
 import br.ufmg.cs.systems.fractal.util.ReflectionSerializationUtils;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import org.apache.log4j.Logger;
@@ -23,6 +24,7 @@ public abstract class BasicComputation<S extends Subgraph>
    protected transient MainGraph mainGraph;
    protected transient Configuration configuration;
    protected transient Computation<S> nextComputation;
+   protected transient Computation<S> previousComputation;
    protected transient Computation<S> lastComputation;
 
    // basic counters
@@ -166,10 +168,12 @@ public abstract class BasicComputation<S extends Subgraph>
               getSubgraphEnumeratorClass()
       );
       subgraphEnumerator.init(config, this);
-      lastComputation = this;
       nextComputation = nextComputation();
+      lastComputation = this;
       while (lastComputation.nextComputation() != null) {
-         lastComputation = lastComputation.nextComputation();
+         Computation<S> currNextComputation = lastComputation.nextComputation();
+         currNextComputation.setPreviousComputation(lastComputation);
+         lastComputation = currNextComputation;
       }
    }
 
@@ -204,6 +208,16 @@ public abstract class BasicComputation<S extends Subgraph>
    @Override
    public Computation<S> nextComputation() {
       return null;
+   }
+
+   @Override
+   public final Computation<S> previousComputation() {
+      return previousComputation;
+   }
+
+   @Override
+   public final void setPreviousComputation(Computation<S> previousComputation) {
+      this.previousComputation = previousComputation;
    }
 
    @Override

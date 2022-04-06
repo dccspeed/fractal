@@ -99,7 +99,7 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
       if (cand.isEmpty() && fini.isEmpty()) {
          exts.clear();
          newExtensions(exts);
-         computation.lastComputation().process(subgraph);
+         //computation.lastComputation().process(subgraph);
          return;
       }
 
@@ -132,6 +132,9 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
       fini.ensureCapacity(neighborhood.size());
       for (int i = 0; i < neighborhood.size(); ++i) {
          int v = neighborhood.getu(i);
+         if (v == -1) {
+            LOG.warn(neighborhood);
+         }
          inducedGraph.put(v, IntArrayListPool.instance().createObject());
          if (v > u) cand.add(v);
          else fini.add(v);
@@ -186,11 +189,15 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
 
       if (super.extend_EXTENSION_PRIMITIVE()) {
          if (computation.nextComputation() == null) return true;
-         MaximalCliquesEnumerator<S> nextEnumerator =
-                 (MaximalCliquesEnumerator<S>) computation.nextComputation().getSubgraphEnumerator();
+
+         SubgraphEnumerator<S> nextEnumerator = nextEnumerator();
+         if (!(nextEnumerator instanceof MaximalCliquesEnumerator)) return true;
+
+         MaximalCliquesEnumerator<S> nextMaximalCliquesEnumerator =
+                 (MaximalCliquesEnumerator<S>) nextEnumerator;
          int u = subgraph.getVertices().getLast();
-         computeSets(u, nextEnumerator.cand, nextEnumerator.fini);
-         nextEnumerator.inducedGraph = inducedGraph;
+         computeSets(u, nextMaximalCliquesEnumerator.cand, nextMaximalCliquesEnumerator.fini);
+         nextMaximalCliquesEnumerator.inducedGraph = inducedGraph;
          return true;
       }
       return false;

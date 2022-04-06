@@ -65,6 +65,9 @@ case class SparkConfiguration(confs: Map[String, Any])
       // collect thread stats
       updateIfExists("collect_thread_stats", CONF_COLLECT_THREAD_STATS)
 
+      // thread stats key
+      updateIfExists("thread_stats_key", CONF_THREAD_STATS_KEY)
+
       // log level
       updateIfExists("log_level", CONF_LOG_LEVEL)
 
@@ -92,7 +95,12 @@ case class SparkConfiguration(confs: Map[String, Any])
       updateIfExists("multigraph", CONF_MAINGRAPH_MULTIGRAPH)
 
       // edge filtering predicate
-      updateIfExists("edge_filtering_predicate", CONF_MAINGRAPH_EDGE_FILTERING_PREDICATE)
+      updateIfExists("edge_filtering_predicate",
+         CONF_MAINGRAPH_EDGE_FILTERING_PREDICATE)
+
+      // vertex filtering predicate
+      updateIfExists("vertex_filtering_predicate",
+         CONF_MAINGRAPH_VERTEX_FILTERING_PREDICATE)
    }
 
    def initializeWithTag(isMaster: Boolean): Unit = synchronized {
@@ -167,6 +175,11 @@ case class SparkConfiguration(confs: Map[String, Any])
       setEdgeFilteringPredicate(
          getValue(CONF_MAINGRAPH_EDGE_FILTERING_PREDICATE, null)
             .asInstanceOf[EdgeFilteringPredicate]
+      )
+
+      setVertexFilteringPredicate(
+         getValue(CONF_MAINGRAPH_VERTEX_FILTERING_PREDICATE, null)
+            .asInstanceOf[VertexFilteringPredicate]
       )
 
       initialized = true

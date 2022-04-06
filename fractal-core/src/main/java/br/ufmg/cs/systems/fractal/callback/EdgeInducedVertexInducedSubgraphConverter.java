@@ -85,7 +85,7 @@ public class EdgeInducedVertexInducedSubgraphConverter
       for (int i = 1; i < numVertices - 1; ++i) {
          int u = verticesAux.getu(i);
          if (!cummulativeNeighborhood.contains(u)) {
-            int j = -1;
+            int j;
             int v = -1;
             for (j = i + 1; j < numVertices; ++j) {
                v = verticesAux.getu(j);

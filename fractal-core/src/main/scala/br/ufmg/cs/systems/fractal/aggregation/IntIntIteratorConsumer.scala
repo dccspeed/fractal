@@ -1,13 +1,13 @@
 package br.ufmg.cs.systems.fractal.aggregation
 
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph
-import com.koloboke.collect.map.ObjLongCursor
+import com.koloboke.collect.map.IntIntCursor
 
-class ObjLongIteratorConsumer[S <: Subgraph, K <: java.io.Serializable]
-(val agg: ObjLongSubgraphAggregation[S, K], finishCallback: () => Unit)
-   extends Iterator[(K, Long)] {
+class IntIntIteratorConsumer[S <: Subgraph]
+(val agg: IntIntSubgraphAggregation[S], finishCallback: () => Unit)
+   extends Iterator[(Int, Int)] {
 
-   private var cursor: ObjLongCursor[K] = _
+   private var cursor: IntIntCursor = _
    private var readyToFinish: Boolean = false
    private var finished: Boolean = false
    private var nextConsumed: Boolean = true
@@ -54,7 +54,7 @@ class ObjLongIteratorConsumer[S <: Subgraph, K <: java.io.Serializable]
       }
    }
 
-   override def next(): (K, Long) = {
+   override def next(): (Int, Int) = {
       nextConsumed = true
       (cursor.key(), cursor.value())
    }

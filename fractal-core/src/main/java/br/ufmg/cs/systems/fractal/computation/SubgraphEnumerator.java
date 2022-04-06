@@ -1,11 +1,18 @@
 package br.ufmg.cs.systems.fractal.computation;
 
 import br.ufmg.cs.systems.fractal.conf.Configuration;
+import br.ufmg.cs.systems.fractal.subgraph.EdgeInducedSubgraph;
+import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
+import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
+import br.ufmg.cs.systems.fractal.util.ReflectionSerializationUtils;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import com.koloboke.collect.IntCollection;
+import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.log4j.Logger;
+import org.apache.spark.graphx.Edge;
 
+import java.lang.reflect.ParameterizedType;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class SubgraphEnumerator<S extends Subgraph> {
@@ -163,6 +170,45 @@ public class SubgraphEnumerator<S extends Subgraph> {
    public synchronized void terminate() {
       if (extensionsIdx != null) {
          extensionsIdx.set(extensionsSize);
+      }
+   }
+
+   public String asExtensionMethodString(Computation computation) {
+      S subgraph = (S) ReflectionSerializationUtils.newInstance(
+                      computation.getSubgraphClass());
+      Class<S> sclass = (Class<S>) subgraph.getClass();
+      if (VertexInducedSubgraph.class.isAssignableFrom(sclass)) {
+         return "Mc";
+      } else if (EdgeInducedSubgraph.class.isAssignableFrom(sclass)) {
+         return "Mc";
+      } else if (PatternInducedSubgraph.class.isAssignableFrom(sclass)) {
+         return "Mp";
+      } else {
+         throw new RuntimeException("Unknown subgraph class " + sclass);
+      }
+   }
+
+   public final <SE extends SubgraphEnumerator<S>> SE nextEnumerator() {
+      Computation<S> nextComputation = computation.nextComputation();
+      while (nextComputation != null && nextComputation.getSubgraphEnumerator() instanceof BypassSubgraphEnumerator) {
+         nextComputation = nextComputation.nextComputation();
+      }
+      if (nextComputation != null) {
+         return (SE) nextComputation.getSubgraphEnumerator();
+      } else {
+         return null;
+      }
+   }
+
+   public final <SE extends SubgraphEnumerator<S>> SE previousEnumerator() {
+      Computation<S> previousComputation = computation.previousComputation();
+      while (previousComputation != null && previousComputation.getSubgraphEnumerator() instanceof BypassSubgraphEnumerator) {
+         previousComputation = previousComputation.previousComputation();
+      }
+      if (previousComputation != null) {
+         return (SE) previousComputation.getSubgraphEnumerator();
+      } else {
+         return null;
       }
    }
 

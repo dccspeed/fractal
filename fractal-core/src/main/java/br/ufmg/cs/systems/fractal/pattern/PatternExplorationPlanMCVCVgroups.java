@@ -77,7 +77,7 @@ public class PatternExplorationPlanMCVCVgroups extends PatternExplorationPlan {
       IntIntMapPool.instance().reclaimObject(labeling);
    }
 
-   private static int updateInitalPlan(Pattern pattern, IntArrayList mcvc) {
+   private static int updateInitialPlan(Pattern pattern, IntArrayList mcvc) {
       int numVertices = pattern.getNumberOfVertices();
       PatternExplorationPlan explorationPlan = pattern.explorationPlan();
       PatternEdgeArrayList patternEdges = pattern.getEdges();
@@ -88,6 +88,8 @@ public class PatternExplorationPlanMCVCVgroups extends PatternExplorationPlan {
 
       explorationPlan.reset(pattern);
 
+      boolean edgeLabeled = pattern.edgeLabeled();
+
       /**
        * Create initial plan
        */
@@ -95,8 +97,13 @@ public class PatternExplorationPlanMCVCVgroups extends PatternExplorationPlan {
          PatternEdge pedge = patternEdges.get(i);
          explorationPlan.intersectionIdxs.get(pedge.getDestPos()).add(pedge.getSrcPos());
          explorationPlan.vertexPredicates.get(pedge.getDestPos()).setLabel(pedge.getDestLabel());
-         EdgePredicate edgePredicate = new EdgePredicate();
-         edgePredicate.setLabel(pedge.getLabel());
+         EdgePredicate edgePredicate;
+         if (edgeLabeled) {
+            edgePredicate = new EdgePredicate();
+            edgePredicate.setLabel(pedge.getLabel());
+         } else {
+            edgePredicate = EdgePredicate.trueEdgePredicate;
+         }
          explorationPlan.edgePredicates.get(pedge.getDestPos()).add(edgePredicate);
          if (pedge.getSrcPos() < mcvc.size() && pedge.getDestPos() < mcvc.size()) {
             ++numCoverEdges;
@@ -215,7 +222,7 @@ public class PatternExplorationPlanMCVCVgroups extends PatternExplorationPlan {
 
    private static ObjArrayList<Pattern> executions(Pattern pattern, IntArrayList mcvc) {
       pattern.setExplorationPlan(new PatternExplorationPlanMCVCVgroups());
-      int numCoverEdges = updateInitalPlan(pattern, mcvc);
+      int numCoverEdges = updateInitialPlan(pattern, mcvc);
 
       ObjObjMap<Pattern, ObjArrayList<IntArrayList>> vgroupSequences = HashObjObjMaps.newMutableMap();
 
@@ -240,7 +247,7 @@ public class PatternExplorationPlanMCVCVgroups extends PatternExplorationPlan {
          Pattern newPattern = pattern.copy();
          PatternExplorationPlanMCVCVgroups explorationPlanMCVC = new PatternExplorationPlanMCVCVgroups();
          newPattern.setExplorationPlan(explorationPlanMCVC);
-         updateInitalPlan(newPattern, mcvc);
+         updateInitialPlan(newPattern, mcvc);
          explorationPlanMCVC.vgroupOrderings.clear();
          explorationPlanMCVC.vgroupOrderings.addAll(vgroupOrderings);
          newPattern.updateSymmetryBreaker(explorationPlanMCVC.vgroupOrderings.get(0));

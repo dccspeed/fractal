@@ -3,7 +3,7 @@ package br.ufmg.cs.systems.fractal.computation
 import java.io
 
 import br.ufmg.cs.systems.fractal.Primitive
-import br.ufmg.cs.systems.fractal.aggregation.{LongLongSubgraphAggregation, LongObjSubgraphAggregation, LongSubgraphAggregation, ObjLongSubgraphAggregation, ObjObjSubgraphAggregation}
+import br.ufmg.cs.systems.fractal.aggregation.{IntIntSubgraphAggregation, LongLongSubgraphAggregation, LongObjSubgraphAggregation, LongSubgraphAggregation, ObjLongSubgraphAggregation, ObjObjSubgraphAggregation}
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.{Logging, ReflectionSerializationUtils}
@@ -68,6 +68,16 @@ trait SparkEngine[S <: Subgraph]
    def computeAggregationObjObj[K <: io.Serializable, V <: io.Serializable]
    (objObjSubgraphAggregation: ObjObjSubgraphAggregation[S, K, V])
    : Iterator[(K, V)]
+
+   /**
+    * This call starts this engine computation and aggregates the valid
+    * subgraphs by key/value, where value is an int.
+    *
+    * @return iterator of (Int,Int) to be consumed downstream
+    */
+   def computeAggregationIntInt
+   (intIntSubgraphAggregation: IntIntSubgraphAggregation[S])
+   : Iterator[(Int, Int)]
 
    /**
     * This call starts this engine computation and aggregates the valid

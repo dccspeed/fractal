@@ -116,7 +116,7 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
       MainGraph graph = computation.getConfig().getMainGraph();
 
       for (int e = myPartitionId; e < totalNumWords; e += numPartitions) {
-         if (graph.isEdgeValid(e))  extensions.add(e);
+         if (graph.isEdgeValid(e)) extensions.add(e);
       }
    }
 

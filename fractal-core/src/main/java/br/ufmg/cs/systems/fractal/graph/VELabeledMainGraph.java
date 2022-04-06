@@ -9,7 +9,10 @@ import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntSetPool;
 import com.koloboke.collect.IntCollection;
+import com.koloboke.collect.map.LongIntMap;
+import com.koloboke.collect.map.hash.HashLongIntMaps;
 import com.koloboke.collect.set.IntSet;
+import com.koloboke.collect.set.hash.HashIntSets;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocatedFileStatus;
 import org.apache.hadoop.fs.Path;
@@ -26,14 +29,9 @@ public class VELabeledMainGraph implements MainGraph {
    protected static final Logger LOG =
            Logger.getLogger(VELabeledMainGraph.class);
 
-   /**
-    * Default parameters
-    */
-   private final DefaultEdgePredicate defaultEdgePredicate =
-           new DefaultEdgePredicate();
-
    /* CSR-like graph representation */
    protected int numEdges;
+   protected int numValidVertices; // allowed to skip vertices while reading
    protected int numValidEdges; // allowed to skip edges while reading
    protected int numVertices;
    protected IntArrayList vertexNeighborhoodIdx;
@@ -52,6 +50,7 @@ public class VELabeledMainGraph implements MainGraph {
    protected IntArrayListPool intArrayListPool;
 
    /* Filtering */
+   protected VertexFilteringPredicate vertexPredicate;
    protected EdgeFilteringPredicate edgePredicate;
    protected IntArrayListView uLabelsView;
    protected IntArrayListView vLabelsView;
@@ -60,9 +59,9 @@ public class VELabeledMainGraph implements MainGraph {
    public VELabeledMainGraph() {
    }
 
-   private final void addEdge(int u, int v, int e) {
+   private final void addEdge(int u, int v, int e, boolean areVerticesValid) {
       if (u < v) { // first time seeing this edge
-         if (isEdgeValid(u, v, e)) { // valid
+         if (areVerticesValid && isEdgeValid(u, v, e)) { // valid
             vertexNeighborhoods.add(v);
             edgeNeighborhoods.add(e);
             edgeSrcs.add(u);
@@ -70,9 +69,11 @@ public class VELabeledMainGraph implements MainGraph {
          } else { // invalid
             edgeSrcs.add(-1);
             edgeDsts.add(v);
+            --numValidEdges;
          }
       } else { // second time seeing this edge
-         if (edgePredicate == null || edgeSrcs.getu(e) != -1) { // valid
+         if (areVerticesValid &&
+                 (edgePredicate == null || edgeSrcs.getu(e) != -1)) { // valid
             vertexNeighborhoods.add(v);
             edgeNeighborhoods.add(e);
          } else { // invalid
@@ -266,14 +267,18 @@ public class VELabeledMainGraph implements MainGraph {
       int i;
       while (true) {
          for (i = 0; i < numIntersectionVertices; ++i) {
+            EdgePredicate epred = epreds.getu(i);
+
             // ensure >= vertexCandidate
             int startIdx = starts.getu(i);
             int endIdx = ends.getu(i);
 
             int v = Integer.MIN_VALUE;
+            int e = Integer.MIN_VALUE;
             for (; startIdx < endIdx; ++startIdx) {
                v = vertexNeighborhoods.getu(startIdx);
-               if (v >= vertexCandidate) break;
+               e = edgeNeighborhoods.getu(startIdx);
+               if (v >= vertexCandidate && epred.test(e)) break;
             }
 
             if (startIdx == endIdx) {
@@ -568,6 +573,20 @@ public class VELabeledMainGraph implements MainGraph {
    }
 
    @Override
+   public IntArrayListView neighborhoodEdges(int u) {
+      int from = vertexNeighborhoodIdx.getu(u);
+      int to = vertexNeighborhoodIdx.getu(u + 1);
+      return edgeNeighborhoods.view(from, to);
+   }
+
+   @Override
+   public void neighborhoodEdges(int u, IntArrayListView view) {
+      int from = vertexNeighborhoodIdx.getu(u);
+      int to = vertexNeighborhoodIdx.getu(u + 1);
+      view.set(edgeNeighborhoods, from, to);
+   }
+
+   @Override
    public int numEdges() {
       return numEdges;
    }
@@ -609,6 +628,7 @@ public class VELabeledMainGraph implements MainGraph {
    public final void init(Configuration configuration) throws IOException {
       intArrayListPool = IntArrayListPool.instance();
       edgePredicate = configuration.getEdgeFilteringPredicate();
+      vertexPredicate = configuration.getVertexFilteringPredicate();
       long start = System.currentTimeMillis();
 
       String graphPath = configuration.getMainGraphPath();
@@ -655,6 +675,10 @@ public class VELabeledMainGraph implements MainGraph {
          if (adjListsIs != null) adjListsIs.close();
       }
 
+      LOG.info("numVertices " + numVertices);
+      LOG.info("numValidVertices " + numValidVertices);
+      LOG.info("numEdges " + numEdges);
+      LOG.info("numValidEdges " + numValidEdges);
       LOG.info("vertexNeighborhoodIdx " + vertexNeighborhoodIdx.size());
       LOG.info("vertexNeighborhoods " + vertexNeighborhoods.size());
       LOG.info("edgeNeighborhoods " + edgeNeighborhoods.size());
@@ -750,8 +774,9 @@ public class VELabeledMainGraph implements MainGraph {
          TextFileParser stream = new TextFileParser(is);
 
          numVertices = stream.nextInt();
+         numValidVertices = numVertices;
          numEdges = stream.nextInt();
-         numValidEdges = 0;
+         numValidEdges = numEdges;
 
          uLabelsView = new IntArrayListView();
          vLabelsView = new IntArrayListView();
@@ -772,10 +797,28 @@ public class VELabeledMainGraph implements MainGraph {
       edgeDsts = new IntArrayList(numEdges);
 
       try {
+         IntSet invalidVertices = null;
          TextFileParser stream = new TextFileParser(is);
          int u, v, e;
+
+         // check vertex against possibly existing predicate
+         if (vertexPredicate != null) {
+            invalidVertices = HashIntSets.newUpdatableSet();
+            for (u = 0; u < numVertices; ++u) {
+               if (!isVertexValid(u)) {
+                  invalidVertices.add(u);
+                  --numValidVertices;
+               }
+            }
+         }
+
          for (u = 0; u < numVertices; ++u) {
             addVertex(u);
+
+            // source vertex is valid if there is no vertex predicate or the
+            // vertex passed the vertex predicate
+            boolean isSrcValid =
+                    invalidVertices == null || !invalidVertices.contains(u);
 
             while (!stream.skipNewLine()) {
                // read neighbor v
@@ -786,8 +829,13 @@ public class VELabeledMainGraph implements MainGraph {
                           "id after neighbor id " + u + " " + v);
                }
 
+               // edge is valid if source vertex is valid and destination
+               // vertex is valid
+               boolean areVerticesValid = isSrcValid &&
+                       (invalidVertices == null || !invalidVertices.contains(v));
+
                e = stream.nextInt();
-               addEdge(u, v, e);
+               addEdge(u, v, e, areVerticesValid);
             }
          }
 
@@ -800,8 +848,8 @@ public class VELabeledMainGraph implements MainGraph {
 
       // sanity check
       if (vertexNeighborhoodIdx.size() != numVertices + 1
-              //|| vertexNeighborhoods.size() != numEdges*2
-              //|| edgeNeighborhoods.size() != numEdges*2
+              || vertexNeighborhoods.size() != numValidEdges*2
+              || edgeNeighborhoods.size() != numValidEdges*2
               || edgeSrcs.size() != numEdges
               || edgeDsts.size() != numEdges) {
          throw new RuntimeException("Issue reading adjacency lists.");
@@ -874,7 +922,24 @@ public class VELabeledMainGraph implements MainGraph {
       return isEdgeValid(edgeSrcs.getu(e), edgeDsts.getu(e), e);
    }
 
-   private final boolean isEdgeValid(int u, int v, int e) {
+   @Override
+   public final boolean isVertexValid(int u) {
+      if (vertexPredicate == null) return true;
+
+      IntArrayListView uLabels = null;
+
+      if (vertexLabels != null) {
+         uLabelsView.set(vertexLabels, vertexLabelsIdx.getu(u),
+                 vertexLabelsIdx.getu(u + 1));
+
+         uLabels = uLabelsView;
+      }
+
+      return vertexPredicate.test(u, uLabels);
+   }
+
+   @Override
+   public final boolean isEdgeValid(int u, int v, int e) {
       if (edgePredicate == null) return true;
 
       IntArrayListView ulabels, vLabels, eLabels;
@@ -899,11 +964,9 @@ public class VELabeledMainGraph implements MainGraph {
       return edgePredicate.test(u, ulabels, v, vLabels, e, eLabels);
    }
 
-   private class DefaultEdgePredicate extends EdgePredicate {
-      @Override
-      public boolean test(int e) {
-         return true;
-      }
+   @Override
+   public int vertexDegree(int u) {
+      return vertexNeighborhoodIdx.getu(u + 1) - vertexNeighborhoodIdx.getu(u);
    }
 
 }

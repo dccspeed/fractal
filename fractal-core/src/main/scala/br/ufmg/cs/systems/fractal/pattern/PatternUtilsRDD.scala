@@ -27,12 +27,42 @@ object PatternUtilsRDD {
          .distinct(3 * sc.defaultParallelism)
    }
 
+   def extendByEdgeInternalRDD(patterns: RDD[Pattern], edgeLabel: Int)
+   : RDD[Pattern] = {
+      val sc = patterns.sparkContext
+      patterns
+         .flatMap(p =>{
+            PatternUtils.extendByEdgeInternal(p, edgeLabel).asScala
+         })
+         .distinct(3 * sc.defaultParallelism)
+   }
+
+   def extendByEdgeExternalRDD(patterns: RDD[Pattern], vertexLabel: Int,
+                               edgeLabel: Int): RDD[Pattern] = {
+      val sc = patterns.sparkContext
+      patterns
+         .flatMap(p =>{
+            PatternUtils.extendByEdgeExternal(p, vertexLabel, edgeLabel).asScala
+         })
+         .distinct(3 * sc.defaultParallelism)
+   }
+
    def extendByEdgeRDD(patterns: RDD[Pattern], vertexLabel: Int)
    : RDD[Pattern] = {
       val sc = patterns.sparkContext
       patterns
          .flatMap(p =>{
             PatternUtils.extendByEdge(p, vertexLabel).asScala
+         })
+         .distinct(3 * sc.defaultParallelism)
+   }
+
+   def extendByEdgeRDD(patterns: RDD[Pattern], vertexLabel: Int, edgeLabel: Int)
+   : RDD[Pattern] = {
+      val sc = patterns.sparkContext
+      patterns
+         .flatMap(p =>{
+            PatternUtils.extendByEdge(p, vertexLabel, edgeLabel).asScala
          })
          .distinct(3 * sc.defaultParallelism)
    }

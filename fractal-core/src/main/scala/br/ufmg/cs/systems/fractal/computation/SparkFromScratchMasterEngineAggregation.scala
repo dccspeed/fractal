@@ -1,13 +1,13 @@
 package br.ufmg.cs.systems.fractal.computation
 
 import java.io.Serializable
-import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue}
 
 import akka.actor._
 import br.ufmg.cs.systems.fractal.aggregation._
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
-import br.ufmg.cs.systems.fractal.util.{Logging, ProcessComputeFunc, ThreadStats}
+import br.ufmg.cs.systems.fractal.util.{FractalSparkListener, FractalThreadStats, Logging, ProcessComputeFunc}
 import br.ufmg.cs.systems.fractal.{Fractoid, Primitive}
 import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
@@ -117,6 +117,13 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
          _.computeAggregationLongLong(longLongSubgraphAggregation))
    }
 
+   override def intIntRDD
+   (intIntSubgraphAggregation: IntIntSubgraphAggregation[S])
+   : RDD[(Int, Int)] = {
+      execEnginesRDD.flatMap(
+         _.computeAggregationIntInt(intIntSubgraphAggregation))
+   }
+
    override def longObjRDD[V <: Serializable : ClassTag]
    (longObjSubgraphAggregation: LongObjSubgraphAggregation[S, V])
    : RDD[(Long, V)] = {
@@ -136,21 +143,24 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
       val _engineDataArray = engineDataArray
 
       // create accumulator for thread stats if this is allowed
-      val threadStatsAccum: CollectionAccumulator[ThreadStats] =
+      val threadStatsAccum: CollectionAccumulator[FractalThreadStats] =
          if (config.collectThreadStats()) {
-            sc.collectionAccumulator[ThreadStats]("THREAD_STATS")
+            val accumKey = config.getThreadStatsKey
+            val accum = sc.collectionAccumulator[FractalThreadStats](accumKey)
+            FractalSparkListener.threadStatsKeyToAccumId.put(accumKey, accum.id)
+            accum
          } else {
             null
          }
 
-      stepRDD.mapPartitionsWithIndex { (idx, _) =>
+      stepRDD.mapPartitionsWithIndex ((idx, _) => {
          val enginesArray = getEnginesArray(idx, threadStatsAccum,
             _engineDataArray)
          val execEngine = enginesArray.last
             .asInstanceOf[SparkFromScratchEngine[S]]
 
          Iterator[SparkEngine[S]](execEngine)
-      }
+      })
    }
 }
 
@@ -169,7 +179,7 @@ object SparkFromScratchMasterEngineAggregation {
     * @return array of engines, each representing a partial workflow
     */
    private def getEnginesArray(idx: Int,
-                               threadStatsAccum: CollectionAccumulator[ThreadStats],
+                               threadStatsAccum: CollectionAccumulator[FractalThreadStats],
                                engineDataArray: Array[EngineData])
    : Array[SparkFromScratchEngine[_ <: Subgraph]] = {
 

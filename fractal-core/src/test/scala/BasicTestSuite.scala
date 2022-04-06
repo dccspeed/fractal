@@ -147,7 +147,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       cubeGraph.set("num_partitions", numPartitions)
 
       for (k <- 0 to (numSubgraph.size - 1)) {
-         val cliquesFrac = cubeGraph.cliquesSF(k + 1)
+         val cliquesFrac = cubeGraph.cliquesPO(k + 1)
 
          val numCliques = cliquesFrac.aggregationCount
          assert(numCliques == numSubgraph(k))
@@ -161,7 +161,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       cubeGraph.set("num_partitions", numPartitions)
 
       for (k <- 0 to (numSubgraph.size - 1)) {
-         val cliqueFrac = cubeGraph.cliquesKClistSF(k + 1)
+         val cliqueFrac = cubeGraph.cliquesCustomKClist(k + 1)
          val numCliques = cliqueFrac.aggregationCount
          assert(numCliques == numSubgraph(k))
       }
@@ -217,14 +217,8 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
          // Subgraph-first optimized approach
          val numMaximalCliques = {
-            val frac = chosenGraph.maximalCliquesQuickSF(maxSize)
-            val callback: CustomSubgraphCallback[VertexInducedSubgraph] =
-               (s, c, cb) => {
-                  if (s.getNumVertices <= maxSize) {
-                     cb.apply(s, c)
-                  }
-               }
-            frac.aggregationCountWithCallback(callback)
+            val frac = chosenGraph.maximalCliquesCustomQuick(maxSize)
+            frac.aggregationCount
          }
 
          assert(numMaximalCliques == numSubgraphs,
@@ -232,12 +226,8 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
          // Pattern-first naive approach
          val numMaximalCliques2 = {
-            var numMaximalCliques = 0L
-            val callback: Fractoid[PatternInducedSubgraph] => Unit = frac => {
-               numMaximalCliques += frac.aggregationCount
-            }
-            chosenGraph.maximalCliquesPF(maxSize, callback)
-            numMaximalCliques
+            val frac = chosenGraph.maximalCliquesPA(maxSize)
+            frac.aggregationCount
          }
 
          assert(numMaximalCliques2 == numSubgraphs,
@@ -277,7 +267,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
    test("[sampling.gquerying.triangle]", Tag("sampling.gquerying.triangle")) {
       citeseerSingleLabelGraph.set("num_partitions", numPartitions)
       // ground-truth 1: 3-cliques
-      val gt1 = citeseerSingleLabelGraph.cliquesSF(3).aggregationCount
+      val gt1 = citeseerSingleLabelGraph.cliquesPO(3).aggregationCount
 
       // ground-truth 2: triangle querying
       val trianglePattern = PatternUtils.fromFS("../data/test/triangle")

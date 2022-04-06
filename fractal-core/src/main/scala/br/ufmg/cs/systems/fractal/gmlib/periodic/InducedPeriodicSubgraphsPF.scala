@@ -8,6 +8,7 @@ import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplication
 import br.ufmg.cs.systems.fractal.graph.MainGraph
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternUtils, PatternUtilsRDD}
 import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph, Subgraph, VertexInducedSubgraph}
+import br.ufmg.cs.systems.fractal.util.Logging
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
 import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
 import org.apache.spark.SparkContext
@@ -138,7 +139,8 @@ class InducedPeriodicSubgraphsPF
       if (s.getNumVertices == 1) return true
       val graph = c.getConfig.getMainGraph
       periodicTime.clear()
-      graph.forEachCommonEdgeLabels(s.getEdges(c.getPattern), consumer)
+      val edges = s.getEdges(c.getPattern)
+      graph.forEachCommonEdgeLabels(edges, consumer)
       isPeriodic(periodicTime, periodicThreshold)
    }
 

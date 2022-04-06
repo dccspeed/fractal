@@ -75,10 +75,16 @@ public interface Computation<S extends Subgraph> extends Serializable {
 
    Computation<S> nextComputation();
 
+   String asPrimitiveString();
+
    // {{{ runtime
    Primitive primitive();
 
    Primitive[] primitives();
+
+   Computation<S> previousComputation();
+
+   void setPreviousComputation(Computation<S> previousComputation);
 
    void process(S Subgraph);
 
@@ -88,3 +94,4 @@ public interface Computation<S extends Subgraph> extends Serializable {
 
    void setSubgraph(S subgraph);
 }
+

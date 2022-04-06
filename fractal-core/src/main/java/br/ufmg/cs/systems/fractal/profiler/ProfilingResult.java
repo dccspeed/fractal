@@ -8,6 +8,8 @@ public class ProfilingResult {
    private long numSamplesTotal;
    private double percentageTotal;
    private long timeTotal;
+   private long startTime;
+   private long finishTime;
 
    public StackTrace[] getTraces() {
       return traces;
@@ -21,11 +23,18 @@ public class ProfilingResult {
       return percentageTotal;
    }
 
+   public long elapsedTime() {
+      return finishTime - startTime;
+   }
+
    public long getTimeTotal() {
       return timeTotal;
    }
 
-   public ProfilingResult(String tracesStr) {
+   public ProfilingResult(String tracesStr, long startTime, long finishTime) {
+      this.startTime = startTime;
+      this.finishTime = finishTime;
+
       final String splitRegex = "--- ";
 
       numSamplesTotal = 0;

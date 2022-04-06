@@ -67,8 +67,8 @@ class QuasiCliquesSF(maxNumVertices: Int, minDensity: Double)
          i += 1
       }
 
+      //true
       val valid = diameterFilter(subgraph, computation)
-
       valid
    }
 

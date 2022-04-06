@@ -2,45 +2,16 @@ package br.ufmg.cs.systems.fractal.util;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.computation.ExecutionEngine;
-import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
-import com.koloboke.collect.map.IntObjMap;
-import com.koloboke.collect.map.hash.HashIntObjMaps;
-import com.koloboke.collect.set.ObjSet;
-import com.koloboke.collect.set.hash.HashObjSets;
+import com.koloboke.collect.map.ObjLongMap;
 
 import java.io.*;
 import java.util.Arrays;
+import java.util.concurrent.ConcurrentHashMap;
 
-public class ThreadStats implements Serializable {
-
-   private static final IntObjMap<ObjArrayList<ThreadStats>> threadStatuses =
-           HashIntObjMaps.newMutableMap();
-
-   public static void add(ThreadStats threadStatus) {
-      int stageId = threadStatus.stage;
-      ObjArrayList<ThreadStats> stageThreadStatuses = threadStatuses.get(stageId);
-      if (stageThreadStatuses == null) {
-         stageThreadStatuses = new ObjArrayList<>();
-         synchronized (threadStatuses) {
-            threadStatuses.put(stageId, stageThreadStatuses);
-         }
-      }
-
-      stageThreadStatuses.add(threadStatus);
-   }
-
-   public static ObjArrayList<ThreadStats> get(int stageId) {
-      return threadStatuses.get(stageId);
-   }
-
-   public static void remove(int stageId) {
-      synchronized (threadStatuses) {
-         threadStatuses.remove(stageId);
-      }
-   }
+public class FractalThreadStats implements Serializable {
 
    // identification
-   public final long step;
+   public final int step;
    public final int stage;
    public final int threadId;
 
@@ -60,8 +31,7 @@ public class ThreadStats implements Serializable {
    public final long[] numInternalWorkSteals;
    public final long[] numExternalWorkSteals;
 
-
-   public ThreadStats(Computation computation) {
+   public FractalThreadStats(Computation computation) {
       ExecutionEngine engine = computation.getExecutionEngine();
       // identification
       step = computation.getStep();
@@ -105,6 +75,22 @@ public class ThreadStats implements Serializable {
    public double computationWorkStealingTimeMs() {
       return (computationWorkStealingTimeEnd - computationWorkStealingTimeStart)
               * 1e-6;
+   }
+
+   @Override
+   public int hashCode() {
+      int h = 1;
+      h += 31 * h + step;
+      h += 31 * h + stage;
+      h += 31 * h + threadId;
+      return h;
+   }
+
+   @Override
+   public boolean equals(Object other) {
+      if (!(other instanceof FractalThreadStats)) return false;
+      FractalThreadStats otherStats = (FractalThreadStats) other;
+      return step == otherStats.step && stage == otherStats.stage && threadId == otherStats.threadId;
    }
 
    @Override

@@ -1,19 +1,23 @@
 package br.ufmg.cs.systems.fractal
 
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.function.IntConsumer
 
-import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplications
-import br.ufmg.cs.systems.fractal.graph.EdgeFilteringPredicate
+import br.ufmg.cs.systems.fractal.graph.{EdgeFilteringPredicate, MainGraph, UnlabeledMainGraph, VertexFilteringPredicate}
 import br.ufmg.cs.systems.fractal.pattern._
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util._
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
+import com.koloboke.collect.map.IntIntMap
+import com.koloboke.collect.map.hash.{HashIntIntMap, HashIntIntMaps}
+import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.rdd.RDD
+import org.roaringbitmap.RoaringBitmap
 
 //import scala.collection.mutable.Map
 import scala.reflect.ClassTag
+import scala.collection.JavaConverters._
 
 /**
  * Graph used as starting point of Fractal application workflows
@@ -28,7 +32,8 @@ case class FractalGraph
  fc: FractalContext,
  confs: Map[String, Any],
  logLevel: String,
- edgePredicate: EdgeFilteringPredicate) extends Logging {
+ edgePredicate: EdgeFilteringPredicate,
+ vertexPredicate: VertexFilteringPredicate) extends Logging {
 
    private val config: SparkConfiguration = {
       val _config = new SparkConfiguration
@@ -48,6 +53,10 @@ case class FractalGraph
 
       if (edgePredicate != null) {
          _config.set("edge_filtering_predicate", edgePredicate)
+      }
+
+      if (vertexPredicate != null) {
+         _config.set("vertex_filtering_predicate", vertexPredicate)
       }
 
       _config
@@ -75,12 +84,12 @@ case class FractalGraph
    def fractalContext: FractalContext = fc
 
    def this(path: String, fc: FractalContext, graphClass: String) = {
-      this (path, graphClass, fc, Map.empty, "warn", null)
+      this (path, graphClass, fc, Map.empty, "warn", null, null)
    }
 
    def this(path: String, graphClass: String,
             fc: FractalContext, logLevel: String) = {
-      this (path, graphClass, fc, Map.empty, logLevel, null)
+      this (path, graphClass, fc, Map.empty, logLevel, null, null)
    }
 
    private def newFractoid[S <: Subgraph : ClassTag]: Fractoid[S] = {
@@ -118,8 +127,20 @@ case class FractalGraph
     * @return Fractoid with the initial state of pattern-induced computation
     */
    def pfractoid(pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
+      //val patternWithPlan = if (pattern.explorationPlan() == null) {
+      //   PatternExplorationPlan.apply(pattern).get(0)
+      //} else {
+      //   pattern
+      //}
       val patternWithPlan = if (pattern.explorationPlan() == null) {
-         PatternExplorationPlan.apply(pattern).get(0)
+         if (graphClass == classOf[UnlabeledMainGraph].getName ||
+            !pattern.vertexLabeled()) {
+            PatternExplorationPlanOrderingHeuristic.apply(
+               pattern, HashIntIntMaps.newUpdatableMap()).getLast
+         } else {
+            PatternExplorationPlanOrderingHeuristic.apply(
+               pattern, vertexLabelFrequencies.value.get()).getLast
+         }
       } else {
          pattern
       }
@@ -135,10 +156,93 @@ case class FractalGraph
       this.copy(confs = confs.updated(key, value))
    }
 
+   def filterVerticesGivenGraph
+   (vertexGraphFilterFunc: (Int,MainGraph) => Boolean): FractalGraph = {
+
+      val start = System.nanoTime()
+
+      // determine set of valid vertices
+      val keyFunc: VertexInducedSubgraph => Long = s => 0L
+      val valueFunc: VertexInducedSubgraph => RoaringBitmap =
+         s => RoaringBitmap.bitmapOf(s.getVertices.getLast)
+      val reduceFunc: (RoaringBitmap, RoaringBitmap) => Unit =
+         (b1,b2) => b1.or(b2)
+
+      val validVertices = vfractoid.expand(1)
+         .filter((s,c) => {
+            vertexGraphFilterFunc(s.getVertices.getLast, s.getMainGraph)
+         })
+         .aggregationLongObj [RoaringBitmap] (keyFunc, valueFunc, reduceFunc)
+         .values.reduce((b1,b2) => {reduceFunc(b1,b2); b1})
+
+      val elapsed = System.nanoTime() - start
+
+      logApp(s"FilterVerticesGivenGraph took ${elapsed * 1e-6} ms")
+
+      val validVerticesBc = fractalContext.sparkContext.broadcast(validVertices)
+
+      // filter based on the valid vertex set
+      filterVertices((u, _) => validVerticesBc.value.contains(u))
+   }
+
+   def filterVertices
+   (vertexFilterFunc: (Int,IntArrayList) => Boolean): FractalGraph = {
+      val currVertexPredicate = vertexPredicate
+
+      val newVertexPredicate = if (currVertexPredicate == null) {
+         new VertexFilteringPredicate {
+            override def test(u: Int, uLabels: IntArrayList): Boolean = {
+               vertexFilterFunc(u, uLabels)
+            }
+         }
+      } else {
+         new VertexFilteringPredicate {
+            override def test(u: Int, uLabels: IntArrayList): Boolean = {
+               currVertexPredicate.test(u, uLabels) &&
+                  vertexFilterFunc(u, uLabels)
+            }
+         }
+      }
+
+      this.copy(vertexPredicate = newVertexPredicate)
+   }
+
+   def filterEdgesGivenGraph
+   (edgeGraphFilterFunc: (Int,Int,Int,MainGraph) => Boolean): FractalGraph = {
+
+      val start = System.nanoTime()
+
+      // determine set of valid vertices
+      val keyFunc: EdgeInducedSubgraph => Long = s => 0L
+      val valueFunc: EdgeInducedSubgraph => RoaringBitmap =
+         s => RoaringBitmap.bitmapOf(s.getEdges.getLast)
+      val reduceFunc: (RoaringBitmap, RoaringBitmap) => Unit =
+         (b1,b2) => b1.or(b2)
+
+      val validEdges = efractoid.expand(1)
+         .filter((s,c) => {
+            val g = s.getMainGraph
+            val e = s.getEdges.getLast
+            val u = g.edgeSrc(e)
+            val v = g.edgeDst(e)
+            edgeGraphFilterFunc(u,v,e,g)
+         })
+         .aggregationLongObj [RoaringBitmap] (keyFunc, valueFunc, reduceFunc)
+         .values.reduce((b1,b2) => {reduceFunc(b1,b2); b1})
+
+      val elapsed = System.nanoTime() - start
+
+      logApp(s"FilterEdgesGivenGraph took ${elapsed * 1e-6} ms")
+
+      val validEdgesBc = fractalContext.sparkContext.broadcast(validEdges)
+
+      // filter based on the valid vertex set
+      filterEdges((_, _, _, _, e, _) => validEdgesBc.value.contains(e))
+   }
+
    def filterEdges
    (edgeFilterFunc: (Int,IntArrayList,Int,IntArrayList,Int,IntArrayList) => Boolean)
-   : FractalGraph
-   = {
+   : FractalGraph = {
       val currEdgePredicate = edgePredicate
 
       val newEdgePredicate = if (currEdgePredicate == null) {
@@ -161,6 +265,31 @@ case class FractalGraph
       }
 
       this.copy(edgePredicate = newEdgePredicate)
+   }
+
+   def getVertexLabelFrequencies(): RDD[(Int,Int)] = {
+      val getVertexLabel: VertexInducedSubgraph => Int = s => {
+         val u = s.getVertices.getLast
+         s.getMainGraph.firstVertexLabel(u)
+      }
+
+      val map = vfractoid.expand(1)
+         .aggregationIntInt(getVertexLabel, 0, s => 1, _ + _)
+
+      map
+   }
+
+   lazy val vertexLabelFrequencies: Broadcast[KolobokeIntIntMapSerializerWrapper] = {
+      val map = if (graphClass.contains(classOf[UnlabeledMainGraph].getSimpleName)) {
+         HashIntIntMaps.getDefaultFactory.withDefaultValue(-1).newUpdatableMap()
+      } else {
+         val entries = getVertexLabelFrequencies().collect()
+         val (keys, values) = entries.unzip
+         HashIntIntMaps.newImmutableMap(keys, values, keys.size)
+      }
+
+      val wrappedMap = new KolobokeIntIntMapSerializerWrapper(map)
+      fractalContext.sparkContext.broadcast(wrappedMap)
    }
 
    override def toString(): String = s"FractalGraph(${path})"

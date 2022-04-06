@@ -92,7 +92,18 @@ public class PatternUtils {
       return newPatterns;
    }
 
-
+   /**
+    * Generates all canonical patterns obtained from *pattern* by extending one edge from it
+    *
+    * @param pattern
+    * @param vertexLabel vertex label for patterns with an additional vertex
+    *                    (external edges)
+    * @return set of new canonical patterns
+    */
+   public static HashObjSet<Pattern> extendByEdge(Pattern pattern,
+                                                  int vertexLabel) {
+      return extendByEdge(pattern, vertexLabel, -1);
+   }
    /**
     * Generates all canonical patterns obtained from *pattern* by extending one edge from it
     *
@@ -100,7 +111,82 @@ public class PatternUtils {
     * @return set of new canonical patterns
     */
    public static HashObjSet<Pattern> extendByEdge(Pattern pattern,
-                                                  int vertexLabel) {
+                                                  int vertexLabel,
+                                                  int edgeLabel) {
+      HashObjSet<Pattern> newPatterns = extendByEdgeInternal(
+              pattern, edgeLabel);
+      HashObjSet<Pattern> externalPatterns = extendByEdgeExternal(
+              pattern, vertexLabel, edgeLabel);
+
+      newPatterns.addAll(externalPatterns);
+
+      return newPatterns;
+   }
+
+   /**
+    * Generates all external canonical patterns obtained from *pattern* by
+    * extending one edge from it such that this edge spans a new vertex
+    *
+    * @param pattern
+    * @param vertexLabel
+    * @param edgeLabel
+    * @return set of new canonical patterns
+    */
+   public static HashObjSet<Pattern> extendByEdgeExternal(Pattern pattern,
+                                                          int vertexLabel,
+                                                          int edgeLabel) {
+      boolean edgeLabeled = pattern.edgeLabeled();
+      HashObjObjMap<Pattern,Pattern> quickMap = HashObjObjMaps.newMutableMap();
+      HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
+      PatternEdgePool edgePool =
+              PatternEdgePool.instance(pattern.edgeLabeled());
+      int numVertices = pattern.getNumberOfVertices();
+      IntArrayList vertexLabels = new IntArrayList(numVertices);
+      for (int i = 0; i < numVertices; ++i) vertexLabels.add(-1);
+      for (PatternEdge edge : pattern.getEdges()) {
+         vertexLabels.setu(edge.getSrcPos(), edge.getSrcLabel());
+         vertexLabels.setu(edge.getDestPos(), edge.getDestLabel());
+      }
+
+      // patterns with external edges
+      int v = pattern.getNumberOfVertices();
+      for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
+         Pattern newPattern = pattern.copy();
+         newPattern.addVertexStandalone(vertexLabel);
+         PatternEdge edge = edgePool.createObject();
+         edge.setSrcPos(u);
+         edge.setSrcLabel(vertexLabels.getu(u));
+         edge.setDestPos(v);
+         edge.setDestLabel(vertexLabel);
+
+         if (edgeLabeled) {
+            LabelledPatternEdge ledge = (LabelledPatternEdge) edge;
+            ledge.setLabel(edgeLabel);
+         }
+
+         newPattern.addEdgeStandalone(edge);
+         Pattern canonicalPattern = newPattern.copy();
+         canonicalPattern.turnCanonical();
+         if (!quickMap.containsKey(canonicalPattern)) {
+            quickMap.put(canonicalPattern, newPattern);
+            newPatterns.add(canonicalPattern);
+         }
+      }
+
+      return newPatterns;
+   }
+
+   /**
+    * Generates all external canonical patterns obtained from *pattern* by
+    * extending one edge from it such that this edge do not spans a new vertex
+    *
+    * @param pattern
+    * @param edgeLabel
+    * @return set of new canonical patterns
+    */
+   public static HashObjSet<Pattern> extendByEdgeInternal(Pattern pattern,
+                                                          int edgeLabel) {
+      boolean edgeLabeled = pattern.edgeLabeled();
       HashObjObjMap<Pattern,Pattern> quickMap = HashObjObjMaps.newMutableMap();
       HashObjSet<Pattern> newPatterns = HashObjSets.newMutableSet();
       PatternEdgePool edgePool =
@@ -134,39 +220,24 @@ public class PatternUtils {
             edge.setSrcLabel(vertexLabels.getu(u));
             edge.setDestPos(v);
             edge.setDestLabel(vertexLabels.getu(v));
+
+            if (edgeLabeled) {
+               LabelledPatternEdge ledge = (LabelledPatternEdge) edge;
+               ledge.setLabel(edgeLabel);
+            }
+
             newPattern.addEdgeStandalone(edge);
             Pattern canonicalPattern = newPattern.copy();
             canonicalPattern.turnCanonical();
             if (!quickMap.containsKey(canonicalPattern)) {
                quickMap.put(canonicalPattern, newPattern);
-               //newPatterns.add(newPattern);
                newPatterns.add(canonicalPattern);
             }
          }
       }
 
-      // patterns with external edges
-      int v = pattern.getNumberOfVertices();
-      for (int u = 0; u < pattern.getNumberOfVertices(); ++u) {
-         Pattern newPattern = pattern.copy();
-         newPattern.addVertexStandalone(vertexLabel);
-         PatternEdge edge = edgePool.createObject();
-         edge.setSrcPos(u);
-         edge.setSrcLabel(vertexLabels.getu(u));
-         edge.setDestPos(v);
-         edge.setDestLabel(vertexLabel);
-         newPattern.addEdgeStandalone(edge);
-         Pattern canonicalPattern = newPattern.copy();
-         canonicalPattern.turnCanonical();
-         if (!quickMap.containsKey(canonicalPattern)) {
-            quickMap.put(canonicalPattern, newPattern);
-            newPatterns.add(canonicalPattern);
-         }
-      }
-
       return newPatterns;
    }
-
 
    public static Pattern singleVertexPattern() {
       Pattern pattern = configuration.createPattern();
@@ -475,8 +546,6 @@ public class PatternUtils {
       pattern.setVertexLabeled(hasVlabels);
       pattern.setEdgeLabeled(hasElabels);
       pattern.setInduced(false);
-
-      LOG.info(pattern + " " + vlabels + " " + elabels + " ");
 
       return pattern;
    }

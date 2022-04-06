@@ -1,9 +1,7 @@
 package br.ufmg.cs.systems.fractal.conf;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
-import br.ufmg.cs.systems.fractal.graph.EdgeFilteringPredicate;
-import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import br.ufmg.cs.systems.fractal.graph.MainGraphStore;
+import br.ufmg.cs.systems.fractal.graph.*;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.ReflectionSerializationUtils;
@@ -19,6 +17,9 @@ public class Configuration implements Serializable {
    public static final String CONF_COLLECT_THREAD_STATS =
            "fractal.collect.thread_stats";
    public static final boolean CONF_COLLECT_THREAD_STATS_DEFAULT = false;
+   public static final String CONF_THREAD_STATS_KEY =
+           "fractal.thread_stats.key";
+   public static final String CONF_THREAD_STATS_KEY_DEFAULT = "";
    public static final String CONF_MASTER_HOSTNAME = "fractal.master.hostname";
    public static final String CONF_MASTER_HOSTNAME_DEFAULT = "localhost";
    public static final String CONF_LOG_LEVEL = "fractal.log.level";
@@ -57,6 +58,8 @@ public class Configuration implements Serializable {
    public static final boolean CONF_WS_MODE_EXTERNAL_DEFAULT = true;
    public static final String CONF_MAINGRAPH_EDGE_FILTERING_PREDICATE =
            "fractal.maingraph.edge.filtering.predicate";
+   public static final String CONF_MAINGRAPH_VERTEX_FILTERING_PREDICATE =
+           "fractal.maingraph.vertex.filtering.predicate";
    protected transient long infoPeriod;
    protected transient MainGraph mainGraph;
    protected transient boolean initialized = false;
@@ -68,6 +71,7 @@ public class Configuration implements Serializable {
    private transient boolean isGraphEdgeLabeled;
    private transient boolean isGraphVertexLabeled;
    private transient EdgeFilteringPredicate edgePredicate;
+   private transient VertexFilteringPredicate vertexPredicate;
 
    public Configuration() {
    }
@@ -168,16 +172,16 @@ public class Configuration implements Serializable {
       MainGraph graph;
 
       if (path == null) {
-         LOG.debug("Creating main graph (not loaded from a path)");
+         LOG.info("Creating main graph (not loaded from a path)");
          graph = createMainGraph();
       } else {
          graph = MainGraphStore.get(path);
          if (graph == null) {
-            LOG.debug("Creating main graph (not found in store)");
+            LOG.info("Creating main graph (not found in store)");
             graph = createMainGraph();
             MainGraphStore.put(path, graph);
          } else {
-            LOG.debug("Found main graph in store: " + path + " " + graph);
+            LOG.info("Found main graph in store: " + path + " " + graph);
          }
       }
 
@@ -264,21 +268,42 @@ public class Configuration implements Serializable {
               CONF_COLLECT_THREAD_STATS, CONF_COLLECT_THREAD_STATS_DEFAULT);
    }
 
+   public String getThreadStatsKey() {
+      return getString(CONF_THREAD_STATS_KEY, CONF_THREAD_STATS_KEY_DEFAULT);
+   }
+
    public EdgeFilteringPredicate getEdgeFilteringPredicate() {
       return edgePredicate;
+   }
+
+   public VertexFilteringPredicate getVertexFilteringPredicate() {
+      return vertexPredicate;
    }
 
    public void setEdgeFilteringPredicate(EdgeFilteringPredicate edgePredicate) {
       this.edgePredicate = edgePredicate;
    }
 
+   public void setVertexFilteringPredicate(VertexFilteringPredicate vertexPredicate) {
+      this.vertexPredicate = vertexPredicate;
+   }
+
    private String getMainGraphKey() {
       String mainGraphPath = getMainGraphPath();
       if (mainGraphPath == null) return null;
       EdgeFilteringPredicate edgePredicate = getEdgeFilteringPredicate();
+      VertexFilteringPredicate vertexPredicate = getVertexFilteringPredicate();
       String mainGraphClassStr = mainGraphClass.getName();
-      if (edgePredicate == null) return mainGraphPath + "-" + mainGraphClassStr;
-      else return mainGraphPath + "-" + mainGraphClassStr + "-" + edgePredicate.getId();
+      if (vertexPredicate != null && edgePredicate == null) {
+         return mainGraphPath + "-" + mainGraphClassStr + "-" + vertexPredicate.getId();
+      } else if (vertexPredicate == null && edgePredicate != null) {
+         return mainGraphPath + "-" + mainGraphClassStr + "-" + edgePredicate.getId();
+      } else if (vertexPredicate != null && edgePredicate != null) {
+         return mainGraphPath + "-" + mainGraphClassStr + "-"
+                 + edgePredicate.getId() + "-" + vertexPredicate.getId();
+      } else {
+         return mainGraphPath + "-" + mainGraphClassStr;
+      }
    }
 }
 

@@ -12,6 +12,8 @@ import java.io.Externalizable;
 public interface Pattern extends Externalizable {
     Pattern copy();
 
+   void setVertexLabels(int... vlabels);
+
    int getFirstVertexLabel();
 
    void addVertexStandalone(int vlabel);
@@ -52,7 +54,7 @@ public interface Pattern extends Externalizable {
 
     VertexPositionEquivalences getVertexPositionEquivalences();
     
-    VertexPositionEquivalences getVertexPositionEquivalences(IntArrayList vertexLabels);
+    VertexPositionEquivalences getVertexPositionEquivalences(IntArrayList vertexLabels, IntArrayList edgeLabels);
 
    IntIntMap getCanonicalLabeling();
 

@@ -15,7 +15,15 @@ import java.util.function.IntConsumer;
 public interface MainGraph {
    void init(Configuration configuration) throws IOException;
 
+   boolean isEdgeValid(int u, int v, int e);
+
+   boolean isVertexValid(int u);
+
    int numVertices();
+
+   IntArrayListView neighborhoodEdges(int u);
+
+   void neighborhoodEdges(int u, IntArrayListView view);
 
    int numEdges();
 
@@ -68,4 +76,5 @@ public interface MainGraph {
                                      IntCollection validExtensions);
 
 
+   int vertexDegree(int u);
 }

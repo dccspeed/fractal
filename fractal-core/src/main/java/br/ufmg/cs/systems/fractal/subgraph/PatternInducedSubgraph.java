@@ -439,13 +439,15 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       int totalNumWords = computation.getInitialNumWords();
       int numPartitions = computation.getNumberPartitions();
       int myPartitionId = computation.getPartitionId();
+      MainGraph graph = computation.getConfig().getMainGraph();
 
       VertexPredicate vertexPredicate =
               pattern.explorationPlan().vertexPredicate(0);
       boolean vertexLabeled = pattern.vertexLabeled();
 
       for (int u = myPartitionId; u < totalNumWords; u += numPartitions) {
-         if (!vertexLabeled || vertexPredicate.test(u)) extensions.add(u);
+         if (graph.isVertexValid(u) &&
+                 (!vertexLabeled || vertexPredicate.test(u))) extensions.add(u);
       }
    }
 

@@ -12,6 +12,7 @@ import br.ufmg.cs.systems.fractal.util.Logging;
 import br.ufmg.cs.systems.fractal.util.Logging$;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
+import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
 import com.koloboke.collect.set.IntSet;
@@ -35,7 +36,9 @@ public class PatternInducedVertexInducedSubgraphConverter
    private IntArrayList posToVertex;
    private IntArrayList verticesAux;
    private IntSet cummulativeNeighborhood;
+   private IntSet visitedVertices;
    private AdjListAdder adjListAdder;
+   private MinFinder minFinder;
 
    @Override
    public void apply(PatternInducedSubgraph subgraph,
@@ -52,8 +55,10 @@ public class PatternInducedVertexInducedSubgraphConverter
       nextSubgraph = nextComputation.getSubgraphEnumerator().getSubgraph();
       graph = computation.getConfig().getMainGraph();
       fillPatternAdjLists(computation.getPattern());
-      cummulativeNeighborhood = HashIntSets.newUpdatableSet();
+      cummulativeNeighborhood = HashIntSets.newMutableSet();
+      visitedVertices = HashIntSets.newUpdatableSet();
       adjListAdder = new AdjListAdder();
+      minFinder = new MinFinder();
    }
 
    @Override
@@ -63,39 +68,36 @@ public class PatternInducedVertexInducedSubgraphConverter
                        Computation<VertexInducedSubgraph> vcomputation) {
       // apply vertices to underlying pattern
       IntArrayList pvertices = psubgraph.getVertices();
+      int numVertices = pvertices.size();
       applySubgraphVertices(pvertices);
 
+      // clear auxiliary structures
       verticesAux.clear();
-      verticesAux.addAll(pvertices);
-
-      // start ordering by sorting
-      verticesAux.sort();
       cummulativeNeighborhood.clear();
-      int numVertices = verticesAux.size();
+      visitedVertices.clear();
+
+      // find min vertex
+      minFinder.clear();
+      pvertices.forEach(minFinder);
+      int u = minFinder.getMin();
+
+      // add min vertex
+      verticesAux.add(u);
+      visitedVertices.add(u);
 
       // vertices reached from first vertex
-      IntSet neighborsPos =
-              patternAdjList.getu(vertexToPos.get(verticesAux.getu(0)));
       adjListAdder.setOutSet(cummulativeNeighborhood);
+      IntSet neighborsPos = patternAdjList.getu(vertexToPos.get(u));
       neighborsPos.forEach(adjListAdder);
 
-      // fix other vertices
-      for (int i = 1; i < numVertices - 1; ++i) {
-         int u = verticesAux.getu(i);
-         if (!cummulativeNeighborhood.contains(u)) {
-            int j = -1;
-            int v = -1;
-            for (j = i + 1; j < numVertices; ++j) {
-               v = verticesAux.getu(j);
-               if (cummulativeNeighborhood.contains(v)) break;
-            }
-
-            // swap pos i and j
-            verticesAux.swap(i, j);
-            u = v;
-         }
-
-         // update number of vertices reached
+      // add other vertices
+      for (int i = 0; i < numVertices - 1; ++i) {
+         minFinder.clear();
+         cummulativeNeighborhood.forEach(minFinder);
+         u = minFinder.getMin();
+         verticesAux.add(u);
+         visitedVertices.add(u);
+         cummulativeNeighborhood.removeInt(u);
          neighborsPos = patternAdjList.getu(vertexToPos.get(u));
          neighborsPos.forEach(adjListAdder);
       }
@@ -165,17 +167,43 @@ public class PatternInducedVertexInducedSubgraphConverter
    private class AdjListAdder implements IntConsumer {
 
       private IntSet outSet;
+      private IntSet removeSet;
       private IntArrayList posToVertex;
 
       public void setOutSet(IntSet outSet) {
          this.outSet = outSet;
          this.posToVertex = PatternInducedVertexInducedSubgraphConverter.this
                  .posToVertex;
+         this.removeSet = PatternInducedVertexInducedSubgraphConverter.this
+                 .visitedVertices;
       }
 
       @Override
       public void accept(int uPos) {
-         outSet.add(posToVertex.getu(uPos));
+         int u = posToVertex.getu(uPos);
+         if (!removeSet.contains(u)) {
+            outSet.add(u);
+         }
+      }
+   }
+
+   private class MinFinder implements IntConsumer {
+
+      private int min;
+
+      public void clear() {
+         min = Integer.MAX_VALUE;
+      }
+
+      public int getMin() {
+         return min;
+      }
+
+      @Override
+      public void accept(int e) {
+         if (e < min) {
+            min = e;
+         }
       }
    }
 

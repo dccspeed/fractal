@@ -82,8 +82,7 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
             return true;
          }
 
-         KClistEnumerator<S> nextEnumerator =
-                 (KClistEnumerator<S>) computation.nextComputation().getSubgraphEnumerator();
+         KClistEnumerator<S> nextEnumerator = nextEnumerator();
          int u = subgraph.getVertices().getLast();
 
          nextEnumerator.clearDag();
@@ -170,6 +169,11 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
    private void clearDag() {
       dag.forEach(dagCleaner);
       dag.clear();
+   }
+
+   @Override
+   public String asExtensionMethodString(Computation computation) {
+      return "Mkcl";
    }
 
    private class DagCleaner implements IntObjConsumer<IntArrayList> {

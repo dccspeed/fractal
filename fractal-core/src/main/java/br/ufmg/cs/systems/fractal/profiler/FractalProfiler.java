@@ -20,8 +20,10 @@ public class FractalProfiler {
     * @param event events supported depend on the JVM, see
     *              [[one.profiler.Events]] for a list with most common ones
     * @param interval determines the interval between data collection
+    * @return fractal profiler handler for stopping and collecting results
     */
-   public static synchronized void start(String event, long interval) {
+   public static synchronized FractalProfilerHandler start(String event,
+                                                           long interval) {
       if (profiler == null) {
          try {
             nativeLibPath = FractalNativeUtils.getTempFileFromJar("libasyncProfiler.so");
@@ -34,29 +36,7 @@ public class FractalProfiler {
       }
 
       profiler.start(event, interval);
-   }
 
-   /**
-    * Stop profiling current JVM
-    * @return result object containing collected data
-    */
-   public static synchronized ProfilingResult stop() {
-      return stop(Integer.MAX_VALUE);
-   }
-
-   /**
-    * Stop profiling current JVM
-    * @param maxtraces limit the number of collected traces to consider
-    * @return result object containing collected data
-    */
-   public static synchronized ProfilingResult stop(int maxtraces) {
-      if (nativeLibPath == null) {
-         throw new RuntimeException("Start profiler first.");
-      }
-
-      AsyncProfiler prof = AsyncProfiler.getInstance(nativeLibPath);
-      String tracesStr = prof.dumpTraces(maxtraces);
-
-      return new ProfilingResult(tracesStr);
+      return new FractalProfilerHandler(profiler);
    }
 }

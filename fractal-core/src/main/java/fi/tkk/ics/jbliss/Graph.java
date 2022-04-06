@@ -69,6 +69,10 @@ public class Graph<V extends Comparable> {
    protected native void _find_automorphisms(long true_bliss, Reporter r);
    public static native int[] _canonical_labeling(long true_bliss, Reporter r);
 
+   private int mapEdgeLabelToVertexLabel(int label) {
+      return - label - 1;
+   }
+
    /**
     * Create a new undirected graph with no vertices or edges.
     */
@@ -79,38 +83,59 @@ public class Graph<V extends Comparable> {
    private long createBlissVertexEdgeLabeled() {
       int numVertices = pattern.getNumberOfVertices();
       int numEdges = pattern.getNumberOfEdges();
-      IntArrayList vertexLabels = new IntArrayList(numVertices);
+      IntArrayList vertexEdgeLabels = new IntArrayList(numVertices);
 
       if (numVertices == 1) {
-         vertexLabels.add(pattern.getFirstVertexLabel());
-         return createBlissVertexLabeled(vertexLabels);
+         vertexEdgeLabels.add(pattern.getFirstVertexLabel());
+         return createBlissVertexLabeled(vertexEdgeLabels);
       }
 
       // add original vertices
       for (int i = 0; i < numVertices; ++i) {
-         vertexLabels.add(-1);
+         vertexEdgeLabels.add(-1);
       }
 
       // add new vertices to account for edge labels
       for (int i = 0; i < numEdges; ++i) {
-         vertexLabels.add(-1);
+         vertexEdgeLabels.add(-1);
       }
 
       // set original vertex labels
       PatternEdgeArrayList edges = pattern.getEdges();
       for (int i = 0; i < edges.size(); ++i) {
          PatternEdge pedge = edges.getu(i);
-         vertexLabels.setu(pedge.getSrcPos(), pedge.getSrcLabel());
-         vertexLabels.setu(pedge.getDestPos(), pedge.getDestLabel());
+         vertexEdgeLabels.setu(pedge.getSrcPos(), pedge.getSrcLabel());
+         vertexEdgeLabels.setu(pedge.getDestPos(), pedge.getDestLabel());
       }
 
       // set new vertex labels representing edge labels
       for (int i = 0; i < numEdges; ++i) {
          LabelledPatternEdge pedge = (LabelledPatternEdge) edges.getu(i);
-         vertexLabels.setu(numVertices + i, pedge.getLabel());
+         // IMPORTANT: edge labels and vertex labels should not overlap, thus
+         // this internal mapping
+         int newVertexLabel = mapEdgeLabelToVertexLabel(pedge.getLabel());
+         vertexEdgeLabels.setu(numVertices + i, newVertexLabel);
       }
 
-      return createBlissVertexEdgeLabeled(vertexLabels);
+      return createBlissVertexEdgeLabeled(vertexEdgeLabels);
+   }
+
+   private long createBlissVertexEdgeLabeled(IntArrayList vertexLabels,
+                                             IntArrayList edgeLabels) {
+      int numVertices = pattern.getNumberOfVertices();
+
+      if (numVertices == 1) {
+         vertexLabels.add(pattern.getFirstVertexLabel());
+         return createBlissVertexLabeled(vertexLabels);
+      }
+
+      IntArrayList vertexEdgeLabels = new IntArrayList(vertexLabels);
+
+      for (int i = 0; i < edgeLabels.size(); ++i) {
+         vertexEdgeLabels.add(mapEdgeLabelToVertexLabel(edgeLabels.get(i)));
+      }
+
+      return createBlissVertexEdgeLabeled(vertexEdgeLabels);
    }
 
    private long createBlissVertexEdgeLabeled(IntArrayList vertexLabels) {
@@ -195,23 +220,17 @@ public class Graph<V extends Comparable> {
       return bliss;
    }
 
-   public void findAutomorphisms(Reporter reporter, Object reporter_param, IntArrayList vertexLabels) {
+   public void findAutomorphisms(Reporter reporter, Object reporter_param,
+                                 IntArrayList vertexLabels,
+                                 IntArrayList edgeLabels) {
+      long bliss = 0;
       if (vertexLabels == null) {
-         findAutomorphisms(reporter, reporter_param);
-         return;
+         bliss = createBlissVertexLabeled();
+      } else if (edgeLabels == null) {
+         bliss = createBlissVertexLabeled(vertexLabels);
+      } else {
+         bliss = createBlissVertexEdgeLabeled(vertexLabels, edgeLabels);
       }
-
-      long bliss = createBlissVertexLabeled(vertexLabels);
-      _reporter = reporter;
-      _reporter_param = reporter_param;
-      _find_automorphisms(bliss, _reporter);
-      destroy(bliss);
-      _reporter = null;
-      _reporter_param = null;
-   }
-
-   public void findAutomorphisms(Reporter reporter, Object reporter_param) {
-      long bliss = createBlissVertexLabeled();
 
       _reporter = reporter;
       _reporter_param = reporter_param;

@@ -9,7 +9,7 @@ import br.ufmg.cs.systems.fractal.Primitive
 import br.ufmg.cs.systems.fractal.aggregation._
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
-import br.ufmg.cs.systems.fractal.util.{ReflectionSerializationUtils, ThreadStats}
+import br.ufmg.cs.systems.fractal.util.{FractalThreadStats, Logging, ReflectionSerializationUtils}
 import one.profiler.{AsyncProfiler, Events}
 import org.apache.spark.TaskContext
 import org.apache.spark.util.CollectionAccumulator
@@ -22,7 +22,7 @@ class SparkFromScratchEngine[S <: Subgraph]
    val step: Int,
    val computation: Computation[S],
    val configuration: SparkConfiguration,
-   val threadStatusAccum: CollectionAccumulator[ThreadStats])
+   val threadStatusAccum: CollectionAccumulator[FractalThreadStats])
    extends SparkEngine[S] {
 
    private var previous: SparkFromScratchEngine[_ <: Subgraph] = _
@@ -159,7 +159,7 @@ class SparkFromScratchEngine[S <: Subgraph]
       }
 
       if (threadStatusAccum != null) {
-         val threadStatus = new ThreadStats(computation)
+         val threadStatus = new FractalThreadStats(computation)
          threadStatusAccum.add(threadStatus)
       }
 
@@ -237,12 +237,12 @@ class SparkFromScratchEngine[S <: Subgraph]
       val computeFuture = Future(compute())(executionContext)
 
       // iterator acting as a key/value *consumer*
-      val objLongIterator = new ObjLongIteratorConsumer[S,K](objLongSubgraphAggregation)
+      val objLongIterator = new ObjLongIteratorConsumer[S,K](
+         objLongSubgraphAggregation, () => {finalizeEngine()})
 
       // finish consumer after producer finished producing (async)
       computeFuture.onComplete { _ =>
          objLongIterator.finishIterator
-         finalizeEngine()
       }(executionContext)
 
       objLongIterator
@@ -270,15 +270,46 @@ class SparkFromScratchEngine[S <: Subgraph]
       val computeFuture = Future(compute())(executionContext)
 
       // iterator acting as a key/value *consumer*
-      val objObjIterator = new ObjObjIteratorConsumer[S,K,V](objObjSubgraphAggregation)
+      val objObjIterator = new ObjObjIteratorConsumer[S,K,V](
+         objObjSubgraphAggregation, () => {finalizeEngine()})
 
       // finish consumer after producer finished producing (async)
       computeFuture.onComplete { _ =>
          objObjIterator.finishIterator
-         finalizeEngine()
       }(executionContext)
 
       objObjIterator
+   }
+
+   /**
+    * This call starts this engine computation and aggregates the valid
+    * subgraphs by key/value, where value is an int.
+    *
+    * @param intIntSubgraphAggregation
+    * @return iterator of (Int,Int) to be consumed downstream
+    */
+   override def computeAggregationIntInt
+   (intIntSubgraphAggregation: IntIntSubgraphAggregation[S])
+   : Iterator[(Int, Int)] = {
+      // initialization
+      subgraphAggregation = intIntSubgraphAggregation
+      intIntSubgraphAggregation.init(configuration)
+      init()
+      ensureExecutionContext()
+
+      // future acting as a key/value *producer* (async)
+      val computeFuture = Future(compute())(executionContext)
+
+      // iterator acting as a key/value *consumer*
+      val intIntIterator = new IntIntIteratorConsumer[S](
+         intIntSubgraphAggregation, () => {finalizeEngine()})
+
+      // finish consumer after producer finished producing (async)
+      computeFuture.onComplete { _ =>
+         intIntIterator.finishIterator
+      }(executionContext)
+
+      intIntIterator
    }
 
    /**
@@ -301,12 +332,12 @@ class SparkFromScratchEngine[S <: Subgraph]
       val computeFuture = Future(compute())(executionContext)
 
       // iterator acting as a key/value *consumer*
-      val longLongIterator = new LongLongIteratorConsumer[S](longLongSubgraphAggregation)
+      val longLongIterator = new LongLongIteratorConsumer[S](
+         longLongSubgraphAggregation, () => {finalizeEngine()})
 
       // finish consumer after producer finished producing (async)
       computeFuture.onComplete { _ =>
          longLongIterator.finishIterator
-         finalizeEngine()
       }(executionContext)
 
       longLongIterator
@@ -333,12 +364,12 @@ class SparkFromScratchEngine[S <: Subgraph]
       val computeFuture = Future(compute())(executionContext)
 
       // iterator acting as a key/value *consumer*
-      val longObjIterator = new LongObjteratorConsumer[S,V](longObjSubgraphAggregation)
+      val longObjIterator = new LongObjteratorConsumer[S,V](
+         longObjSubgraphAggregation, () => {finalizeEngine()})
 
       // finish consumer after producer finished producing (async)
       computeFuture.onComplete { _ =>
          longObjIterator.finishIterator
-         finalizeEngine()
       }(executionContext)
 
       longObjIterator

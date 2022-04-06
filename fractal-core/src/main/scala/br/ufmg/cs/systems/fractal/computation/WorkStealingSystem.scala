@@ -187,6 +187,8 @@ class WorkStealingSystem [S <: Subgraph]
 
    private def workStealingComputeLocalIter
    (c: Computation[S], computations: ObjArrayList[Computation[S]]): Long = {
+      if (computations == null) return 0
+
       var thisComp = c
       var thisSubgraphEnumerator = thisComp.getSubgraphEnumerator
       var continue = remoteWorkQueueIsEmpty

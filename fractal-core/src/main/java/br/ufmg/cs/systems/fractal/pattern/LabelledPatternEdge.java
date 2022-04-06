@@ -36,6 +36,10 @@ public class LabelledPatternEdge extends PatternEdge {
         return label;
     }
 
+    public void setLabel(int label) {
+        this.label = label;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

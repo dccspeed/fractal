@@ -54,6 +54,8 @@ dependencies {
     compile 'org.scalatest:scalatest_2.11:2.2.6'
 
     compile 'com.typesafe.akka:akka-remote_2.11:2.5.3'
+
+    implementation 'com.github.RoaringBitmap:RoaringBitmap:0.9.9'
 }
 
 sourceSets {

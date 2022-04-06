@@ -33,6 +33,11 @@ public final class IntArrayListView extends IntArrayList{
    }
 
    @Override
+   public int getLast() {
+      return getu(size() - 1);
+   }
+
+   @Override
    protected void checkIndex(int i) {
       if (i < offset || i >= offset + numElements) {
          throw new ArrayIndexOutOfBoundsException(i);

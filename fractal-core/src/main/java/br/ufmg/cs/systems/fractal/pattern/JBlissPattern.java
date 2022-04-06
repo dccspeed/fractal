@@ -58,13 +58,21 @@ public class JBlissPattern extends BasicPattern {
    }
 
    @Override
-   protected void fillVertexPositionEquivalences(VertexPositionEquivalences vertexPositionEquivalences, IntArrayList vertexLabels) {
-      for (int i = 0; i < getNumberOfVertices(); ++i) {
+   protected void fillVertexPositionEquivalences(VertexPositionEquivalences vertexPositionEquivalences, IntArrayList vertexLabels, IntArrayList edgeLabels) {
+      int numVertices = getNumberOfVertices();
+      int numEdges = getNumberOfEdges();
+      for (int i = 0; i < numVertices; ++i) {
          vertexPositionEquivalences.addEquivalence(i, i);
       }
 
+      if (edgeLabels != null) {
+         for (int i = numVertices; i < numVertices + numEdges; ++i) {
+            vertexPositionEquivalences.addEquivalence(i, i);
+         }
+      }
+
       VertexPositionEquivalencesReporter reporter = new VertexPositionEquivalencesReporter(vertexPositionEquivalences);
-      jblissGraph.findAutomorphisms(reporter, null, vertexLabels);
+      jblissGraph.findAutomorphisms(reporter, null, vertexLabels, edgeLabels);
       vertexPositionEquivalences.propagateEquivalences();
    }
 

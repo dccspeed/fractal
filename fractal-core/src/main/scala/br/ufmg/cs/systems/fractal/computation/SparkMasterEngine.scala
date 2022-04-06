@@ -3,7 +3,7 @@ package br.ufmg.cs.systems.fractal.computation
 import java.io.Serializable
 
 import br.ufmg.cs.systems.fractal.Fractoid
-import br.ufmg.cs.systems.fractal.aggregation.{LongLongSubgraphAggregation, LongObjSubgraphAggregation, LongSubgraphAggregation, ObjLongSubgraphAggregation, ObjObjSubgraphAggregation}
+import br.ufmg.cs.systems.fractal.aggregation.{IntIntSubgraphAggregation, LongLongSubgraphAggregation, LongObjSubgraphAggregation, LongSubgraphAggregation, ObjLongSubgraphAggregation, ObjObjSubgraphAggregation}
 import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.Logging
@@ -68,6 +68,10 @@ trait SparkMasterEngine[S <: Subgraph] extends Logging {
    def longObjRDD[V <: Serializable : ClassTag]
    (longObjSubgraphAggregation: LongObjSubgraphAggregation[S, V])
    : RDD[(Long, V)]
+
+   def intIntRDD
+   (intIngSubgraphAggregation: IntIntSubgraphAggregation[S])
+   : RDD[(Int,Int)]
 }
 
 object SparkMasterEngine {

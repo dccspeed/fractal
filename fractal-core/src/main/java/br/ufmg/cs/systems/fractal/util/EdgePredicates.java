@@ -8,16 +8,27 @@ public class EdgePredicates extends ObjArrayList<EdgePredicate> implements Exter
    public void write(DataOutput out) throws IOException {
       out.writeInt(size());
       for (int i = 0; i < size(); ++i) {
-         get(i).write(out);
+         EdgePredicate epred = get(i);
+         if (epred == EdgePredicate.trueEdgePredicate) {
+            out.writeBoolean(true);
+         } else {
+            out.writeBoolean(false);
+            epred.write(out);
+         }
       }
    }
 
    public void readFields(DataInput in) throws IOException {
       int size = in.readInt();
       for (int i = 0; i < size; ++i) {
-         EdgePredicate edgePredicate = new EdgePredicate();
-         edgePredicate.readFields(in);
-         add(edgePredicate);
+         boolean isDefaultPredicate = in.readBoolean();
+         if (isDefaultPredicate) {
+            add(EdgePredicate.trueEdgePredicate);
+         } else {
+            EdgePredicate edgePredicate = new EdgePredicate();
+            edgePredicate.readFields(in);
+            add(edgePredicate);
+         }
       }
    }
 

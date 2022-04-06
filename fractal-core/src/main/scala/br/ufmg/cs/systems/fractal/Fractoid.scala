@@ -1,6 +1,7 @@
 package br.ufmg.cs.systems.fractal
 
 import java.io.Serializable
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
 import br.ufmg.cs.systems.fractal.aggregation._
@@ -8,13 +9,18 @@ import br.ufmg.cs.systems.fractal.callback.{EdgeInducedVertexInducedSubgraphConv
 import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
 import br.ufmg.cs.systems.fractal.pattern.Pattern
+import br.ufmg.cs.systems.fractal.profiler.FractalProfiler
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util._
+import one.profiler.Events
 import org.apache.spark.SparkContext
 import org.apache.spark.api.python.{PythonRDD, SerDeUtil}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 
+import scala.collection.mutable
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration.Duration
 import scala.reflect.{ClassTag, classTag}
 
 /**
@@ -99,6 +105,11 @@ case class Fractoid[S <: Subgraph : ClassTag]
       }
 
       thisPrimitives
+   }
+
+   def numPrimitives: Int = {
+      if (parent == null) primitives.length
+      else primitives.length + parent.numPrimitives
    }
 
    private[fractal] def masterEngineImmutable: SparkMasterEngine[S] = {
@@ -607,6 +618,60 @@ case class Fractoid[S <: Subgraph : ClassTag]
 
    /**
     * Aggregates valid subgraphs by mapping each valid subgraph to a
+    * key/value pair and reducing the values by key. Keys and values in this
+    * function are ints.
+    *
+    * @param _key    mapping function that extracts the key from a subgraph
+    * @param _value  value mapping functions that extracts a value from a
+    *                subgraph
+    * @param _reduce reduce function that aggregates the value of the
+    *                second parameter value into the first parameter value
+    * @return an RDD of key/value pairs (K,V)
+    */
+   def aggregationIntInt
+   (_key: S => Int, _defaultValue: Int, _value: S => Int,
+    _reduce: (Int, Int) => Int)
+   : RDD[(Int, Int)] = {
+
+      val intIntSubgraphAggregation = new IntIntSubgraphAggregation[S] {
+         override def aggregate_AGGREGATION_PRIMITIVE(subgraph: S): Unit = {
+            map(_key(subgraph), _value(subgraph))
+         }
+
+         override def reduce(v1: Int, v2: Int): Int = _reduce(v1, v2)
+
+         override def defaultValue(): Int = _defaultValue
+      }
+
+      val intIntRDD = aggregationIntInt(intIntSubgraphAggregation)
+         .reduceByKey(_reduce)
+
+      intIntRDD
+   }
+
+   /**
+    * Aggregates valid subgraphs by mapping each valid subgraph to a
+    * key/value pair and reducing the values by key. Keys and values in this
+    * function are ints.
+    *
+    * @param intIntSubgraphAggregation custom aggregation
+    * @return an RDD of key/value pairs (K,V)
+    */
+   def aggregationIntInt
+   (intIntSubgraphAggregation: IntIntSubgraphAggregation[S])
+   : RDD[(Int, Int)] = {
+      val callback = subgraphAggregationCallback
+      val intIntRDD = withNextStepId
+         .withInitAggregations(c => callback.init(c))
+         .withProcess((s, c) => callback.apply(s, c))
+         .masterEngineImmutable
+         .intIntRDD(intIntSubgraphAggregation)
+
+      intIntRDD
+   }
+
+   /**
+    * Aggregates valid subgraphs by mapping each valid subgraph to a
     * key/value pair and reducing the values by key. Keys in this function
     * are longs and values are objects.
     *
@@ -995,6 +1060,17 @@ case class Fractoid[S <: Subgraph : ClassTag]
       pfrac
    }
 
+   def asDiagnosticsFractoid: (Fractoid[S], String) = {
+      val newConfs = scala.collection.mutable.Map[String,Any]()
+      config.confs.foreach(kv => newConfs.update(kv._1, kv._2))
+      val newConfig = new SparkConfiguration(newConfs)
+      val diagKey = UUID.randomUUID.toString
+      newConfig.set("collect_thread_stats", true)
+      newConfig.set("thread_stats_key", diagKey)
+      val newConfigBc = sparkContext.broadcast(newConfig)
+      (this.copy(configBc = newConfigBc), diagKey)
+   }
+
    /** **** Fractal Scala API: ComputationContainer ******/
 
    /**
@@ -1045,6 +1121,11 @@ case class Fractoid[S <: Subgraph : ClassTag]
       initRes
    }
 
+   /**
+    * Change the subgraph enumerator (extension method) for a extend call.
+    * @param senumClass
+    * @return new fractoid
+    */
    private def withSubgraphEnumeratorClass
    (senumClass: Class[_ <: SubgraphEnumerator[S]]): Fractoid[S] = {
       if (senumClass == null) return this.copy()
@@ -1074,6 +1155,26 @@ case class Fractoid[S <: Subgraph : ClassTag]
          s",primitives=${primitives.mkString("-")}" +
          s",parent=${parent}" +
          s")"
+   }
+
+   def asPrimitiveString: String = {
+      val p = primitives.last
+      if (p == Primitive.E) {
+         val sclass = classTag[S].runtimeClass.asInstanceOf[Class[S]]
+         if (classOf[VertexInducedSubgraph].isAssignableFrom(sclass)) {
+            "E(Tv,Mc)"
+         } else if (classOf[EdgeInducedSubgraph].isAssignableFrom(sclass)) {
+            "E(Te,Mc)"
+         } else if (classOf[PatternInducedSubgraph].isAssignableFrom(sclass)) {
+            "E(Tp,Mp)"
+         } else {
+            throw new RuntimeException(s"Unknown extension type: ${sclass}")
+         }
+      } else if (p == Primitive.F) {
+         "F(p)"
+      } else {
+         throw new RuntimeException(s"Unknown primitive: ${primitives.last}")
+      }
    }
 }
 

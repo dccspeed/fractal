@@ -12,6 +12,8 @@ import java.io.Externalizable;
 public interface Pattern extends Externalizable {
     Pattern copy();
 
+   ObjArrayList<IntArrayList> getVertexPosToEdgeIndices();
+
    void setVertexLabels(int... vlabels);
 
    int getFirstVertexLabel();
@@ -25,6 +27,10 @@ public interface Pattern extends Externalizable {
    void removeLastNEdges(int n);
 
    void removeLastNVertices(int n);
+
+   IntArrayList getVertexLabels(boolean shouldConsiderVertexLabels);
+
+   IntArrayList getEdgeLabels(boolean shouldConsiderEdgeLabels);
 
    PatternExplorationPlan explorationPlan();
 

@@ -187,14 +187,15 @@ public class PatternExplorationPlanMCVCVgroups extends PatternExplorationPlan {
    }
 
    public static ObjArrayList<Pattern> apply(Pattern pattern) {
-      ObjArrayList<Pattern> bestPlan = null;
-      for (ObjArrayList<Pattern> plan : allExecutions(pattern)) {
-         if (bestPlan == null || bestPlan.size() > plan.size()) {
-            bestPlan = plan;
-         }
-      }
+      throw new UnsupportedOperationException();
+      //ObjArrayList<Pattern> bestPlan = null;
+      //for (ObjArrayList<Pattern> plan : allExecutions(pattern)) {
+      //   if (bestPlan == null || bestPlan.size() > plan.size()) {
+      //      bestPlan = plan;
+      //   }
+      //}
 
-      return bestPlan;
+      //return bestPlan;
    }
 
    public static ObjArrayList<ObjArrayList<Pattern>> allExecutions(Pattern pattern) {

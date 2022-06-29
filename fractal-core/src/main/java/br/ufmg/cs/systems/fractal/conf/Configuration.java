@@ -41,6 +41,10 @@ public class Configuration implements Serializable {
    public static final boolean CONF_MAINGRAPH_MULTIGRAPH_DEFAULT = false;
    public static final String INFO_PERIOD = "fractal.info.period";
    public static final long INFO_PERIOD_DEFAULT_MS = 60000;
+   public static final String CONF_START_TIME_MS = "fractal.start.time.ms";
+   public static final long CONF_START_TIME_MS_DEFAULT = -1;
+   public static final String CONF_TIME_LIMIT_MS = "fractal.time.limit.ms";
+   public static final long CONF_TIME_LIMIT_MS_DEFAULT = -1;
    public static final String CONF_COMPUTATION_CLASS = "fractal.computation.class";
    public static final String CONF_COMPUTATION_CLASS_DEFAULT =
            "br.ufmg.cs.systems.fractal.computation.ComputationContainer";
@@ -61,6 +65,8 @@ public class Configuration implements Serializable {
    public static final String CONF_MAINGRAPH_VERTEX_FILTERING_PREDICATE =
            "fractal.maingraph.vertex.filtering.predicate";
    protected transient long infoPeriod;
+   protected transient long startTime;
+   protected transient long timeLimit;
    protected transient MainGraph mainGraph;
    protected transient boolean initialized = false;
    protected transient boolean isGraphMulti;
@@ -304,6 +310,13 @@ public class Configuration implements Serializable {
       } else {
          return mainGraphPath + "-" + mainGraphClassStr;
       }
+   }
+
+   public boolean reachedTimeLimit() {
+      if (startTime <= 0 || timeLimit <= 0) return false;
+      long deadline = startTime + timeLimit;
+      long currentTime = System.currentTimeMillis();
+      return currentTime >= deadline;
    }
 }
 

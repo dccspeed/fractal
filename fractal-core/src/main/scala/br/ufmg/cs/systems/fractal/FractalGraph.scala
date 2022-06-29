@@ -1,7 +1,6 @@
 package br.ufmg.cs.systems.fractal
 
 import java.util.concurrent.atomic.AtomicInteger
-
 import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplications
 import br.ufmg.cs.systems.fractal.graph.{EdgeFilteringPredicate, MainGraph, UnlabeledMainGraph, VertexFilteringPredicate}
@@ -14,6 +13,8 @@ import com.koloboke.collect.map.hash.{HashIntIntMap, HashIntIntMaps}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.roaringbitmap.RoaringBitmap
+
+import java.io.File
 
 //import scala.collection.mutable.Map
 import scala.reflect.ClassTag
@@ -34,6 +35,8 @@ case class FractalGraph
  logLevel: String,
  edgePredicate: EdgeFilteringPredicate,
  vertexPredicate: VertexFilteringPredicate) extends Logging {
+
+   val name: String = new File(path).getName
 
    private val config: SparkConfiguration = {
       val _config = new SparkConfiguration
@@ -127,11 +130,6 @@ case class FractalGraph
     * @return Fractoid with the initial state of pattern-induced computation
     */
    def pfractoid(pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
-      //val patternWithPlan = if (pattern.explorationPlan() == null) {
-      //   PatternExplorationPlan.apply(pattern).get(0)
-      //} else {
-      //   pattern
-      //}
       val patternWithPlan = if (pattern.explorationPlan() == null) {
          if (graphClass == classOf[UnlabeledMainGraph].getName ||
             !pattern.vertexLabeled()) {

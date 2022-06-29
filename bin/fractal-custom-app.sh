@@ -2,6 +2,9 @@
 
 version="SPARK-2.4.3"
 
+SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]:-$0}"; )" &> /dev/null && pwd 2> /dev/null; )"
+export FRACTAL_HOME="$SCRIPT_DIR/.."
+
 if [ -z $FRACTAL_HOME ]; then
 	echo "FRACTAL_HOME is unset"
 	exit 1

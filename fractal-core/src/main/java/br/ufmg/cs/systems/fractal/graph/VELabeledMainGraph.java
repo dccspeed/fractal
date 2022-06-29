@@ -569,7 +569,7 @@ public class VELabeledMainGraph implements MainGraph {
    public void neighborhoodVertices(int u, IntArrayListView view) {
       int from = vertexNeighborhoodIdx.getu(u);
       int to = vertexNeighborhoodIdx.getu(u + 1);
-      view.set(vertexNeighborhoods, from, to);
+      vertexNeighborhoods.view(view, from, to);
    }
 
    @Override
@@ -583,7 +583,7 @@ public class VELabeledMainGraph implements MainGraph {
    public void neighborhoodEdges(int u, IntArrayListView view) {
       int from = vertexNeighborhoodIdx.getu(u);
       int to = vertexNeighborhoodIdx.getu(u + 1);
-      view.set(edgeNeighborhoods, from, to);
+      edgeNeighborhoods.view(view, from, to);
    }
 
    @Override
@@ -929,7 +929,7 @@ public class VELabeledMainGraph implements MainGraph {
       IntArrayListView uLabels = null;
 
       if (vertexLabels != null) {
-         uLabelsView.set(vertexLabels, vertexLabelsIdx.getu(u),
+         vertexLabels.view(uLabelsView, vertexLabelsIdx.getu(u),
                  vertexLabelsIdx.getu(u + 1));
 
          uLabels = uLabelsView;
@@ -946,9 +946,9 @@ public class VELabeledMainGraph implements MainGraph {
       ulabels = vLabels = eLabels = null;
 
       if (vertexLabels != null) {
-         uLabelsView.set(vertexLabels, vertexLabelsIdx.getu(u),
+         vertexLabels.view(uLabelsView, vertexLabelsIdx.getu(u),
                  vertexLabelsIdx.getu(u + 1));
-         vLabelsView.set(vertexLabels, vertexLabelsIdx.getu(v),
+         vertexLabels.view(vLabelsView, vertexLabelsIdx.getu(v),
                  vertexLabelsIdx.getu(v + 1));
 
          ulabels = uLabelsView;
@@ -956,7 +956,7 @@ public class VELabeledMainGraph implements MainGraph {
       }
 
       if (edgeLabels != null) {
-         eLabelsView.set(edgeLabels, edgeLabelsIdx.getu(e),
+         edgeLabels.view(eLabelsView, edgeLabelsIdx.getu(e),
                  edgeLabelsIdx.getu(e + 1));
          eLabels = eLabelsView;
       }

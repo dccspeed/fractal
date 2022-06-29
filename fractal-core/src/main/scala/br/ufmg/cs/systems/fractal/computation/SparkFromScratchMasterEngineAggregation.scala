@@ -1,6 +1,7 @@
 package br.ufmg.cs.systems.fractal.computation
 
 import java.io.Serializable
+import java.lang.management.ManagementFactory
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue}
 
 import akka.actor._
@@ -51,18 +52,20 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
 
    // get current fractoid, going backwards building engine data for each
    // partial workflow
-   val engineDataArray: Array[EngineData] = {
+   private lazy val engineDataArray: Array[EngineData] = {
       var engineDataList = List.empty[EngineData]
 
-      var currFrac: Fractoid[_ <: Subgraph] = fractoid
-      while (currFrac != null) {
+      var currEngine: SparkFromScratchMasterEngineAggregation[_ <: Subgraph] =
+         this
+      while (currEngine != null) {
+         val currFrac = currEngine.fractoid
          val step = currFrac.step
          val configBc = currFrac.configBc
          val computationContainer =
             getFixedContainer(currFrac.computationContainer)
          val data: EngineData = (step, configBc, computationContainer)
          engineDataList = data :: engineDataList
-         currFrac = currFrac.parent
+         currEngine = currEngine.parent
       }
 
       engineDataList.toArray
@@ -132,7 +135,13 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
    }
 
    override def execEnginesRDD: RDD[SparkEngine[S]] = {
-      init()
+      //try {
+         init()
+      //} catch {
+      //   case e: InterruptedException =>
+      //      logWarn(s"Cannot create engine: ${e}")
+      //      return sc.emptyRDD
+      //}
 
       // save original container, i.e., without parents' computations
       logInfo(s"From scratch computation (${this})." +
@@ -159,7 +168,12 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
          val execEngine = enginesArray.last
             .asInstanceOf[SparkFromScratchEngine[S]]
 
-         Iterator[SparkEngine[S]](execEngine)
+         val config = execEngine.configuration
+         if (config.reachedTimeLimit()) {
+            Iterator.empty
+         } else {
+            Iterator[SparkEngine[S]](execEngine)
+         }
       })
    }
 }

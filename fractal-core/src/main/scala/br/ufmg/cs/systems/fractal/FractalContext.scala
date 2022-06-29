@@ -1,7 +1,7 @@
 package br.ufmg.cs.systems.fractal
 
-import br.ufmg.cs.systems.fractal.computation.{ActorMessageSystem, LocalComputationStore, SparkFromScratchMasterEngineAggregation}
-import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
+import br.ufmg.cs.systems.fractal.computation.{ActorMessageSystem, LocalComputationStore}
+import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.graph.MainGraphStore
 import br.ufmg.cs.systems.fractal.profiler.FractalProfiler
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph
@@ -12,7 +12,8 @@ import org.apache.spark.SparkContext
 import spire.ClassTag
 
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
+import scala.concurrent.{Await, Future, Promise}
+import scala.util.Try
 
 /**
  * Starting point for Fractal execution engine (currently Spark)
@@ -34,11 +35,24 @@ class FractalContext(sc: SparkContext, logLevel: String = "warn")
 
    setLogLevel(logLevel)
 
+   private var _acceptingNewJobs: Boolean = true
+   def acceptingNewJobs: Boolean = _acceptingNewJobs
+
    def sparkContext: SparkContext = sc
 
    def submitFractalStep[S <: Subgraph, T]
    (fractoid: Fractoid[S])(callback: Fractoid[S] => T): T = {
       callback(fractoid)
+   }
+
+   def trySubmitFractalSteps[S <: Subgraph, T]
+   (fractoids: Seq[Fractoid[S]])(callback: Fractoid[S] => T): Seq[Try[T]] = {
+      import scala.concurrent.ExecutionContext.Implicits.global
+      fractoids.map(fractoid => {
+         val future = Future(callback(fractoid))
+         Await.ready(future, Duration.Inf)
+         future.value.get
+      })
    }
 
    def submitFractalSteps[S <: Subgraph, T]
@@ -154,8 +168,17 @@ class FractalContext(sc: SparkContext, logLevel: String = "warn")
     * Stop this context, cleaning the temporary directory
     */
    def stop() = {
+      _acceptingNewJobs = false
       ActorMessageSystem.shutdown()
       MainGraphStore.shutdown()
       LocalComputationStore.shutdown()
+   }
+
+   /**
+    * Early termination
+    */
+   def terminate(): Unit = {
+      _acceptingNewJobs = false
+      ActorMessageSystem.terminate()
    }
 }

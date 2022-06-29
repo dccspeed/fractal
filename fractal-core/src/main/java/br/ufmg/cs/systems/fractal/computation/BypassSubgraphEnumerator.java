@@ -20,7 +20,8 @@ public class BypassSubgraphEnumerator<S extends Subgraph>
    }
 
    @Override
-   public synchronized boolean forkEnumerator(Computation<S> computation) {
+   public synchronized boolean forkEnumerator(Computation<S> computation,
+                                              boolean updateState) {
       return false;
    }
 

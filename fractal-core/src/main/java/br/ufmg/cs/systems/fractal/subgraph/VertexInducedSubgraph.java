@@ -113,11 +113,6 @@ public class VertexInducedSubgraph extends BasicSubgraph {
       super.removeLastWord();
    }
 
-   @Override
-   public Pattern quickPattern() {
-      return super.quickPattern();
-   }
-
    /**
     * Updates the list of edges of this subgraph based on the addition of a
     * new vertex.

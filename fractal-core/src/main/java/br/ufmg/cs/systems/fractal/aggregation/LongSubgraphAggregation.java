@@ -21,4 +21,5 @@ public abstract class LongSubgraphAggregation<S extends Subgraph>
    }
 
    public long value() { return value; }
+
 }

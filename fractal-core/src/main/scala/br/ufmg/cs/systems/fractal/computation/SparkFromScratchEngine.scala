@@ -46,11 +46,9 @@ class SparkFromScratchEngine[S <: Subgraph]
 
    private def ensureExecutionContext(): Unit = {
       if (executionContext != null) return
-      // executor service
-      val engine = this
       val threadFactory = new ThreadFactory {
-         override def newThread(runnable: Runnable): Thread = {
-            new FractalWorkerThread(runnable, engine)
+         override def newThread(r: Runnable): Thread = {
+            new Thread(r, s"FractalWorkerThread(${Thread.currentThread().getName})")
          }
       }
 
@@ -116,7 +114,6 @@ class SparkFromScratchEngine[S <: Subgraph]
          s" subgraph_throughput" +
          s" ${computation.lastComputation().getNumValidExtensions / computeElapsedTime}")
 
-
       var comp = computation
       while (comp != null) {
          val d = comp.getDepth
@@ -136,6 +133,10 @@ class SparkFromScratchEngine[S <: Subgraph]
          comp = comp.nextComputation()
       }
 
+      logInfo(s"ThreadStats step=${step} stageId=${stageId}" +
+         s" id=${partitionId}" +
+         s" valid_subgraphs ${computation.lastComputation().getNumValidExtensions}")
+
       if (Configuration.INSTRUMENTATION_ENABLED) {
          var comp = computation
          while (comp != null) {
@@ -150,11 +151,14 @@ class SparkFromScratchEngine[S <: Subgraph]
          }
       }
 
+      // subgraph aggregation
+      subgraphAggregation = null
+
       // clear-up resources
       if (executionContext != null) executionContext.shutdown()
 
       if (previous == null && configuration.externalWsEnabled()) {
-         slaveActorRef ! Terminate
+         slaveActorRef ! Stop
          slaveActorRef = null
       }
 
@@ -408,24 +412,6 @@ class SparkFromScratchEngine[S <: Subgraph]
    }
 
    override def toString: String = {
-      s"SparkEngine(${step},${previous},${next})"
-   }
-}
-
-class FractalWorkerThread(r: Runnable,
-                          engine: SparkFromScratchEngine[_ <: Subgraph])
-   extends Thread(r, s"FractalWorkerThread(${Thread.currentThread().getName})") {
-
-   def getEngine(): SparkFromScratchEngine[_ <: Subgraph] = engine
-}
-
-object SparkFromScratchEngine {
-   def getStageId: Int = {
-      val t = Thread.currentThread()
-      if (t.isInstanceOf[FractalWorkerThread]) {
-         t.asInstanceOf[FractalWorkerThread].getEngine().stageId
-      } else {
-         TaskContext.get().stageId()
-      }
+      s"SparkEngine(${step},${stageId},${next})"
    }
 }

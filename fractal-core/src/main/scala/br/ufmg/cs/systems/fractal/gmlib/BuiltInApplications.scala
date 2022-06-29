@@ -2,23 +2,22 @@ package br.ufmg.cs.systems.fractal.gmlib
 
 import br.ufmg.cs.systems.fractal.computation.{Computation, RandomWalkEnumerator, SamplingEnumerator}
 import br.ufmg.cs.systems.fractal.gmlib.clique.{KClistEnumerator, MaximalCliquesEnumerator}
-import br.ufmg.cs.systems.fractal.gmlib.fsm.{FSMHybrid, FSMPF, FSMPFMCVC, FSMSF, MinImageSupport}
-import br.ufmg.cs.systems.fractal.gmlib.kws.KeywordSearchPO
+import br.ufmg.cs.systems.fractal.gmlib.fsm._
+import br.ufmg.cs.systems.fractal.gmlib.kws.{KeywordSearchPO, MinimalKeywordSearchPO}
+import br.ufmg.cs.systems.fractal.gmlib.mcvc.MCVCEnumerator
 import br.ufmg.cs.systems.fractal.gmlib.motifs.{MotifsHybrid, MotifsPF, MotifsPFMCVC, MotifsSF}
 import br.ufmg.cs.systems.fractal.gmlib.periodic.{InducedPeriodicSubgraphsPF, InducedPeriodicSubgraphsPFMCVC, InducedPeriodicSubgraphsSF}
-import br.ufmg.cs.systems.fractal.gmlib.quasicliques.QuasiCliquesSF
-import br.ufmg.cs.systems.fractal.graph.MainGraph
+import br.ufmg.cs.systems.fractal.gmlib.quasicliques.{QuasiCliquesPA, QuasiCliquesPAPO, QuasiCliquesPO}
 import br.ufmg.cs.systems.fractal.pattern._
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
-import br.ufmg.cs.systems.fractal.util.collection.ObjSet
 import br.ufmg.cs.systems.fractal.util.pool.{IntArrayListPool, IntArrayListViewPool}
 import br.ufmg.cs.systems.fractal.util.{Logging, Utils}
-import br.ufmg.cs.systems.fractal.{FSMSF, FractalGraph, Fractoid}
+import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
 import org.apache.spark.rdd.RDD
 
-import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 
 /**
  * Built-in algorithms with the following alternative implementations:
@@ -573,11 +572,43 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * @param pattern representing a query
     * @return an array of fractoids with partial query results
     */
+   def patternMatchingPFMCVC2(pattern: Pattern)
+   : Array[Fractoid[PatternInducedSubgraph]] = {
+      logInfo(s"PatternBeforePlan ${pattern}")
+
+      val newPatterns = PatternExplorationPlanMCVC.apply(pattern)
+      val partialResults = new Array[Fractoid[PatternInducedSubgraph]](newPatterns.size())
+
+      var i = 0
+      while (i < newPatterns.size()) {
+         val nextPattern = newPatterns.getu(i)
+         val explorationPlanMCVC = nextPattern.explorationPlan()
+         val mcvcSize = explorationPlanMCVC.mcvcSize()
+
+         var gquerying = self.pfractoid(nextPattern)
+            .expand(nextPattern.getNumberOfVertices, classOf[MCVCEnumerator])
+
+         //val gquerying = this.patternMatchingPF(nextPattern)
+         //   .explore(mcvcSize - 1)
+
+         logInfo(s"MCVCPartialResult pattern=${nextPattern}" +
+            s" sbLower=${nextPattern.vsymmetryBreakerLowerBound()}" +
+            s" sbUpper=${nextPattern.vsymmetryBreakerUpperBound()}" +
+            s" plan=${explorationPlanMCVC}" +
+            s" fractoid=${gquerying}")
+
+         partialResults(i) = gquerying
+         i += 1
+      }
+
+      partialResults
+   }
+
    def patternMatchingPFMCVC(pattern: Pattern)
    : Array[Fractoid[PatternInducedSubgraph]] = {
       logInfo(s"PatternBeforePlan ${pattern}")
 
-      val newPatterns = PatternExplorationPlanMCVCVgroups.apply(pattern)
+      val newPatterns = PatternExplorationPlanMCVC.apply(pattern)
       val partialResults = new Array[Fractoid[PatternInducedSubgraph]](newPatterns.size())
 
       var i = 0
@@ -625,14 +656,38 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
    }
 
    /**
-    * Vertex-induced implementation of quasi-cliques
+    * Pattern-oblivious implementation of quasi-cliques
     * @param numVertices number of vertices
     * @param minDensity density of edges between 0 and 1.
     * @return Fractoid with the initial state for quasi-cliques
     */
-   def quasiCliquesSF(numVertices: Int,
+   def quasiCliquesPO(numVertices: Int,
                       minDensity: Double): Fractoid[VertexInducedSubgraph] = {
-      val app = new QuasiCliquesSF(numVertices, minDensity)
+      val app = new QuasiCliquesPO(numVertices, minDensity)
+      app.apply(self)
+   }
+
+   /**
+    * Pattern-aware implementation of quasi-cliques
+    * @param numVertices number of vertices
+    * @param minDensity density of edges between 0 and 1.
+    * @return Fractoid with the initial state for quasi-cliques
+    */
+   def quasiCliquesPA(numVertices: Int, minDensity: Double)
+   : Seq[Fractoid[PatternInducedSubgraph]] = {
+      val app = new QuasiCliquesPA(numVertices, minDensity)
+      app.apply(self)
+   }
+
+   /**
+    * Pattern-aware and pattern-oblivious hybrid implementation of quasi-cliques
+    * @param numVertices number of vertices
+    * @param minDensity density of edges between 0 and 1.
+    * @return Fractoid with the initial state for quasi-cliques
+    */
+   def quasiCliquesPAPO(numVertices: Int, minDensity: Double)
+   : Seq[Fractoid[VertexInducedSubgraph]] = {
+      val app = new QuasiCliquesPAPO(numVertices, minDensity)
       app.apply(self)
    }
 
@@ -686,7 +741,6 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * Finds induced subgraphs containing only given labels (pattern-aware)
     * @param labelsSet target labels
     * @param numVertices number of vertices in the induced subgraphs
-    * @param callback callback for each fractoid generated
     * @return fractoid representing the computation
     */
    def inducedSubgraphSearchLabelsPA
@@ -757,6 +811,19 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
    def keywordSearchPO(keywords: Set[Int], numEdges: Int)
    : Fractoid[EdgeInducedSubgraph] = {
       val app = new KeywordSearchPO(keywords, numEdges)
+      app.apply(self)
+   }
+
+   /**
+    * Given a set of words (labels) find subgraphs such that each keyword is
+    * covered by some vertex and this subgraph should be minimal.
+    * @param keywords
+    * @param numVertices
+    * @return new fractoid
+    */
+   def minimalKeywordSearchPO(keywords: Set[Int], numVertices: Int)
+   : Fractoid[VertexInducedSubgraph] = {
+      val app = new MinimalKeywordSearchPO(keywords, numVertices)
       app.apply(self)
    }
 

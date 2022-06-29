@@ -25,6 +25,8 @@ trait SparkEngine[S <: Subgraph]
 
    def computation: Computation[S]
 
+   def getComputation: Computation[S] = computation
+
    val computationCopy: Computation[S] = {
       val comp = ReflectionSerializationUtils.clone(computation)
       if (configuration.getSubgraphClass() == null) {
@@ -56,6 +58,22 @@ trait SparkEngine[S <: Subgraph]
    override def getPartitionId() = partitionId
 
    override def getStep() = step
+
+   override def terminate(): Unit = {
+      def terminateComputation(c: Computation[S]): Unit = {
+         var currComp = c
+         while (currComp != null) {
+            currComp.terminate()
+            currComp = currComp.nextComputation()
+         }
+      }
+
+      terminateComputation(computation)
+      terminateComputation(computationCopy)
+
+      val nextEngine = getNextEngine
+      if (nextEngine != null) nextEngine.terminate()
+   }
 
    def computeAggregationLong
    (longSubgraphAggregation: LongSubgraphAggregation[S])

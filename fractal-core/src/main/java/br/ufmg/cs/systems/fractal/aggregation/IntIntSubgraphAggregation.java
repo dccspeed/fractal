@@ -50,4 +50,5 @@ public abstract class IntIntSubgraphAggregation<S extends Subgraph>
    public final int applyAsInt(int k, int existing) {
       return reduce(newValue, existing);
    }
+
 }

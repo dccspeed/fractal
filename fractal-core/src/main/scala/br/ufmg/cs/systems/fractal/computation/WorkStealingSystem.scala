@@ -1,11 +1,10 @@
 package br.ufmg.cs.systems.fractal.computation
 
 import java.util.concurrent.ConcurrentLinkedQueue
-
 import akka.actor._
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph
 import br.ufmg.cs.systems.fractal.util.Logging
-import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjArrayList}
+import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, IntArrayListView, ObjArrayList}
 import br.ufmg.cs.systems.fractal.util.pool.HashIntSetPool
 
 class WorkStealingSystem [S <: Subgraph]
@@ -14,6 +13,8 @@ class WorkStealingSystem [S <: Subgraph]
 
    private val remoteWorkQueue: ConcurrentLinkedQueue[StealWorkResponse] =
       new ConcurrentLinkedQueue[StealWorkResponse]()
+
+   private var active: Boolean = true
 
    // indicates whether this thread is allowed to keep sending new remote
    // requests or work -- this is flagged out uppon receiving an empty
@@ -28,7 +29,7 @@ class WorkStealingSystem [S <: Subgraph]
    private val maxRequestsOnTheFly = 1 // TODO: include as config
 
    // timeout used for waiting for external work stealing responses
-   private val workQueueTimeoutMs = 500
+   private val workQueueTimeoutMs = 100
 
    // just to measure how far from the upper bound on onTheFly requests we are
    private var requestsOnTheFlyMax = Long.MinValue
@@ -37,12 +38,13 @@ class WorkStealingSystem [S <: Subgraph]
    private val unvisitedComputations: ObjArrayList[Computation[S]] =
       new ObjArrayList[Computation[S]]()
 
+   private val numPartitions = rootComputation.getNumberPartitions
+
    private def remoteWorkQueueIsEmpty: Boolean = {
       requestsOnTheFly <= 0 || remoteWorkQueue.isEmpty
    }
 
    private def consumeExternalWork(c: Computation[S]): Long = {
-      val numPartitions = c.getNumberPartitions
       var externalSteals = 0L
       var response = remoteWorkQueue.poll()
 
@@ -54,12 +56,20 @@ class WorkStealingSystem [S <: Subgraph]
             val computation = consumer.getComputation()
             val ret = computation.processCompute(consumer)
             externalSteals += 1
+            computation.addExternalWorkSteals(1)
 
          } else if (response.numPeers == numPartitions) {
             newExternalRequestsAllowed = false
          }
 
          response = remoteWorkQueue.poll()
+      }
+
+      // allow early termination by master
+      if (active && !c.isActive) {
+         newExternalRequestsAllowed = false
+         requestsOnTheFly = 0
+         active = false
       }
 
       externalSteals
@@ -88,7 +98,7 @@ class WorkStealingSystem [S <: Subgraph]
 
          // step 1: internal and external work stealing allowed
          var wsIterationsStep1 = 0L
-         while (newExternalRequestsAllowed) {
+         while (active && newExternalRequestsAllowed) {
             // internal work stealing while still possible
             internalSteals += workStealingComputeLocal(c)
 
@@ -109,35 +119,130 @@ class WorkStealingSystem [S <: Subgraph]
             }
 
             wsIterationsStep1 += 1
+            if (wsIterationsStep1 % 100000 == 0) {
+               logInfo(s"WorkStealingReportStep1" +
+                  s" step=${c.getStep}" +
+                  s" partitionId=${c.getPartitionId}" +
+                  s" internalSteals=${internalSteals}" +
+                  s" externalSteals=${externalSteals}" +
+                  s" requestsOnTheFly=${requestsOnTheFly}" +
+                  s" requestsOnTheFlyMax=${requestsOnTheFlyMax}" +
+                  s" wsIterations=${wsIterations}" +
+                  s" wsIterationsStep1=${wsIterationsStep1}" +
+                  s" maxRequestsOnTheFly=${maxRequestsOnTheFly}" +
+                  s" numPartitionsTotal=${numPartitions}")
+            }
          }
 
          // step 2: ensure all sent requests got responses
          var wsIterationsStep2 = 0L
-         externalSteals += consumeExternalWork(c)
-         while (requestsOnTheFly > 0) {
-            remoteWorkQueue.synchronized {
-               remoteWorkQueue.wait(workQueueTimeoutMs)
-            }
+
+         if (active) {
             externalSteals += consumeExternalWork(c)
-            wsIterationsStep2 += 1
+            while (requestsOnTheFly > 0) {
+               externalSteals += consumeExternalWork(c)
+               wsIterationsStep2 += 1
+               if (wsIterationsStep2 % 100000 == 0) {
+                  logInfo(s"WorkStealingReportStep2" +
+                     s" step=${c.getStep}" +
+                     s" partitionId=${c.getPartitionId}" +
+                     s" internalSteals=${internalSteals}" +
+                     s" externalSteals=${externalSteals}" +
+                     s" requestsOnTheFly=${requestsOnTheFly}" +
+                     s" requestsOnTheFlyMax=${requestsOnTheFlyMax}" +
+                     s" wsIterations=${wsIterations}" +
+                     s" wsIterationsStep2=${wsIterationsStep2}" +
+                     s" maxRequestsOnTheFly=${maxRequestsOnTheFly}" +
+                     s" numPartitionsTotal=${numPartitions}")
+               }
+               remoteWorkQueue.synchronized {
+                  remoteWorkQueue.wait(workQueueTimeoutMs)
+               }
+            }
          }
 
          // step 3: drain any rejected response that may exist in this thread
          // obs. too many rejected work is a sign of network delay/failure
          var wsIterationsStep3 = 0L
-         slaveActor ! DrainRejectedWork
-         requestsOnTheFly += 1
-         while (requestsOnTheFly > 0) {
-            externalSteals += consumeExternalWork(c)
-            wsIterationsStep3 += 1
-         }
-         while (!remoteWorkQueue.isEmpty) {
-            externalSteals += consumeExternalWork(c)
-            wsIterationsStep3 += 1
+         if (active) {
+            slaveActor ! DrainRejectedWork
+            requestsOnTheFly += 1
+            while (requestsOnTheFly > 0) {
+               externalSteals += consumeExternalWork(c)
+               wsIterationsStep3 += 1
+               if (wsIterationsStep3 % 100000 == 0) {
+                  logInfo(s"WorkStealingReportStep3-1" +
+                     s" step=${c.getStep}" +
+                     s" partitionId=${c.getPartitionId}" +
+                     s" internalSteals=${internalSteals}" +
+                     s" externalSteals=${externalSteals}" +
+                     s" requestsOnTheFly=${requestsOnTheFly}" +
+                     s" requestsOnTheFlyMax=${requestsOnTheFlyMax}" +
+                     s" wsIterations=${wsIterations}" +
+                     s" wsIterationsStep3=${wsIterationsStep3}" +
+                     s" maxRequestsOnTheFly=${maxRequestsOnTheFly}" +
+                     s" numPartitionsTotal=${numPartitions}")
+               }
+               remoteWorkQueue.synchronized {
+                  remoteWorkQueue.wait(workQueueTimeoutMs)
+               }
+            }
          }
 
-         // step 4: only internal work stealing allowed (final)
-         internalSteals += workStealingComputeLocal(c)
+         // step 4: wait for a message indicating that all threads are ready
+         // to terminate and that all threads know that this thread is ready
+         // to terminate
+         if (active) {
+            requestsOnTheFly += 1
+            while (requestsOnTheFly > 0) {
+               externalSteals += consumeExternalWork(c)
+               wsIterationsStep3 += 1
+               if (wsIterationsStep3 % 100000 == 0) {
+                  logInfo(s"WorkStealingReportStep3-2" +
+                     s" step=${c.getStep}" +
+                     s" partitionId=${c.getPartitionId}" +
+                     s" internalSteals=${internalSteals}" +
+                     s" externalSteals=${externalSteals}" +
+                     s" requestsOnTheFly=${requestsOnTheFly}" +
+                     s" requestsOnTheFlyMax=${requestsOnTheFlyMax}" +
+                     s" wsIterations=${wsIterations}" +
+                     s" wsIterationsStep3=${wsIterationsStep3}" +
+                     s" maxRequestsOnTheFly=${maxRequestsOnTheFly}" +
+                     s" numPartitionsTotal=${numPartitions}")
+               }
+               remoteWorkQueue.synchronized {
+                  remoteWorkQueue.wait(workQueueTimeoutMs)
+               }
+            }
+         }
+
+         // step 5: sanity check to guarantee that all remote work queued is
+         // properly consumed before finishing work stealing
+         if (active) {
+            while (!remoteWorkQueue.isEmpty) {
+               externalSteals += consumeExternalWork(c)
+               wsIterationsStep3 += 1
+               if (wsIterationsStep3 % 100000 == 0) {
+                  logInfo(s"WorkStealingReportStep3-3" +
+                     s" step=${c.getStep}" +
+                     s" partitionId=${c.getPartitionId}" +
+                     s" internalSteals=${internalSteals}" +
+                     s" externalSteals=${externalSteals}" +
+                     s" requestsOnTheFly=${requestsOnTheFly}" +
+                     s" requestsOnTheFlyMax=${requestsOnTheFlyMax}" +
+                     s" wsIterations=${wsIterations}" +
+                     s" wsIterationsStep3=${wsIterationsStep3}" +
+                     s" maxRequestsOnTheFly=${maxRequestsOnTheFly}" +
+                     s" numPartitionsTotal=${numPartitions}")
+               }
+            }
+         }
+
+         // step 6: final local work stealing in case some local thread still
+         // have work to do
+         if (active) {
+            internalSteals += workStealingComputeLocal(c)
+         }
 
          wsIterations += wsIterationsStep1 + wsIterationsStep2 + wsIterationsStep3
 
@@ -202,7 +307,7 @@ class WorkStealingSystem [S <: Subgraph]
          val thatComp = computations.getu(i)
          if (thatComp != null) {
             val thatSubgraphEnumerator = thatComp.getSubgraphEnumerator
-            if (thatSubgraphEnumerator.forkEnumerator(thisComp)) {
+            if (thatSubgraphEnumerator.forkEnumerator(thisComp, true)) {
                thisComp.processCompute(thisSubgraphEnumerator)
                thisComp.addInternalWorkSteals(1)
                internalSteals += 1
@@ -230,7 +335,7 @@ class WorkStealingSystem [S <: Subgraph]
          while (continue && i < numUnvisitedComputations) {
             val thatComp = unvisitedComputations.getu(i)
             val thatSubgraphEnumerator = thatComp.getSubgraphEnumerator
-            if (thatSubgraphEnumerator.forkEnumerator(thisComp)) {
+            if (thatSubgraphEnumerator.forkEnumerator(thisComp, true)) {
                thisComp.processCompute(thisSubgraphEnumerator)
                thisComp.addInternalWorkSteals(1)
                internalSteals += 1
@@ -267,23 +372,20 @@ class WorkStealingSystem [S <: Subgraph]
 
       // fill subgraph according to prefix
       val subgraphEnum = currComp.getSubgraphEnumerator
-      val subgraph = subgraphEnum.getSubgraph
-      subgraph.reset()
-
       val prefixSize = workUnit.getu(i)
       i += 1
 
-      // add prefix into subgraph
-      var j = 0
-      while (j < prefixSize) {
-         subgraph.addWord(workUnit.getu(i))
-         j += 1
-         i += 1
-      }
+      // rebuild subgraph enumerator state
+      val prefix = workUnit.view(i, i + prefixSize)
 
-      // set subgraph enumerator and rebuild its state
+      //SubgraphEnumerator.maybeUpdateState(subgraphEnum, prefix, true)
+      subgraphEnum.maybeUpdateState(prefix, true)
+      i += prefixSize
+
+      // new extensions stealed
       subgraphEnum.newExtensions(workUnit.view(i, workUnit.size()))
-      subgraphEnum.rebuildState()
+
+      //logWarn(s"WorkStealing ${workUnit} ${prefix} ${subgraphEnum}")
 
       subgraphEnum
    }

@@ -38,31 +38,36 @@ public class KClistEnumerator<S extends Subgraph> extends SubgraphEnumerator<S> 
       cliqueSize = config.getInteger("clique_size", -1);
    }
 
+   //@Override
+   //public void rebuildState() {
+   //   dag.clear();
+   //   if (subgraph.getNumWords() == 0) return;
+   //   IntArrayList vertices = subgraph.getVertices();
+   //   IntObjMap<IntArrayList> currentDag = HashIntObjMaps.newMutableMap();
+   //   IntObjMap<IntArrayList> aux;
+
+   //   extendFromGraph(computation.getConfig().getMainGraph(), neighborhood,
+   //           dag, vertices.get(0));
+
+   //   int numVertices = vertices.size();
+
+   //   for (int i = 1; i < numVertices; ++i) {
+   //      if (numVertices < cliqueSize - 1) {
+   //         aux = currentDag;
+   //         currentDag = dag;
+   //         dag = aux;
+   //         dag.clear();
+   //         extendFromDag(currentDag, dag, vertices.get(i));
+   //         dagExtensions = dag.keySet();
+   //      } else {
+   //         dagExtensions = currentDag.get(vertices.get(i));
+   //      }
+   //   }
+   //}
+
    @Override
-   public void rebuildState() {
-      dag.clear();
-      if (subgraph.getNumWords() == 0) return;
-      IntArrayList vertices = subgraph.getVertices();
-      IntObjMap<IntArrayList> currentDag = HashIntObjMaps.newMutableMap();
-      IntObjMap<IntArrayList> aux;
-
-      extendFromGraph(computation.getConfig().getMainGraph(), neighborhood,
-              dag, vertices.get(0));
-
-      int numVertices = vertices.size();
-
-      for (int i = 1; i < numVertices; ++i) {
-         if (numVertices < cliqueSize - 1) {
-            aux = currentDag;
-            currentDag = dag;
-            dag = aux;
-            dag.clear();
-            extendFromDag(currentDag, dag, vertices.get(i));
-            dagExtensions = dag.keySet();
-         } else {
-            dagExtensions = currentDag.get(vertices.get(i));
-         }
-      }
+   public boolean shouldRebuildState() {
+      return true;
    }
 
    @Override

@@ -11,9 +11,14 @@ import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 import scala.io.Source
 
 class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
-   private val numPartitions: Int = 8
+   private val numPartitions: Int = 20
    private val appName: String = "fractal-test"
    private val logLevel: String = "warn"
+   private val defaultConfs: Map[String,Any] = Map(
+      "num_partitions" -> numPartitions
+      ,"ws_internal" -> true
+      ,"ws_external" -> true
+   )
 
    private var master: String = _
    private var sc: SparkContext = _
@@ -102,20 +107,26 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       sc.setLogLevel(logLevel)
       fc = new FractalContext(sc, logLevel)
 
-      cubeGraph = fc.textFile(
+      def withDefaultConfs(graph: FractalGraph): FractalGraph = {
+         var newGraph = graph
+         defaultConfs.foreach(kv => newGraph = newGraph.set(kv._1,kv._2))
+         newGraph
+      }
+
+      cubeGraph = withDefaultConfs(fc.textFile(
          //"../data/cube.sc",
          "../data/cube",
-         graphClass = "br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph")
+         graphClass = "br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph"))
 
-      citeseerSingleLabelGraph = fc.textFile(
+      citeseerSingleLabelGraph = withDefaultConfs(fc.textFile(
          //"../data/citeseer-single-label.sc",
          "../data/citeseer",
-         graphClass = "br.ufmg.cs.systems.fractal.graph.UnlabeledMainGraph")
+         graphClass = "br.ufmg.cs.systems.fractal.graph.UnlabeledMainGraph"))
 
-      citeseerGraph = fc.textFile(
+      citeseerGraph = withDefaultConfs(fc.textFile(
          //"../data/citeseer.sc",
          "../data/citeseer",
-         graphClass = "br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph")
+         graphClass = "br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph"))
    }
 
    /** stop spark context */
@@ -334,8 +345,12 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       for (((graph, numVertices), counts) <- motifsGt) {
          val chosenGraph = if (graph == "citeseer-single-label") {
             citeseerSingleLabelGraph
+               //.set("ws_internal", false)
+               //.set("ws_external", false)
          } else if (graph == "citeseer") {
             citeseerGraph
+               //.set("ws_internal", false)
+               //.set("ws_external", false)
          } else {
             throw new RuntimeException(s"Invalid graph string ${graph}")
          }
@@ -359,7 +374,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
          val motifsMap3 = chosenGraph.motifsPFMCVC(numVertices).collectAsMap()
          assert(motifsMap3.equals(motifsMap1),
             s"${motifsMap1.values.sum} ${motifsMap3.values.sum}" +
-               s"${motifsMap1} ${motifsMap3}")
+               s" ${motifsMap1} ${motifsMap3}")
       }
    }
 
@@ -367,26 +382,23 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       for (((_, query, numVertices), numSubgraphs) <- patternMatchingGt
          .filter(_._1._1 == "citeseer")) {
 
-         citeseerSingleLabelGraph.set("num_partitions", numPartitions)
+         val graph = citeseerSingleLabelGraph
+            .set("num_partitions", numPartitions)
 
          val queryGraphPattern = PatternUtils.fromFS(
             s"../data/queries/${query}")
-         val gqueryingFrac = citeseerSingleLabelGraph
+         val gqueryingFrac = graph
             .patternMatchingPF(queryGraphPattern)
             .explore(numVertices - 1)
 
          assert(gqueryingFrac.aggregationCount == numSubgraphs,
             s"query=${query} numVertices=${numVertices}")
 
-         val queryPartialResults = citeseerSingleLabelGraph
-            .patternMatchingPFMCVC(queryGraphPattern)
+         val queryPartialResults = graph
+            .patternMatchingPFMCVC2(queryGraphPattern)
          var totalNumSubgraphs = 0L
          for (queryPartialResult <- queryPartialResults) {
-            totalNumSubgraphs += queryPartialResult
-               .aggregationCountWithCallback(
-                  (s, c, cb) => {
-                     s.completeMatch(c, c.getPattern, cb)
-                  })
+            totalNumSubgraphs += queryPartialResult.aggregationCount
          }
          assert(totalNumSubgraphs == numSubgraphs,
             s"MCVC query=${query} numVertices=${numVertices}")
@@ -416,7 +428,8 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
          val frequentPatternsPf = chosenGraph
             .fsmPF(minSupport, Int.MaxValue)
             .collectAsMap()
-         assert(frequentPatternsPf.size == numPatterns)
+         assert(frequentPatternsPf.size == numPatterns,
+            s"${minSupport} ${frequentPatterns}")
          assert(frequentPatterns.equals(frequentPatternsPf), {
             var debugStr = "\n"
             for (p <- frequentPatterns.keySet) {

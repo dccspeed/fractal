@@ -31,6 +31,9 @@ public class FractalThreadStats implements Serializable {
    public final long[] numInternalWorkSteals;
    public final long[] numExternalWorkSteals;
 
+   // forced termination
+   public final boolean forcedTermination;
+
    public FractalThreadStats(Computation computation) {
       ExecutionEngine engine = computation.getExecutionEngine();
       // identification
@@ -62,6 +65,8 @@ public class FractalThreadStats implements Serializable {
          numExternalWorkSteals[i] = currComp.getExternalWorkSteals();
          currComp = currComp.nextComputation();
       }
+
+      forcedTermination = computation.getForcedTermination();
    }
 
    public double initTimeMs() {

@@ -74,6 +74,12 @@ case class SparkConfiguration(confs: Map[String, Any])
       // info period
       updateIfExists("info_period", INFO_PERIOD)
 
+      // start time
+      updateIfExists("start_time", CONF_START_TIME_MS)
+
+      // time limit
+      updateIfExists("time_limit", CONF_TIME_LIMIT_MS)
+
       // computation classes
       updateIfExists("computation", CONF_COMPUTATION_CLASS)
 
@@ -146,6 +152,8 @@ case class SparkConfiguration(confs: Map[String, Any])
 
       // periodic information about execution
       infoPeriod = getLong(INFO_PERIOD, INFO_PERIOD_DEFAULT_MS)
+      startTime = getLong(CONF_START_TIME_MS, CONF_START_TIME_MS_DEFAULT)
+      timeLimit = getLong(CONF_TIME_LIMIT_MS, CONF_TIME_LIMIT_MS_DEFAULT)
 
       // common configs
       setMainGraphClass(

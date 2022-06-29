@@ -25,14 +25,17 @@ cliquess="${cliquess}|maximal_cliques_custom_quick"
 cliquess="${cliquess}|maximal_cliques_pa"
 cliquess="${cliquess}|maximal_cliques_po"
 
-quasicliquess="quasi_cliques_sf"
+quasicliquess="quasi_cliques_po"
+quasicliquess="${quasicliquess}|quasi_cliques_pa"
+quasicliquess="${quasicliquess}|quasi_cliques_pa_po"
 
-fsms="fsm_sf"
-fsms="${fsms}|fsm_pf"
-fsms="${fsms}|fsm_pf_mcvc"
-fsms="${fsms}|fsm_hybrid"
+fsms="fsm_po"
+fsms="${fsms}|fsm_pa"
+fsms="${fsms}|fsm_pa_mcvc"
+fsms="${fsms}|fsm_pa_po"
 
 gqueryings="pattern_matching_pf_mcvc"
+gqueryings="${gqueryings}|pattern_matching_pf_mcvc_old"
 gqueryings="${gqueryings}|pattern_matching_sf"
 gqueryings="${gqueryings}|pattern_matching_pf"
 gqueryings="${gqueryings}|pattern_matching_induced_pf"
@@ -48,8 +51,13 @@ subgraphsearch="induced_subgraph_search_labels_po"
 subgraphsearch="${subgraphsearch}|induced_subgraph_search_labels_pa"
 
 keywordsearch="keyword_search_po"
+keywordsearch="${keywordsearch}|minimal_keyword_search_po"
 
-apps="${gqueryings}|${motifss}|${cliquess}|${quasicliquess}|${fsms}|${subgraphlisting}|${temporals}|${subgraphsearch}|${keywordsearch}|${extras}"
+patternquerygenerator="pattern_query_generator"
+
+apps="${gqueryings}|${motifss}|${cliquess}|${quasicliquess}|${fsms}"
+apps="${apps}|${subgraphlisting}|${temporals}|${subgraphsearch}"
+apps="${apps}|${keywordsearch}|${extras}|${patternquerygenerator}"
 
 usage="
 APPS_AVAILABLE
@@ -102,7 +110,7 @@ ALGOPTION for '$app':
    ** empty because this is a custom application **"
 	;;
 
-	fsm_sf)
+	fsm_po)
 	required="inputgraph steps fsmsupp"
         appusage="
 
@@ -112,7 +120,7 @@ ALGOPTION for '$app':
    fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
 	;;
 
-	fsm_pf)
+	fsm_pa)
 	required="inputgraph steps fsmsupp"
         appusage="
 
@@ -122,7 +130,7 @@ ALGOPTION for '$app':
    fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
 	;;
 
-	fsm_pf_mcvc)
+	fsm_pa_mcvc)
 	required="inputgraph steps fsmsupp"
         appusage="
 
@@ -132,7 +140,7 @@ ALGOPTION for '$app':
    fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
 	;;
 
-	fsm_hybrid)
+	fsm_pa_po)
 	required="inputgraph steps fsmsupp"
         appusage="
 
@@ -289,7 +297,27 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 
-	quasi_cliques_sf)
+	quasi_cliques_po)
+	required="inputgraph steps mindensity"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   mindensity=<between 0 and 1>            'Minimum density for quasi cliques'"
+	;;
+
+	quasi_cliques_pa)
+	required="inputgraph steps mindensity"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   mindensity=<between 0 and 1>            'Minimum density for quasi cliques'"
+	;;
+
+	quasi_cliques_pa_po)
 	required="inputgraph steps mindensity"
         appusage="
 
@@ -300,6 +328,16 @@ ALGOPTION for '$app':
 	;;
 
 	pattern_matching_pf_mcvc)
+	required="inputgraph steps query"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
+	;;
+
+	pattern_matching_pf_mcvc_old)
 	required="inputgraph steps query"
         appusage="
 
@@ -334,8 +372,6 @@ ALGOPTION for '$app':
         appusage="
 
 ALGOPTION for '$app':
-   inputgraph=<file-path>                  'Input graph file path'
-   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 
@@ -435,6 +471,30 @@ ALGOPTION for '$app':
    gfiltering=true|false                   'Graph filtering: whether input graph should be filtered before enumeration'"
 	;;
 
+	minimal_keyword_search_po)
+	required="inputgraph steps labelsset gfiltering"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   labelsset=l1,l2,...,ln                  'Labels set: keywords'
+   gfiltering=true|false                   'Graph filtering: whether input graph should be filtered before enumeration'"
+	;;
+
+	pattern_query_generator)
+	required="inputgraph steps fraction seed topk outputdir"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   fraction=<between 0 and 1>              'Fraction of subgraphs to sample.'
+   seed=<any long value>                   'Seed used for sampling and selection among top-k patterns.'
+   topk=1|2|...                            'How many patterns to draw from each category'
+   outputdir=<directory path dir>          'Where to store selected patterns'"
+	;;
+
 	*)
     >&2 echo "Invalid application: ${app}"
     >&2 printf "$usage\n"
@@ -464,71 +524,20 @@ comm=${comm:-scratch}
 total_cores=$((num_workers * worker_cores))
 deploy_mode=${deploy_mode:-client}
 log_level=${log_level:-info}
+timelimit=${timelimit:--1}
 jars=${jars:-""}
+uienabled=${uienabled:-false}
 app_class=${app_class:-br.ufmg.cs.systems.fractal.FractalSparkRunner}
 packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties ${PROFILER_OPTIONS}\""
-args=${args:-"$labeling $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $mindensity $query $fraction $periodicthreshold $labelsset $gfiltering $configs"}
+args=${args:-"$labeling $inputgraph $app $comm $total_cores $steps $log_level $timelimit $fsmsupp $mindensity $query $fraction $periodicthreshold $labelsset $gfiltering $seed $topk $outputdir $configs"}
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\
    --driver-memory $master_memory \\
    --driver-java-options "${extrajavaoptions}" \\
    --conf spark.executor.extraJavaOptions=$extrajavaoptions \\
-   --conf spark.ui.enabled=true \\
-   --num-executors $num_workers \\
-   --executor-cores $worker_cores \\
-   --executor-memory $worker_memory \\
-   --class $app_class \\
-   --jars $FRACTAL_HOME/fractal-core/build/libs/fractal-core-$version.jar,$jars \\
-   --packages $packages \\
-   $FRACTAL_HOME/fractal-apps/build/libs/fractal-apps-$version.jar \\
-   $args"
-
-# output command
-echo "$cmd"
-
-	*)
-    >&2 echo "Invalid application: ${app}"
-    >&2 printf "$usage\n"
-	  exit 1
-	;;
-esac
-
-wholeusage="$usage $appusage"
-
-for argname in $required; do
-	if [ -z ${!argname+x} ]; then
-		>&2 printf "error: $argname is unset\n"
-                >&2 printf "$wholeusage\n"
-		exit 1
-	else
-		>&2 echo "info: $argname is set to '${!argname}'"
-	fi
-done
-
-master_memory=${master_memory:-2g}
-num_workers=${num_workers:-1}
-worker_cores=${worker_cores:-1}
-spark_master=${spark_master:-local[${worker_cores}]}
-worker_memory=${worker_memory:-2g}
-labeling=${labeling:-n}
-comm=${comm:-scratch}
-total_cores=$((num_workers * worker_cores))
-deploy_mode=${deploy_mode:-client}
-log_level=${log_level:-info}
-jars=${jars:-""}
-app_class=${app_class:-br.ufmg.cs.systems.fractal.FractalSparkRunner}
-packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
-extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties ${PROFILER_OPTIONS}\""
-args=${args:-"$labeling $inputgraph $app $comm $total_cores $steps $log_level $fsmsupp $mindensity $query $fraction $periodicthreshold $labelsset $gfiltering $configs"}
-
-cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
-   --deploy-mode $deploy_mode \\
-   --driver-memory $master_memory \\
-   --driver-java-options "${extrajavaoptions}" \\
-   --conf spark.executor.extraJavaOptions=$extrajavaoptions \\
-   --conf spark.ui.enabled=true \\
+   --conf spark.ui.enabled=$uienabled \\
    --num-executors $num_workers \\
    --executor-cores $worker_cores \\
    --executor-memory $worker_memory \\

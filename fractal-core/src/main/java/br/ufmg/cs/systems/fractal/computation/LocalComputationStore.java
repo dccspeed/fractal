@@ -18,7 +18,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 
 public class LocalComputationStore {
    private static final Logger LOG = Logger.getLogger(LocalComputationStore.class);
-   private static final long EXPIRE_TIME_MS = 5000;
+   private static final long EXPIRE_TIME_MS = 1000;
 
    // active stage computations
    private static final IntObjMap<ObjArrayList<Computation<? extends Subgraph>>>
@@ -58,12 +58,12 @@ public class LocalComputationStore {
 
          int numClearedStages = expiredStages.size();
          if (numClearedStages > 0) {
-            LOG.info("ClearedStages" + " numStages=" + numClearedStages +
+            LOG.info("ClearedStages" + " numClearedStages=" + numClearedStages +
                     " activeComputations=" + activeStageComputations.size());
          }
       };
 
-      scheduler.scheduleAtFixedRate(expirerer, 5, 5, SECONDS);
+      scheduler.scheduleAtFixedRate(expirerer, 1, 1, SECONDS);
    }
 
    public static ObjArrayList<Computation<? extends Subgraph>> localComputations(
@@ -96,12 +96,16 @@ public class LocalComputationStore {
    }
 
    public static void unregisterComputation(SparkEngine<? extends Subgraph> engine) {
-      if (engine.getPartitionId() == 0) {
-         int stageId = engine.getStageId();
-         long currentTime = System.currentTimeMillis();
+      int stageId = engine.getStageId();
+      long existingTime = stageFinishedTimes.getOrDefault(stageId, -1);
 
+      if (existingTime == -1) {
          synchronized (stageFinishedTimes) {
-            stageFinishedTimes.put(stageId, currentTime);
+            existingTime = stageFinishedTimes.getOrDefault(stageId, -1);
+            if (existingTime == -1) {
+               long currentTime = System.currentTimeMillis();
+               stageFinishedTimes.put(stageId, currentTime);
+            }
          }
       }
    }

@@ -5,22 +5,16 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
 import br.ufmg.cs.systems.fractal.aggregation._
-import br.ufmg.cs.systems.fractal.callback.{EdgeInducedVertexInducedSubgraphConverter, PatternInducedEdgeInducedSubgraphConverter, PatternInducedVertexInducedSubgraphConverter, SubgraphCallback, SubgraphConverter, VertexInducedPatternducedSubgraphConverter}
+import br.ufmg.cs.systems.fractal.callback._
 import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
 import br.ufmg.cs.systems.fractal.pattern.Pattern
-import br.ufmg.cs.systems.fractal.profiler.FractalProfiler
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util._
-import one.profiler.Events
 import org.apache.spark.SparkContext
-import org.apache.spark.api.python.{PythonRDD, SerDeUtil}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 
-import scala.collection.mutable
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.Duration
 import scala.reflect.{ClassTag, classTag}
 
 /**
@@ -144,7 +138,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
          .withProcess((s, c) => callback.apply(s, c))
          .masterEngineImmutable
          .longRDD(longSubgraphAggregation)
-         .reduce(_reduce)
+         .fold(0)(_reduce)
    }
 
    /**

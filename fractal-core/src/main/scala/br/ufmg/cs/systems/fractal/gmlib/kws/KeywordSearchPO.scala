@@ -18,17 +18,14 @@ class KeywordSearchPO(keywords: Set[Int], numEdges: Int)
 
    private val numKeywords: Int = keywords.size
 
-   @transient private var subgraphLabels: IntSet = _
+   private lazy val subgraphLabels: IntSet =
+      HashIntSets.newUpdatableSet(numKeywords)
 
-   @transient private var lastEdgeLabels: IntSet = _
+   private lazy val lastEdgeLabels: IntSet =
+      HashIntSets.newUpdatableSet(numKeywords)
 
-   @transient private var keywordsSet: IntSet = _
-
-   private def init(): Unit = {
-      subgraphLabels = HashIntSets.newUpdatableSet(numKeywords)
-      lastEdgeLabels = HashIntSets.newUpdatableSet(numKeywords)
-      keywordsSet = HashIntSets.newImmutableSet(keywords.toArray)
-   }
+   private lazy val keywordsSet: IntSet =
+      HashIntSets.newImmutableSet(keywords.toArray)
 
    private def getSubgraphLabels(subgraph: EdgeInducedSubgraph): IntSet = {
       val graph = subgraph.getMainGraph
@@ -76,8 +73,6 @@ class KeywordSearchPO(keywords: Set[Int], numEdges: Int)
    private def keywordSearchFilter
    (s: EdgeInducedSubgraph, c: Computation[EdgeInducedSubgraph])
    : Boolean = {
-      if (this.subgraphLabels == null) init()
-
       val lastEdgeLabels = getLastEdgeLabels(s)
       val subgraphLabels = getSubgraphLabels(s)
 

@@ -1,11 +1,9 @@
 package br.ufmg.cs.systems.fractal.pattern;
 
-import akka.event.Logging$;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgeThreadUnsafePool;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
-import br.ufmg.cs.systems.fractal.util.Logging;
 import br.ufmg.cs.systems.fractal.util.ReflectionSerializationUtils;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.IntCollectionAddConsumer;
@@ -48,22 +46,26 @@ public abstract class BasicPattern implements Pattern {
    private IntArrayList vertices;
    private PatternEdgeArrayList edges;
    private int firstVertexLabel;
+   private ObjArrayList<IntArrayList> vertexPosToEdgeIndices;
+   private boolean dirtyVertexPosToEdgeIndices;
 
    // K = vertex id, V = vertex position
    private IntIntMap vertexPositions;
-   // Incremental building {{
+
+   // Incremental building
    private IntArrayList previousWords; // TODO: is it previous or current ?
    private int numVerticesAddedFromPrevious;
    private int numAddedEdgesFromPrevious;
-   // Isomorphisms {{
+
+   // Isomorphisms
    private VertexPositionEquivalences vertexPositionEquivalences;
    private IntIntMap canonicalLabelling;
    private ObjArrayList<IntArrayList> vsymmetryBreakerLowerBound;
    private ObjArrayList<IntArrayList> vsymmetryBreakerUpperBound;
-   // Others {{
+
+   // Others
    private PatternEdgeThreadUnsafePool patternEdgePool;
    private PatternExplorationPlan explorationPlan;
-   // }}
 
    public BasicPattern(BasicPattern basicPattern) {
       this();
@@ -115,6 +117,7 @@ public abstract class BasicPattern implements Pattern {
       dirtyCanonicalLabelling = true;
       dirtyVertexPositionEquivalences = true;
       dirtyEdgePositionEquivalences = true;
+      dirtyVertexPosToEdgeIndices = true;
    }
 
    private void resetIncremental() {
@@ -904,7 +907,8 @@ public abstract class BasicPattern implements Pattern {
       return vsymmetryBreakerMatrix(vertexLabeled, edgeLabeled);
    }
 
-   private IntArrayList getVertexLabels(boolean shouldConsiderVertexLabels) {
+   @Override
+   public IntArrayList getVertexLabels(boolean shouldConsiderVertexLabels) {
       int numVertices = getNumberOfVertices();
       IntArrayList vertexLabels = new IntArrayList(numVertices);
 
@@ -920,7 +924,8 @@ public abstract class BasicPattern implements Pattern {
       return vertexLabels;
    }
 
-   private IntArrayList getEdgeLabels(boolean shouldConsiderEdgeLabels) {
+   @Override
+   public IntArrayList getEdgeLabels(boolean shouldConsiderEdgeLabels) {
       if (shouldConsiderEdgeLabels) {
          int numEdges = getNumberOfEdges();
          IntArrayList edgeLabels = new IntArrayList(numEdges);
@@ -1098,6 +1103,39 @@ public abstract class BasicPattern implements Pattern {
    @Override
    public void setExplorationPlan(PatternExplorationPlan explorationPlan) {
       this.explorationPlan = explorationPlan;
+   }
+
+   @Override
+   public ObjArrayList<IntArrayList> getVertexPosToEdgeIndices() {
+      if (vertexPosToEdgeIndices == null) {
+         vertexPosToEdgeIndices = new ObjArrayList<>(getNumberOfVertices());
+      }
+
+      if (dirtyVertexPosToEdgeIndices) {
+         int numVertices = getNumberOfVertices();
+         int numEdges = getNumberOfEdges();
+         // reclaim old arrays
+         for (int i = 0; i < vertexPosToEdgeIndices.size(); ++i) {
+            vertexPosToEdgeIndices.getu(i).reclaim();
+         }
+
+         // clear mapping and construct it from scratch
+         vertexPosToEdgeIndices.clear();
+
+         for (int i = 0; i < numVertices; ++i) {
+            vertexPosToEdgeIndices.add(IntArrayListPool.instance().createObject());
+         }
+
+         for (int i = 0; i < numEdges; ++i) {
+            PatternEdge pedge = edges.getu(i);
+            vertexPosToEdgeIndices.getu(pedge.getSrcPos()).add(i);
+            vertexPosToEdgeIndices.getu(pedge.getDestPos()).add(i);
+         }
+
+         dirtyVertexPosToEdgeIndices = false;
+      }
+
+      return vertexPosToEdgeIndices;
    }
 
    @Override

@@ -34,6 +34,19 @@ public abstract class BasicComputation<S extends Subgraph>
    private transient long validSubgraphs;
    private transient long internalWorkSteals;
    private transient long externalWorkSteals;
+   private transient boolean forcedTermination;
+
+   private transient boolean active;
+
+   @Override
+   public void setForcedTermination(boolean forcedTermination) {
+      this.forcedTermination = forcedTermination;
+   }
+
+   @Override
+   public boolean getForcedTermination() {
+      return this.forcedTermination;
+   }
 
    @Override
    public void addCanonicalSubgraphs(long inc) {
@@ -162,6 +175,7 @@ public abstract class BasicComputation<S extends Subgraph>
 
    @Override
    public void init(Configuration config) {
+      active = true;
       configuration = config;
       mainGraph = configuration.getMainGraph();
       subgraphEnumerator = ReflectionSerializationUtils.newInstance(
@@ -241,8 +255,16 @@ public abstract class BasicComputation<S extends Subgraph>
       this.subgraph = subgraph;
    }
 
-   public boolean shouldBypass() {
-      return false;
+   @Override
+   public void terminate() {
+      setForcedTermination(true);
+      this.active = false;
+      getSubgraphEnumerator().terminate();
+   }
+
+   @Override
+   public boolean isActive() {
+      return active;
    }
 
    public MainGraph getMainGraph() {

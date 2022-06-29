@@ -8,6 +8,8 @@ import br.ufmg.cs.systems.fractal.util.Logging
 import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, IntArrayListView}
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListViewPool
 import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
+import com.koloboke.collect.map.IntIntMap
+import com.koloboke.collect.map.hash.HashIntIntMaps
 import com.koloboke.collect.set.IntSet
 import com.koloboke.collect.set.hash.HashIntSets
 
@@ -17,7 +19,7 @@ import com.koloboke.collect.set.hash.HashIntSets
  * @param maxNumVertices
  * @param minDensity
  */
-class QuasiCliquesSF(maxNumVertices: Int, minDensity: Double)
+class QuasiCliquesPO(maxNumVertices: Int, minDensity: Double)
    extends BuiltInApplication[Fractoid[VertexInducedSubgraph]] {
 
    // reusable data structures
@@ -33,7 +35,7 @@ class QuasiCliquesSF(maxNumVertices: Int, minDensity: Double)
     * @return true - valid; false - invalid
     */
    private def isQuasiClique(subgraph: VertexInducedSubgraph,
-                                 computation: Computation[VertexInducedSubgraph])
+                             computation: Computation[VertexInducedSubgraph])
    : Boolean = {
       val vertices = subgraph.getVertices
       val numVertices = vertices.size()
@@ -67,9 +69,9 @@ class QuasiCliquesSF(maxNumVertices: Int, minDensity: Double)
          i += 1
       }
 
-      //true
-      val valid = diameterFilter(subgraph, computation)
-      valid
+      //val valid = diameterFilter(subgraph, computation)
+      //valid
+      true
    }
 
    private lazy val vertexSet: IntSet = HashIntSets.newMutableSet()

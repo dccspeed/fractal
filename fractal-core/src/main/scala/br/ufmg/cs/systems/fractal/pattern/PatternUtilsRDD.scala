@@ -93,25 +93,25 @@ object PatternUtilsRDD {
       patterns
    }
 
-   def localIterator(patternsRDD: RDD[Pattern]): Iterator[Pattern] = {
+   def localIterator(patternsRDD: RDD[Pattern]): PatternIteratorRDD = {
       new PatternIteratorRDD(patternsRDD)
    }
+}
 
-   private class PatternIteratorRDD(patternsRDD: RDD[Pattern])
-      extends Iterator[Pattern] {
+class PatternIteratorRDD(patternsRDD: RDD[Pattern])
+   extends Iterator[Pattern] {
 
-      // initial caching for local iterator
-      patternsRDD.cache()
-      patternsRDD.foreachPartition(_ => {})
-      private val localIterator = patternsRDD.toLocalIterator
-      //private val localIterator = patternsRDD.collect().iterator
+   // initial caching for local iterator
+   patternsRDD.cache()
+   val numPatterns = patternsRDD.count()
+   private val localIterator = patternsRDD.toLocalIterator
+   //private val localIterator = patternsRDD.collect().iterator
 
-      override def hasNext: Boolean = {
-         val iterHasNext = localIterator.hasNext
-         if (!iterHasNext) patternsRDD.unpersist()
-         iterHasNext
-      }
-
-      override def next(): Pattern = localIterator.next()
+   override def hasNext: Boolean = {
+      val iterHasNext = localIterator.hasNext
+      if (!iterHasNext) patternsRDD.unpersist()
+      iterHasNext
    }
+
+   override def next(): Pattern = localIterator.next()
 }

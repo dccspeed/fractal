@@ -50,4 +50,5 @@ public abstract class LongObjSubgraphAggregation
    public final LongObjMap<V> getKeyValueMap() {
       return keyValueMap;
    }
+
 }

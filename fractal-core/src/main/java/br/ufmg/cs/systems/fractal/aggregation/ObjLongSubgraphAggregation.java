@@ -61,4 +61,5 @@ public abstract class ObjLongSubgraphAggregation
       lastValue = existing;
       return reduce(newValue, existing);
    }
+
 }

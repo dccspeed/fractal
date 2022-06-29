@@ -18,6 +18,8 @@ trait SparkMasterEngine[S <: Subgraph] extends Logging {
 
    val step: Int
 
+   val fractoid: Fractoid[S]
+
    def sc: SparkContext
 
    def config: SparkConfiguration

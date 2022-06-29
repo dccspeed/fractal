@@ -4,9 +4,13 @@ import br.ufmg.cs.systems.fractal.FractalGraph
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplication
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternUtils, PatternUtilsRDD}
 import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph
-import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
+
+import scala.collection.mutable.ArrayBuffer
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration.Duration
+import scala.util.{Failure, Success}
 
 class FSMPF(minSupport: Int, maxNumEdges: Int)
    extends BuiltInApplication[RDD[(Pattern,MinImageSupport)]] {
@@ -138,9 +142,23 @@ class FSMPF(minSupport: Int, maxNumEdges: Int)
 
    override def apply(fg: FractalGraph): RDD[(Pattern, MinImageSupport)] = {
       val sc = fg.fractalContext.sparkContext
+      val results = ArrayBuffer.empty[RDD[(Pattern,MinImageSupport)]]
+      try {
+         compute(fg, results)
+      } catch {
+         case e: Exception =>
+            logWarn(s"InterruptedExecution exception=${e}. " +
+               s"Returning: ${results}")
+      }
+      sc.union(results)
+   }
 
-      var frequentPatternsSupportsRDDs: List[PatternsSupports] = List.empty
-      var canonicalPatternsSupportsRDDs: List[PatternsSupports] = List.empty
+   def compute(fg: FractalGraph,
+               results: ArrayBuffer[RDD[(Pattern,MinImageSupport)]]): Unit = {
+      val fc = fg.fractalContext
+      val sc = fc.sparkContext
+      var canonicalPatternsSupportsRDDs = List.empty[PatternsSupports]
+      import scala.concurrent.ExecutionContext.Implicits.global
 
       // Frequent edges and labels {
 
@@ -149,18 +167,19 @@ class FSMPF(minSupport: Int, maxNumEdges: Int)
          val patternWithoutPlan = PatternUtils.singleEdgePattern()
          patternWithoutPlan.setVertexLabeled(false)
          val pattern = getPatternWithPlan(patternWithoutPlan)
-         val rdd = canonicalPatternsSupports(fg, pattern).cache()
-         rdd.foreachPartition(_ => {})
-
-         canonicalPatternsSupportsRDDs = rdd :: canonicalPatternsSupportsRDDs
-         rdd
+         canonicalPatternsSupports(fg, pattern)
       }
+      canonicalPatternsSupportsRDD.cache()
+      canonicalPatternsSupportsRDDs = canonicalPatternsSupportsRDD :: canonicalPatternsSupportsRDDs
 
       // frequent patterns -> supports
-      var frequentPatternsSupportsRDD = {
-         val rdd = frequentPatternsSupports(canonicalPatternsSupportsRDD).cache()
-         frequentPatternsSupportsRDDs = rdd :: frequentPatternsSupportsRDDs
-         rdd
+      var frequentPatternsSupportsRDD =
+         frequentPatternsSupports(canonicalPatternsSupportsRDD)
+
+      frequentPatternsSupportsRDD.cache()
+      val numFrequentPatternsPattern = frequentPatternsSupportsRDD.count()
+      if (numFrequentPatternsPattern > 0) {
+         results += frequentPatternsSupportsRDD
       }
 
       // frequent labels
@@ -169,17 +188,16 @@ class FSMPF(minSupport: Int, maxNumEdges: Int)
       )
 
       // infrequent patterns
-      var infrequentPatternsRDD =
-         infrequentPatterns(canonicalPatternsSupportsRDD)
+      var infrequentPatternsRDD = infrequentPatterns(canonicalPatternsSupportsRDD)
 
       // } Frequent edges and labels
 
       // stop condition
       var numEdges = 1
-      var continue = numEdges < maxNumEdges &&
-         !frequentPatternsSupportsRDD.isEmpty()
+      var continue = numEdges < maxNumEdges && numFrequentPatternsPattern > 0
 
       while (continue) {
+         var numFrequentPatterns = 0L
 
          // get valid candidate patterns extended from previous step
          val validCandPatternsRDD = validPatternCandidates(
@@ -187,58 +205,70 @@ class FSMPF(minSupport: Int, maxNumEdges: Int)
             infrequentPatternsRDD,
             frequentLabelsBc)
 
+         // compute pattern/supports of all patterns in parallel
+         val patterns = validCandPatternsRDD.collect()
+
+         // uncache previous candidate pattern supports
+         canonicalPatternsSupportsRDDs.foreach(_.unpersist())
+         canonicalPatternsSupportsRDDs = List.empty
+
+         // compute patterns and supports in parallel
+         val futures = patterns
+            .map(patternWithoutPlan => {
+               patternWithoutPlan.setVertexLabeled(true)
+               val pattern = getPatternWithPlan(patternWithoutPlan)
+               val canonicalPatternsSupportsRDD = canonicalPatternsSupports(fg, pattern)
+               canonicalPatternsSupportsRDD.cache()
+               val rddFreq = frequentPatternsSupports(canonicalPatternsSupportsRDD)
+               rddFreq.cache()
+               val rddInfreq = infrequentPatterns(canonicalPatternsSupportsRDD)
+               Future {
+                  (canonicalPatternsSupportsRDD,
+                     rddFreq, rddFreq.count(), rddInfreq)
+               }
+            })
+
          // partial results (pattern by pattern)
          var lastFrequentPatternsRDDs = List.empty[PatternsSupports]
          var lastInfrequentPatternsRDDs = List.empty[Patterns]
 
-         val iter = PatternUtilsRDD.localIterator(validCandPatternsRDD)
-         while (iter.hasNext) {
+         // verify results
+         var failure = false
+         for (f <- futures) {
+            Await.ready(f, Duration.Inf)
+            f.value.get match {
+               case Success((canonicalPatternsSupportsRDD, rddFreq,
+               numFrequentPatternsPattern, rddInfreq)) =>
+                  lastFrequentPatternsRDDs = rddFreq :: lastFrequentPatternsRDDs
+                  lastInfrequentPatternsRDDs = rddInfreq :: lastInfrequentPatternsRDDs
+                  canonicalPatternsSupportsRDDs =
+                     canonicalPatternsSupportsRDD :: canonicalPatternsSupportsRDDs
+                  if (numFrequentPatternsPattern > 0) {
+                     numFrequentPatterns += numFrequentPatternsPattern
+                     results.synchronized {
+                        results += rddFreq
+                     }
+                  }
 
-            // patterns -> supports
-            val canonicalPatternsSupportsRDD = {
-               val patternWithoutPlan = iter.next()
-               patternWithoutPlan.setVertexLabeled(true)
-               val pattern = getPatternWithPlan(patternWithoutPlan)
-               val rdd = canonicalPatternsSupports(fg, pattern).cache()
-               canonicalPatternsSupportsRDDs = rdd :: canonicalPatternsSupportsRDDs
-               rdd
+               case Failure(e) =>
+                  logWarn(s"ExecutionFailed future=${f} exception=${e}")
+                  failure = true
             }
-
-            // frequent patterns -> supports
-            val rddFreq = frequentPatternsSupports(canonicalPatternsSupportsRDD)
-            lastFrequentPatternsRDDs = rddFreq :: lastFrequentPatternsRDDs
-
-            // infrequent patterns
-            val rddInfreq = infrequentPatterns(canonicalPatternsSupportsRDD)
-            lastInfrequentPatternsRDDs = rddInfreq :: lastInfrequentPatternsRDDs
          }
 
-         // assemble results
-         frequentPatternsSupportsRDD = sc.union(lastFrequentPatternsRDDs).cache()
-         infrequentPatternsRDD = sc.union(lastInfrequentPatternsRDDs)
+         if (failure) throw new RuntimeException("SomeJobFailed")
 
-         // accumulate into final result RDDs
-         frequentPatternsSupportsRDDs =
-            frequentPatternsSupportsRDD :: frequentPatternsSupportsRDDs
+         // assemble results
+         frequentPatternsSupportsRDD = sc.union(lastFrequentPatternsRDDs)
+         infrequentPatternsRDD = sc.union(lastInfrequentPatternsRDDs)
 
          // stop condition
          numEdges += 1
-         continue = numEdges < maxNumEdges &&
-            !frequentPatternsSupportsRDD.isEmpty()
+         continue = numEdges < maxNumEdges && numFrequentPatterns > 0
       }
 
-      // final result RDD
-      val frequentPatternSupportRDD = sc.union(frequentPatternsSupportsRDDs)
-         .cache()
-         .setName("fsmPF(FrequentPatternsSupports)")
-
-      // materialize final result to unpersist others
-      frequentPatternSupportRDD.foreachPartition(_ => {})
-
-      // unpersist any RDD cached in this call (after materialization)
-      frequentPatternsSupportsRDDs.foreach(_.unpersist())
+      // uncache previous candidate pattern supports
       canonicalPatternsSupportsRDDs.foreach(_.unpersist())
-
-      frequentPatternSupportRDD
+      canonicalPatternsSupportsRDDs = List.empty
    }
 }

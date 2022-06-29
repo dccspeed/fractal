@@ -18,8 +18,7 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.Logger;
 
 import javax.xml.soap.Text;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.util.Iterator;
 
 public class PatternUtils {
@@ -413,15 +412,88 @@ public class PatternUtils {
 
    }
 
+   public static void toFS(Pattern pattern, String patternDirPath) throws IOException {
+      FileSystem fs = FileSystem.get(new org.apache.hadoop.conf.Configuration());
+
+      // files
+      String metadataFilePath = patternDirPath + "/metadata";
+      String vlabelsFilePath = patternDirPath + "/vlabels";
+      String elabelsFilePath = patternDirPath + "/elabels";
+      String edgesFilePath = patternDirPath + "/edges";
+
+      Path hadoopPath;
+      OutputStream os;
+
+      // metadata
+      int numVertices = pattern.getNumberOfVertices();
+      int numEdges = pattern.getNumberOfEdges();
+      hadoopPath = new Path(metadataFilePath);
+      os = null;
+      try {
+         os = fs.create(hadoopPath);
+         os.write(String.format("%d %d\n", numVertices, numEdges).getBytes());
+      } finally {
+         if (os != null) os.close();
+      }
+
+      // vlabels
+      boolean vertexLabeled = pattern.vertexLabeled();
+      hadoopPath = new Path(vlabelsFilePath);
+      os = null;
+      try {
+         IntArrayList vlabels = pattern.getVertexLabels(vertexLabeled);
+         if (vlabels != null) {
+            os = fs.create(hadoopPath);
+            for (int i = 0; i < vlabels.size(); ++i) {
+               os.write(String.format("%d\n", vlabels.get(i)).getBytes());
+            }
+         }
+      } finally {
+         if (os != null) os.close();
+      }
+
+      // elabels
+      boolean edgeLabeled = pattern.edgeLabeled();
+      hadoopPath = new Path(elabelsFilePath);
+      os = null;
+      try {
+         IntArrayList elabels = pattern.getEdgeLabels(edgeLabeled);
+         if (elabels != null) {
+            os = fs.create(hadoopPath);
+            for (int i = 0; i < elabels.size(); ++i) {
+               os.write(String.format("%d\n", elabels.get(i)).getBytes());
+            }
+         }
+      } finally {
+         if (os != null) os.close();
+      }
+
+      // edges
+      PatternEdgeArrayList edges = pattern.copy().getEdges();
+      edges.sort();
+      hadoopPath = new Path(edgesFilePath);
+      os = null;
+      try {
+         os = fs.create(hadoopPath);
+         for (PatternEdge edge : edges) {
+            int src = edge.getSrcPos();
+            int dst = edge.getDestPos();
+            os.write(String.format("%d %d\n", src, dst).getBytes());
+         }
+      } finally {
+         if (os != null) os.close();
+      }
+   }
+
    public static Pattern fromFS(String patternDirPath) throws IOException {
       Pattern pattern = configuration.createPattern();
       FileSystem fs = FileSystem.get(new org.apache.hadoop.conf.Configuration());
 
       // files
       String metadataFilePath = patternDirPath + "/metadata";
-      String edgesFilePath = patternDirPath + "/edges";
       String vlabelsFilePath = patternDirPath + "/vlabels";
       String elabelsFilePath = patternDirPath + "/elabels";
+      String edgesFilePath = patternDirPath + "/edges";
 
       Path hadoopPath;
 
@@ -462,7 +534,10 @@ public class PatternUtils {
          }
 
          if (vlabels.size() != numVertices) {
-            throw new RuntimeException("Number of vertex labels differ.");
+            throw new RuntimeException("Number of vertex labels differ." +
+                    " Expected: " + numVertices +
+                    " Found: " + vlabels.size() +
+                    " " + vlabels);
          }
 
       } else {

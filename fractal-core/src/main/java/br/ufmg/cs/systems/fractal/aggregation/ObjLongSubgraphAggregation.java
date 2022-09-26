@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal.aggregation;
 
+import br.ufmg.cs.systems.fractal.computation.ExecutionEngine;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.ProducerConsumerSignaling;
@@ -60,6 +61,11 @@ public abstract class ObjLongSubgraphAggregation
    public final long applyAsLong(K k, long existing) {
       lastValue = existing;
       return reduce(newValue, existing);
+   }
+
+   @Override
+   public void report(ExecutionEngine<S> engine) {
+      // empty by default
    }
 
 }

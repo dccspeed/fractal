@@ -4,11 +4,12 @@ import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplication
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternUtilsRDD}
 import br.ufmg.cs.systems.fractal.subgraph.EdgeInducedSubgraph
+import br.ufmg.cs.systems.fractal.util.ReportFuncs
 import br.ufmg.cs.systems.fractal.util.collection.ObjSet
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 
-class FSMSF(minSupport: Int, maxNumEdges: Int)
+class FSMPO(minSupport: Int, maxNumEdges: Int)
    extends BuiltInApplication[RDD[(Pattern,MinImageSupport)]] {
 
    // reusable pattern key
@@ -36,7 +37,8 @@ class FSMSF(minSupport: Int, maxNumEdges: Int)
     */
    private def quickPatternsSupports(frac: Fractoid[EdgeInducedSubgraph])
    : RDD[(Pattern,MinImageSupport)] = {
-      frac.aggregationObjObj[Pattern,MinImageSupport](key, value, aggregate)
+      frac.aggregationObjObj[Pattern,MinImageSupport](key, value, aggregate,
+         ReportFuncs.FSM_AGG_REPORT)
    }
 
    /**

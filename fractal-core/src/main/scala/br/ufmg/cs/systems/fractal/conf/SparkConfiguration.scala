@@ -1,14 +1,12 @@
 package br.ufmg.cs.systems.fractal.conf
 
-import java.io._
-import java.net.InetAddress
-
 import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.conf.Configuration._
 import br.ufmg.cs.systems.fractal.graph._
 import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.util.Logging
 
+import java.net.InetAddress
 import scala.collection.mutable.Map
 
 /**
@@ -82,9 +80,6 @@ case class SparkConfiguration(confs: Map[String, Any])
 
       // computation classes
       updateIfExists("computation", CONF_COMPUTATION_CLASS)
-
-      // communication strategy
-      updateIfExists("comm_strategy", CONF_COMM_STRATEGY)
 
       // work stealing
       updateIfExists("ws_internal", CONF_WS_INTERNAL)
@@ -230,33 +225,5 @@ case class SparkConfiguration(confs: Map[String, Any])
 
    override def toString: String = {
       s"SparkConfiguration(${confs})"
-   }
-}
-
-object SparkConfiguration extends Logging {
-   // re-enumerates from scratch every superstep (aggregation based)
-   val COMM_FROM_SCRATCH = "scratch"
-
-   // auxiliary functions
-   def serialize[T](obj: T): Array[Byte] = {
-      val baos = new ByteArrayOutputStream
-      val oos = new ObjectOutputStream(baos)
-      oos.writeObject(obj)
-      oos.close
-      baos.toByteArray
-   }
-
-   def deserialize[T](bytes: Array[Byte]): T = {
-      val bais = new ByteArrayInputStream(bytes)
-      deserialize(bais)
-   }
-
-   def deserialize[T](is: InputStream): T = {
-      val ois = new ObjectInputStream(is)
-      ois.readObject().asInstanceOf[T]
-   }
-
-   def clone[T](obj: T): T = {
-      deserialize(serialize(obj))
    }
 }

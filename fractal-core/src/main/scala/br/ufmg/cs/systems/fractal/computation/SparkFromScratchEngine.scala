@@ -1,8 +1,7 @@
 package br.ufmg.cs.systems.fractal.computation
 
 import java.io.Serializable
-import java.util.concurrent.{Executors, ThreadFactory}
-
+import java.util.concurrent.{Executors, ScheduledExecutorService, ThreadFactory, TimeUnit}
 import akka.actor._
 import br.ufmg.cs.systems.fractal
 import br.ufmg.cs.systems.fractal.Primitive
@@ -34,6 +33,8 @@ class SparkFromScratchEngine[S <: Subgraph]
 
    private var executionContext: ExecutionContextExecutorService = _
 
+   private var reportStatsExecutor: ScheduledExecutorService = _
+
    override def slaveActor(): ActorRef = slaveActorRef
 
    private var computationTimeStart: Long = _
@@ -55,6 +56,41 @@ class SparkFromScratchEngine[S <: Subgraph]
       executionContext = ExecutionContext.fromExecutorService(
          Executors.newSingleThreadExecutor(threadFactory)
       )
+   }
+
+   private def ensureReportStatsExecutor(): Unit = {
+      if (reportStatsExecutor != null) return
+      reportStatsExecutor = Executors.newScheduledThreadPool(1)
+
+      import Configuration._
+
+      val engine = this
+      val infoPeriod = configuration.getInfoPeriod
+      val startTime = configuration
+         .getLong(CONF_START_TIME_MS, CONF_START_TIME_MS_DEFAULT)
+      val timeLimit = configuration
+         .getLong(CONF_TIME_LIMIT_MS, CONF_TIME_LIMIT_MS_DEFAULT)
+      val targetTimestamp = if (startTime != CONF_START_TIME_MS_DEFAULT
+         && timeLimit != CONF_TIME_LIMIT_MS_DEFAULT) {
+         val lastNInfos = configuration
+            .getInteger(INFO_PERIOD_LAST_N, INFO_PERIOD_LAST_N_DEFAULT)
+         (startTime + timeLimit) - (lastNInfos * infoPeriod)
+      } else {
+         -1
+      }
+
+      val periodicReport = new Runnable {
+         override def run(): Unit = {
+            val now = System.currentTimeMillis()
+            if (subgraphAggregation != null && now >= targetTimestamp) {
+               subgraphAggregation.report(engine)
+            }
+         }
+      }
+
+      reportStatsExecutor.scheduleAtFixedRate(periodicReport,
+         Configuration.INFO_PERIOD_DEFAULT_MS,
+         Configuration.INFO_PERIOD_DEFAULT_MS, TimeUnit.MILLISECONDS)
    }
 
    override def init(): Unit = {
@@ -151,11 +187,15 @@ class SparkFromScratchEngine[S <: Subgraph]
          }
       }
 
+      // last progress report
+      subgraphAggregation.report(this)
+
       // subgraph aggregation
       subgraphAggregation = null
 
       // clear-up resources
       if (executionContext != null) executionContext.shutdown()
+      if (reportStatsExecutor != null) reportStatsExecutor.shutdown()
 
       if (previous == null && configuration.externalWsEnabled()) {
          slaveActorRef ! Stop
@@ -215,6 +255,7 @@ class SparkFromScratchEngine[S <: Subgraph]
       subgraphAggregation = longSubgraphAggregation
       longSubgraphAggregation.init(configuration)
       init()
+      ensureReportStatsExecutor()
       compute()
       finalizeEngine()
       longSubgraphAggregation.value()
@@ -236,6 +277,7 @@ class SparkFromScratchEngine[S <: Subgraph]
       objLongSubgraphAggregation.init(configuration)
       init()
       ensureExecutionContext()
+      ensureReportStatsExecutor()
 
       // future acting as a key/value *producer* (async)
       val computeFuture = Future(compute())(executionContext)
@@ -269,6 +311,7 @@ class SparkFromScratchEngine[S <: Subgraph]
       objObjSubgraphAggregation.init(configuration)
       init()
       ensureExecutionContext()
+      ensureReportStatsExecutor()
 
       // future acting as a key/value *producer* (async)
       val computeFuture = Future(compute())(executionContext)
@@ -300,6 +343,7 @@ class SparkFromScratchEngine[S <: Subgraph]
       intIntSubgraphAggregation.init(configuration)
       init()
       ensureExecutionContext()
+      ensureReportStatsExecutor()
 
       // future acting as a key/value *producer* (async)
       val computeFuture = Future(compute())(executionContext)
@@ -331,6 +375,7 @@ class SparkFromScratchEngine[S <: Subgraph]
       longLongSubgraphAggregation.init(configuration)
       init()
       ensureExecutionContext()
+      ensureReportStatsExecutor()
 
       // future acting as a key/value *producer* (async)
       val computeFuture = Future(compute())(executionContext)
@@ -363,6 +408,7 @@ class SparkFromScratchEngine[S <: Subgraph]
       longObjSubgraphAggregation.init(configuration)
       init()
       ensureExecutionContext()
+      ensureReportStatsExecutor()
 
       // future acting as a key/value *producer* (async)
       val computeFuture = Future(compute())(executionContext)

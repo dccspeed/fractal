@@ -1,6 +1,5 @@
 package br.ufmg.cs.systems.fractal
 
-import java.util.concurrent.atomic.AtomicInteger
 import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplications
 import br.ufmg.cs.systems.fractal.graph.{EdgeFilteringPredicate, MainGraph, UnlabeledMainGraph, VertexFilteringPredicate}
@@ -8,17 +7,16 @@ import br.ufmg.cs.systems.fractal.pattern._
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util._
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
-import com.koloboke.collect.map.IntIntMap
-import com.koloboke.collect.map.hash.{HashIntIntMap, HashIntIntMaps}
+import com.koloboke.collect.map.hash.HashIntIntMaps
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 import org.roaringbitmap.RoaringBitmap
 
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 
 //import scala.collection.mutable.Map
 import scala.reflect.ClassTag
-import scala.collection.JavaConverters._
 
 /**
  * Graph used as starting point of Fractal application workflows
@@ -42,12 +40,12 @@ case class FractalGraph
       val _config = new SparkConfiguration
       confs.foreach { case (k,v) =>
          _config.set(k, v)
-         logInfo(s"Setting (${k},${v}) from graph")
+         logDebug(s"Setting (${k},${v}) from graph")
       }
 
-      _config.set ("input_graph_path", path)
-      _config.set ("input_graph_class", graphClass)
-      _config.set ("log_level", logLevel)
+      _config.set("input_graph_path", path)
+      _config.set("input_graph_class", graphClass)
+      _config.set("log_level", logLevel)
 
       val numPartitions = _config.getInteger("num_partitions",
          fractalContext.sparkContext.defaultParallelism).intValue()

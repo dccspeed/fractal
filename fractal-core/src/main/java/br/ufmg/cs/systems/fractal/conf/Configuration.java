@@ -41,6 +41,8 @@ public class Configuration implements Serializable {
    public static final boolean CONF_MAINGRAPH_MULTIGRAPH_DEFAULT = false;
    public static final String INFO_PERIOD = "fractal.info.period";
    public static final long INFO_PERIOD_DEFAULT_MS = 60000;
+   public static final String INFO_PERIOD_LAST_N = "fractal.info.period.last.n";
+   public static final int INFO_PERIOD_LAST_N_DEFAULT = 10;
    public static final String CONF_START_TIME_MS = "fractal.start.time.ms";
    public static final long CONF_START_TIME_MS_DEFAULT = -1;
    public static final String CONF_TIME_LIMIT_MS = "fractal.time.limit.ms";
@@ -48,8 +50,6 @@ public class Configuration implements Serializable {
    public static final String CONF_COMPUTATION_CLASS = "fractal.computation.class";
    public static final String CONF_COMPUTATION_CLASS_DEFAULT =
            "br.ufmg.cs.systems.fractal.computation.ComputationContainer";
-   public static final String CONF_COMM_STRATEGY = "fractal.comm.strategy";
-   public static final String CONF_COMM_STRATEGY_DEFAULT = "scratch";
    public static final String CONF_PATTERN_CLASS = "fractal.pattern.class";
    public static final String CONF_PATTERN_CLASS_DEFAULT =
            "br.ufmg.cs.systems.fractal.pattern.JBlissPattern";
@@ -173,7 +173,6 @@ public class Configuration implements Serializable {
    }
 
    public MainGraph getOrCreateMainGraph() {
-      //String path = getMainGraphPath();
       String path = getMainGraphKey();
       MainGraph graph;
 

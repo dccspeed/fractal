@@ -96,9 +96,6 @@ public interface Pattern extends Externalizable {
 
    Configuration getConfig();
 
-    String toOutputString();
-   
-    ////////
-    boolean equals(Object o, int upTo);
+   boolean equals(Object o, int upTo);
     
 }

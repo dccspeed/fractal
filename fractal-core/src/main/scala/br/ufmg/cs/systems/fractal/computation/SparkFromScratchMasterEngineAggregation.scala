@@ -85,12 +85,10 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
       // coordinator actor
       masterActorRef = ActorMessageSystem.createActor(this)
 
-      logInfo(s"Started master-actor(step=${step}):" +
-         s" ${masterActorRef}")
-
       val end = System.currentTimeMillis
 
-      logInfo(s"${this} took ${(end - start)}ms to initialize.")
+      logDebug(s"Started master-actor(step=${step}):" +
+         s" ${masterActorRef}. Took ${(end - start)}ms to initialize")
    }
 
    override def longRDD
@@ -135,16 +133,16 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
    }
 
    override def execEnginesRDD: RDD[SparkEngine[S]] = {
-      //try {
+      try {
          init()
-      //} catch {
-      //   case e: InterruptedException =>
-      //      logWarn(s"Cannot create engine: ${e}")
-      //      return sc.emptyRDD
-      //}
+      } catch {
+         case e: InterruptedException =>
+            logWarn(s"Cannot create engine: ${e}")
+            return sc.emptyRDD
+      }
 
       // save original container, i.e., without parents' computations
-      logInfo(s"From scratch computation (${this})." +
+      logDebug(s"From scratch computation (${this})." +
          s" Original computation: ${originalContainer}" +
          s" Fixed computation: ${fixedContainer}")
 

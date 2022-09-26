@@ -4,11 +4,12 @@ import br.ufmg.cs.systems.fractal.FractalGraph
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplication
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan}
 import br.ufmg.cs.systems.fractal.subgraph.EdgeInducedSubgraph
+import br.ufmg.cs.systems.fractal.util.ReportFuncs
 import org.apache.spark.rdd.RDD
 
 import scala.collection.mutable.ArrayBuffer
 
-class FSMHybrid(minSupport: Int, maxNumEdges: Int)
+class FSMPAPO(minSupport: Int, maxNumEdges: Int)
    extends BuiltInApplication[RDD[(Pattern,MinImageSupport)]] {
 
    // type aliases
@@ -45,7 +46,7 @@ class FSMHybrid(minSupport: Int, maxNumEdges: Int)
          .efractoid
          .expand(1)
          .aggregationObjObj(
-            s => s.quickPattern(), value, aggregate)
+            s => s.quickPattern(), value, aggregate, ReportFuncs.FSM_AGG_REPORT)
          .map { case (quickPatern,supp) =>
             val canonicalPattern = quickPatern.copy()
             canonicalPattern.turnCanonical()

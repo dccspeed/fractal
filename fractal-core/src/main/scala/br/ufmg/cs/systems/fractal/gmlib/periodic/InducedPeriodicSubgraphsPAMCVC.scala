@@ -6,15 +6,10 @@ import java.util.function.IntConsumer
 import br.ufmg.cs.systems.fractal.computation.Computation
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplication
 import br.ufmg.cs.systems.fractal.graph.MainGraph
-import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternUtils, PatternUtilsRDD}
-import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph, Subgraph, VertexInducedSubgraph}
-import br.ufmg.cs.systems.fractal.util.Logging
+import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternExplorationPlanMCVC, PatternUtilsRDD}
+import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
 import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
-import org.apache.spark.SparkContext
-import org.apache.spark.rdd.RDD
-
-import scala.collection.JavaConverters._
 
 /**
  * Periodic induced subgraphs assumes each each has a sequence of ordered
@@ -25,10 +20,10 @@ import scala.collection.JavaConverters._
  * *periodicThreshold* and also the time difference between consecutive
  * timestamps must be the same for the whole (sub)sequence
  */
-class InducedPeriodicSubgraphsPF
-(periodicThreshold: Int,
- numVertices: Int,
- _callback: (Pattern, Fractoid[PatternInducedSubgraph]) => Unit)
+class InducedPeriodicSubgraphsPAMCVC
+(periodicThreshold: Int, numVertices: Int,
+ _callback: (InducedPeriodicSubgraphsPAMCVC,Pattern,
+    Fractoid[PatternInducedSubgraph]) => Unit)
    extends BuiltInApplication[Unit] {
 
    /**
@@ -139,8 +134,7 @@ class InducedPeriodicSubgraphsPF
       if (s.getNumVertices == 1) return true
       val graph = c.getConfig.getMainGraph
       periodicTime.clear()
-      val edges = s.getEdges(c.getPattern)
-      graph.forEachCommonEdgeLabels(edges, consumer)
+      graph.forEachCommonEdgeLabels(s.getEdges(c.getPattern), consumer)
       isPeriodic(periodicTime, periodicThreshold)
    }
 
@@ -162,22 +156,26 @@ class InducedPeriodicSubgraphsPF
       // iterate over the canonical patterns
       val iter = PatternUtilsRDD.localIterator(patternsRDD)
       while (iter.hasNext) {
-
          // prepare induced pattern for execution
          val pattern = iter.next()
          pattern.setInduced(true)
          pattern.setVertexLabeled(false)
-         val patternWithPlan = PatternExplorationPlan.apply(pattern).get(0)
+         val cur = PatternExplorationPlanMCVC.apply(pattern).cursor()
 
-         // fractoid including the periodic filter
-         val frac = fgraph.patternMatchingPF(patternWithPlan)
-            .filter((s,c) => periodicFilter(s, c))
-            .explore(numVertices - 1)
+         while (cur.moveNext()) {
+            val patternWithPlan = cur.elem()
+            val mcvcSize = patternWithPlan.explorationPlan().mcvcSize()
 
-         // call user callback on this partial result
-         callback(patternWithPlan, frac)
+            // fractoid including the periodic filter
+            val frac = fgraph.patternQueryingPA(patternWithPlan)
+               .filter((s, c) => periodicFilter(s, c))
+               .explore(mcvcSize - 1)
+
+            callback(this, patternWithPlan, frac)
+         }
       }
 
       patternsRDD.unpersist()
+
    }
 }

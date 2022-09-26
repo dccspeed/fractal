@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.SequenceInputStream;
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.function.IntConsumer;
 
 public class VELabeledMainGraph implements MainGraph {
@@ -918,12 +919,12 @@ public class VELabeledMainGraph implements MainGraph {
 
 
    @Override
-   public final boolean isEdgeValid(int e) {
+   public final synchronized boolean isEdgeValid(int e) {
       return isEdgeValid(edgeSrcs.getu(e), edgeDsts.getu(e), e);
    }
 
    @Override
-   public final boolean isVertexValid(int u) {
+   public final synchronized boolean isVertexValid(int u) {
       if (vertexPredicate == null) return true;
 
       IntArrayListView uLabels = null;
@@ -939,7 +940,7 @@ public class VELabeledMainGraph implements MainGraph {
    }
 
    @Override
-   public final boolean isEdgeValid(int u, int v, int e) {
+   public final synchronized boolean isEdgeValid(int u, int v, int e) {
       if (edgePredicate == null) return true;
 
       IntArrayListView ulabels, vLabels, eLabels;

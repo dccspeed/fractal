@@ -6,17 +6,17 @@ version="SPARK-2.4.3"
 
 extras="custom"
 
-subgraphlisting="subgraphs_listing_sf"
-subgraphlisting="${subgraphlisting}|subgraphs_listing_pf"
-subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_sf"
-subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_pf"
-subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_pf_mcvc"
-subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_sample_sf"
+subgraphlisting="subgraphs_listing_po"
+subgraphlisting="${subgraphlisting}|subgraphs_listing_pa"
+subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_po"
+subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_pa"
+subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_pa_mcvc"
+subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_sample_po"
 
-motifss="motifs_pf"
-motifss="${motifss}|motifs_pf_mcvc"
-motifss="${motifss}|motifs_sample_sf"
-motifss="${motifss}|motifs_sf"
+motifss="motifs_pa"
+motifss="${motifss}|motifs_pa_mcvc"
+motifss="${motifss}|motifs_sample_po"
+motifss="${motifss}|motifs_po"
 
 cliquess="cliques_custom_kclist"
 cliquess="${cliquess}|cliques_po"
@@ -34,30 +34,37 @@ fsms="${fsms}|fsm_pa"
 fsms="${fsms}|fsm_pa_mcvc"
 fsms="${fsms}|fsm_pa_po"
 
-gqueryings="pattern_matching_pf_mcvc"
-gqueryings="${gqueryings}|pattern_matching_pf_mcvc_old"
-gqueryings="${gqueryings}|pattern_matching_sf"
-gqueryings="${gqueryings}|pattern_matching_pf"
-gqueryings="${gqueryings}|pattern_matching_induced_pf"
-gqueryings="${gqueryings}|pattern_matching_induced_pf_mcvc"
-gqueryings="${gqueryings}|pattern_matching_sample_pf"
-gqueryings="${gqueryings}|pattern_matching_induced_sample_pf"
+gqueryings="pattern_querying_pa_mcvc"
+gqueryings="${gqueryings}|pattern_querying_pa_mcvc_old"
+gqueryings="${gqueryings}|pattern_querying_po"
+gqueryings="${gqueryings}|pattern_querying_pa"
+gqueryings="${gqueryings}|pattern_querying_induced_pa"
+gqueryings="${gqueryings}|pattern_querying_induced_pa_mcvc"
+gqueryings="${gqueryings}|pattern_querying_sample_pa"
+gqueryings="${gqueryings}|pattern_querying_induced_sample_pa"
 
-temporals="periodic_subgraphs_induced_sf"
-temporals="${temporals}|periodic_subgraphs_induced_pf"
-temporals="${temporals}|periodic_subgraphs_induced_pf_mcvc"
+temporals="periodic_subgraphs_induced_po"
+temporals="${temporals}|periodic_subgraphs_induced_pa"
+temporals="${temporals}|periodic_subgraphs_induced_pa_mcvc"
 
-subgraphsearch="induced_subgraph_search_labels_po"
-subgraphsearch="${subgraphsearch}|induced_subgraph_search_labels_pa"
+subgraphsearch="label_search_po"
+subgraphsearch="${subgraphsearch}|label_search_pa"
 
 keywordsearch="keyword_search_po"
 keywordsearch="${keywordsearch}|minimal_keyword_search_po"
 
+queryspecialization="query_specialization_po"
+queryspecialization="${queryspecialization}|query_specialization_pa"
+queryspecialization="${queryspecialization}|query_specialization_pa_po"
+
 patternquerygenerator="pattern_query_generator"
+
+labelbasedquerygenerator="label_query_generator"
 
 apps="${gqueryings}|${motifss}|${cliquess}|${quasicliquess}|${fsms}"
 apps="${apps}|${subgraphlisting}|${temporals}|${subgraphsearch}"
 apps="${apps}|${keywordsearch}|${extras}|${patternquerygenerator}"
+apps="${apps}|${labelbasedquerygenerator}|${queryspecialization}"
 
 usage="
 APPS_AVAILABLE
@@ -72,7 +79,6 @@ OPTION:
    worker_cores=1|2|3|...                  'Number of cores per worker'                            Default: 1
    worker_memory=512m|1g|2g|...            'Workers memory'                                        Default: 2g
    labeling=n|v|e|ve                       'None, vertices, edges, vertices and edges'             Default: n
-   comm=scratch|graphred                   'Execution strategy'                                    Default: scratch
    spark_master=local[1]|local[2]|yarn|... 'Spark master URL'                                      Default: local[worker_cores]
    deploy_mode=server|client               'Spark deploy mode'                                     Default: client
    log_level=info|warn|error               'Log vebosity'                                          Default: info"
@@ -150,7 +156,7 @@ ALGOPTION for '$app':
    fsmsupp=<threshold>                     'Frequent Subgraph Mining absolute threshold'"
 	;;
 
-	subgraphs_listing_sf)
+	subgraphs_listing_po)
 	required="inputgraph steps"
         appusage="
 
@@ -159,7 +165,7 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 
-	subgraphs_listing_pf)
+	subgraphs_listing_pa)
 	required="inputgraph steps"
         appusage="
 
@@ -168,7 +174,7 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 
-	induced_subgraphs_listing_sf)
+	induced_subgraphs_listing_po)
 	required="inputgraph steps"
         appusage="
 
@@ -177,7 +183,7 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 
-	induced_subgraphs_listing_pf)
+	induced_subgraphs_listing_pa)
 	required="inputgraph steps"
         appusage="
 
@@ -186,7 +192,7 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 
-	induced_subgraphs_listing_pf_mcvc)
+	induced_subgraphs_listing_pa_mcvc)
 	required="inputgraph steps"
         appusage="
 
@@ -195,7 +201,7 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 
-	induced_subgraphs_listing_sample_sf)
+	induced_subgraphs_listing_sample_po)
 	required="inputgraph steps fraction"
         appusage="
 
@@ -205,7 +211,7 @@ ALGOPTION for '$app':
    fraction=<fraction between 0 and 1>     'Fraction of subgraphs to be sampled uniformly at random'"
 	;;
 
-	motifs_sample_sf)
+	motifs_sample_po)
 	required="inputgraph steps fraction"
         appusage="
 
@@ -215,7 +221,7 @@ ALGOPTION for '$app':
    fraction=<fraction between 0 and 1>     'Fraction of subgraphs to be sampled uniformly at random'"
 	;;
 
-	motifs_sf)
+	motifs_po)
 	required="inputgraph steps"
         appusage="
 
@@ -224,7 +230,7 @@ ALGOPTION for '$app':
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'"
 	;;
 
-	motifs_pf)
+	motifs_pa)
 	required="inputgraph steps"
         appusage="
 
@@ -234,7 +240,7 @@ ALGOPTION for '$app':
   subgraph has size k, then steps=k-1'"
 	;;
 
-	motifs_pf_mcvc)
+	motifs_pa_mcvc)
 	required="inputgraph steps"
         appusage="
 
@@ -327,7 +333,7 @@ ALGOPTION for '$app':
    mindensity=<between 0 and 1>            'Minimum density for quasi cliques'"
 	;;
 
-	pattern_matching_pf_mcvc)
+	pattern_querying_pa_mcvc)
 	required="inputgraph steps query"
         appusage="
 
@@ -337,7 +343,7 @@ ALGOPTION for '$app':
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 
-	pattern_matching_pf_mcvc_old)
+	pattern_querying_pa_mcvc_old)
 	required="inputgraph steps query"
         appusage="
 
@@ -347,7 +353,7 @@ ALGOPTION for '$app':
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 
-	pattern_matching_sf)
+	pattern_querying_po)
 	required="inputgraph steps query"
         appusage="
 
@@ -357,7 +363,7 @@ ALGOPTION for '$app':
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 
-	pattern_matching_pf)
+	pattern_querying_pa)
 	required="inputgraph steps query"
         appusage="
 
@@ -367,7 +373,7 @@ ALGOPTION for '$app':
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 
-	pattern_matching_induced_pf)
+	pattern_querying_induced_pa)
 	required="inputgraph steps query"
         appusage="
 
@@ -375,7 +381,7 @@ ALGOPTION for '$app':
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 
-	pattern_matching_induced_pf_mcvc)
+	pattern_querying_induced_pa_mcvc)
 	required="inputgraph steps query"
         appusage="
 
@@ -385,7 +391,7 @@ ALGOPTION for '$app':
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 
-	pattern_matching_sample_pf)
+	pattern_querying_sample_pa)
 	required="inputgraph steps query fraction"
         appusage="
 
@@ -396,7 +402,7 @@ ALGOPTION for '$app':
    fraction=<fraction between 0 and 1>     'Fraction of subgraphs to be sampled uniformly at random'"
 	;;
 
-	pattern_matching_induced_sample_pf)
+	pattern_querying_induced_sample_pa)
 	required="inputgraph steps query fraction"
         appusage="
 
@@ -407,7 +413,7 @@ ALGOPTION for '$app':
    fraction=<fraction between 0 and 1>     'Fraction of subgraphs to be sampled uniformly at random'"
 	;;
 
-	periodic_subgraphs_induced_sf)
+	periodic_subgraphs_induced_po)
 	required="inputgraph steps periodicthreshold"
         appusage="
 
@@ -417,7 +423,7 @@ ALGOPTION for '$app':
    periodicthreshold=2|3|4|...             'Periodic threshold: indicates how many times subgraphs must occur with an arbitrary periodicity'"
 	;;
 
-	periodic_subgraphs_induced_pf)
+	periodic_subgraphs_induced_pa)
 	required="inputgraph steps periodicthreshold"
         appusage="
 
@@ -427,7 +433,7 @@ ALGOPTION for '$app':
    periodicthreshold=2|3|4|...             'Periodic threshold: indicates how many times subgraphs must occur with an arbitrary periodicity'"
 	;;
 
-	periodic_subgraphs_induced_pf_mcvc)
+	periodic_subgraphs_induced_pa_mcvc)
 	required="inputgraph steps periodicthreshold"
         appusage="
 
@@ -438,7 +444,7 @@ ALGOPTION for '$app':
 	;;
 
 
-	induced_subgraph_search_labels_po)
+	label_search_po)
 	required="inputgraph steps labelsset gfiltering"
         appusage="
 
@@ -449,7 +455,7 @@ ALGOPTION for '$app':
    gfiltering=true|false                   'Graph filtering: whether input graph should be filtered before enumeration'"
 	;;
 
-	induced_subgraph_search_labels_pa)
+	label_search_pa)
 	required="inputgraph steps labelsset gfiltering"
         appusage="
 
@@ -495,6 +501,48 @@ ALGOPTION for '$app':
    outputdir=<directory path dir>          'Where to store selected patterns'"
 	;;
 
+	label_query_generator)
+	required="inputgraph steps fraction seed topk"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   fraction=<between 0 and 1>              'Fraction of subgraphs to sample.'
+   seed=<any long value>                   'Seed used for sampling labels at random'
+   topk=1|2|...                            'How many patterns to draw from each category'"
+	;;
+
+	query_specialization_po)
+	required="inputgraph steps query"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
+	;;
+
+	query_specialization_pa)
+	required="inputgraph steps query"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
+	;;
+
+	query_specialization_pa_po)
+	required="inputgraph steps query"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
+	;;
+
 	*)
     >&2 echo "Invalid application: ${app}"
     >&2 printf "$usage\n"
@@ -520,7 +568,6 @@ worker_cores=${worker_cores:-1}
 spark_master=${spark_master:-local[${worker_cores}]}
 worker_memory=${worker_memory:-2g}
 labeling=${labeling:-n}
-comm=${comm:-scratch}
 total_cores=$((num_workers * worker_cores))
 deploy_mode=${deploy_mode:-client}
 log_level=${log_level:-info}
@@ -530,7 +577,7 @@ uienabled=${uienabled:-false}
 app_class=${app_class:-br.ufmg.cs.systems.fractal.FractalSparkRunner}
 packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties ${PROFILER_OPTIONS}\""
-args=${args:-"$labeling $inputgraph $app $comm $total_cores $steps $log_level $timelimit $fsmsupp $mindensity $query $fraction $periodicthreshold $labelsset $gfiltering $seed $topk $outputdir $configs"}
+args=${args:-"$labeling $inputgraph $app $total_cores $steps $log_level $timelimit $fsmsupp $mindensity $query $fraction $periodicthreshold $labelsset $gfiltering $seed $topk $outputdir $configs"}
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\

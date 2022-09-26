@@ -19,7 +19,7 @@ import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
  * *periodicThreshold* and also the time difference between consecutive
  * timestamps must be the same for the whole (sub)sequence
  */
-class InducedPeriodicSubgraphsSF(periodicThreshold: Int)
+class InducedPeriodicSubgraphsPO(periodicThreshold: Int)
    extends BuiltInApplication[Fractoid[VertexInducedSubgraph]] {
 
    private val periodicTime = new IntArrayList()

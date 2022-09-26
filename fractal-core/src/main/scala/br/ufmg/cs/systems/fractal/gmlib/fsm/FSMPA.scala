@@ -4,6 +4,7 @@ import br.ufmg.cs.systems.fractal.FractalGraph
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplication
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternUtils, PatternUtilsRDD}
 import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph
+import br.ufmg.cs.systems.fractal.util.ReportFuncs
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 
@@ -12,7 +13,7 @@ import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
 import scala.util.{Failure, Success}
 
-class FSMPF(minSupport: Int, maxNumEdges: Int)
+class FSMPA(minSupport: Int, maxNumEdges: Int)
    extends BuiltInApplication[RDD[(Pattern,MinImageSupport)]] {
 
    // type aliases
@@ -51,7 +52,7 @@ class FSMPF(minSupport: Int, maxNumEdges: Int)
       fg.pfractoid(pattern)
          .expand(pattern.getNumberOfVertices)
          .aggregationObjObj[Pattern,MinImageSupport](
-            key(pattern), value, aggregate)
+            key(pattern), value, aggregate, ReportFuncs.FSM_AGG_REPORT)
          .map { case (quickPatern,supp) =>
             val canonicalPattern = quickPatern.copy()
             canonicalPattern.turnCanonical()

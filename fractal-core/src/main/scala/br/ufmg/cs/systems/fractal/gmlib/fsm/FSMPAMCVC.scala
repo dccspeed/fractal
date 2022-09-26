@@ -5,8 +5,8 @@ import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlanMCVC}
 import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph
 import br.ufmg.cs.systems.fractal.util.ScalaFractalFuncs.CustomSubgraphCallback
 
-class FSMPFMCVC(minSupport: Int, maxNumEdges: Int)
-   extends FSMPF(minSupport, maxNumEdges) {
+class FSMPAMCVC(minSupport: Int, maxNumEdges: Int)
+   extends FSMPA(minSupport, maxNumEdges) {
 
    /**
     * Matches a pattern using Fractal, obtains the quick pattern -> supports

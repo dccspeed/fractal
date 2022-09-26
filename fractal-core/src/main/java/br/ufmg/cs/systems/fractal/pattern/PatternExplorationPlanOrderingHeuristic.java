@@ -99,7 +99,7 @@ public class PatternExplorationPlanOrderingHeuristic extends PatternExplorationP
       }
       int numEntriesAfter = costMap.size();
 
-      LOG.info(String.format("CostMap entriesBefore=%d entriesAfter=%d " +
+      LOG.debug(String.format("CostMap entriesBefore=%d entriesAfter=%d " +
                       "bestCost=%s", numEntriesBefore, numEntriesAfter, bestCost));
 
       // 5. repeat by growing the orderings
@@ -178,7 +178,7 @@ public class PatternExplorationPlanOrderingHeuristic extends PatternExplorationP
          }
          numEntriesAfter = newCostMap.size();
 
-         LOG.info(String.format("CostMap entriesBefore=%d entriesAfter=%d " +
+         LOG.debug(String.format("CostMap entriesBefore=%d entriesAfter=%d " +
                          "bestCost=%s", numEntriesBefore, numEntriesAfter, bestCost));
 
          ObjObjMap aux = costMap;
@@ -195,12 +195,12 @@ public class PatternExplorationPlanOrderingHeuristic extends PatternExplorationP
          relabeling.put(chosenOrdering.getu(u), u);
       }
 
-      LOG.info("before relabeling " + pattern + " " + pattern.vsymmetryBreakerLowerBound() + " " +
+      LOG.debug("before relabeling " + pattern + " " + pattern.vsymmetryBreakerLowerBound() + " " +
               pattern.vsymmetryBreakerUpperBound());
       pattern.relabel(relabeling);
-      LOG.info("after relabeling " + pattern);
+      LOG.debug("after relabeling " + pattern);
       pattern.getEdges().sort();
-      LOG.info("after increasing positions " + pattern + " " + pattern.vsymmetryBreakerLowerBound() + " " + pattern.vsymmetryBreakerUpperBound());
+      LOG.debug("after increasing positions " + pattern + " " + pattern.vsymmetryBreakerLowerBound() + " " + pattern.vsymmetryBreakerUpperBound());
 
       // fill exploration plan according to this ordering
       super.updateWithNaivePlan(pattern);

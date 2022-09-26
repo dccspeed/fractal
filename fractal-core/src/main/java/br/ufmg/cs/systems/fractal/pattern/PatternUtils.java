@@ -19,6 +19,7 @@ import org.apache.log4j.Logger;
 
 import javax.xml.soap.Text;
 import java.io.*;
+import java.util.HashSet;
 import java.util.Iterator;
 
 public class PatternUtils {
@@ -409,7 +410,33 @@ public class PatternUtils {
          }
 
          return quickPatterns;
+   }
 
+   public static HashSet<Pattern>[] quickPatternsPerLevel(ObjSet<Pattern> quickPatterns) {
+      int numEdges = Integer.MIN_VALUE;
+      ObjCursor<Pattern> cur = quickPatterns.cursor();
+      while (cur.moveNext()) {
+         int n = cur.elem().getNumberOfEdges();
+         if (n > numEdges) numEdges = n;
+      }
+
+      HashSet<Pattern>[] quickPatternsPerLevel = new HashSet[numEdges];
+
+      for (int i = 0; i < quickPatternsPerLevel.length; ++i) {
+         quickPatternsPerLevel[i] = new HashSet<>();
+      }
+
+      cur = quickPatterns.cursor();
+      while (cur.moveNext()) {
+         Pattern pattern = cur.elem();
+         for (int i = numEdges - 1; i >= 0; --i) {
+            quickPatternsPerLevel[i].add(pattern);
+            pattern = pattern.copy();
+            pattern.removeLastNEdges(1);
+         }
+      }
+
+      return quickPatternsPerLevel;
    }
 
    public static void toFS(Pattern pattern, String patternDirPath) throws IOException {

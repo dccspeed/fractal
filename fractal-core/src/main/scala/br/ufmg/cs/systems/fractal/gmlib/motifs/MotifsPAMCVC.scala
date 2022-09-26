@@ -9,7 +9,7 @@ import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, Patt
 import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph
 import org.apache.spark.rdd.RDD
 
-class MotifsPFMCVC(numVertices: Int)
+class MotifsPAMCVC(numVertices: Int)
    extends BuiltInApplication[RDD[(Pattern,Long)]] {
 
       override def apply(fg: FractalGraph): RDD[(Pattern, Long)] = {

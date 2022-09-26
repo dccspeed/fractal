@@ -142,6 +142,40 @@ case class Fractoid[S <: Subgraph : ClassTag]
    }
 
    /**
+    * Aggregates valid subgraphs into a single long
+    *
+    * @param _defaultValue initial value for this aggregation
+    * @param _value        mapping function applied on each valid subgraph
+    * @param _reduce       reduce function to aggregate the results
+    * @return single final long
+    */
+   def aggregationLong
+   (_defaultValue: Long, _value: S => Long, _reduce: (Long, Long) => Long,
+   _report: (ExecutionEngine[_ <: Subgraph],LongSubgraphAggregation[_ <: Subgraph]) => Unit)
+   : Long = {
+
+      val longSubgraphAggregation = new LongSubgraphAggregation[S] {
+         override def reduce(v1: Long, v2: Long): Long = _reduce(v1, v2)
+
+         override def aggregate_AGGREGATION_PRIMITIVE(subgraph: S): Unit = map(_value(subgraph))
+
+         override def defaultValue(): Long = _defaultValue
+
+         override def report(engine: ExecutionEngine[S]): Unit = {
+            _report(engine, this)
+         }
+      }
+
+      val callback = subgraphAggregationCallback
+      withNextStepId
+         .withInitAggregations(c => callback.init(c))
+         .withProcess((s, c) => callback.apply(s, c))
+         .masterEngineImmutable
+         .longRDD(longSubgraphAggregation)
+         .fold(0)(_reduce)
+   }
+
+   /**
     * Aggregates valid subgraphs into a single long with custom callback
     *
     * @param _defaultValue initial value for this aggregation
@@ -181,6 +215,16 @@ case class Fractoid[S <: Subgraph : ClassTag]
     */
    def aggregationCount: Long = {
       aggregationLong(0L, _ => 1L, _ + _)
+   }
+
+   /**
+    * Counts (listing) the number of valid subgraphs
+    *
+    * @return number of valid subgraphs
+    */
+   def aggregationCount(_report: (ExecutionEngine[_ <: Subgraph],LongSubgraphAggregation[_ <: Subgraph]) => Unit)
+   : Long = {
+      aggregationLong(0L, _ => 1L, _ + _, _report)
    }
 
    /**
@@ -426,6 +470,45 @@ case class Fractoid[S <: Subgraph : ClassTag]
 
          override def aggregate_AGGREGATION_PRIMITIVE(subgraph: S): Unit = {
             map(_key(subgraph), _value(subgraph))
+         }
+      }
+
+      val objObjRDD = aggregationObjObj[K, V](objObjSubgraphAggregation)
+         .reduceByKey { case (v1, v2) => _reduce(v1, v2); v1 }
+
+      objObjRDD
+   }
+
+   /**
+    * Aggregates valid subgraphs by mapping each valid subgraph to a
+    * key/value pair and reducing the values by key. Keys and values in this
+    * function are objects.
+    *
+    * @param _key    mapping function that extracts the key from a subgraph
+    * @param _value  value mapping functions that extracts a value from a
+    *                subgraph
+    * @param _reduce reduce function that aggregates the value of the
+    *                second parameter value into the first parameter value
+    * @tparam K key parameter type
+    * @tparam V value parameter type
+    * @return an RDD of key/value pairs (K,V)
+    */
+   def aggregationObjObj
+   [K <: Serializable : ClassTag, V <: Serializable : ClassTag]
+   (_key: S => K, _value: S => V, _reduce: (V, V) => Unit,
+   _report: (ExecutionEngine[_ <: Subgraph],ObjObjSubgraphAggregation[_ <: Subgraph,K,V]) => Unit)
+   : RDD[(K, V)] = {
+      val objObjSubgraphAggregation = new ObjObjSubgraphAggregation[S, K, V] {
+         override def reduce(existingValue: V, otherValue: V): Unit = {
+            _reduce(existingValue, otherValue)
+         }
+
+         override def aggregate_AGGREGATION_PRIMITIVE(subgraph: S): Unit = {
+            map(_key(subgraph), _value(subgraph))
+         }
+
+         override def report(engine: ExecutionEngine[S]): Unit = {
+            _report(engine, this)
          }
       }
 
@@ -742,7 +825,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
     */
    private def handleNextResult(result: Fractoid[S])
    : Fractoid[S] = {
-      logInfo(s"HandleNextResultAppend ${result} to  ${this}")
+      logDebug(s"HandleNextResultAppend ${result} to  ${this}")
       val nextContainer = result.computationContainer
       withNextComputation(nextContainer)
    }
@@ -799,7 +882,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
     */
    def expand(n: Int, senumClass: Class[_ <: SubgraphEnumerator[S]])
    : Fractoid[S] = {
-      logInfo(s"Expand fractoid=${this} n=${n}")
+      logDebug(s"Expand fractoid=${this} n=${n}")
       // base step, no effect
       if (n == 0) return this
 
@@ -809,14 +892,14 @@ case class Fractoid[S <: Subgraph : ClassTag]
       if (computationContainer == null) {
          stepResult = withFirstComputation
             .withSubgraphEnumeratorClass(senumClass)
-         logInfo(
+         logDebug(
             s"ExpandNewComputation(n=${n}): before=${this}" +
                s" after=${stepResult} senumClass=${senumClass}")
       } else {
          val expandComp = emptyComputation(Primitive.E)
             .withSubgraphEnumeratorClass(senumClass)
          stepResult = handleNextResult(expandComp)
-         logInfo(
+         logDebug(
             s"ExpandAppendComputation(n=${n}): before=${this} " +
                s"after=${stepResult} senumClass=${senumClass}")
       }
@@ -839,7 +922,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
          .withSubgraphEnumeratorClass(senumClass)
          .withFilter(filter)
       val result = handleNextResult(filterComp)
-      logInfo(s"Filter before: ${this} after: ${result}")
+      logDebug(s"Filter before: ${this} after: ${result}")
       result
    }
 
@@ -1078,8 +1161,8 @@ case class Fractoid[S <: Subgraph : ClassTag]
       val newComp = computationContainer.withNewFunctions(
          processOpt = Option(process))
       val result = this.copy(computationContainer = newComp)
-      logInfo(s"WithProcess before: ${this} after: ${result}")
-      logInfo(
+      logDebug(s"WithProcess before: ${this} after: ${result}")
+      logDebug(
          s"WithProcessComp before: ${computationContainer} after: ${newComp}")
       result
    }
@@ -1111,7 +1194,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
       val initComp = computationContainer.withNewFunctions(
          initAggregationsOpt = Option(initAggregations))
       val initRes = this.copy(computationContainer = initComp)
-      logInfo(s"WithInitAggregations before=${this} after=${initRes}")
+      logDebug(s"WithInitAggregations before=${this} after=${initRes}")
       initRes
    }
 
@@ -1134,20 +1217,22 @@ case class Fractoid[S <: Subgraph : ClassTag]
     */
    private def withNextComputation(nextComputation: Computation[S])
    : Fractoid[S] = {
-      logInfo(s"Appending ${nextComputation} to ${computationContainer}")
+      logDebug(s"Appending ${nextComputation} to ${computationContainer}")
       val newComp = computationContainer
          .withComputationAppended(nextComputation)
       val result = this.copy(computationContainer = newComp)
-      logInfo(s"Result after appending: ${result}")
+      logDebug(s"Result after appending: ${result}")
       result
    }
 
    override def toString: String = {
-      val className = classTag[S].runtimeClass.getSimpleName
+      val subgraphClass = classTag[S].runtimeClass
+      val className = subgraphClass.getSimpleName
+      val patternInfo = if (pattern == null) "" else s"pattern=${pattern}"
       s"Fractoid${className}(" +
          s"step=${step}" +
          s",primitives=${primitives.mkString("-")}" +
-         s",parent=${parent}" +
+         patternInfo +
          s")"
    }
 

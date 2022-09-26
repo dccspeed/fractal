@@ -1,28 +1,26 @@
 package br.ufmg.cs.systems.fractal
 
-import java.util.function.BiPredicate
 import br.ufmg.cs.systems.fractal.callback.SubgraphCallback
-import br.ufmg.cs.systems.fractal.computation.{Computation, SamplingEnumerator}
-import br.ufmg.cs.systems.fractal.gmlib.periodic.InducedPeriodicSubgraphsPFMCVC
+import br.ufmg.cs.systems.fractal.computation.{Computation, ExecutionEngine, SamplingEnumerator}
+import br.ufmg.cs.systems.fractal.gmlib.periodic.InducedPeriodicSubgraphsPAMCVC
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternUtils, PatternUtilsRDD}
-import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph, VertexInducedSubgraph}
+import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, Subgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.Logging
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
+import br.ufmg.cs.systems.fractal.util.ReportFuncs._
 import org.apache.spark.{SparkConf, SparkContext}
 
 import java.io.File
+import java.util.function.BiPredicate
+import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
 
-trait ApplicationRunner extends Logging
+object SubgraphsListingPO extends Logging {
+   val appid: String = "subgraphs_listing_po"
 
-object SubgraphsListingSF extends ApplicationRunner {
-   val appid: String = "subgraphs_listing_sf"
-
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int): Unit = {
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
       val frac = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
          .efractoid.expand(1).explore(explorationSteps)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
@@ -33,11 +31,10 @@ object SubgraphsListingSF extends ApplicationRunner {
    }
 }
 
-object SubgraphsListingPF extends ApplicationRunner {
-   val appid: String = "subgraphs_listing_pf"
+object SubgraphsListingPA extends Logging {
+   val appid: String = "subgraphs_listing_pa"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int): Unit = {
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
       var numSubgraphs = 0L
       val callback: Fractoid[PatternInducedSubgraph] => Unit = frac =>
          synchronized {
@@ -47,21 +44,17 @@ object SubgraphsListingPF extends ApplicationRunner {
          }
 
       val (_, elapsed) = FractalSparkRunner.time {
-         fractalGraph
-            .set("num_partitions", numPartitions)
-            .set("comm_strategy", commStrategy)
-            .subgraphsMaxEdgesPF(explorationSteps + 1, callback)
+         fractalGraph.subgraphsMaxEdgesPA(explorationSteps + 1, callback)
       }
 
       logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
-object InducedSubgraphsListingPFMCVC extends ApplicationRunner {
-   val appid: String = "induced_subgraphs_listing_pf_mcvc"
+object InducedSubgraphsListingPAMCVC extends Logging {
+   val appid: String = "induced_subgraphs_listing_pa_mcvc"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-                      numPartitions: Int, explorationSteps: Int): Unit = {
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
       var numSubgraphs = 0L
       val callback: Fractoid[PatternInducedSubgraph] => Unit = frac => {
          numSubgraphs += frac.aggregationCountWithCallback(
@@ -70,46 +63,35 @@ object InducedSubgraphsListingPFMCVC extends ApplicationRunner {
       }
 
       val (_, elapsed) = FractalSparkRunner.time {
-         fractalGraph
-            .set("num_partitions", numPartitions)
-            .set("comm_strategy", commStrategy)
-            .inducedSubgraphsPFMCVC(explorationSteps + 1, callback)
+         fractalGraph.inducedSubgraphsPAMCVC(explorationSteps + 1, callback)
       }
 
       logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
-object InducedSubgraphsListingPF extends ApplicationRunner {
-   val appid: String = "induced_subgraphs_listing_pf"
+object InducedSubgraphsListingPA extends Logging {
+   val appid: String = "induced_subgraphs_listing_pa"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-                      numPartitions: Int, explorationSteps: Int): Unit = {
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
       var numSubgraphs = 0L
       val callback: Fractoid[PatternInducedSubgraph] => Unit = frac => {
          numSubgraphs += frac.aggregationCount
       }
 
       val (_, elapsed) = FractalSparkRunner.time {
-         fractalGraph
-            .set("num_partitions", numPartitions)
-            .set("comm_strategy", commStrategy)
-            .inducedSubgraphsPF(explorationSteps + 1, callback)
+         fractalGraph.inducedSubgraphsPA(explorationSteps + 1, callback)
       }
 
       logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
-object InducedSubgraphsListingSF extends ApplicationRunner {
-   val appid: String = "induced_subgraphs_listing_sf"
+object InducedSubgraphsListingPO extends Logging {
+   val appid: String = "induced_subgraphs_listing_po"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-                      numPartitions: Int, explorationSteps: Int): Unit = {
-      val frac = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .vfractoid.expand(1).explore(explorationSteps)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
+      val frac = fractalGraph.vfractoid.expand(1).explore(explorationSteps)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
          frac.aggregationCount
@@ -119,20 +101,17 @@ object InducedSubgraphsListingSF extends ApplicationRunner {
    }
 }
 
-object InducedSubgraphsListingSampleSF extends ApplicationRunner {
-   val appid: String = "induced_subgraphs_listing_sample_sf"
+object InducedSubgraphsListingSamplePO extends Logging {
+   val appid: String = "induced_subgraphs_listing_sample_po"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-                      numPartitions: Int, explorationSteps: Int,
-                      fraction: Double): Unit = {
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             fraction: Double): Unit = {
 
       val fractionKey = "sampling_fraction"
       val senumClass = classOf[SamplingEnumerator[VertexInducedSubgraph]]
 
       val (numSugbraphs, elapsed) = FractalSparkRunner.time {
          fractalGraph
-            .set("num_partitions", numPartitions)
-            .set("comm_strategy", commStrategy)
             .set(fractionKey, fraction)
             .vfractoid
             .expand(1, senumClass)
@@ -145,16 +124,12 @@ object InducedSubgraphsListingSampleSF extends ApplicationRunner {
    }
 }
 
-object MotifsPF extends ApplicationRunner {
-   val appid: String = "motifs_pf"
+object MotifsPA extends Logging {
+   val appid: String = "motifs_pa"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int): Unit = {
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
 
-      val motifsCountsRDD = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .motifsPF(explorationSteps + 1)
+      val motifsCountsRDD = fractalGraph.motifsPA(explorationSteps + 1)
       motifsCountsRDD.cache()
 
       val (_, elapsed) = FractalSparkRunner.time {
@@ -178,15 +153,11 @@ object MotifsPF extends ApplicationRunner {
    }
 }
 
-object MotifsPFMCVC extends ApplicationRunner {
-   val appid: String = "motifs_pf_mcvc"
+object MotifsPAMCVC extends Logging {
+   val appid: String = "motifs_pa_mcvc"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int): Unit = {
-      val motifsCountsRDD = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .motifsPFMCVC(explorationSteps + 1)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
+      val motifsCountsRDD = fractalGraph.motifsPAMCVC(explorationSteps + 1)
       motifsCountsRDD.cache()
 
       val (_, elapsed) = FractalSparkRunner.time {
@@ -210,17 +181,13 @@ object MotifsPFMCVC extends ApplicationRunner {
    }
 }
 
-object MotifsSampleSF extends ApplicationRunner {
-   val appid: String = "motifs_sample_sf"
+object MotifsSamplePO extends Logging {
+   val appid: String = "motifs_sample_po"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, fraction: Double)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int, fraction: Double)
    : Unit = {
 
-      val motifsCountsRDD = fractalGraph
-         .set("comm_strategy", commStrategy)
-         .set("num_partitions", numPartitions)
-         .motifsSampleSF(explorationSteps + 1, fraction)
+      val motifsCountsRDD = fractalGraph.motifsSamplePO(explorationSteps + 1, fraction)
       motifsCountsRDD.cache()
 
       val (_, elapsed) = FractalSparkRunner.time {
@@ -245,16 +212,12 @@ object MotifsSampleSF extends ApplicationRunner {
    }
 }
 
-object MotifsSF extends ApplicationRunner {
-   val appid: String = "motifs_sf"
+object MotifsPO extends Logging {
+   val appid: String = "motifs_po"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int): Unit = {
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
 
-      val motifsCountsRDD = fractalGraph
-         .set("comm_strategy", commStrategy)
-         .set("num_partitions", numPartitions)
-         .motifsSF(explorationSteps + 1)
+      val motifsCountsRDD = fractalGraph.motifsPO(explorationSteps + 1)
       motifsCountsRDD.cache()
 
       val (_, elapsed) = FractalSparkRunner.time {
@@ -279,153 +242,121 @@ object MotifsSF extends ApplicationRunner {
 
 }
 
-object CliquesCustomKClist extends ApplicationRunner {
+object CliquesCustomKClist extends Logging {
    val appid: String = "cliques_custom_kclist"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int): Unit = {
-      val frac = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .cliquesCustomKClist(explorationSteps + 1)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
+      val frac = fractalGraph.cliquesCustomKClist(explorationSteps + 1)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount
+         frac.aggregationCount(COUNT_AGG_REPORT)
       }
 
       logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
-object CliquesPO extends ApplicationRunner {
+object CliquesPO extends Logging {
    val appid: String = "cliques_po"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int): Unit = {
-      val frac = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .cliquesPO(explorationSteps + 1)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
+      val frac = fractalGraph.cliquesPO(explorationSteps + 1)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount
+         frac.aggregationCount(COUNT_AGG_REPORT)
       }
 
       logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
-object CliquesPA extends ApplicationRunner {
+object CliquesPA extends Logging {
    val appid: String = "cliques_pa"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int): Unit = {
-      val frac = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .cliquesPO(explorationSteps + 1)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
+      val frac = fractalGraph.cliquesPA(explorationSteps + 1)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount
+         frac.aggregationCount(COUNT_AGG_REPORT)
       }
 
       logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
-object MaximalCliquesPO extends ApplicationRunner {
+object MaximalCliquesPO extends Logging {
    val appid: String = "maximal_cliques_po"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int): Unit = {
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         fractalGraph
-            .set("num_partitions", numPartitions)
-            .set("comm_strategy", commStrategy)
-            .maximalCliquesPO(explorationSteps + 1)
-            .aggregationCount
+         fractalGraph.maximalCliquesPO(explorationSteps + 1)
+            .aggregationCount(COUNT_AGG_REPORT)
       }
 
       logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
-object MaximalCliquesPA extends ApplicationRunner {
+object MaximalCliquesPA extends Logging {
    val appid: String = "maximal_cliques_pa"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int): Unit = {
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         fractalGraph
-            .set("num_partitions", numPartitions)
-            .set("comm_strategy", commStrategy)
-            .maximalCliquesPA(explorationSteps + 1)
-            .aggregationCount
+         fractalGraph.maximalCliquesPA(explorationSteps + 1)
+            .aggregationCount(COUNT_AGG_REPORT)
       }
 
       logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
-object MaximalCliquesCustomQuick extends ApplicationRunner {
+object MaximalCliquesCustomQuick extends Logging {
    val appid: String = "maximal_cliques_custom_quick"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int): Unit = {
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
 
       val maxNumVertices = explorationSteps + 1
 
-      val frac = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .maximalCliquesCustomQuick(maxNumVertices)
+      val frac = fractalGraph.maximalCliquesCustomQuick(maxNumVertices)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount
+         frac.aggregationCount(COUNT_AGG_REPORT)
       }
 
       logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
-object QuasiCliquesPO extends ApplicationRunner {
+object QuasiCliquesPO extends Logging {
    val appid: String = "quasi_cliques_po"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, minDensity: Double)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int, minDensity: Double)
    : Unit = {
       val numVertices = explorationSteps + 1
-      val frac = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .quasiCliquesPO(numVertices, minDensity)
+      val frac = fractalGraph.quasiCliquesPO(numVertices, minDensity)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount
+         frac.aggregationCount(COUNT_AGG_REPORT)
       }
 
       logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
-object QuasiCliquesPA extends ApplicationRunner {
+object QuasiCliquesPA extends Logging {
    val appid: String = "quasi_cliques_pa"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, minDensity: Double)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int, minDensity: Double)
    : Unit = {
       val fc = fractalGraph.fractalContext
       val numVertices = explorationSteps + 1
-      val fracs = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .quasiCliquesPA(numVertices, minDensity)
+      val fracs = fractalGraph.quasiCliquesPA(numVertices, minDensity)
 
       val (results, elapsed) = FractalSparkRunner.time {
          fc.trySubmitFractalSteps(fracs)(f => {
-            val numSubgraphs = f.aggregationCount
+            val numSubgraphs = f.aggregationCount(COUNT_AGG_REPORT)
             logApp(s"PartialResult fractoid=${f} numSubgraphs=${numSubgraphs}")
             numSubgraphs
          })
@@ -439,22 +370,70 @@ object QuasiCliquesPA extends ApplicationRunner {
    }
 }
 
-object QuasiCliquesPAPO extends ApplicationRunner {
+object QuasiCliquesPAPO extends Logging {
    val appid: String = "quasi_cliques_pa_po"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, minDensity: Double)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int, minDensity: Double)
    : Unit = {
       val fc = fractalGraph.fractalContext
       val numVertices = explorationSteps + 1
-      val fracs = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .quasiCliquesPAPO(numVertices, minDensity)
+      val fracs = fractalGraph.quasiCliquesPAPO(numVertices, minDensity)
 
       val (results, elapsed) = FractalSparkRunner.time {
          fc.trySubmitFractalSteps(fracs)(f => {
-            val numSubgraphs = f.aggregationCount
+            val numSubgraphs = f.aggregationCount(COUNT_AGG_REPORT)
+            logApp(s"PartialResult fractoid=${f} numSubgraphs=${numSubgraphs}")
+            numSubgraphs
+            //String path = getMainGraphPath();
+         })
+      }
+
+      val failure = results.exists(_.isFailure)
+      val numSubgraphs = results.filter(_.isSuccess).map(_.get).sum
+
+      logApp(s"failure=${failure} numSubgraphs=${numSubgraphs}" +
+         s" elapsed=${elapsed}")
+   }
+}
+
+object QuerySpecializationPO extends Logging {
+   val appid: String = "query_specialization_po"
+
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             patternPath: String): Unit = {
+
+      val fc = fractalGraph.fractalContext
+      val pattern = PatternUtils.fromFS(patternPath)
+      pattern.setInduced(false)
+      pattern.setVertexLabeled(true)
+      pattern.setEdgeLabeled(true)
+
+      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
+         val fractoid = fractalGraph.querySpecializationPO(pattern)
+         fractoid.aggregationCount(COUNT_AGG_REPORT)
+      }
+
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+   }
+}
+
+object QuerySpecializationPA extends Logging {
+   val appid: String = "query_specialization_pa"
+
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             patternPath: String): Unit = {
+
+      val fc = fractalGraph.fractalContext
+
+      val pattern = PatternUtils.fromFS(patternPath)
+      pattern.setInduced(false)
+      pattern.setVertexLabeled(true)
+      pattern.setEdgeLabeled(true)
+
+      val (results, elapsed) = FractalSparkRunner.time {
+         val fractoids = fractalGraph.querySpecializationPA(pattern)
+         fc.trySubmitFractalSteps(fractoids)(f => {
+            val numSubgraphs = f.aggregationCount(COUNT_AGG_REPORT)
             logApp(s"PartialResult fractoid=${f} numSubgraphs=${numSubgraphs}")
             numSubgraphs
          })
@@ -468,11 +447,30 @@ object QuasiCliquesPAPO extends ApplicationRunner {
    }
 }
 
-object FSMSF extends ApplicationRunner {
+object QuerySpecializationPAPO extends Logging {
+   val appid: String = "query_specialization_pa_po"
+
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             patternPath: String): Unit = {
+
+      val pattern = PatternUtils.fromFS(patternPath)
+      pattern.setInduced(false)
+      pattern.setVertexLabeled(true)
+      pattern.setEdgeLabeled(true)
+
+      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
+         val frac = fractalGraph.querySpecializationPAPO(pattern)
+         frac.aggregationCount(COUNT_AGG_REPORT)
+      }
+
+      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+   }
+}
+
+object FSMPO extends Logging {
    val appid: String = "fsm_po"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, minSupport: Int)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int, minSupport: Int)
    : Unit = {
 
       // we create the fractoid inside the timer because there is actual work
@@ -480,9 +478,7 @@ object FSMSF extends ApplicationRunner {
       val ((patternsSupportsRDD,numPatterns), elapsed) =
       FractalSparkRunner.time {
          val patternsSupportsRDD = fractalGraph
-            .set("num_partitions", numPartitions)
-            .set("comm_strategy", commStrategy)
-            .fsmSF(minSupport, explorationSteps + 1)
+            .fsmPO(minSupport, explorationSteps + 1)
          patternsSupportsRDD.cache()
          val numPatterns = patternsSupportsRDD.count() // materialize
          (patternsSupportsRDD, numPatterns)
@@ -505,20 +501,17 @@ object FSMSF extends ApplicationRunner {
    }
 }
 
-object FSMPF extends ApplicationRunner {
+object FSMPA extends Logging {
    val appid: String = "fsm_pa"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, minSupport: Int)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int, minSupport: Int)
    : Unit = {
 
       // we create the fractoid inside the timer because there is actual work
       // being done to obtain the RDD
       val ((patternsSupportsRDD,numPatterns), elapsed) = FractalSparkRunner.time {
          val patternsSupportsRDD = fractalGraph
-            .set("num_partitions", numPartitions)
-            .set("comm_strategy", commStrategy)
-            .fsmPF(minSupport, explorationSteps + 1)
+            .fsmPA(minSupport, explorationSteps + 1)
          patternsSupportsRDD.cache()
          val numPatterns = patternsSupportsRDD.count() // materialize
          (patternsSupportsRDD, numPatterns)
@@ -541,20 +534,17 @@ object FSMPF extends ApplicationRunner {
    }
 }
 
-object FSMPFMCVC extends ApplicationRunner {
+object FSMPAMCVC extends Logging {
    val appid: String = "fsm_pa_mcvc"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, minSupport: Int)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int, minSupport: Int)
    : Unit = {
 
       // we create the fractoid inside the timer because there is actual work
       // being done to obtain the RDD
       val ((patternsSupportsRDD,numPatterns), elapsed) = FractalSparkRunner.time {
          val patternsSupportsRDD = fractalGraph
-            .set("num_partitions", numPartitions)
-            .set("comm_strategy", commStrategy)
-            .fsmPFMCVC(minSupport, explorationSteps + 1)
+            .fsmPAMCVC(minSupport, explorationSteps + 1)
          patternsSupportsRDD.cache()
          val numPatterns = patternsSupportsRDD.count() // materialize
          (patternsSupportsRDD, numPatterns)
@@ -577,20 +567,17 @@ object FSMPFMCVC extends ApplicationRunner {
    }
 }
 
-object FSMHybrid extends ApplicationRunner {
+object FSMPAPO extends Logging {
    val appid: String = "fsm_pa_po"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, minSupport: Int)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int, minSupport: Int)
    : Unit = {
 
       // we create the fractoid inside the timer because there is actual work
       // being done to obtain the RDD
       val ((patternsSupportsRDD,numPatterns), elapsed) = FractalSparkRunner.time {
          val patternsSupportsRDD = fractalGraph
-            .set("num_partitions", numPartitions)
-            .set("comm_strategy", commStrategy)
-            .fsmHybrid(minSupport, explorationSteps + 1)
+            .fsmPAPO(minSupport, explorationSteps + 1)
          patternsSupportsRDD.cache()
          val numPatterns = patternsSupportsRDD.count() // materialize
          (patternsSupportsRDD, numPatterns)
@@ -613,20 +600,16 @@ object FSMHybrid extends ApplicationRunner {
    }
 }
 
-object PatternMatchingInducedPFMCVC extends ApplicationRunner {
-   val appid: String = "pattern_matching_induced_pf_mcvc"
+object PatternQueryingInducedPAMCVC extends Logging {
+   val appid: String = "pattern_querying_induced_pa_mcvc"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, subgraphPath: String)
-   : Unit = {
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             subgraphPath: String): Unit = {
 
       val pattern = PatternUtils.fromFS(subgraphPath)
       pattern.setInduced(true)
 
-      val fracs = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .patternMatchingPFMCVC2(pattern)
+      val fracs = fractalGraph.patternQueryingPAMCVC(pattern)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
          var numSubgraphs = 0L
@@ -640,48 +623,39 @@ object PatternMatchingInducedPFMCVC extends ApplicationRunner {
    }
 }
 
-object PatternMatchingPFMCVC extends ApplicationRunner {
-   val appid: String = "pattern_matching_pf_mcvc"
+object PatternQueryingPAMCVC extends Logging {
+   val appid: String = "pattern_querying_pa_mcvc"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, subgraphPath: String)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int, subgraphPath: String)
    : Unit = {
+      val fc = fractalGraph.fractalContext
 
       val pattern = PatternUtils.fromFS(subgraphPath)
 
-      val fracs = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .patternMatchingPFMCVC2(pattern)
+      val fracs = fractalGraph.patternQueryingPAMCVC(pattern)
 
-      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         var numSubgraphs = 0L
-         for (frac <- fracs) {
-            numSubgraphs += frac.aggregationCount
-            //numSubgraphs += frac.aggregationCountWithCallback(
-            //   (s,c,cb) => s.completeMatch(c, c.getPattern, cb)
-            //)
-         }
-         numSubgraphs
+      val (results, elapsed) = FractalSparkRunner.time {
+         fc.trySubmitFractalSteps(fracs)(
+            f => f.aggregationCount(COUNT_AGG_REPORT))
       }
 
-      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      val failure = results.exists(_.isFailure)
+      val numSubgraphs = results.filter(_.isSuccess).map(_.get).sum
+
+      logApp(s"failure=${failure} numSubgraphs=${numSubgraphs} " +
+         s"elapsed=${elapsed}")
    }
 }
 
-object PatternMatchingPFMCVC2 extends ApplicationRunner {
-   val appid: String = "pattern_matching_pf_mcvc_old"
+object PatternQueryingPAMCVCOld extends Logging {
+   val appid: String = "pattern_querying_pa_mcvc_old"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, subgraphPath: String)
-   : Unit = {
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             subgraphPath: String): Unit = {
 
       val pattern = PatternUtils.fromFS(subgraphPath)
 
-      val fracs = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .patternMatchingPFMCVC(pattern)
+      val fracs = fractalGraph.patternQueryingPAMCVC_old(pattern)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
          var numSubgraphs = 0L
@@ -697,19 +671,15 @@ object PatternMatchingPFMCVC2 extends ApplicationRunner {
    }
 }
 
-object PatternMatchingSamplePF extends ApplicationRunner {
-   val appid: String = "pattern_matching_sample_pf"
+object PatternQueryingSamplePA extends Logging {
+   val appid: String = "pattern_querying_sample_pa"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, subgraphPath: String,
-             fraction: Double): Unit = {
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             subgraphPath: String, fraction: Double): Unit = {
 
       val pattern = PatternUtils.fromFS(subgraphPath)
 
-      val frac = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .patternMatchingPF(pattern, fraction)
+      val frac = fractalGraph.patternQueryingPA(pattern, fraction)
          .explore(pattern.getNumberOfVertices - 1)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
@@ -722,20 +692,16 @@ object PatternMatchingSamplePF extends ApplicationRunner {
    }
 }
 
-object PatternMatchingInducedSamplePF extends ApplicationRunner {
-   val appid: String = "pattern_matching_induced_sample_pf"
+object PatternQueryingInducedSamplePA extends Logging {
+   val appid: String = "pattern_querying_induced_sample_pa"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, subgraphPath: String,
-             fraction: Double): Unit = {
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             subgraphPath: String, fraction: Double): Unit = {
 
       val pattern = PatternUtils.fromFS(subgraphPath)
       pattern.setInduced(true)
 
-      val frac = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .patternMatchingPF(pattern, fraction)
+      val frac = fractalGraph.patternQueryingPA(pattern, fraction)
          .explore(pattern.getNumberOfVertices - 1)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
@@ -748,41 +714,33 @@ object PatternMatchingInducedSamplePF extends ApplicationRunner {
    }
 }
 
-object PatternMatchingPF extends ApplicationRunner {
-   val appid: String = "pattern_matching_pf"
+object PatternQueryingPA extends Logging {
+   val appid: String = "pattern_querying_pa"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, subgraphPath: String)
-   : Unit = {
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             subgraphPath: String): Unit = {
       val pattern = PatternUtils.fromFS(subgraphPath)
 
-      val frac = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .patternMatchingPF(pattern)
+      val frac = fractalGraph.patternQueryingPA(pattern)
          .explore(pattern.getNumberOfVertices - 1)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount
+         frac.aggregationCount(COUNT_AGG_REPORT)
       }
 
       logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
-object PatternMatchingInducedPF extends ApplicationRunner {
-   val appid: String = "pattern_matching_induced_pf"
+object PatternQueryingInducedPA extends Logging {
+   val appid: String = "pattern_querying_induced_pa"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, subgraphPath: String)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int, subgraphPath: String)
    : Unit = {
       val pattern = PatternUtils.fromFS(subgraphPath)
       pattern.setInduced(true)
 
-      val frac = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .patternMatchingPF(pattern)
+      val frac = fractalGraph.patternQueryingPA(pattern)
          .explore(pattern.getNumberOfVertices - 1)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
@@ -793,33 +751,28 @@ object PatternMatchingInducedPF extends ApplicationRunner {
    }
 }
 
-object PatternMatchingSF extends ApplicationRunner {
-   val appid: String = "pattern_matching_sf"
+object PatternQueryingPO extends Logging {
+   val appid: String = "pattern_querying_po"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int, subgraphPath: String)
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int, subgraphPath: String)
    : Unit = {
       val pattern = PatternUtils.fromFS(subgraphPath)
 
-      val frac = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .patternMatchingSF(pattern)
+      val frac = fractalGraph.patternQueryingPO(pattern)
          .explore(pattern.getNumberOfEdges - 1)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount
+         frac.aggregationCount(COUNT_AGG_REPORT)
       }
 
       logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
-object PeriodicSubgraphsInducedPF extends ApplicationRunner {
-   val appid: String = "periodic_subgraphs_induced_pf"
+object PeriodicSubgraphsInducedPA extends Logging {
+   val appid: String = "periodic_subgraphs_induced_pa"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int,
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
              periodicThreshold: Int): Unit = {
 
       val ec = ExecutionContext.global
@@ -831,25 +784,21 @@ object PeriodicSubgraphsInducedPF extends ApplicationRunner {
          }
 
       val (_, elapsed) = FractalSparkRunner.time {
-         fractalGraph
-            .set("num_partitions", numPartitions)
-            .set("comm_strategy", commStrategy)
-            .periodicInducedSubgraphsPF(
-               periodicThreshold, explorationSteps + 1, callback)
+         fractalGraph.periodicInducedSubgraphsPA(
+            periodicThreshold, explorationSteps + 1, callback)
       }
 
       logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
-object PeriodicSubgraphsInducedPFMCVC extends ApplicationRunner {
-   val appid: String = "periodic_subgraphs_induced_pf_mcvc"
+object PeriodicSubgraphsInducedPAMCVC extends Logging {
+   val appid: String = "periodic_subgraphs_induced_pa_mcvc"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int,
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
              periodicThreshold: Int): Unit = {
       var numSubgraphs = 0L
-      val callback = (app: InducedPeriodicSubgraphsPFMCVC,
+      val callback = (app: InducedPeriodicSubgraphsPAMCVC,
                       pattern: Pattern,
                       frac: Fractoid[PatternInducedSubgraph]) => {
 
@@ -874,27 +823,20 @@ object PeriodicSubgraphsInducedPFMCVC extends ApplicationRunner {
       }
 
       val (_, elapsed) = FractalSparkRunner.time {
-         fractalGraph
-            .set("num_partitions", numPartitions)
-            .set("comm_strategy", commStrategy)
-            .periodicInducedSubgraphsPFMCVC(
-               periodicThreshold, explorationSteps + 1, callback)
+         fractalGraph.periodicInducedSubgraphsPAMCVC(
+            periodicThreshold, explorationSteps + 1, callback)
       }
 
       logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
 
-object PeriodicSubgraphsInducedSF extends ApplicationRunner {
-   val appid: String = "periodic_subgraphs_induced_sf"
+object PeriodicSubgraphsInducedPO extends Logging {
+   val appid: String = "periodic_subgraphs_induced_po"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int,
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
              periodicThreshold: Int): Unit = {
-      val frac = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .periodicInducedSubgraphsSF(periodicThreshold)
+      val frac = fractalGraph.periodicInducedSubgraphsPO(periodicThreshold)
          .explore(explorationSteps)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
@@ -905,11 +847,10 @@ object PeriodicSubgraphsInducedSF extends ApplicationRunner {
    }
 }
 
-object InducedSubgraphSearchLabelsPA extends ApplicationRunner {
-   val appid: String = "induced_subgraph_search_labels_pa"
+object LabelSearchPA extends Logging {
+   val appid: String = "label_search_pa"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int,
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
              labelsSet: Set[Int], gfiltering: Boolean): Unit = {
 
       val fg = if (gfiltering) {
@@ -922,27 +863,26 @@ object InducedSubgraphSearchLabelsPA extends ApplicationRunner {
          fractalGraph
       }
 
-      val fractoidsIter = fg
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .inducedSubgraphSearchLabelsPA(labelsSet, explorationSteps)
+      val fractoids = fg.labelSearchPA(labelsSet, explorationSteps + 1)
 
-      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         val results = fg.fractalContext.submitFractalSteps(fractoidsIter.toSeq)(
-            f => f.aggregationCount)
-         results.sum
+      val (results, elapsed) = FractalSparkRunner.time {
+         fg.fractalContext.trySubmitFractalSteps(fractoids)(
+            f => f.aggregationCount(COUNT_AGG_REPORT))
       }
 
-      logApp(s"labelsSet=${labelsSet} gfiltering=${gfiltering}" +
-         s" numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      val failure = results.exists(_.isFailure)
+      val numSubgraphs = results.filter(_.isSuccess).map(_.get).sum
+
+      logApp(s"failure=${failure} labelsSet=${labelsSet}" +
+         s" gfiltering=${gfiltering} numSubgraphs=${numSubgraphs}" +
+         s" elapsed=${elapsed}")
    }
 }
 
-object InducedSubgraphSearchLabelsPO extends ApplicationRunner {
-   val appid: String = "induced_subgraph_search_labels_po"
+object LabelSearchPO extends Logging {
+   val appid: String = "label_search_po"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int,
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
              labelsSet: Set[Int], gfiltering: Boolean): Unit = {
 
       val fg = if (gfiltering) {
@@ -955,13 +895,10 @@ object InducedSubgraphSearchLabelsPO extends ApplicationRunner {
          fractalGraph
       }
 
-      val frac = fg
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .inducedSubgraphSearchLabelsPO(labelsSet, explorationSteps)
+      val frac = fg.labelSearchPO(labelsSet, explorationSteps + 1)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount
+         frac.aggregationCount(COUNT_AGG_REPORT)
       }
 
       logApp(s"labelsSet=${labelsSet} gfiltering=${gfiltering}" +
@@ -969,30 +906,26 @@ object InducedSubgraphSearchLabelsPO extends ApplicationRunner {
    }
 }
 
-object KeywordSearchPO extends ApplicationRunner {
+object KeywordSearchPO extends Logging {
    val appid: String = "keyword_search_po"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int,
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
              keywords: Set[Int], gfiltering: Boolean): Unit = {
 
       val fg = if (gfiltering) {
          fractalGraph.filterEdges(
             (u,uLabels,v,vLabels,e,eLabels) => {
-               keywords.contains(uLabels.getu(0)) &&
-                  keywords.contains(vLabels.getu(0))
+               keywords.contains(uLabels.get(0)) ||
+                  keywords.contains(vLabels.get(0))
             })
       } else {
          fractalGraph
       }
 
-      val frac = fg
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .keywordSearchPO(keywords, explorationSteps + 1)
+      val frac = fg.keywordSearchPO(keywords, explorationSteps + 1)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount
+         frac.aggregationCount(COUNT_AGG_REPORT)
       }
 
       logApp(s"labelsSet=${keywords} gfiltering=${gfiltering}" +
@@ -1000,11 +933,10 @@ object KeywordSearchPO extends ApplicationRunner {
    }
 }
 
-object MinimalKeywordSearchPO extends ApplicationRunner {
+object MinimalKeywordSearchPO extends Logging {
    val appid: String = "minimal_keyword_search_po"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int,
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
              keywords: Set[Int], gfiltering: Boolean): Unit = {
 
       val fg = if (gfiltering) {
@@ -1018,13 +950,10 @@ object MinimalKeywordSearchPO extends ApplicationRunner {
          fractalGraph
       }
 
-      val frac = fg
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-         .minimalKeywordSearchPO(keywords, explorationSteps + 1)
+      val frac = fg.minimalKeywordSearchPO(keywords, explorationSteps + 1)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount
+         frac.aggregationCount(COUNT_AGG_REPORT)
       }
 
       logApp(s"labelsSet=${keywords} gfiltering=${gfiltering}" +
@@ -1032,22 +961,21 @@ object MinimalKeywordSearchPO extends ApplicationRunner {
    }
 }
 
-object PatternQueryGenerator extends ApplicationRunner {
+object PatternQueryGenerator extends Logging {
    val appid: String = "pattern_query_generator"
 
-   def apply(fractalGraph: FractalGraph, commStrategy: String,
-             numPartitions: Int, explorationSteps: Int,
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
              fraction: Double, seed: Long, topk: Int,
              outputDir: String): Unit = {
 
       val fg = fractalGraph
-         .set("num_partitions", numPartitions)
-         .set("comm_strategy", commStrategy)
-
-      val sc = fg.fractalContext.sparkContext
+      val fc = fg.fractalContext
+      val sc = fc.sparkContext
       val senumClass = classOf[SamplingEnumerator[PatternInducedSubgraph]]
       val random = new java.util.Random(seed)
       val numVertices = explorationSteps + 1
+      val maxEdges = numVertices * (numVertices - 1) / 2
+      val minEdges = numVertices - 1
 
       val patterns = PatternUtilsRDD.vertexPatternsRDD(sc, numVertices)
          .map(pattern => {
@@ -1057,60 +985,112 @@ object PatternQueryGenerator extends ApplicationRunner {
             PatternExplorationPlan.apply(pattern).get(0)
          })
 
-      val patternIter = PatternUtilsRDD.localIterator(patterns)
-      val numPatterns = patternIter.numPatterns
-      var patternCountArrays = List.empty[Array[(Pattern, Long)]]
+      val fractoids = patterns.collect()
+         .map(pattern => {
+            val fractionKey = "sampling_fraction"
+            val seedKey = "sampling_seed"
+            fg.set(fractionKey, fraction).set(seedKey, seed)
+               .pfractoid(pattern).expand(numVertices, senumClass)
+         })
 
-      var i = 1
-      while (patternIter.hasNext) {
-         val pattern = patternIter.next()
-         val fractionKey = "sampling_fraction"
-         val seedKey = "sampling_seed"
-         val tmp = fg
-            .set(fractionKey, fraction)
-            .set(seedKey, seed)
-            .pfractoid(pattern).expand(numVertices, senumClass)
-            .aggregationCanonicalPatternLong(
+      val numQueryPatterns = fractoids.size
+      logApp(s"NumJobs ${numQueryPatterns}")
+
+      val resultsArray = ArrayBuffer.empty[Array[(Pattern, Long)]]
+      var leastDenseLeastFrequent: (Pattern, Long) = null
+      var leastDenseMostFrequent: (Pattern, Long) = null
+      var mostDenseLeastFrequent: (Pattern, Long) = null
+      var mostDenseMostFrequent: (Pattern, Long) = null
+
+      var i = 0
+      val step = 10
+      var numPartialPatterns = 0
+      while (i < fractoids.length) {
+         val fractoidsBatch = fractoids.slice(i, i + step)
+         val resultsBatch = fc.submitFractalSteps(fractoidsBatch)(f => {
+            val pattern = f.pattern
+            f.aggregationCanonicalPatternLong(
                s => s.applyLabels(pattern), 0, _ => 1L, _ + _)
-            .collect()
-         logApp(s"PatternCount(${i}/${numPatterns}) ${pattern} ${tmp.length}")
-         patternCountArrays = tmp :: patternCountArrays
-         i += 1
+         })
+
+         val partialResult = sc.union(resultsBatch)
+         val partialResultFiltered = if(numVertices <= 3) {
+            partialResult
+         } else if (numVertices == 4) {
+            partialResult.filter(kv => kv._2 > 0
+               && kv._1.getNumberOfEdges != maxEdges)
+         } else {
+            partialResult.filter(kv => kv._2 > 0
+               && kv._1.getNumberOfEdges != maxEdges
+               && kv._1.getNumberOfEdges != minEdges)
+         }
+
+         partialResultFiltered.cache()
+         var patternsSet = Set.empty[Pattern]
+
+         // least dense, least frequent
+         val ldlfTake = partialResultFiltered
+            .sortBy(kv => (kv._1.getNumberOfEdges, kv._2))
+            .take(topk)
+         if (ldlfTake.nonEmpty) {
+            val ldlf = ldlfTake.apply(random.nextInt(topk))
+            patternsSet += ldlf._1
+            leastDenseLeastFrequent = Array(leastDenseLeastFrequent, ldlf)
+               .filter(kv => kv != null)
+               .minBy(kv => (kv._1.getNumberOfEdges, kv._2))
+         }
+
+         val ldmfTake = partialResultFiltered
+            .filter(kv => !patternsSet.contains(kv._1))
+            .sortBy(kv => (kv._1.getNumberOfEdges, -kv._2))
+            .take(topk)
+         if (ldmfTake.nonEmpty) {
+            val ldmf = ldmfTake.apply(random.nextInt(topk))
+            patternsSet += ldmf._1
+            leastDenseMostFrequent = Array(leastDenseMostFrequent, ldmf)
+               .filter(kv => kv != null)
+               .minBy(kv => (kv._1.getNumberOfEdges, -kv._2))
+         }
+
+         val mdlfTake = partialResult
+            .filter(kv => !patternsSet.contains(kv._1))
+            .sortBy(kv => (-kv._1.getNumberOfEdges, kv._2))
+            .take(topk)
+         if (mdlfTake.nonEmpty) {
+            val mdlf = mdlfTake.apply(random.nextInt(topk))
+            patternsSet += mdlf._1
+            mostDenseLeastFrequent = Array(mostDenseLeastFrequent, mdlf)
+               .filter(kv => kv != null)
+               .minBy(kv => (-kv._1.getNumberOfEdges, kv._2))
+         }
+
+         val mdmfTake = partialResult
+            .filter(kv => !patternsSet.contains(kv._1))
+            .sortBy(kv => (-kv._1.getNumberOfEdges, -kv._2))
+            .take(topk)
+         if (mdmfTake.nonEmpty) {
+            val mdmf = mdmfTake.apply(random.nextInt(topk))
+            patternsSet += mdmf._1
+            mostDenseMostFrequent = Array(mostDenseMostFrequent, mdmf)
+               .filter(kv => kv != null)
+               .minBy(kv => (-kv._1.getNumberOfEdges, -kv._2))
+         }
+
+         partialResultFiltered.unpersist()
+
+         numPartialPatterns += resultsBatch.size
+         logApp(s"PartialResultPatternQueries" +
+            s" ${numPartialPatterns}/${numQueryPatterns}" +
+            s" leastDenseLeastFrequent=${leastDenseLeastFrequent}" +
+            s" leastDenseMostFrequent=${leastDenseMostFrequent}" +
+            s" mostDenseLeastFrequent=${mostDenseLeastFrequent}" +
+            s" mostDenseMostFrequent=${mostDenseMostFrequent}")
+         i += step
       }
 
-      val maxEdges = numVertices * (numVertices - 1) / 2
-      val minEdges = numVertices - 1
-
-      val patternCount = patternCountArrays.flatten.toArray
-
-      logApp(s"NumPatterns ${patternCount.size}")
-
-      val patternCountFiltered = patternCount
-         .filter(kv => kv._1.getNumberOfEdges != maxEdges && kv
-            ._1.getNumberOfEdges != minEdges)
-
-      val leastDenseLeastFrequent = patternCountFiltered
-         .sortBy(kv => (kv._1.getNumberOfEdges, kv._2))
-         .take(topk)
-         .apply(random.nextInt(topk))
       logApp(s"LeastDenseLeastFrequent ${leastDenseLeastFrequent}")
-
-      val leastDenseMostFrequent = patternCountFiltered
-         .sortBy(kv => (kv._1.getNumberOfEdges, -kv._2))
-         .take(topk)
-         .apply(random.nextInt(topk))
       logApp(s"LeastDenseMostFrequent ${leastDenseMostFrequent}")
-
-      val mostDenseLeastFrequent = patternCountFiltered
-         .sortBy(kv => (-kv._1.getNumberOfEdges, kv._2))
-         .take(topk)
-         .apply(random.nextInt(topk))
       logApp(s"MostDenseLeastFrequent ${mostDenseLeastFrequent}")
-
-      val mostDenseMostFrequent = patternCountFiltered
-         .sortBy(kv => (-kv._1.getNumberOfEdges, -kv._2))
-         .take(topk)
-         .apply(random.nextInt(topk))
       logApp(s"MostDenseMostFrequent ${mostDenseMostFrequent}")
 
       // write sampled patterns to file
@@ -1119,21 +1099,94 @@ object PatternQueryGenerator extends ApplicationRunner {
 
       val leastDenseLeastFrequentPath =
          new File(outputDir, s"${prefix}-least-dense-least-freq").getPath
+      leastDenseLeastFrequent._1.setVertexLabeled(true)
       PatternUtils.toFS(leastDenseLeastFrequent._1, leastDenseLeastFrequentPath)
 
       val leastDenseMostFrequentPath =
          new File(outputDir, s"${prefix}-least-dense-most-freq").getPath
+      leastDenseMostFrequent._1.setVertexLabeled(true)
       PatternUtils.toFS(leastDenseMostFrequent._1, leastDenseMostFrequentPath)
 
       val mostDenseLeastFrequentPath =
          new File(outputDir, s"${prefix}-most-dense-least-freq").getPath
+      mostDenseLeastFrequent._1.setVertexLabeled(true)
       PatternUtils.toFS(mostDenseLeastFrequent._1, mostDenseLeastFrequentPath)
 
       val mostDenseMostFrequentPath =
          new File(outputDir, s"${prefix}-most-dense-most-freq").getPath
+      mostDenseMostFrequent._1.setVertexLabeled(true)
       PatternUtils.toFS(mostDenseMostFrequent._1, mostDenseMostFrequentPath)
 
       logApp(s"Sampled patterns written to: ${outputDir}")
+   }
+}
+
+object LabelQueryGenerator extends Logging {
+   val appid: String = "label_query_generator"
+
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             fraction: Double, seed: Long, topk: Int): Unit = {
+      val numVertices = explorationSteps + 1
+      val random = new java.util.Random(seed)
+      val fractionKey = "sampling_fraction"
+      val seedKey = "sampling_seed"
+      val senumClass = classOf[SamplingEnumerator[VertexInducedSubgraph]]
+
+      val getLabels: VertexInducedSubgraph => IntArrayList = s => {
+         val graph = s.getMainGraph
+         val vertices = s.getVertices
+         val numVertices = vertices.size()
+         var labelSet = Set.empty[Int]
+         var i = 0
+         while (i < numVertices) {
+            labelSet += graph.firstVertexLabel(vertices.getu(i))
+            i += 1
+         }
+         val arr = new IntArrayList(labelSet.toArray)
+         arr.sort()
+         arr
+      }
+
+      val labelsCounts = fractalGraph
+         .set(fractionKey, fraction)
+         .set(seedKey, seed)
+         .vfractoid
+         .expand(1, senumClass)
+         .filter((s, _) => getLabels(s).size() == s.getNumVertices)
+         .explore(numVertices - 1)
+         .aggregationObjLong(getLabels, 0L, _ => 1L, _ + _)
+
+      labelsCounts.cache()
+
+      val leastFreq = labelsCounts.top(topk)(
+         new Ordering[(IntArrayList, Long)] {
+            override def compare(x: (IntArrayList, Long),
+                                 y: (IntArrayList, Long)): Int = {
+               if (x._2 < y._2) 1 else if (x._2 > y._2) -1 else 0
+            }
+         }).apply(random.nextInt(topk))
+      logApp(s"leastFreqLabels=${leastFreq._1} count=${leastFreq._2}")
+
+      val mid = labelsCounts.count() / 2
+      val medianFreq = labelsCounts
+         .sortBy(_._2)
+         .zipWithIndex()
+         .filter(kv => kv._2 >= mid && kv._2 <= mid + topk)
+         .keys
+         .collect()
+         .apply(random.nextInt(topk))
+      logApp(s"medianFreqLabels=${medianFreq._1} count=${medianFreq._2}")
+
+      val mostFreq = labelsCounts.top(topk)(
+         new Ordering[(IntArrayList, Long)] {
+            override def compare(x: (IntArrayList, Long),
+                                 y: (IntArrayList, Long)): Int = {
+               if (x._2 < y._2) -1 else if (x._2 > y._2) 1 else 0
+            }
+         }).apply(random.nextInt(topk))
+      logApp(s"mostFreqLabels=${mostFreq._1} count=${mostFreq._2}")
+
+      labelsCounts.unpersist()
    }
 }
 
@@ -1145,7 +1198,7 @@ object FractalSparkRunner extends Logging {
       (result, t1 - t0)
    }
 
-   def main(args: Array[String]) {
+   def main(args: Array[String]): Unit = {
       // args
       var i = 0
       def nextArg: String = {
@@ -1171,7 +1224,6 @@ object FractalSparkRunner extends Logging {
       }
       val graphPath = nextArg
       val algorithm = nextArg
-      val commStrategy = nextArg
       val numPartitions = nextArg.toInt
       val explorationSteps = nextArg.toInt
       val logLevel = nextArg
@@ -1190,7 +1242,9 @@ object FractalSparkRunner extends Logging {
       }
 
       val fc = new FractalContext(sc, logLevel)
-      var fractalGraph = fc.textFile(graphPath, graphClass = graphClass)
+      var fractalGraph = fc
+         .textFile(graphPath, graphClass = graphClass)
+         .set("num_partitions", numPartitions)
 
       // set start time and time limit
       val timeLimit = nextArg.toLong
@@ -1205,9 +1259,11 @@ object FractalSparkRunner extends Logging {
             Thread.sleep(timeLimit)
             terminated = true
             logInfo(s"TimeLimitReached timelimit=${timeLimit}")
-            fc.terminate() // stop submitting new steps and stop running ones
-            Thread.sleep(5*60*1000)
+            fc.terminate()
+            fc.stop()
             sc.cancelAllJobs()
+            sc.stop()
+            System.exit(0)
          }
       }
 
@@ -1223,227 +1279,206 @@ object FractalSparkRunner extends Logging {
          }
       }
 
-      val start = System.currentTimeMillis()
       algorithm.toLowerCase match {
-         case SubgraphsListingSF.appid =>
+         case SubgraphsListingPO.appid =>
             setRemainingConfigs()
-            SubgraphsListingSF(fractalGraph, commStrategy,
-               numPartitions, explorationSteps)
+            SubgraphsListingPO(fractalGraph, explorationSteps)
 
-         case SubgraphsListingPF.appid =>
+         case SubgraphsListingPA.appid =>
             setRemainingConfigs()
-            SubgraphsListingPF(fractalGraph, commStrategy,
-               numPartitions, explorationSteps)
+            SubgraphsListingPA(fractalGraph, explorationSteps)
 
-         case InducedSubgraphsListingPFMCVC.appid =>
+         case InducedSubgraphsListingPAMCVC.appid =>
             setRemainingConfigs()
-            InducedSubgraphsListingPFMCVC(fractalGraph, commStrategy,
-               numPartitions, explorationSteps)
+            InducedSubgraphsListingPAMCVC(fractalGraph, explorationSteps)
 
-         case InducedSubgraphsListingPF.appid =>
+         case InducedSubgraphsListingPA.appid =>
             setRemainingConfigs()
-            InducedSubgraphsListingPF(fractalGraph, commStrategy,
-               numPartitions, explorationSteps)
+            InducedSubgraphsListingPA(fractalGraph, explorationSteps)
 
-         case InducedSubgraphsListingSF.appid =>
+         case InducedSubgraphsListingPO.appid =>
             setRemainingConfigs()
-            InducedSubgraphsListingSF(fractalGraph, commStrategy,
-               numPartitions, explorationSteps)
+            InducedSubgraphsListingPO(fractalGraph, explorationSteps)
 
-         case InducedSubgraphsListingSampleSF.appid =>
+         case InducedSubgraphsListingSamplePO.appid =>
             val fraction = nextArg.toDouble
             setRemainingConfigs()
-            InducedSubgraphsListingSampleSF(fractalGraph, commStrategy,
-               numPartitions, explorationSteps, fraction)
+            InducedSubgraphsListingSamplePO(fractalGraph, explorationSteps,
+               fraction)
 
-         case MotifsPF.appid =>
+         case MotifsPA.appid =>
             setRemainingConfigs()
-            MotifsPF(fractalGraph, commStrategy, numPartitions,
-               explorationSteps)
+            MotifsPA(fractalGraph, explorationSteps)
 
-         case MotifsPFMCVC.appid =>
+         case MotifsPAMCVC.appid =>
             setRemainingConfigs()
-            MotifsPFMCVC(fractalGraph, commStrategy, numPartitions,
-               explorationSteps)
+            MotifsPAMCVC(fractalGraph, explorationSteps)
 
-         case MotifsSampleSF.appid =>
+         case MotifsSamplePO.appid =>
             val fraction = nextArg.toDouble
             setRemainingConfigs()
-            MotifsSampleSF(fractalGraph, commStrategy,
-               numPartitions, explorationSteps, fraction)
+            MotifsSamplePO(fractalGraph, explorationSteps, fraction)
 
-         case MotifsSF.appid =>
+         case MotifsPO.appid =>
             setRemainingConfigs()
-            MotifsSF(fractalGraph, commStrategy, numPartitions,
-               explorationSteps)
+            MotifsPO(fractalGraph, explorationSteps)
 
          case CliquesCustomKClist.appid =>
             setRemainingConfigs()
-            CliquesCustomKClist(fractalGraph, commStrategy, numPartitions,
-               explorationSteps)
+            CliquesCustomKClist(fractalGraph, explorationSteps)
 
          case CliquesPO.appid =>
             setRemainingConfigs()
-            CliquesPO(fractalGraph, commStrategy, numPartitions,
-               explorationSteps)
+            CliquesPO(fractalGraph, explorationSteps)
 
          case CliquesPA.appid =>
             setRemainingConfigs()
-            CliquesPA(fractalGraph, commStrategy, numPartitions,
-               explorationSteps)
+            CliquesPA(fractalGraph, explorationSteps)
 
          case MaximalCliquesCustomQuick.appid =>
             setRemainingConfigs()
-            MaximalCliquesCustomQuick(fractalGraph, commStrategy,
-               numPartitions, explorationSteps)
+            MaximalCliquesCustomQuick(fractalGraph, explorationSteps)
 
          case MaximalCliquesPA.appid =>
             setRemainingConfigs()
-            MaximalCliquesPA(fractalGraph, commStrategy, numPartitions,
-               explorationSteps)
+            MaximalCliquesPA(fractalGraph, explorationSteps)
 
          case MaximalCliquesPO.appid =>
             setRemainingConfigs()
-            MaximalCliquesPO(fractalGraph, commStrategy, numPartitions,
-               explorationSteps)
+            MaximalCliquesPO(fractalGraph, explorationSteps)
 
          case QuasiCliquesPO.appid =>
             val minDensity = nextArg.toDouble
             setRemainingConfigs()
-            QuasiCliquesPO(fractalGraph, commStrategy, numPartitions,
-               explorationSteps, minDensity)
+            QuasiCliquesPO(fractalGraph, explorationSteps, minDensity)
 
          case QuasiCliquesPA.appid =>
             val minDensity = nextArg.toDouble
             setRemainingConfigs()
-            QuasiCliquesPA(fractalGraph, commStrategy, numPartitions,
-               explorationSteps, minDensity)
+            QuasiCliquesPA(fractalGraph, explorationSteps, minDensity)
 
          case QuasiCliquesPAPO.appid =>
             val minDensity = nextArg.toDouble
             setRemainingConfigs()
-            QuasiCliquesPAPO(fractalGraph, commStrategy, numPartitions,
-               explorationSteps, minDensity)
+            QuasiCliquesPAPO(fractalGraph, explorationSteps, minDensity)
 
-         case FSMSF.appid =>
+         case FSMPO.appid =>
             val support = nextArg.toInt
             setRemainingConfigs()
-            FSMSF(fractalGraph, commStrategy, numPartitions,
-               explorationSteps, support)
+            FSMPO(fractalGraph, explorationSteps, support)
 
-         case FSMPF.appid =>
+         case FSMPA.appid =>
             val support = nextArg.toInt
             setRemainingConfigs()
-               FSMPF(fractalGraph, commStrategy, numPartitions,
-                  explorationSteps, support)
+            FSMPA(fractalGraph, explorationSteps, support)
 
-         case FSMPFMCVC.appid =>
+         case FSMPAMCVC.appid =>
             val support = nextArg.toInt
             setRemainingConfigs()
-            FSMPFMCVC(fractalGraph, commStrategy, numPartitions,
-               explorationSteps, support)
+            FSMPAMCVC(fractalGraph, explorationSteps, support)
 
-         case FSMHybrid.appid =>
+         case FSMPAPO.appid =>
             val support = nextArg.toInt
             setRemainingConfigs()
-            FSMHybrid(fractalGraph, commStrategy, numPartitions,
-               explorationSteps, support)
+            FSMPAPO(fractalGraph, explorationSteps, support)
 
-         case PatternMatchingPFMCVC.appid =>
+         case PatternQueryingPAMCVC.appid =>
             val subgraphPath = nextArg
             setRemainingConfigs()
-            PatternMatchingPFMCVC(fractalGraph, commStrategy, numPartitions,
-               explorationSteps, subgraphPath)
+            PatternQueryingPAMCVC(fractalGraph, explorationSteps,
+               subgraphPath)
 
-         case PatternMatchingPFMCVC2.appid =>
+         case PatternQueryingPAMCVCOld.appid =>
             val subgraphPath = nextArg
             setRemainingConfigs()
-            PatternMatchingPFMCVC2(fractalGraph, commStrategy, numPartitions,
-               explorationSteps, subgraphPath)
+            PatternQueryingPAMCVCOld(fractalGraph, explorationSteps,
+               subgraphPath)
 
-         case PatternMatchingInducedPFMCVC.appid =>
+         case PatternQueryingInducedPAMCVC.appid =>
             val subgraphPath = nextArg
             setRemainingConfigs()
-            PatternMatchingInducedPFMCVC(fractalGraph, commStrategy,
-               numPartitions, explorationSteps, subgraphPath)
+            PatternQueryingInducedPAMCVC(fractalGraph, explorationSteps,
+               subgraphPath)
 
-         case PatternMatchingPF.appid =>
+         case PatternQueryingPA.appid =>
             val subgraphPath = nextArg
             setRemainingConfigs()
-            PatternMatchingPF(fractalGraph, commStrategy, numPartitions,
-               explorationSteps, subgraphPath)
+            PatternQueryingPA(fractalGraph, explorationSteps, subgraphPath)
 
-         case PatternMatchingInducedPF.appid =>
+         case PatternQueryingInducedPA.appid =>
             val subgraphPath = nextArg
             setRemainingConfigs()
-            PatternMatchingInducedPF(fractalGraph, commStrategy,
-               numPartitions, explorationSteps, subgraphPath)
+            PatternQueryingInducedPA(fractalGraph, explorationSteps,
+               subgraphPath)
 
-         case PatternMatchingSamplePF.appid =>
+         case PatternQueryingSamplePA.appid =>
             val subgraphPath = nextArg
             val fraction = nextArg.toDouble
             setRemainingConfigs()
-            PatternMatchingSamplePF(fractalGraph, commStrategy,
-               numPartitions, explorationSteps, subgraphPath, fraction)
+            PatternQueryingSamplePA(fractalGraph, explorationSteps,
+               subgraphPath, fraction)
 
-         case PatternMatchingInducedSamplePF.appid =>
+         case PatternQueryingInducedSamplePA.appid =>
             val subgraphPath = nextArg
             val fraction = nextArg.toDouble
             setRemainingConfigs()
-            PatternMatchingInducedSamplePF(fractalGraph, commStrategy,
-               numPartitions, explorationSteps, subgraphPath, fraction)
+            PatternQueryingInducedSamplePA(fractalGraph, explorationSteps,
+               subgraphPath, fraction)
 
-         case PatternMatchingSF.appid =>
+         case PatternQueryingPO.appid =>
             val subgraphPath = nextArg
             setRemainingConfigs()
-            PatternMatchingSF(fractalGraph, commStrategy,
-               numPartitions, explorationSteps, subgraphPath)
+            PatternQueryingPO(fractalGraph, explorationSteps, subgraphPath)
 
-         case PeriodicSubgraphsInducedSF.appid =>
+         case PeriodicSubgraphsInducedPO.appid =>
             val periodicThreshold = nextArg.toInt
             setRemainingConfigs()
-            PeriodicSubgraphsInducedSF(fractalGraph, commStrategy,
-               numPartitions, explorationSteps, periodicThreshold)
+            PeriodicSubgraphsInducedPO(fractalGraph, explorationSteps,
+               periodicThreshold)
 
-         case PeriodicSubgraphsInducedPF.appid =>
+         case PeriodicSubgraphsInducedPA.appid =>
             val periodicThreshold = nextArg.toInt
             setRemainingConfigs()
-            PeriodicSubgraphsInducedPF(fractalGraph, commStrategy,
-               numPartitions, explorationSteps, periodicThreshold)
+            PeriodicSubgraphsInducedPA(fractalGraph, explorationSteps,
+               periodicThreshold)
 
-         case PeriodicSubgraphsInducedPFMCVC.appid =>
+         case PeriodicSubgraphsInducedPAMCVC.appid =>
             val periodicThreshold = nextArg.toInt
             setRemainingConfigs()
-            PeriodicSubgraphsInducedPFMCVC(fractalGraph, commStrategy,
-               numPartitions, explorationSteps, periodicThreshold)
+            PeriodicSubgraphsInducedPAMCVC(fractalGraph, explorationSteps,
+               periodicThreshold)
 
-         case InducedSubgraphSearchLabelsPO.appid =>
-            val labelsSet = nextArg.split(",").map(str => str.trim.toInt).toSet
+         case LabelSearchPO.appid =>
+            val labelsSet = nextArg.split(",").map(str => str.trim.toInt)
+               .toSet
             val gfiltering = nextArg.toBoolean
             setRemainingConfigs()
-            InducedSubgraphSearchLabelsPO(fractalGraph, commStrategy,
-               numPartitions, explorationSteps, labelsSet, gfiltering)
+            LabelSearchPO(fractalGraph, explorationSteps, labelsSet,
+               gfiltering)
 
-         case InducedSubgraphSearchLabelsPA.appid =>
-            val labelsSet = nextArg.split(",").map(str => str.trim.toInt).toSet
+         case LabelSearchPA.appid =>
+            val labelsSet = nextArg.split(",").map(str => str.trim.toInt)
+               .toSet
             val gfiltering = nextArg.toBoolean
             setRemainingConfigs()
-            InducedSubgraphSearchLabelsPA(fractalGraph, commStrategy,
-               numPartitions, explorationSteps, labelsSet, gfiltering)
+            LabelSearchPA(fractalGraph, explorationSteps, labelsSet,
+               gfiltering)
 
          case KeywordSearchPO.appid =>
-            val keywords = nextArg.split(",").map(str => str.trim.toInt).toSet
+            val keywords = nextArg.split(",").map(str => str.trim.toInt)
+               .toSet
             val gfiltering = nextArg.toBoolean
             setRemainingConfigs()
-            KeywordSearchPO(fractalGraph, commStrategy,
-               numPartitions, explorationSteps, keywords, gfiltering)
+            KeywordSearchPO(fractalGraph, explorationSteps, keywords,
+               gfiltering)
 
          case MinimalKeywordSearchPO.appid =>
-            val keywords = nextArg.split(",").map(str => str.trim.toInt).toSet
-               val gfiltering = nextArg.toBoolean
-               setRemainingConfigs()
-               MinimalKeywordSearchPO(fractalGraph, commStrategy,
-                  numPartitions, explorationSteps, keywords, gfiltering)
+            val keywords = nextArg.split(",").map(str => str.trim.toInt)
+               .toSet
+            val gfiltering = nextArg.toBoolean
+            setRemainingConfigs()
+            MinimalKeywordSearchPO(fractalGraph, explorationSteps, keywords,
+               gfiltering)
 
          case PatternQueryGenerator.appid =>
             val fraction = nextArg.toDouble
@@ -1451,8 +1486,34 @@ object FractalSparkRunner extends Logging {
             val topk = nextArg.toInt
             val outputDir = nextArg
             setRemainingConfigs()
-            PatternQueryGenerator(fractalGraph, commStrategy,
-               numPartitions, explorationSteps, fraction, seed, topk, outputDir)
+            PatternQueryGenerator(fractalGraph, explorationSteps, fraction,
+               seed, topk, outputDir)
+
+         case LabelQueryGenerator.appid =>
+            val fraction = nextArg.toDouble
+            val seed = nextArg.toLong
+            val topk = nextArg.toInt
+            setRemainingConfigs()
+            LabelQueryGenerator(fractalGraph, explorationSteps, fraction,
+               seed, topk)
+
+         case QuerySpecializationPO.appid =>
+            val patternPath = nextArg
+            setRemainingConfigs()
+            QuerySpecializationPO(fractalGraph, explorationSteps,
+               patternPath)
+
+         case QuerySpecializationPA.appid =>
+            val patternPath = nextArg
+            setRemainingConfigs()
+            QuerySpecializationPA(fractalGraph, explorationSteps,
+               patternPath)
+
+         case QuerySpecializationPAPO.appid =>
+            val patternPath = nextArg
+            setRemainingConfigs()
+            QuerySpecializationPAPO(fractalGraph, explorationSteps,
+               patternPath)
 
          case appName =>
             throw new RuntimeException(s"Unknown app: ${appName}")
@@ -1461,11 +1522,6 @@ object FractalSparkRunner extends Logging {
       if (terminated) {
          Await.result(timeLimitFuture, Duration.Inf)
       }
-
-      val elapsed = System.currentTimeMillis() - start
-
-      logApp(s"ApplicationFinished terminated=${terminated}" +
-         s" elapsed=${elapsed} timelimit=${timeLimit}")
 
       fc.stop()
       sc.stop()

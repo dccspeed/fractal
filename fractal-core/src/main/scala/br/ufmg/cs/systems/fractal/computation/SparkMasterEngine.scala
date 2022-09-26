@@ -1,17 +1,14 @@
 package br.ufmg.cs.systems.fractal.computation
 
-import java.io.Serializable
-
 import br.ufmg.cs.systems.fractal.Fractoid
-import br.ufmg.cs.systems.fractal.aggregation.{IntIntSubgraphAggregation, LongLongSubgraphAggregation, LongObjSubgraphAggregation, LongSubgraphAggregation, ObjLongSubgraphAggregation, ObjObjSubgraphAggregation}
-import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
+import br.ufmg.cs.systems.fractal.aggregation._
+import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.Logging
-import com.koloboke.collect.map.LongLongMap
-import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
+import java.io.Serializable
 import scala.reflect.ClassTag
 
 trait SparkMasterEngine[S <: Subgraph] extends Logging {
@@ -34,7 +31,7 @@ trait SparkMasterEngine[S <: Subgraph] extends Logging {
       }
 
       // set log level
-      logInfo(s"Setting num_partitions to " +
+      logDebug(s"Setting num_partitions to " +
          s"${config.getInteger("num_partitions", sc.defaultParallelism)}")
 
       // set initial state
@@ -77,15 +74,6 @@ trait SparkMasterEngine[S <: Subgraph] extends Logging {
 }
 
 object SparkMasterEngine {
-
-   import Configuration._
-   import SparkConfiguration._
-
-   def apply[S <: Subgraph]
-   (frac: Fractoid[S]): SparkMasterEngine[S] =
-      frac.config.getString(CONF_COMM_STRATEGY, CONF_COMM_STRATEGY_DEFAULT)
-      match {
-         case COMM_FROM_SCRATCH =>
-            new SparkFromScratchMasterEngineAggregation[S](frac)
-      }
+   def apply[S <: Subgraph](frac: Fractoid[S]): SparkMasterEngine[S] =
+      new SparkFromScratchMasterEngineAggregation[S](frac)
 }

@@ -6,7 +6,7 @@ import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.util.Logging
 import org.apache.spark.rdd.RDD
 
-class MotifsSF(numVertices: Int)
+class MotifsPO(numVertices: Int)
    extends BuiltInApplication[RDD[(Pattern,Long)]] {
 
    override def apply(fg: FractalGraph): RDD[(Pattern, Long)] = {

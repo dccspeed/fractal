@@ -150,13 +150,11 @@ public class MCVCEnumerator extends SubgraphEnumerator<PatternInducedSubgraph> {
    public String asExtensionMethodString(Computation computation) {
       return "Mmcvc";
    }
-
    private void swapPreviousAndResult(int pos) {
       IntArrayList aux = previouss.getu(pos);
       previouss.setu(pos, results.getu(pos));
       results.setu(pos, aux);
    }
-
    private void ensureNeighborhoods(IntArrayList vertices, Pattern pattern,
                                     int pos) {
       if (neighborhoods.getu(pos) != null) return;

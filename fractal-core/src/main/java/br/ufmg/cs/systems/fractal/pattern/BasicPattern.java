@@ -136,7 +136,7 @@ public abstract class BasicPattern implements Pattern {
       VertexPositionEquivalences vertexPositionEquivalences =
               pattern.getVertexPositionEquivalences(vertexLabels, edgeLabels);
 
-      LOG.info(String.format(
+      LOG.debug(String.format(
               "symmetryBreakerRec{pattern=%s,vertices=%s,vertexLabels=%s," +
                       "vertexEquivalences=%s,nextLabel=%s}\n",
               pattern, pattern.getVertices(), vertexLabels,
@@ -265,11 +265,6 @@ public abstract class BasicPattern implements Pattern {
 
       return edges.equals(that.edges);
 
-   }
-
-   @Override
-   public String toString() {
-      return toOutputString();
    }
 
    public MainGraph getMainGraph() {
@@ -524,7 +519,7 @@ public abstract class BasicPattern implements Pattern {
             }
          }
 
-         LOG.info("vsymmetryBreakerUpperBound " + vsymmetryBreakerUpperBound);
+         LOG.debug("vsymmetryBreakerUpperBound " + vsymmetryBreakerUpperBound);
       }
 
       return vsymmetryBreakerUpperBound;
@@ -539,7 +534,7 @@ public abstract class BasicPattern implements Pattern {
             }
          }
 
-         LOG.info("vsymmetryBreakerLowerBound " + vsymmetryBreakerLowerBound);
+         LOG.debug("vsymmetryBreakerLowerBound " + vsymmetryBreakerLowerBound);
       }
 
       return vsymmetryBreakerLowerBound;
@@ -699,7 +694,7 @@ public abstract class BasicPattern implements Pattern {
    }
 
    @Override
-   public String toOutputString() {
+   public String toString() {
       if (getNumberOfEdges() > 0) {
          StringBuffer sb = new StringBuffer("edges=[");
          IntArrayList vlabels = IntArrayListPool.instance().createObject();
@@ -978,7 +973,7 @@ public abstract class BasicPattern implements Pattern {
       }
       sb.append("}");
 
-      LOG.info(sb.toString());
+      LOG.debug(sb.toString());
 
       return symmetryBreaker;
    }
@@ -998,7 +993,9 @@ public abstract class BasicPattern implements Pattern {
       dataOutput.writeBoolean(vertexLabeled);
       dataOutput.writeBoolean(edgeLabeled);
       dataOutput.writeInt(edges.size());
-      for (int i = 0; i < edges.size(); ++i) edges.getu(i).write(dataOutput);
+      for (int i = 0; i < edges.size(); ++i) {
+         edges.getu(i).write(dataOutput);
+      }
       vertices.write(dataOutput);
       dataOutput.writeInt(firstVertexLabel);
 
@@ -1055,6 +1052,7 @@ public abstract class BasicPattern implements Pattern {
       }
       vertices.readFields(dataInput);
       firstVertexLabel = dataInput.readInt();
+
 
       for (int i = 0; i < vertices.size(); ++i) {
          vertexPositions.put(vertices.getu(i), i);

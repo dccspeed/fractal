@@ -771,6 +771,9 @@ class SlaveActor[S <: Subgraph](args: SlaveActor.Args[S])
          masterRef ! ByeMaster(partitionId, self)
          context.stop(self)
 
+      case ReceiveTimeout =>
+      // nothing
+
       case other =>
          logWarn(s"Terminating: ${self} is not ready. Ignoring " +
             s"message: ${other}. ${readyToFinishSlaves.mkString(",")}")

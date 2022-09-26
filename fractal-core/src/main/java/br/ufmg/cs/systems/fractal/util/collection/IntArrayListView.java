@@ -39,12 +39,12 @@ public final class IntArrayListView extends IntArrayList{
       return getu(size() - 1);
    }
 
-   @Override
-   protected void checkIndex(int i) {
-      if (i < offset || i >= offset + numElements) {
-         throw new ArrayIndexOutOfBoundsException(i);
-      }
-   }
+   //@Override
+   //protected void checkIndex(int i) {
+   //   if (i < offset || i >= offset + numElements) {
+   //      throw new ArrayIndexOutOfBoundsException(i);
+   //   }
+   //}
 
    @Override
    public void reclaim() {

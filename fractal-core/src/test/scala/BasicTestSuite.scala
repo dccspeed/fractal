@@ -189,7 +189,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
       for (k <- 1 to numFreqPatterns.size) {
          cubeGraph.set("num_partitions", numPartitions)
-         val freqPatterns = cubeGraph.fsmSF(support, k).collectAsMap()
+         val freqPatterns = cubeGraph.fsmPO(support, k).collectAsMap()
 
          assert(freqPatterns.size == numFreqPatterns(k - 1))
       }
@@ -204,14 +204,14 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
       // triangles
       val trianglePattern = PatternUtils.fromFS("../data/test/triangle")
-      val trianglesFrac = cubeGraph.patternMatchingPF(trianglePattern).
+      val trianglesFrac = cubeGraph.patternQueryingPA(trianglePattern).
          explore(2)
       val numTriangles = trianglesFrac.aggregationCount
       assert(numTriangles == numSubgraph("triangles"))
 
       // squares
       val squarePattern = PatternUtils.fromFS("../data/test/square")
-      val squaresFrac = cubeGraph.patternMatchingPF(squarePattern).
+      val squaresFrac = cubeGraph.patternQueryingPA(squarePattern).
          explore(3)
       val numSquares = squaresFrac.aggregationCount
       assert(numSquares == numSubgraph("squares"))
@@ -252,13 +252,13 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       for (k <- Array(3, 4)) {
 
          // k-motifs
-         val motifsCounts = citeseerSingleLabelGraph.motifsSF(k)
+         val motifsCounts = citeseerSingleLabelGraph.motifsPO(k)
             .collectAsMap()
 
          // k-motifs estimate
          val fraction = 0.5
          val motifsCountsEst = citeseerSingleLabelGraph
-            .motifsSampleSF(k, fraction)
+            .motifsSamplePO(k, fraction)
             .collectAsMap()
 
          for ((p, gt) <- motifsCounts) {
@@ -283,7 +283,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       // ground-truth 2: triangle querying
       val trianglePattern = PatternUtils.fromFS("../data/test/triangle")
       val trianglesFrac = citeseerSingleLabelGraph
-         .patternMatchingPF(trianglePattern).
+         .patternQueryingPA(trianglePattern).
          explore(2)
       val gt2 = trianglesFrac.aggregationCount
 
@@ -317,7 +317,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       // ground-truth: square querying
       val squarePattern = PatternUtils.fromFS("../data/test/square")
       squarePattern.setVertexLabeled(false);
-      val squares = citeseerSingleLabelGraph.patternMatchingPF(squarePattern)
+      val squares = citeseerSingleLabelGraph.patternQueryingPA(squarePattern)
          .explore(3)
       val gt = squares.aggregationCount
 
@@ -357,21 +357,21 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
          chosenGraph.set("num_partitions", numPartitions)
 
-         val motifsMap1 = chosenGraph.motifsSF(numVertices).collectAsMap()
+         val motifsMap1 = chosenGraph.motifsPO(numVertices).collectAsMap()
          val counts1 = motifsMap1.values.toArray
          java.util.Arrays.sort(counts1)
          assert(java.util.Arrays.equals(counts, counts1),
             s"numVertices=${numVertices} ${counts.sum} ${counts1.sum}"
          )
 
-         val motifsMap2 = chosenGraph.motifsPF(numVertices).collectAsMap()
+         val motifsMap2 = chosenGraph.motifsPA(numVertices).collectAsMap()
          assert(motifsMap2.equals(motifsMap1),
             s"${motifsMap1.values.sum} ${motifsMap2.values.sum} " +
                s"\n${
                   motifsMap1 -- motifsMap2.keys
                }\n${motifsMap1}\n${motifsMap2}")
 
-         val motifsMap3 = chosenGraph.motifsPFMCVC(numVertices).collectAsMap()
+         val motifsMap3 = chosenGraph.motifsPAMCVC(numVertices).collectAsMap()
          assert(motifsMap3.equals(motifsMap1),
             s"${motifsMap1.values.sum} ${motifsMap3.values.sum}" +
                s" ${motifsMap1} ${motifsMap3}")
@@ -388,14 +388,14 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
          val queryGraphPattern = PatternUtils.fromFS(
             s"../data/queries/${query}")
          val gqueryingFrac = graph
-            .patternMatchingPF(queryGraphPattern)
+            .patternQueryingPA(queryGraphPattern)
             .explore(numVertices - 1)
 
          assert(gqueryingFrac.aggregationCount == numSubgraphs,
             s"query=${query} numVertices=${numVertices}")
 
          val queryPartialResults = graph
-            .patternMatchingPFMCVC2(queryGraphPattern)
+            .patternQueryingPAMCVC(queryGraphPattern)
          var totalNumSubgraphs = 0L
          for (queryPartialResult <- queryPartialResults) {
             totalNumSubgraphs += queryPartialResult.aggregationCount
@@ -420,13 +420,13 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
          // subgraph-first approach: edge by edge
          val frequentPatterns = chosenGraph
-            .fsmSF(minSupport, Int.MaxValue)
+            .fsmPO(minSupport, Int.MaxValue)
             .collectAsMap()
          assert(frequentPatterns.size == numPatterns)
 
          // pattern-first approach: pattern-matching on every possible pattern
          val frequentPatternsPf = chosenGraph
-            .fsmPF(minSupport, Int.MaxValue)
+            .fsmPA(minSupport, Int.MaxValue)
             .collectAsMap()
          assert(frequentPatternsPf.size == numPatterns,
             s"${minSupport} ${frequentPatterns}")
@@ -441,7 +441,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
 
          // pattern-first approach using MCVC optimization
          val frequentPatternsPf2 = chosenGraph
-            .fsmPFMCVC(minSupport, Int.MaxValue)
+            .fsmPAMCVC(minSupport, Int.MaxValue)
             .collectAsMap()
          assert(frequentPatternsPf2.size == numPatterns,
             s"${frequentPatterns} ${frequentPatternsPf2}")

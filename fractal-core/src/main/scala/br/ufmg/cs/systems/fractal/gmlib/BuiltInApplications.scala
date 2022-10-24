@@ -3,17 +3,19 @@ package br.ufmg.cs.systems.fractal.gmlib
 import br.ufmg.cs.systems.fractal.computation.{AllEdgesSubgraphEnumerator, Computation, RandomWalkEnumerator, SamplingEnumerator}
 import br.ufmg.cs.systems.fractal.gmlib.clique.{KClistEnumerator, MaximalCliquesEnumerator}
 import br.ufmg.cs.systems.fractal.gmlib.fsm._
-import br.ufmg.cs.systems.fractal.gmlib.kws.{KeywordSearchPO, MinimalKeywordSearchPO}
+import br.ufmg.cs.systems.fractal.gmlib.kws.{KeywordSearchPO, MinimalKeywordSearchPA, MinimalKeywordSearchPO}
 import br.ufmg.cs.systems.fractal.gmlib.mcvc.MCVCEnumerator
 import br.ufmg.cs.systems.fractal.gmlib.motifs.{MotifsHybrid, MotifsPA, MotifsPAMCVC, MotifsPO}
 import br.ufmg.cs.systems.fractal.gmlib.periodic.{InducedPeriodicSubgraphsPA, InducedPeriodicSubgraphsPAMCVC, InducedPeriodicSubgraphsPO}
 import br.ufmg.cs.systems.fractal.gmlib.quasicliques.{QuasiCliquesPA, QuasiCliquesPAPO, QuasiCliquesPO}
+import br.ufmg.cs.systems.fractal.gmlib.queryspecialization.{QuerySpecializationPAPO, QuerySpecializationPO}
 import br.ufmg.cs.systems.fractal.pattern._
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
 import br.ufmg.cs.systems.fractal.util.pool.{IntArrayListPool, IntArrayListViewPool}
 import br.ufmg.cs.systems.fractal.util.{Logging, Utils}
 import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
+import com.koloboke.collect.set.hash.{HashIntSets, HashObjSets}
 import org.apache.spark.rdd.RDD
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -78,7 +80,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
    (numVertices: Int, callback: Fractoid[PatternInducedSubgraph] => Unit)
    : Unit = {
 
-      val canonicalPatternsRDD = PatternUtilsRDD.vertexPatternsRDD(
+      val canonicalPatternsRDD = PatternUtilsRDD.getOrGenerateVertexPatternsRDD(
          self.fractalContext.sparkContext, numVertices)
 
       // local iterator for better memory footprint
@@ -109,7 +111,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     callback: Fractoid[PatternInducedSubgraph] => Unit): Unit = {
 
       // generate all canonical patterns with *numVertices* vertices
-      val canonicalPatternsRDD = PatternUtilsRDD.vertexPatternsRDD(
+      val canonicalPatternsRDD = PatternUtilsRDD.getOrGenerateVertexPatternsRDD(
          self.fractalContext.sparkContext, numVertices)
 
       // local iterator for better memory footprint
@@ -141,7 +143,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
    (numVertices: Int, callback: Fractoid[PatternInducedSubgraph] => Unit)
    : Unit = {
 
-      val canonicalPatternsRDD = PatternUtilsRDD.vertexPatternsRDD(
+      val canonicalPatternsRDD = PatternUtilsRDD.getOrGenerateVertexPatternsRDD(
          self.fractalContext.sparkContext, numVertices)
 
       // local iterator for better memory footprint
@@ -575,7 +577,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
          val nextPattern = newPatterns.getu(i)
          val explorationPlanMCVC = nextPattern.explorationPlan()
 
-         var gquerying = self.pfractoid(nextPattern)
+         val gquerying = self.pfractoid(nextPattern)
             .expand(nextPattern.getNumberOfVertices, classOf[MCVCEnumerator])
 
          logInfo(s"MCVCPartialResult pattern=${nextPattern}" +
@@ -730,8 +732,8 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * @param numVertices number of vertices in the induced subgraphs
     * @return fractoid representing the computation
     */
-   def labelSearchPA
-   (labelsSet: Set[Int], numVertices: Int): Array[Fractoid[PatternInducedSubgraph]] = {
+   def labelSearchPA(labelsSet: Set[Int], numVertices: Int)
+   : Iterator[Fractoid[PatternInducedSubgraph]] = {
       val labelFilter
       : (PatternInducedSubgraph, Computation[PatternInducedSubgraph]) => Boolean =
          (s,c) => {
@@ -750,10 +752,11 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
             valid
          }
 
+      val sc = self.fractalContext.sparkContext
       val patterns = PatternUtilsRDD
-         .vertexPatternsRDD(self.fractalContext.sparkContext, numVertices).collect()
+         .getOrGenerateVertexPatternsRDD(sc, numVertices)
 
-      patterns.map(pattern => {
+      patterns.toLocalIterator.map(pattern => {
          pattern.setInduced(true)
          pattern.setVertexLabeled(false)
          self.pfractoid(pattern)
@@ -817,6 +820,19 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
    }
 
    /**
+    * Given a set of words (labels) find subgraphs such that each keyword is
+    * covered by some vertex and this subgraph should be minimal.
+    * @param keywords
+    * @param numVertices
+    * @return new fractoid
+    */
+   def minimalKeywordSearchPA(keywords: Set[Int], numVertices: Int)
+   : Iterator[Fractoid[PatternInducedSubgraph]] = {
+      val app = new MinimalKeywordSearchPA(keywords, numVertices)
+      app.apply(self)
+   }
+
+   /**
     * Pattern-oblivious implementation of query specialization result set
     * computation: given a pattern, obtain subgraph instances of pattern
     * specializations of that pattern. A pattern specialization is defined as
@@ -830,7 +846,6 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       pattern.setInduced(false)
       pattern.setVertexLabeled(true)
       pattern.setEdgeLabeled(false)
-      val numEdges = pattern.getNumberOfEdges
 
       // graph vertex labels
       val vertexLabels = self.vfractoid.expand(1)
@@ -857,41 +872,9 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       val patterns = sc
          .union(internalExtendedPatterns, externalExtendedPatterns)
 
-      val quickPatternsPerLevel = patterns
-         .map(pattern => {
-            val quickPatterns = PatternUtils.quickPatterns(pattern)
-            val quickPatternsPerLevel = PatternUtils.quickPatternsPerLevel(quickPatterns)
-            Logging.logApp(s"QuickPatternsPerLevel pattern=${pattern} " +
-               s"numPatterns=${quickPatterns.size()}")
-            quickPatternsPerLevel
-         })
-         .reduce((perLevel1, perLevel2) => {
-            var i = 0
-            while (i < perLevel1.length) {
-               perLevel1(i).addAll(perLevel2(i))
-               i += 1
-            }
-            perLevel1
-         })
-
-      logApp(s"FinalQuickPatternsPerLevel" +
-         s" sizePerLevel=${quickPatternsPerLevel.map(_.size()).mkString(",")}")
-
-      val quickPatternsPerLevelBc = sc.broadcast(quickPatternsPerLevel)
-
-      // filtering function: last edge must exist in the map
-      val edgeFilterFunc
-      : (EdgeInducedSubgraph, Computation[EdgeInducedSubgraph]) => Boolean =
-         (s,c) => {
-            val quickPattern = s.quickPattern()
-            val numEdges = quickPattern.getNumberOfEdges
-            quickPatternsPerLevelBc.value(numEdges - 1).contains(quickPattern)
-         }
-
-      self.efractoid
-         .expand(1)
-         .filter(edgeFilterFunc)
-         .explore(numEdges)
+      val patternsBc = sc.broadcast(patterns.collect())
+      val app = new QuerySpecializationPO(patternsBc)
+      app.apply(self)
    }
 
    /**
@@ -958,23 +941,17 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * computation: given a pattern, obtain subgraph instances of pattern
     * specializations of that pattern. A pattern specialization is defined as
     * the given pattern with an additional edge.
-    * @param pattern query
+    * @param _pattern query
     * @return new fractoid
     */
-   def querySpecializationPAPO(pattern: Pattern)
+   def querySpecializationPAPO(_pattern: Pattern)
    : Fractoid[EdgeInducedSubgraph] = {
-      pattern.setInduced(false)
-      pattern.setVertexLabeled(true)
-      pattern.setEdgeLabeled(false)
-
-      val numVertices = pattern.getNumberOfVertices
-
-      val fractoid = self.pfractoid(pattern)
-         .expand(numVertices)
-         .efractoid
-         .expand(1, classOf[AllEdgesSubgraphEnumerator])
-
-      fractoid
+      _pattern.setInduced(false)
+      _pattern.setVertexLabeled(true)
+      _pattern.setEdgeLabeled(false)
+      val pattern = self.pfractoid(_pattern).pattern
+      val app = new QuerySpecializationPAPO(pattern)
+      app.apply(self)
    }
 
    /**

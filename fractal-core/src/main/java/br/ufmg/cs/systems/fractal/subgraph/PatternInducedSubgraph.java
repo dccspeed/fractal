@@ -432,7 +432,6 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       extensions.setFrom(extensionsSet);
    }
 
-   @Override
    public void computeFirstLevelExtensions(Computation computation,
                                            IntArrayList extensions) {
       Pattern pattern = computation.getPattern();
@@ -441,11 +440,21 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       int myPartitionId = computation.getPartitionId();
       MainGraph graph = computation.getConfig().getMainGraph();
 
+      computeFirstLevelExtensions(pattern, totalNumWords, numPartitions,
+              myPartitionId, graph, extensions);
+   }
+
+   @Override
+   public void computeFirstLevelExtensions(Pattern pattern,
+                                           int totalNumWords,
+                                           int numPartitions, int partitionId,
+                                           MainGraph graph,
+                                           IntArrayList extensions) {
       VertexPredicate vertexPredicate =
               pattern.explorationPlan().vertexPredicate(0);
       boolean vertexLabeled = pattern.vertexLabeled();
 
-      for (int u = myPartitionId; u < totalNumWords; u += numPartitions) {
+      for (int u = partitionId; u < totalNumWords; u += numPartitions) {
          if (graph.isVertexValid(u) &&
                  (!vertexLabeled || vertexPredicate.test(u))) extensions.add(u);
       }

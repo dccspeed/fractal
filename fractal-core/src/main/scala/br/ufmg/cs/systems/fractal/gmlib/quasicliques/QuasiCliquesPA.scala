@@ -3,7 +3,7 @@ package br.ufmg.cs.systems.fractal.gmlib.quasicliques
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplication
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternUtilsRDD}
 import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph
-import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, IntArrayListView}
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
 import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
 
 /**
@@ -52,7 +52,8 @@ class QuasiCliquesPA(maxNumVertices: Int, minDensity: Double)
       val fc = fg.fractalContext
       val sc = fc.sparkContext
       val minDegree = Math.ceil(minDensity * (maxNumVertices - 1)).toInt
-      val patternCandidates = PatternUtilsRDD.vertexPatternsRDD(sc, maxNumVertices)
+      val patternCandidates = PatternUtilsRDD
+         .getOrGenerateVertexPatternsRDD(sc, maxNumVertices)
       val quasiCliquePatterns = patternCandidates
          .filter(p => quasiCliquePatternFilter(p, minDegree))
          .map(p => {

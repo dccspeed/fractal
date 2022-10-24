@@ -594,6 +594,9 @@ case class PComputationContainer [S <: PatternInducedSubgraph]
       _processCompute (iter, this)
    override def nextComputation(): Computation[S] = _nextComputation
    override def getPattern(): Pattern = _pattern
+   override def setPattern(pattern: Pattern): Unit = {
+      _pattern = pattern
+   }
    override def getSubgraphClass: Class[_ <: Subgraph] = _subgraphClass
    override def getSubgraphEnumeratorClass: Class[_ <: SubgraphEnumerator[S]] =
       _subgraphEnumeratorClass

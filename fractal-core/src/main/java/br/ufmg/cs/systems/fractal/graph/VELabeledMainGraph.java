@@ -2,15 +2,18 @@ package br.ufmg.cs.systems.fractal.graph;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
+import br.ufmg.cs.systems.fractal.pattern.Pattern;
+import br.ufmg.cs.systems.fractal.pattern.PatternEdge;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.*;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
+import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListPool;
 import br.ufmg.cs.systems.fractal.util.pool.IntSetPool;
 import com.koloboke.collect.IntCollection;
-import com.koloboke.collect.map.LongIntMap;
-import com.koloboke.collect.map.hash.HashLongIntMaps;
+import com.koloboke.collect.map.IntIntMap;
+import com.koloboke.collect.map.hash.HashIntIntMaps;
 import com.koloboke.collect.set.IntSet;
 import com.koloboke.collect.set.hash.HashIntSets;
 import org.apache.hadoop.fs.FileSystem;
@@ -23,7 +26,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.SequenceInputStream;
 import java.util.ArrayList;
-import java.util.BitSet;
 import java.util.function.IntConsumer;
 
 public class VELabeledMainGraph implements MainGraph {
@@ -625,6 +627,55 @@ public class VELabeledMainGraph implements MainGraph {
       }
    }
 
+   public final void init(Pattern pattern) throws IOException {
+      Configuration configuration = pattern.getConfig();
+      intArrayListPool = IntArrayListPool.instance();
+      edgePredicate = configuration.getEdgeFilteringPredicate();
+      vertexPredicate = configuration.getVertexFilteringPredicate();
+      long start = System.currentTimeMillis();
+
+      readMetadataFromPattern(pattern);
+
+      if (pattern.vertexLabeled()) {
+         readVertexLabelsFromPattern(pattern);
+      }
+
+      //if (pattern.edgeLabeled()) {
+      //   readEdgeLabelsFromPattern(pattern);
+      //}
+
+      readAdjacencyListsFromPattern(pattern);
+
+      LOG.info("numVertices " + numVertices);
+      LOG.info("numValidVertices " + numValidVertices);
+      LOG.info("numEdges " + numEdges);
+      LOG.info("numValidEdges " + numValidEdges);
+      LOG.info("vertexNeighborhoodIdx " + vertexNeighborhoodIdx.size());
+      LOG.info("vertexNeighborhoods " + vertexNeighborhoods.size());
+      LOG.info("edgeNeighborhoods " + edgeNeighborhoods.size());
+      LOG.info("edgeSrcs " + edgeSrcs.size());
+      LOG.info("edgeDsts " + edgeDsts.size());
+
+      if (vertexLabelsIdx != null) {
+         LOG.info("vertexLabelsIdx " + vertexLabelsIdx.size());
+      }
+
+      if (vertexLabels != null) {
+         LOG.info("vertexLabels " + vertexLabels.size());
+      }
+
+      if (edgeLabelsIdx != null) {
+         LOG.info("edgeLabelsIdx " + edgeLabelsIdx.size());
+      }
+
+      if (edgeLabels != null) {
+         LOG.info("edgeLabels " + edgeLabels.size());
+      }
+
+      long elapsed = System.currentTimeMillis() - start;
+      LOG.info("GraphReading took " + elapsed + " ms");
+   }
+
    @Override
    public final void init(Configuration configuration) throws IOException {
       intArrayListPool = IntArrayListPool.instance();
@@ -769,6 +820,17 @@ public class VELabeledMainGraph implements MainGraph {
       return is;
    }
 
+   private void readMetadataFromPattern(Pattern pattern) {
+      numVertices = pattern.getNumberOfVertices();
+      numValidVertices = numVertices;
+      numEdges = pattern.getNumberOfEdges();
+      numValidEdges = numEdges;
+
+      uLabelsView = new IntArrayListView();
+      vLabelsView = new IntArrayListView();
+      eLabelsView = new IntArrayListView();
+   }
+
    private void readMetadataFromInputStream(InputStream is) {
       LOG.info("Reading metadata from input stream: " + is);
       try {
@@ -788,6 +850,69 @@ public class VELabeledMainGraph implements MainGraph {
       }
    }
 
+   private void readAdjacencyListsFromPattern(Pattern pattern) {
+      vertexNeighborhoodIdx = new IntArrayList(numVertices + 1);
+      vertexNeighborhoods = new IntArrayList(numEdges * 2);
+      edgeNeighborhoods = new IntArrayList(numEdges * 2);
+      edgeSrcs = new IntArrayList(numEdges);
+      edgeDsts = new IntArrayList(numEdges);
+
+      ObjArrayList<IntArrayList> adjLists = new ObjArrayList<>(numVertices);
+
+      for (int u = 0; u < numVertices; ++u) {
+         adjLists.add(new IntArrayList(numVertices));
+      }
+
+      // build adjacency lists
+      for (PatternEdge pedge : pattern.getEdges()) {
+         int src = pedge.getSrcPos();
+         int dst = pedge.getDestPos();
+         adjLists.getu(src).add(dst);
+         adjLists.getu(dst).add(src);
+      }
+
+      // sort adjacency lists
+      for (int u = 0; u < numVertices; ++u) {
+         adjLists.getu(u).sort();
+      }
+
+      // build edge ids
+      ObjArrayList<IntIntMap> edgeToEdgeIdx = new ObjArrayList<>(numVertices);
+
+      for (int u = 0; u < numVertices; ++u) {
+         edgeToEdgeIdx.add(HashIntIntMaps.newUpdatableMap(numVertices));
+      }
+
+      // add adjacency list to this graph
+      int nextEdgeId = 0;
+      for (int u = 0; u < numVertices; ++u) {
+         addVertex(u);
+         IntArrayList uneighbors = adjLists.getu(u);
+         for (int i = 0; i < uneighbors.size(); ++i) {
+            int v = uneighbors.getu(i);
+            if (u < v) { // new edge id
+               int e = nextEdgeId++;
+               edgeToEdgeIdx.get(u).put(v, e);
+               addEdge(u, v, e, true);
+            } else { // existing edge id
+               int e = edgeToEdgeIdx.get(v).get(u);
+               addEdge(u, v, e, true);
+            }
+         }
+      }
+
+      // for convenience
+      vertexNeighborhoodIdx.add(vertexNeighborhoods.size());
+
+      // sanity check
+      if (vertexNeighborhoodIdx.size() != numVertices + 1
+              || vertexNeighborhoods.size() != numValidEdges*2
+              || edgeNeighborhoods.size() != numValidEdges*2
+              || edgeSrcs.size() != numEdges
+              || edgeDsts.size() != numEdges) {
+         throw new RuntimeException("Issue reading adjacency lists.");
+      }
+   }
    private void readAdjacencyListsFromInputStream(InputStream is) {
       LOG.info("Reading adjacency lists from input stream: " + is);
 
@@ -854,6 +979,27 @@ public class VELabeledMainGraph implements MainGraph {
               || edgeSrcs.size() != numEdges
               || edgeDsts.size() != numEdges) {
          throw new RuntimeException("Issue reading adjacency lists.");
+      }
+   }
+
+   protected void readVertexLabelsFromPattern(Pattern pattern) {
+      vertexLabelsIdx = new IntArrayList(numVertices + 1);
+      vertexLabels = new IntArrayList(numVertices); // at least
+
+      IntArrayList patternVertexLabels = pattern.getVertexLabels(pattern.vertexLabeled());
+
+      for (int u = 0; u < numVertices; ++u) {
+         vertexLabelsIdx.add(vertexLabels.size());
+         int ulabel = patternVertexLabels.getu(u);
+         addVertexLabel(u, ulabel);
+      }
+
+      vertexLabelsIdx.add(vertexLabels.size());
+
+      // sanity check
+      if (vertexLabelsIdx.size() != numVertices + 1
+              || patternVertexLabels.size() < numVertices) {
+         throw new RuntimeException("Issue reading vertex labels.");
       }
    }
 

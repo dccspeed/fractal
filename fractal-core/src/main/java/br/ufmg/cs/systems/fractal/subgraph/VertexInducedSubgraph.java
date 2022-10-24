@@ -91,8 +91,17 @@ public class VertexInducedSubgraph extends BasicSubgraph {
       int myPartitionId = computation.getPartitionId();
       MainGraph graph = computation.getConfig().getMainGraph();
 
+      computeFirstLevelExtensions(null, totalNumWords, numPartitions,
+              myPartitionId, graph, extensions);
+   }
+
+   @Override
+   public void computeFirstLevelExtensions(Pattern pattern, int totalNumWords,
+                                           int numPartitions,
+                                           int partitionId, MainGraph graph,
+                                           IntArrayList extensions) {
       // round-robin
-      for (int u = myPartitionId; u < totalNumWords; u += numPartitions) {
+      for (int u = partitionId; u < totalNumWords; u += numPartitions) {
          if (graph.isVertexValid(u)) extensions.add(u);
       }
    }

@@ -198,19 +198,19 @@ case class SparkConfiguration(confs: Map[String, Any])
    }
 
    override def getInteger(key: String, defaultValue: Integer) =
-      getValue(key, defaultValue).asInstanceOf[Int]
+      getValue(key, defaultValue).toString.toInt
 
    override def getLong(key: String, defaultValue: java.lang.Long) =
-      getValue(key, defaultValue).asInstanceOf[Long]
+      getValue(key, defaultValue).toString.toLong
 
    override def getDouble(key: String, defaultValue: java.lang.Double) =
-      getValue(key, defaultValue).asInstanceOf[Double]
+      getValue(key, defaultValue).toString.toDouble
 
    override def getFloat(key: String, defaultValue: java.lang.Float) =
-      getValue(key, defaultValue).asInstanceOf[Float]
+      getValue(key, defaultValue).toString.toFloat
 
    override def getString(key: String, defaultValue: String) =
-      getValue(key, defaultValue).asInstanceOf[String]
+      getValue(key, defaultValue).toString
 
    override def getBoolean(key: String, defaultValue: java.lang.Boolean) = {
       val value = getValue(key, defaultValue)

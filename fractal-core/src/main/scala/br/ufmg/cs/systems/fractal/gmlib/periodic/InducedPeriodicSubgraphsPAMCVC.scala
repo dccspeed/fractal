@@ -147,7 +147,8 @@ class InducedPeriodicSubgraphsPAMCVC
       val sc = fgraph.fractalContext.sparkContext
 
       // all patterns with *numVertices* vertices
-      val patternsRDD = PatternUtilsRDD.vertexPatternsRDD(sc, numVertices)
+      val patternsRDD = PatternUtilsRDD
+         .getOrGenerateVertexPatternsRDD(sc, numVertices)
 
       // caching this RDD because we are going to consume the elements
       // partition per partition (reducing memory footprint)

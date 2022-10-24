@@ -89,8 +89,7 @@ class SparkFromScratchEngine[S <: Subgraph]
       }
 
       reportStatsExecutor.scheduleAtFixedRate(periodicReport,
-         Configuration.INFO_PERIOD_DEFAULT_MS,
-         Configuration.INFO_PERIOD_DEFAULT_MS, TimeUnit.MILLISECONDS)
+         infoPeriod, infoPeriod, TimeUnit.MILLISECONDS)
    }
 
    override def init(): Unit = {
@@ -188,7 +187,9 @@ class SparkFromScratchEngine[S <: Subgraph]
       }
 
       // last progress report
-      subgraphAggregation.report(this)
+      if (subgraphAggregation != null) {
+         subgraphAggregation.report(this)
+      }
 
       // subgraph aggregation
       subgraphAggregation = null

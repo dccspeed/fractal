@@ -1161,4 +1161,5 @@ public abstract class BasicPattern implements Pattern {
    public boolean edgeLabeled() {
       return edgeLabeled;
    }
+
 }

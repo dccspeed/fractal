@@ -16,8 +16,8 @@ class MotifsPA(numVertices: Int)
          var motifCountRDDs = List.empty[RDD[(Pattern,Long)]]
 
          // canonical patterns RDD
-         val canonicalPatternsRDD = PatternUtilsRDD.vertexPatternsRDD(
-            sc, numVertices)
+         val canonicalPatternsRDD = PatternUtilsRDD
+            .getOrGenerateVertexPatternsRDD(sc, numVertices)
 
          // local iterator for better memory footprint
          val iter = PatternUtilsRDD.localIterator(canonicalPatternsRDD)

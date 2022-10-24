@@ -5,6 +5,19 @@ import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import java.io.*;
 
 public class EdgePredicates extends ObjArrayList<EdgePredicate> implements Externalizable {
+
+   public static EdgePredicates trueEdgePredicates = new EdgePredicates() {
+      @Override
+      public EdgePredicate get(int i) {
+         return EdgePredicate.trueEdgePredicate;
+      }
+
+      @Override
+      public EdgePredicate getu(int i) {
+         return EdgePredicate.trueEdgePredicate;
+      }
+   };
+
    public void write(DataOutput out) throws IOException {
       out.writeInt(size());
       for (int i = 0; i < size(); ++i) {

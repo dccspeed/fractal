@@ -5,7 +5,6 @@ import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
-import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
 import br.ufmg.cs.systems.fractal.util.ReflectionSerializationUtils;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import org.apache.log4j.Logger;
@@ -147,6 +146,11 @@ public abstract class BasicComputation<S extends Subgraph>
    @Override
    public Pattern getPattern() {
       return null;
+   }
+
+   @Override
+   public void setPattern(Pattern pattern) {
+
    }
 
    @Override

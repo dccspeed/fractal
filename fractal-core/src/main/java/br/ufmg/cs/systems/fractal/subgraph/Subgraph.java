@@ -5,6 +5,7 @@ import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import jdk.jfr.internal.tool.Main;
 
 public interface Subgraph {
    void addWord(int word);
@@ -14,6 +15,12 @@ public interface Subgraph {
    void computeExtensions(Computation computation, IntArrayList extensions);
 
    void computeFirstLevelExtensions(Computation computation,
+                                    IntArrayList extensions);
+
+   void computeFirstLevelExtensions(Pattern pattern,
+                                    int totalNumWords,
+                                    int numPartitions,
+                                    int partitionId, MainGraph graph,
                                     IntArrayList extensions);
 
    Configuration getConfig();

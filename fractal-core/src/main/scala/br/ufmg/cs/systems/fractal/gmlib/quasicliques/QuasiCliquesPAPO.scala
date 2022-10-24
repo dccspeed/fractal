@@ -54,7 +54,7 @@ class QuasiCliquesPAPO(maxNumVertices: Int, minDensity: Double)
       val minDegree = Math.ceil(minDensity * (maxNumVertices - 1)).toInt
       val minDegreeSubpattern = minDegree - 1
       val subpatternCandidates = PatternUtilsRDD
-         .vertexPatternsRDD(sc, maxNumVertices - 1)
+         .getOrGenerateVertexPatternsRDD(sc, maxNumVertices - 1)
       val quasiCliqueSubpatterns = subpatternCandidates
          .filter(p => quasiCliquePatternFilter(p, minDegreeSubpattern))
          .map(p => {

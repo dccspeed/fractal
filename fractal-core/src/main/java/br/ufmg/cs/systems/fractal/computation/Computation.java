@@ -36,6 +36,9 @@ public interface Computation<S extends Subgraph> extends Serializable {
    int getNumberPartitions();
    int getPartitionId();
    Pattern getPattern();
+
+   void setPattern(Pattern pattern);
+
    int getStep();
    SubgraphAggregation<S> getSubgraphAggregation();
    Class<? extends Subgraph> getSubgraphClass();

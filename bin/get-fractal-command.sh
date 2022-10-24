@@ -52,6 +52,7 @@ subgraphsearch="${subgraphsearch}|label_search_pa"
 
 keywordsearch="keyword_search_po"
 keywordsearch="${keywordsearch}|minimal_keyword_search_po"
+keywordsearch="${keywordsearch}|minimal_keyword_search_pa"
 
 queryspecialization="query_specialization_po"
 queryspecialization="${queryspecialization}|query_specialization_pa"
@@ -61,9 +62,12 @@ patternquerygenerator="pattern_query_generator"
 
 labelbasedquerygenerator="label_query_generator"
 
+canonicalpatterngenerator="canonical_pattern_generator_vertex"
+
 apps="${gqueryings}|${motifss}|${cliquess}|${quasicliquess}|${fsms}"
 apps="${apps}|${subgraphlisting}|${temporals}|${subgraphsearch}"
 apps="${apps}|${keywordsearch}|${extras}|${patternquerygenerator}"
+apps="${apps}|${canonicalpatterngenerator}"
 apps="${apps}|${labelbasedquerygenerator}|${queryspecialization}"
 
 usage="
@@ -333,44 +337,49 @@ ALGOPTION for '$app':
    mindensity=<between 0 and 1>            'Minimum density for quasi cliques'"
 	;;
 
-	pattern_querying_pa_mcvc)
-	required="inputgraph steps query"
-        appusage="
-
-ALGOPTION for '$app':
-   inputgraph=<file-path>                  'Input graph file path'
-   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
-   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
-	;;
-
-	pattern_querying_pa_mcvc_old)
-	required="inputgraph steps query"
-        appusage="
-
-ALGOPTION for '$app':
-   inputgraph=<file-path>                  'Input graph file path'
-   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
-   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
-	;;
 
 	pattern_querying_po)
-	required="inputgraph steps query"
+	required="inputgraph steps query plabeling"
         appusage="
 
 ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
-   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'
+   plabeling=n|v|e|ve                      'Pattern query labeling: (n) none, (v) vertices, (e) edges, (ve) vertices and edges'"
 	;;
 
 	pattern_querying_pa)
-	required="inputgraph steps query"
+	required="inputgraph steps query plabeling"
         appusage="
 
 ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
-   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'
+   plabeling=n|v|e|ve                      'Pattern query labeling: (n) none, (v) vertices, (e) edges, (ve) vertices and edges'"
+	;;
+
+	pattern_querying_pa_mcvc)
+	required="inputgraph steps query plabeling"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'
+   plabeling=n|v|e|ve                      'Pattern query labeling: (n) none, (v) vertices, (e) edges, (ve) vertices and edges'"
+	;;
+
+	pattern_querying_pa_mcvc_old)
+	required="inputgraph steps query plabeling"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'
+   plabeling=n|v|e|ve                      'Pattern query labeling: (n) none, (v) vertices, (e) edges, (ve) vertices and edges'"
 	;;
 
 	pattern_querying_induced_pa)
@@ -488,6 +497,17 @@ ALGOPTION for '$app':
    gfiltering=true|false                   'Graph filtering: whether input graph should be filtered before enumeration'"
 	;;
 
+	minimal_keyword_search_pa)
+	required="inputgraph steps labelsset gfiltering"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   labelsset=l1,l2,...,ln                  'Labels set: keywords'
+   gfiltering=true|false                   'Graph filtering: whether input graph should be filtered before enumeration'"
+	;;
+
 	pattern_query_generator)
 	required="inputgraph steps fraction seed topk outputdir"
         appusage="
@@ -511,6 +531,16 @@ ALGOPTION for '$app':
    fraction=<between 0 and 1>              'Fraction of subgraphs to sample.'
    seed=<any long value>                   'Seed used for sampling labels at random'
    topk=1|2|...                            'How many patterns to draw from each category'"
+	;;
+
+	canonical_pattern_generator_vertex)
+	inputgraph="place-holder"
+	required="steps outputpath"
+        appusage="
+
+ALGOPTION for '$app':
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   outputpath                              'Path to save patterns (object file, RDDs)'"
 	;;
 
 	query_specialization_po)
@@ -577,7 +607,7 @@ uienabled=${uienabled:-false}
 app_class=${app_class:-br.ufmg.cs.systems.fractal.FractalSparkRunner}
 packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties ${PROFILER_OPTIONS}\""
-args=${args:-"$labeling $inputgraph $app $total_cores $steps $log_level $timelimit $fsmsupp $mindensity $query $fraction $periodicthreshold $labelsset $gfiltering $seed $topk $outputdir $configs"}
+args=${args:-"$labeling $inputgraph $app $total_cores $steps $log_level $timelimit $fsmsupp $mindensity $query $plabeling $fraction $periodicthreshold $labelsset $gfiltering $seed $topk $outputdir $outputpath $configs"}
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\

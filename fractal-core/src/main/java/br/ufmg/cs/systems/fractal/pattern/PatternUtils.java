@@ -4,13 +4,17 @@ import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgePool;
 import br.ufmg.cs.systems.fractal.util.TextFileParser;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import br.ufmg.cs.systems.fractal.util.pool.IntIntMapPool;
+import com.koloboke.collect.IntCursor;
 import com.koloboke.collect.ObjCursor;
 import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
 import com.koloboke.collect.map.hash.HashObjObjMap;
 import com.koloboke.collect.map.hash.HashObjObjMaps;
+import com.koloboke.collect.set.IntSet;
 import com.koloboke.collect.set.ObjSet;
+import com.koloboke.collect.set.hash.HashIntSets;
 import com.koloboke.collect.set.hash.HashObjSet;
 import com.koloboke.collect.set.hash.HashObjSets;
 import org.apache.hadoop.fs.FileSystem;
@@ -21,6 +25,7 @@ import javax.xml.soap.Text;
 import java.io.*;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.function.Consumer;
 
 public class PatternUtils {
    private static final Logger LOG = Logger.getLogger(PatternUtils.class);
@@ -333,83 +338,216 @@ public class PatternUtils {
 
       return newPattern;
    }
-
    public static ObjSet<Pattern> quickPatterns(Pattern pattern) {
-         int numVertices = pattern.getNumberOfVertices();
-         int numEdges = pattern.getNumberOfEdges();
-         IntArrayList vertices = new IntArrayList();
-         IntArrayList edges = new IntArrayList();
-         for (int u = 0; u < numVertices; ++u) vertices.add(u);
-         for (int e = 0; e < numEdges; ++e) edges.add(e);
+      int numVertices = pattern.getNumberOfVertices();
+      int numEdges = pattern.getNumberOfEdges();
+      IntArrayList vertices = new IntArrayList();
+      IntArrayList edges = new IntArrayList();
+      for (int u = 0; u < numVertices; ++u) vertices.add(u);
+      for (int e = 0; e < numEdges; ++e) edges.add(e);
 
-         Iterator<IntArrayList> orderings = vertices.permutations();
+      Iterator<IntArrayList> orderings = vertices.permutations();
 
-         ObjSet<Pattern> patterns = HashObjSets.newMutableSet();
-         ObjSet<Pattern> quickPatterns = HashObjSets.newMutableSet();
-         IntIntMap relabeling = HashIntIntMaps.newMutableMap();
+      ObjSet<Pattern> patterns = HashObjSets.newMutableSet();
+      ObjSet<Pattern> quickPatterns = HashObjSets.newMutableSet();
+      IntIntMap relabeling = HashIntIntMaps.newMutableMap();
 
-         // vertex permutation
-         while (orderings.hasNext()) {
-            IntArrayList ordering = orderings.next();
-            relabeling.clear();
-            for (int i = 0; i < ordering.size(); ++i) {
-               relabeling.put(i, ordering.get(i));
-            }
-
-            Pattern newPattern = pattern.copy();
-            newPattern.relabel(relabeling);
-            newPattern.getEdges().sort();
-            patterns.add(newPattern);
+      // vertex permutation
+      while (orderings.hasNext()) {
+         IntArrayList ordering = orderings.next();
+         relabeling.clear();
+         for (int i = 0; i < ordering.size(); ++i) {
+            relabeling.put(i, ordering.get(i));
          }
 
-         Iterator<IntArrayList> edgeOrderings = edges.permutations();
+         Pattern newPattern = pattern.copy();
+         newPattern.relabel(relabeling);
+         newPattern.getEdges().sort();
+         patterns.add(newPattern);
+      }
 
-         while (edgeOrderings.hasNext()) {
-            IntArrayList edgeOrdering = edgeOrderings.next();
-            // edge permutation
-            ObjCursor<Pattern> cur = patterns.cursor();
-            while (cur.moveNext()) {
-               Pattern relabeledPattern = cur.elem();
-               Pattern newPattern = relabeledPattern.copy();
+      Iterator<IntArrayList> edgeOrderings = edges.permutations();
 
-               for (int i = 0; i < edgeOrdering.size(); ++i) {
-                  int targetEdgeIdx = edgeOrdering.get(i);
-                  PatternEdge targetEdge = relabeledPattern.getEdges().get(targetEdgeIdx);
-                  newPattern.getEdges().get(i).setFromOther(targetEdge);
-               }
+      while (edgeOrderings.hasNext()) {
+         IntArrayList edgeOrdering = edgeOrderings.next();
+         // edge permutation
+         ObjCursor<Pattern> cur = patterns.cursor();
+         while (cur.moveNext()) {
+            Pattern relabeledPattern = cur.elem();
+            Pattern newPattern = relabeledPattern.copy();
+
+            for (int i = 0; i < edgeOrdering.size(); ++i) {
+               int targetEdgeIdx = edgeOrdering.get(i);
+               PatternEdge targetEdge = relabeledPattern.getEdges().get(targetEdgeIdx);
+               newPattern.getEdges().get(i).setFromOther(targetEdge);
+            }
 
 
-               boolean validOrdering = true;
-               PatternEdgeArrayList newPatternEdges = newPattern.getEdges();
-               PatternEdge firstEdge = newPatternEdges.get(0);
+            boolean validOrdering = true;
+            PatternEdgeArrayList newPatternEdges = newPattern.getEdges();
+            PatternEdge firstEdge = newPatternEdges.get(0);
 
-               if (firstEdge.getSrcPos() != 0 || firstEdge.getDestPos() != 1) {
-                  validOrdering = false;
-               } else {
-                  int lastVisitedVertex = 1;
-                  for (int i = 1; i < newPatternEdges.size(); ++i) {
-                     PatternEdge nextEdge = newPatternEdges.get(i);
-                     int src = nextEdge.getSrcPos();
-                     int dst = nextEdge.getDestPos();
-                     if (src > lastVisitedVertex || dst > lastVisitedVertex + 1) {
-                        validOrdering = false;
-                        break;
-                     } else if (dst == lastVisitedVertex + 1) {
-                        lastVisitedVertex++;
-                     }
+            if (firstEdge.getSrcPos() != 0 || firstEdge.getDestPos() != 1) {
+               validOrdering = false;
+            } else {
+               int lastVisitedVertex = 1;
+               for (int i = 1; i < newPatternEdges.size(); ++i) {
+                  PatternEdge nextEdge = newPatternEdges.get(i);
+                  int src = nextEdge.getSrcPos();
+                  int dst = nextEdge.getDestPos();
+                  if (src > lastVisitedVertex || dst > lastVisitedVertex + 1) {
+                     validOrdering = false;
+                     break;
+                  } else if (dst == lastVisitedVertex + 1) {
+                     lastVisitedVertex++;
                   }
                }
+            }
 
-               //LOG.info(relabeledPattern + " " + newPattern + " "
-               //        + edgeOrdering +
-               //        " " + validOrdering);
+            //LOG.info(relabeledPattern + " " + newPattern + " "
+            //        + edgeOrdering +
+            //        " " + validOrdering);
 
-               if (validOrdering) quickPatterns.add(newPattern);
+            if (validOrdering) {
+               quickPatterns.add(newPattern);
+            }
 
+         }
+      }
+
+      return quickPatterns;
+   }
+
+   public static ObjSet<Pattern> quickPatterns2(Pattern _pattern) {
+      Pattern pattern = _pattern.copy();
+      increasingPositions(pattern);
+      int numVertices = pattern.getNumberOfVertices();
+      int numEdges = pattern.getNumberOfEdges();
+      PatternEdgeArrayList edges = pattern.getEdges();
+      ObjSet<Pattern> quickPatterns = HashObjSets.newMutableSet();
+
+      // build pattern edges adjacency lists
+      ObjArrayList<IntArrayList> edgesAdjacencyLists = new ObjArrayList<>(numEdges);
+      {
+         ObjArrayList<IntArrayList> adjacentEdgeIdxs =
+                 new ObjArrayList<>(numVertices);
+         for (int i = 0; i < numVertices; ++i) {
+            adjacentEdgeIdxs.add(new IntArrayList(numEdges));
+         }
+
+         for (int i = 0; i < numEdges; ++i) {
+            PatternEdge pedge = edges.getu(i);
+            adjacentEdgeIdxs.getu(pedge.getSrcPos()).add(i);
+            adjacentEdgeIdxs.getu(pedge.getDestPos()).add(i);
+         }
+
+         for (int i = 0; i < numEdges; ++i) {
+            edgesAdjacencyLists.add(new IntArrayList(numEdges));
+         }
+
+         for (int i = 0; i < numVertices; ++i) {
+            IntArrayList adjacentEdges = adjacentEdgeIdxs.getu(i);
+            for (int j = 0; j < adjacentEdges.size(); ++j) {
+               int edgeIdx1 = adjacentEdges.getu(j);
+               for (int k = j + 1; k < adjacentEdges.size(); ++k) {
+                  int edgeIdx2 = adjacentEdges.getu(k);
+                  edgesAdjacencyLists.getu(edgeIdx1).add(edgeIdx2);
+                  edgesAdjacencyLists.getu(edgeIdx2).add(edgeIdx1);
+               }
+            }
+         }
+      }
+
+      IntIntMap relabeling = HashIntIntMaps.newUpdatableMap(numVertices);
+      Consumer<IntArrayList> consumer = edgeOrdering -> {
+         Pattern quickPattern = pattern.copy();
+         PatternEdgeArrayList quickEdges = quickPattern.getEdges();
+
+         relabeling.clear();
+         for (int i = 0; i < numEdges; ++i) {
+            int edgeIdx = edgeOrdering.getu(i);
+            PatternEdge pedge = edges.getu(edgeIdx);
+            quickEdges.getu(i).setFromOther(pedge);
+            int src = pedge.getSrcPos();
+            int dst = pedge.getDestPos();
+            if (!relabeling.containsKey(src)) {
+               relabeling.put(src, relabeling.size());
+            }
+            if (!relabeling.containsKey(dst)) {
+               relabeling.put(dst, relabeling.size());
             }
          }
 
-         return quickPatterns;
+         Pattern quickPattern2 = quickPattern.copy();
+
+         quickPattern.relabel(relabeling);
+         quickPatterns.add(quickPattern);
+
+         PatternEdge firstEdge = edges.getu(0);
+         relabeling.put(firstEdge.getDestPos(), 0);
+         relabeling.put(firstEdge.getSrcPos(), 1);
+
+         quickPattern2.getEdges().get(0).invert();
+         quickPattern2.relabel(relabeling);
+         quickPatterns.add(quickPattern2);
+
+         //LOG.warn("EdgeOrdering " + edgeOrdering);
+         //LOG.warn("QuickPattern " + quickPattern);
+      };
+
+      IntSet extensions = HashIntSets.newMutableSet(numEdges);
+      IntArrayList edgeOrdering = new IntArrayList(numEdges);
+      for (int edgeIdx = 0; edgeIdx < numEdges; ++edgeIdx) {
+         edgeOrdering.clear();
+         edgeOrdering.add(edgeIdx);
+         extensions.clear();
+         extensions.addAll(edgesAdjacencyLists.getu(edgeIdx));
+         enumerate(edgesAdjacencyLists, consumer, edgeOrdering, extensions);
+      }
+
+      return quickPatterns;
+   }
+
+   private static void enumerate(ObjArrayList<IntArrayList> edgesAjacencyLists,
+                                 Consumer<IntArrayList> consumer,
+                                 IntArrayList edgeOrdering,
+                                 IntSet extensions) {
+
+      if (extensions.isEmpty()) {
+         consumer.accept(edgeOrdering);
+         return;
+      }
+
+      IntCursor cur = extensions.cursor();
+      IntSet newExtensions = HashIntSets.newMutableSet(extensions);
+      while (cur.moveNext()) {
+         int edgeIdx = cur.elem();
+         edgeOrdering.add(edgeIdx);
+
+         // new extensions
+         newExtensions.removeInt(edgeIdx);
+         IntArrayList extensionsToAdd = edgesAjacencyLists.getu(edgeIdx);
+         for (int i = 0; i < extensionsToAdd.size(); ++i) {
+            newExtensions.add(extensionsToAdd.getu(i));
+         }
+
+         for (int i = 0; i < edgeOrdering.size(); ++i) {
+            newExtensions.removeInt(edgeOrdering.getu(i));
+         }
+
+         // recursive call
+         enumerate(edgesAjacencyLists, consumer, edgeOrdering, newExtensions);
+
+         // back to old extensions
+         newExtensions.add(edgeIdx);
+         for (int i = 0; i < extensionsToAdd.size(); ++i) {
+            int oldExtensions = extensionsToAdd.getu(i);
+            if (!extensions.contains(oldExtensions)) {
+               newExtensions.removeInt(oldExtensions);
+            }
+         }
+         edgeOrdering.removeLast();
+      }
    }
 
    public static HashSet<Pattern>[] quickPatternsPerLevel(ObjSet<Pattern> quickPatterns) {
@@ -513,6 +651,10 @@ public class PatternUtils {
    }
 
    public static Pattern fromFS(String patternDirPath) throws IOException {
+      return fromFS(patternDirPath, true, true);
+   }
+   public static Pattern fromFS(String patternDirPath, boolean vertexLabeled,
+                                boolean edgeLabeled) throws IOException {
       Pattern pattern = configuration.createPattern();
       FileSystem fs = FileSystem.get(new org.apache.hadoop.conf.Configuration());
 
@@ -545,7 +687,7 @@ public class PatternUtils {
       IntArrayList vlabels = new IntArrayList();
       boolean hasVlabels;
       hadoopPath = new Path(vlabelsFilePath);
-      if (fs.exists(hadoopPath)) {
+      if (vertexLabeled && fs.exists(hadoopPath)) {
          hasVlabels = true;
          InputStream is = null;
          try {
@@ -585,7 +727,7 @@ public class PatternUtils {
       IntArrayList elabels = new IntArrayList();
       boolean hasElabels;
       hadoopPath = new Path(elabelsFilePath);
-      if (fs.exists(hadoopPath)) {
+      if (edgeLabeled && fs.exists(hadoopPath)) {
          hasElabels = true;
          InputStream is = null;
          try {

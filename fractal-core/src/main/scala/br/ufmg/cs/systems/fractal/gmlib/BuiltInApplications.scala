@@ -1,6 +1,7 @@
 package br.ufmg.cs.systems.fractal.gmlib
 
 import br.ufmg.cs.systems.fractal.computation.{AllEdgesSubgraphEnumerator, Computation, RandomWalkEnumerator, SamplingEnumerator}
+import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.gmlib.clique.{KClistEnumerator, MaximalCliquesEnumerator}
 import br.ufmg.cs.systems.fractal.gmlib.fsm._
 import br.ufmg.cs.systems.fractal.gmlib.kws.{KeywordSearchPO, MinimalKeywordSearchPA, MinimalKeywordSearchPO}
@@ -663,7 +664,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * @return Fractoid with the initial state for quasi-cliques
     */
    def quasiCliquesPA(numVertices: Int, minDensity: Double)
-   : Seq[Fractoid[PatternInducedSubgraph]] = {
+   : (Int, Iterator[Fractoid[PatternInducedSubgraph]]) = {
       val app = new QuasiCliquesPA(numVertices, minDensity)
       app.apply(self)
    }
@@ -675,7 +676,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * @return Fractoid with the initial state for quasi-cliques
     */
    def quasiCliquesPAPO(numVertices: Int, minDensity: Double)
-   : Seq[Fractoid[VertexInducedSubgraph]] = {
+   : (Int,Iterator[Fractoid[VertexInducedSubgraph]]) = {
       val app = new QuasiCliquesPAPO(numVertices, minDensity)
       app.apply(self)
    }
@@ -730,10 +731,10 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * Finds induced subgraphs containing only given labels (pattern-aware)
     * @param labelsSet target labels
     * @param numVertices number of vertices in the induced subgraphs
-    * @return fractoid representing the computation
+    * @return number of fractoids, fractoid representing the computation
     */
    def labelSearchPA(labelsSet: Set[Int], numVertices: Int)
-   : Iterator[Fractoid[PatternInducedSubgraph]] = {
+   : (Int, Iterator[Fractoid[PatternInducedSubgraph]]) = {
       val labelFilter
       : (PatternInducedSubgraph, Computation[PatternInducedSubgraph]) => Boolean =
          (s,c) => {
@@ -756,13 +757,15 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       val patterns = PatternUtilsRDD
          .getOrGenerateVertexPatternsRDD(sc, numVertices)
 
-      patterns.toLocalIterator.map(pattern => {
+      val numSteps = patterns.count().toInt
+      val sortedPatterns = patterns.sortBy(p => -p.getNumberOfEdges)
+      (numSteps, sortedPatterns.toLocalIterator.map(pattern => {
          pattern.setInduced(true)
          pattern.setVertexLabeled(false)
          self.pfractoid(pattern)
             .expand(1).filter(labelFilter)
             .explore(numVertices - 1)
-      })
+      }))
    }
 
    /**

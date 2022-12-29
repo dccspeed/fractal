@@ -78,6 +78,9 @@ case class SparkConfiguration(confs: Map[String, Any])
       // time limit
       updateIfExists("time_limit", CONF_TIME_LIMIT_MS)
 
+      // step time limit
+      updateIfExists("step_time_limit", CONF_STEP_TIME_LIMIT_MS)
+
       // computation classes
       updateIfExists("computation", CONF_COMPUTATION_CLASS)
 
@@ -149,6 +152,7 @@ case class SparkConfiguration(confs: Map[String, Any])
       infoPeriod = getLong(INFO_PERIOD, INFO_PERIOD_DEFAULT_MS)
       startTime = getLong(CONF_START_TIME_MS, CONF_START_TIME_MS_DEFAULT)
       timeLimit = getLong(CONF_TIME_LIMIT_MS, CONF_TIME_LIMIT_MS_DEFAULT)
+      stepTimeLimitMs = getLong(CONF_STEP_TIME_LIMIT_MS, CONF_STEP_TIME_LIMIT_MS_DEFAULT)
 
       // common configs
       setMainGraphClass(

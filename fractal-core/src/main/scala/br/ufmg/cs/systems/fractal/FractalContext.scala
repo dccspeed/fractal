@@ -45,6 +45,22 @@ class FractalContext(sc: SparkContext, logLevel: String = "warn")
       callback(fractoid)
    }
 
+   def submitFractalStepWithElapsedTimeMs[S <: Subgraph, T]
+   (fractoid: Fractoid[S])(callback: Fractoid[S] => T): (T,Long) = {
+      val start = System.currentTimeMillis()
+      val result = callback(fractoid)
+      val elapsed = System.currentTimeMillis() - start
+      (result, elapsed)
+   }
+
+   def trySubmitFractalStep[S <: Subgraph, T]
+   (fractoid: Fractoid[S])(callback: Fractoid[S] => T): Try[T] = {
+      import scala.concurrent.ExecutionContext.Implicits.global
+      val future = Future(callback(fractoid))
+      Await.ready(future, Duration.Inf)
+      future.value.get
+   }
+
    def trySubmitFractalSteps[S <: Subgraph, T]
    (fractoids: Seq[Fractoid[S]])(callback: Fractoid[S] => T): Seq[Try[T]] = {
       import scala.concurrent.ExecutionContext.Implicits.global
@@ -52,6 +68,19 @@ class FractalContext(sc: SparkContext, logLevel: String = "warn")
          val future = Future(callback(fractoid))
          Await.ready(future, Duration.Inf)
          future.value.get
+      })
+   }
+
+   def trySubmitFractalStepsWithElapsedTimeMs[S <: Subgraph, T]
+   (fractoids: Seq[Fractoid[S]])(callback: Fractoid[S] => T): Seq[(Try[T],Long)]
+   = {
+      import scala.concurrent.ExecutionContext.Implicits.global
+      fractoids.map(fractoid => {
+         val start = System.currentTimeMillis()
+         val future = Future(callback(fractoid))
+         Await.ready(future, Duration.Inf)
+         val elapsed = System.currentTimeMillis() - start
+         (future.value.get, elapsed)
       })
    }
 

@@ -1,6 +1,6 @@
 package br.ufmg.cs.systems.fractal.gmlib.fsm
 
-import br.ufmg.cs.systems.fractal.FractalGraph
+import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlanMCVC}
 import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph
 import br.ufmg.cs.systems.fractal.util.ScalaFractalFuncs.CustomSubgraphCallback
@@ -18,7 +18,7 @@ class FSMPAMCVC(minSupport: Int, maxNumEdges: Int)
     */
    override protected def canonicalPatternsSupports(fg: FractalGraph,
       pattern: Pattern)
-   : PatternsSupports = {
+   : (Fractoid[PatternInducedSubgraph], PatternsSupports) = {
       val explorationPlanMCVC = pattern.explorationPlan()
       val mcvcSize = explorationPlanMCVC.mcvcSize()
 
@@ -27,8 +27,9 @@ class FSMPAMCVC(minSupport: Int, maxNumEdges: Int)
             s.completeMatch(c, c.getPattern, cb)
          }
 
-      fg.pfractoid(pattern)
+      val fractoid = fg.pfractoid(pattern)
          .expand(mcvcSize)
+      val aggregation = fractoid
          .aggregationObjObjWithCallback[Pattern,MinImageSupport](
             key(pattern), value, aggregate, callback)
          .map { case (quickPatern,supp) =>
@@ -39,6 +40,7 @@ class FSMPAMCVC(minSupport: Int, maxNumEdges: Int)
             (canonicalPattern, supp)
          }
          .reduceByKey((s1,s2) => {s1.aggregate(s2); s1})
+      (fractoid, aggregation)
    }
 
    override protected def getPatternWithPlan(pattern: Pattern): Pattern = {

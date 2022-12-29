@@ -12,10 +12,12 @@ subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_po"
 subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_pa"
 subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_pa_mcvc"
 subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_sample_po"
+subgraphlisting="${subgraphlisting}|induced_subgraphs_listing_sample_pa"
 
 motifss="motifs_pa"
 motifss="${motifss}|motifs_pa_mcvc"
 motifss="${motifss}|motifs_sample_po"
+motifss="${motifss}|motifs_sample_pa"
 motifss="${motifss}|motifs_po"
 
 cliquess="cliques_custom_kclist"
@@ -206,6 +208,26 @@ ALGOPTION for '$app':
 	;;
 
 	induced_subgraphs_listing_sample_po)
+	required="inputgraph steps fraction"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   fraction=<fraction between 0 and 1>     'Fraction of subgraphs to be sampled uniformly at random'"
+	;;
+
+	induced_subgraphs_listing_sample_pa)
+	required="inputgraph steps fraction"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   fraction=<fraction between 0 and 1>     'Fraction of subgraphs to be sampled uniformly at random'"
+	;;
+
+	motifs_sample_pa)
 	required="inputgraph steps fraction"
         appusage="
 
@@ -602,12 +624,13 @@ total_cores=$((num_workers * worker_cores))
 deploy_mode=${deploy_mode:-client}
 log_level=${log_level:-info}
 timelimit=${timelimit:--1}
+steptimelimit=${steptimelimit:--1}
 jars=${jars:-""}
 uienabled=${uienabled:-false}
 app_class=${app_class:-br.ufmg.cs.systems.fractal.FractalSparkRunner}
 packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties ${PROFILER_OPTIONS}\""
-args=${args:-"$labeling $inputgraph $app $total_cores $steps $log_level $timelimit $fsmsupp $mindensity $query $plabeling $fraction $periodicthreshold $labelsset $gfiltering $seed $topk $outputdir $outputpath $configs"}
+args=${args:-"$labeling $inputgraph $app $total_cores $steps $log_level $steptimelimit $timelimit $fsmsupp $mindensity $query $plabeling $fraction $periodicthreshold $labelsset $gfiltering $seed $topk $outputdir $outputpath $configs"}
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\

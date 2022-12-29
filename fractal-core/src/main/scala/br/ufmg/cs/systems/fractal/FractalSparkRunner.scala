@@ -18,7 +18,7 @@ import java.util.function.BiPredicate
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration.{Duration, pairIntToDuration}
 import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 object SubgraphsListingPO extends Logging {
    val appid: String = "subgraphs_listing_po"
@@ -105,6 +105,50 @@ object InducedSubgraphsListingPO extends Logging {
    }
 }
 
+object InducedSubgraphsListingSamplePA extends Logging {
+   val appid: String = "induced_subgraphs_listing_sample_pa"
+
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             fraction: Double): Unit = {
+
+      val sc = fractalGraph.fractalContext.sparkContext
+
+      val fractionKey = "sampling_fraction"
+      val senumClass = classOf[SamplingEnumerator[PatternInducedSubgraph]]
+
+      val (numSubgraphs, elapsedMs) = FractalSparkRunner.time {
+
+         val patterns = PatternUtilsRDD.getOrGenerateVertexPatternsRDD(sc,
+            explorationSteps + 1)
+         val patternsIter = patterns.toLocalIterator
+
+         var numSubgraphsTotal = 0L
+         while (patternsIter.hasNext) {
+            val pattern = patternsIter.next()
+            pattern.setInduced(true)
+            val fractoid = fractalGraph
+               .set(fractionKey, fraction)
+               .pfractoid(pattern)
+               .expand(1, senumClass)
+               .explore(explorationSteps)
+            val (numSubgraphs, elapsedMs) = FractalSparkRunner.time {
+               fractoid.aggregationCount
+            }
+            numSubgraphsTotal += numSubgraphs
+            logApp(s"StepResult fractoid=${fractoid}" +
+               s" numSubgraphs=${numSubgraphs} elapsedMs=${elapsedMs}" +
+               s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+         }
+         numSubgraphsTotal
+      }
+
+      logApp(s"FinalResult" +
+         s" numSubgraphs=${numSubgraphs} elapsedMs=${elapsedMs}" +
+         s" thoughput=${numSubgraphs / elapsedMs.toDouble}")
+
+   }
+}
+
 object InducedSubgraphsListingSamplePO extends Logging {
    val appid: String = "induced_subgraphs_listing_sample_po"
 
@@ -124,7 +168,8 @@ object InducedSubgraphsListingSamplePO extends Logging {
       }
 
       logApp(s"numSubgraphs=${numSugbraphs}" +
-         s" numSubgraphsEstimate=${numSugbraphs / fraction} elapsed=${elapsed}")
+         s" numSubgraphsEstimate=${numSugbraphs / fraction} elapsed=${elapsed}" +
+         s" throughput=${numSugbraphs / elapsed.toDouble}")
    }
 }
 
@@ -185,6 +230,52 @@ object MotifsPAMCVC extends Logging {
    }
 }
 
+object MotifsSamplePA extends Logging {
+   val appid: String = "motifs_sample_pa"
+
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int, fraction: Double)
+   : Unit = {
+
+      val sc = fractalGraph.fractalContext.sparkContext
+
+      val (numSubgraphs, elapsedMs) = FractalSparkRunner.time {
+
+         val patterns = PatternUtilsRDD.getOrGenerateVertexPatternsRDD(sc,
+            explorationSteps + 1)
+         val patternsIter = patterns.toLocalIterator
+
+         var numSubgraphsTotal = 0L
+         while (patternsIter.hasNext) {
+            val pattern = patternsIter.next()
+            pattern.setInduced(true)
+            val fractoid = fractalGraph
+               .set("sampling_fraction", fraction)
+               .pfractoid(pattern)
+               .expand(pattern.getNumberOfVertices,
+                  classOf[SamplingEnumerator[PatternInducedSubgraph]])
+
+            val (numSubgraphs, elapsedMs) = FractalSparkRunner.time {
+               fractoid.aggregationCount
+            }
+
+            numSubgraphsTotal += numSubgraphs
+
+            logApp(s"StepResult fractoid=${fractoid}" +
+               s" numSubgraphs=${numSubgraphs} elapsedMs=${elapsedMs}" +
+               s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+         }
+
+         numSubgraphsTotal
+      }
+
+      logApp(s"FinalResult" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" numSubgraphsEstimate=${numSubgraphs / fraction} " +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+   }
+}
+
 object MotifsSamplePO extends Logging {
    val appid: String = "motifs_sample_po"
 
@@ -211,8 +302,10 @@ object MotifsSamplePO extends Logging {
 
       motifsCountsRDD.unpersist()
 
-      logApp(s"numMotifs=${numMotifs} numSubgraphs=${numSubgraphs}" +
-         s" numSubgraphsEstimate=${numSubgraphs / fraction} elapsed=${elapsed}")
+      logApp(s"FinalResult numMotifs=${numMotifs}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" numSubgraphsEstimate=${numSubgraphs / fraction} elapsed=${elapsed}" +
+         s" throughput=${numSubgraphs / elapsed.toDouble}")
    }
 }
 
@@ -338,14 +431,45 @@ object QuasiCliquesPO extends Logging {
 
    def apply(fractalGraph: FractalGraph, explorationSteps: Int, minDensity: Double)
    : Unit = {
+      val fc = fractalGraph.fractalContext
       val numVertices = explorationSteps + 1
-      val frac = fractalGraph.quasiCliquesPO(numVertices, minDensity)
 
-      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount(COUNT_AGG_REPORT)
+      val numSteps = 1
+      val timeLimitMs = fractalGraph.config.getTotalTimeLimitMs
+      val (numSubgraphs, elapsedMs) = FractalSparkRunner.time {
+         val stepTimeLimitMs = timeLimitMs
+         val fractoid = fractalGraph.quasiCliquesPO(numVertices, minDensity)
+            .withStepTimeLimit(stepTimeLimitMs)
+         val (numSubgraphsTry, elapsedMs) = FractalSparkRunner.time {
+            fc.trySubmitFractalStep(fractoid)(
+               f => f.aggregationCount(COUNT_AGG_REPORT))
+         }
+
+         val (numSubgraphs, exception) = numSubgraphsTry match {
+            case Success(numSubgraphs) => (numSubgraphs, null)
+            case Failure(e) => (0L, e)
+         }
+
+         logApp(s"StepResult fractoid=${fractoid}" +
+            s" exception=${exception}" +
+            s" numVertices=${numVertices}" +
+            s" minDensity=${minDensity}" +
+            s" numSteps=${numSteps}" +
+            s" stepTimeLimitMs=${stepTimeLimitMs}" +
+            s" numSubgraphs=${numSubgraphs}" +
+            s" elapsedMs=${elapsedMs}" +
+            s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+
+         numSubgraphs
       }
 
-      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"FinalResult" +
+         s" numVertices=${numVertices}" +
+         s" minDensity=${minDensity}" +
+         s" numSteps=${numSteps}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
    }
 }
 
@@ -354,23 +478,56 @@ object QuasiCliquesPA extends Logging {
 
    def apply(fractalGraph: FractalGraph, explorationSteps: Int, minDensity: Double)
    : Unit = {
-      val fc = fractalGraph.fractalContext
       val numVertices = explorationSteps + 1
-      val fracs = fractalGraph.quasiCliquesPA(numVertices, minDensity)
+      val fc = fractalGraph.fractalContext
 
-      val (results, elapsed) = FractalSparkRunner.time {
-         fc.trySubmitFractalSteps(fracs)(f => {
-            val numSubgraphs = f.aggregationCount(COUNT_AGG_REPORT)
-            logApp(s"PartialResult fractoid=${f} numSubgraphs=${numSubgraphs}")
-            numSubgraphs
-         })
+      val ((numSteps,numSubgraphs), elapsedMs) = FractalSparkRunner.time {
+         val (numSteps, fractoidsIter) = fractalGraph
+            .quasiCliquesPA(numVertices, minDensity)
+         var remainingTime = fractalGraph.config.getTotalTimeLimitMs
+         var remainingSteps = numSteps
+         var numSubgraphsTotal = 0L
+         while (fractoidsIter.hasNext) {
+            val stepTimeLimitMs = remainingTime / remainingSteps
+            val fractoid = fractoidsIter.next().withStepTimeLimit(stepTimeLimitMs)
+
+            val (numSubgraphsTry, elapsedMs) = FractalSparkRunner.time {
+               fc.trySubmitFractalStep(fractoid)(
+                  f => f.aggregationCount(COUNT_AGG_REPORT))
+            }
+
+            val (numSubgraphs, exception) = numSubgraphsTry match {
+               case Success(numSubgraphs) => (numSubgraphs, null)
+               case Failure(e) => (0L, e)
+            }
+
+            numSubgraphsTotal += numSubgraphs
+            remainingTime -= elapsedMs
+            remainingSteps -= 1
+
+            logApp(s"StepResult fractoid=${fractoid}" +
+               s" remainingTimeMs=${remainingTime}" +
+               s" remainingSteps=${remainingSteps}" +
+               s" exception=${exception}" +
+               s" numVertices=${numVertices}" +
+               s" minDensity=${minDensity}" +
+               s" numSteps=${numSteps}" +
+               s" stepTimeLimitMs=${stepTimeLimitMs}" +
+               s" numSubgraphs=${numSubgraphs}" +
+               s" elapsedMs=${elapsedMs}" +
+               s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+         }
+
+         (numSteps, numSubgraphsTotal)
       }
 
-      val failure = results.exists(_.isFailure)
-      val numSubgraphs = results.filter(_.isSuccess).map(_.get).sum
-
-      logApp(s"failure=${failure} numSubgraphs=${numSubgraphs} " +
-         s"elapsed=${elapsed}")
+      logApp(s"FinalResult" +
+         s" numVertices=${numVertices}" +
+         s" minDensity=${minDensity}" +
+         s" numSteps=${numSteps}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
    }
 }
 
@@ -381,22 +538,53 @@ object QuasiCliquesPAPO extends Logging {
    : Unit = {
       val fc = fractalGraph.fractalContext
       val numVertices = explorationSteps + 1
-      val fracs = fractalGraph.quasiCliquesPAPO(numVertices, minDensity)
 
-      val (results, elapsed) = FractalSparkRunner.time {
-         fc.trySubmitFractalSteps(fracs)(f => {
-            val numSubgraphs = f.aggregationCount(COUNT_AGG_REPORT)
-            logApp(s"PartialResult fractoid=${f} numSubgraphs=${numSubgraphs}")
-            numSubgraphs
-            //String path = getMainGraphPath();
-         })
+      val ((numSteps,numSubgraphs), elapsedMs) = FractalSparkRunner.time {
+         val (numSteps, fractoidsIter) = fractalGraph
+            .quasiCliquesPAPO(numVertices, minDensity)
+         var remainingTime = fractalGraph.config.getTotalTimeLimitMs
+         var remainingSteps = numSteps
+         var numSubgraphsTotal = 0L
+         while (fractoidsIter.hasNext) {
+            val stepTimeLimitMs = remainingTime / remainingSteps
+            val fractoid = fractoidsIter.next().withStepTimeLimit(stepTimeLimitMs)
+            val (numSubgraphsTry, elapsedMs) = FractalSparkRunner.time {
+               fc.trySubmitFractalStep(fractoid)(
+                  f => f.aggregationCount(COUNT_AGG_REPORT))
+            }
+
+            val (numSubgraphs, exception) = numSubgraphsTry match {
+               case Success(numSubgraphs) => (numSubgraphs, null)
+               case Failure(e) => (0L, e)
+            }
+
+            numSubgraphsTotal += numSubgraphs
+            remainingTime -= elapsedMs
+            remainingSteps -= 1
+
+            logApp(s"StepResult fractoid=${fractoid}" +
+               s" remainingTimeMs=${remainingTime}" +
+               s" remainingSteps=${remainingSteps}" +
+               s" exception=${exception}" +
+               s" numVertices=${numVertices}" +
+               s" minDensity=${minDensity}" +
+               s" numSteps=${numSteps}" +
+               s" stepTimeLimitMs=${stepTimeLimitMs}" +
+               s" numSubgraphs=${numSubgraphs}" +
+               s" elapsedMs=${elapsedMs}" +
+               s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+         }
+
+         (numSteps, numSubgraphsTotal)
       }
 
-      val failure = results.exists(_.isFailure)
-      val numSubgraphs = results.filter(_.isSuccess).map(_.get).sum
-
-      logApp(s"failure=${failure} numSubgraphs=${numSubgraphs}" +
-         s" elapsed=${elapsed}")
+      logApp(s"FinalResult" +
+         s" numVertices=${numVertices}" +
+         s" minDensity=${minDensity}" +
+         s" numSteps=${numSteps}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
    }
 }
 
@@ -477,12 +665,13 @@ object FSMPO extends Logging {
    def apply(fractalGraph: FractalGraph, explorationSteps: Int, minSupport: Int)
    : Unit = {
 
+      val numEdges = explorationSteps + 1
+
       // we create the fractoid inside the timer because there is actual work
       // being done to obtain the RDD
-      val ((patternsSupportsRDD,numPatterns), elapsed) =
+      val ((patternsSupportsRDD,numPatterns), elapsedMs) =
       FractalSparkRunner.time {
-         val patternsSupportsRDD = fractalGraph
-            .fsmPO(minSupport, explorationSteps + 1)
+         val patternsSupportsRDD = fractalGraph.fsmPO(minSupport, numEdges)
          patternsSupportsRDD.cache()
          val numPatterns = patternsSupportsRDD.count() // materialize
          (patternsSupportsRDD, numPatterns)
@@ -490,18 +679,17 @@ object FSMPO extends Logging {
 
       val numSubgraphs = patternsSupportsRDD.values
          .map(_.getNumSubgraphsAggregated)
-         .reduce(_ + _)
-
-      logApp(s"numSubgraphs=${numSubgraphs}" +
-         s" numPatterns=${numPatterns} elapsed=${elapsed}")
-
-      val iter = patternsSupportsRDD.toLocalIterator
-      while (iter.hasNext) {
-         val (pattern, support) = iter.next()
-         logApp(s"PatternSupport ${pattern} ${support}")
-      }
-
+         .fold(0)(_ + _)
       patternsSupportsRDD.unpersist()
+
+      logApp(s"FinalResult" +
+         s" numEdges=${numEdges}" +
+         s" minSupport=${minSupport}" +
+         s" numSteps=${numEdges}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" numPatterns=${numPatterns}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
    }
 }
 
@@ -511,11 +699,13 @@ object FSMPA extends Logging {
    def apply(fractalGraph: FractalGraph, explorationSteps: Int, minSupport: Int)
    : Unit = {
 
+      val numEdges = explorationSteps + 1
+
       // we create the fractoid inside the timer because there is actual work
       // being done to obtain the RDD
-      val ((patternsSupportsRDD,numPatterns), elapsed) = FractalSparkRunner.time {
+      val ((patternsSupportsRDD,numPatterns), elapsedMs) = FractalSparkRunner.time {
          val patternsSupportsRDD = fractalGraph
-            .fsmPA(minSupport, explorationSteps + 1)
+            .fsmPA(minSupport, numEdges)
          patternsSupportsRDD.cache()
          val numPatterns = patternsSupportsRDD.count() // materialize
          (patternsSupportsRDD, numPatterns)
@@ -523,18 +713,17 @@ object FSMPA extends Logging {
 
       val numSubgraphs = patternsSupportsRDD.values
          .map(_.getNumSubgraphsAggregated)
-         .reduce(_ + _)
-
-      logApp(s"numSubgraphs=${numSubgraphs}" +
-         s" numPatterns=${numPatterns} elapsed=${elapsed}")
-
-      val iter = patternsSupportsRDD.toLocalIterator
-      while (iter.hasNext) {
-         val (pattern, support) = iter.next()
-         logApp(s"PatternSupport ${pattern} ${support}")
-      }
-
+         .fold(0)(_ + _)
       patternsSupportsRDD.unpersist()
+
+      logApp(s"FinalResult" +
+         s" numEdges=${numEdges}" +
+         s" minSupport=${minSupport}" +
+         s" numSteps=${numEdges}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" numPatterns=${numPatterns}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
    }
 }
 
@@ -577,11 +766,12 @@ object FSMPAPO extends Logging {
    def apply(fractalGraph: FractalGraph, explorationSteps: Int, minSupport: Int)
    : Unit = {
 
+      val numEdges = explorationSteps + 1
+
       // we create the fractoid inside the timer because there is actual work
       // being done to obtain the RDD
-      val ((patternsSupportsRDD,numPatterns), elapsed) = FractalSparkRunner.time {
-         val patternsSupportsRDD = fractalGraph
-            .fsmPAPO(minSupport, explorationSteps + 1)
+      val ((patternsSupportsRDD,numPatterns), elapsedMs) = FractalSparkRunner.time {
+         val patternsSupportsRDD = fractalGraph.fsmPAPO(minSupport, numEdges)
          patternsSupportsRDD.cache()
          val numPatterns = patternsSupportsRDD.count() // materialize
          (patternsSupportsRDD, numPatterns)
@@ -589,18 +779,17 @@ object FSMPAPO extends Logging {
 
       val numSubgraphs = patternsSupportsRDD.values
          .map(_.getNumSubgraphsAggregated)
-         .reduce(_ + _)
-
-      logApp(s"numSubgraphs=${numSubgraphs}" +
-         s" numPatterns=${numPatterns} elapsed=${elapsed}")
-
-      val iter = patternsSupportsRDD.toLocalIterator
-      while (iter.hasNext) {
-         val (pattern, support) = iter.next()
-         logApp(s"PatternSupport ${pattern} ${support}")
-      }
-
+         .fold(0)(_ + _)
       patternsSupportsRDD.unpersist()
+
+      logApp(s"FinalResult" +
+         s" numEdges=${numEdges}" +
+         s" minSupport=${minSupport}" +
+         s" numSteps=${numEdges}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" numPatterns=${numPatterns}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
    }
 }
 
@@ -844,7 +1033,8 @@ object PatternQueryingPAMCVCOld extends Logging {
          var numSubgraphs = 0L
          for (frac <- fracs) {
             numSubgraphs += frac.aggregationCountWithCallback(
-               (s,c,cb) => s.completeMatch(c, c.getPattern, cb)
+               (s,c,cb) => s.completeMatch(c, c.getPattern, cb),
+               COUNT_AGG_REPORT
             )
          }
          numSubgraphs
@@ -957,6 +1147,9 @@ object LabelSearchPA extends Logging {
    def apply(fractalGraph: FractalGraph, explorationSteps: Int,
              labelsSet: Set[Int], gfiltering: Boolean): Unit = {
 
+      val fc = fractalGraph.fractalContext
+      val numVertices = explorationSteps + 1
+
       val fg = if (gfiltering) {
          fractalGraph.filterEdges(
             (u,uLabels,v,vLabels,e,eLabels) => {
@@ -967,26 +1160,55 @@ object LabelSearchPA extends Logging {
          fractalGraph
       }
 
-      val fractoidsIter = fg.labelSearchPA(labelsSet, explorationSteps + 1)
-      val fractoidsGroupedIter = fractoidsIter.grouped(10)
 
-      val (results, elapsed) = FractalSparkRunner.time {
-         val results = ArrayBuffer.empty[Try[Long]]
-         while (fractoidsGroupedIter.hasNext) {
-            val fractoids = fractoidsGroupedIter.next()
-            val partialResults = fg.fractalContext.trySubmitFractalSteps(
-               fractoids)(f => f.aggregationCount(COUNT_AGG_REPORT))
-            results ++= partialResults
+      val ((numSteps, numSubgraphs), elapsed) = FractalSparkRunner.time {
+         val (numSteps, fractoidsIter) = fg.labelSearchPA(labelsSet, numVertices)
+         var remainingTime = fractalGraph.config.getTotalTimeLimitMs
+         var remainingSteps = numSteps
+         var numSubgraphsTotal = 0L
+         while (fractoidsIter.hasNext) {
+            val stepTimeLimitMs = remainingTime / remainingSteps
+            val fractoid = fractoidsIter.next().withStepTimeLimit(stepTimeLimitMs)
+            //val stepTimeLimitMs = fractoid.config.getStepTimeLimitMs
+            val (numSubgraphsTry, elapsedMs) = FractalSparkRunner.time {
+               fc.trySubmitFractalStep(fractoid)(
+                  f => f.aggregationCount(COUNT_AGG_REPORT))
+            }
+
+            val (numSubgraphs, exception) = numSubgraphsTry match {
+               case Success(numSubgraphs) => (numSubgraphs, null)
+               case Failure(e) => (0L, e)
+            }
+
+            numSubgraphsTotal += numSubgraphs
+            remainingTime -= elapsedMs
+            remainingSteps -= 1
+
+            logApp(s"StepResult fractoid=${fractoid}" +
+               s" remainingTimeMs=${remainingTime}" +
+               s" remainingSteps=${remainingSteps}" +
+               s" exception=${exception}" +
+               s" numVertices=${numVertices}" +
+               s" labelsSet=${labelsSet.toArray.sorted.mkString(",")}" +
+               s" gfiltering=${gfiltering}" +
+               s" numSteps=${numSteps}" +
+               s" stepTimeLimitMs=${stepTimeLimitMs}" +
+               s" numSubgraphs=${numSubgraphs}" +
+               s" elapsedMs=${elapsedMs}" +
+               s" throughput=${numSubgraphs / elapsedMs.toDouble}")
          }
-         results
+
+         (numSteps, numSubgraphsTotal)
       }
 
-      val failure = results.exists(_.isFailure)
-      val numSubgraphs = results.filter(_.isSuccess).map(_.get).sum
-
-      logApp(s"failure=${failure} labelsSet=${labelsSet}" +
-         s" gfiltering=${gfiltering} numSubgraphs=${numSubgraphs}" +
-         s" elapsed=${elapsed}")
+      logApp(s"FinalResult" +
+         s" numVertices=${numVertices}" +
+         s" labelsSet=${labelsSet.toArray.sorted.mkString(",")}" +
+         s" gfiltering=${gfiltering}" +
+         s" numSteps=${numSteps}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" elapsedMs=${elapsed}" +
+         s" throughput=${numSubgraphs / elapsed.toDouble}")
    }
 }
 
@@ -996,6 +1218,9 @@ object LabelSearchPO extends Logging {
    def apply(fractalGraph: FractalGraph, explorationSteps: Int,
              labelsSet: Set[Int], gfiltering: Boolean): Unit = {
 
+      val fc = fractalGraph.fractalContext
+      val numVertices = explorationSteps + 1
+
       val fg = if (gfiltering) {
          fractalGraph.filterEdges(
             (u,uLabels,v,vLabels,e,eLabels) => {
@@ -1006,14 +1231,44 @@ object LabelSearchPO extends Logging {
          fractalGraph
       }
 
-      val frac = fg.labelSearchPO(labelsSet, explorationSteps + 1)
+      val numSteps = 1
+      val timeLimitMs = fg.config.getTotalTimeLimitMs
+      val (numSubgraphs, elapsedMs) = FractalSparkRunner.time {
+         val stepTimeLimitMs = timeLimitMs
+         val fractoid = fg.labelSearchPO(labelsSet, numVertices)
+            .withStepTimeLimit(stepTimeLimitMs)
+         val (numSubgraphsTry, elapsedMs) = FractalSparkRunner.time {
+            fc.trySubmitFractalStep(fractoid)(
+               f => f.aggregationCount(COUNT_AGG_REPORT))
+         }
 
-      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount(COUNT_AGG_REPORT)
+         val (numSubgraphs, exception) = numSubgraphsTry match {
+            case Success(numSubgraphs) => (numSubgraphs, null)
+            case Failure(e) => (0L, e)
+         }
+
+         logApp(s"StepResult fractoid=${fractoid}" +
+            s" exception=${exception}" +
+            s" numVertices=${numVertices}" +
+            s" labelsSet=${labelsSet.toArray.sorted.mkString(",")}" +
+            s" gfiltering=${gfiltering}" +
+            s" numSteps=${numSteps}" +
+            s" stepTimeLimitMs=${stepTimeLimitMs}" +
+            s" numSubgraphs=${numSubgraphs}" +
+            s" elapsedMs=${elapsedMs}" +
+            s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+
+         numSubgraphs
       }
 
-      logApp(s"labelsSet=${labelsSet} gfiltering=${gfiltering}" +
-         s" numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"FinalResult" +
+         s" numVertices=${numVertices}" +
+         s" labelsSet=${labelsSet.toArray.sorted.mkString(",")}" +
+         s" gfiltering=${gfiltering}" +
+         s" numSteps=${numSteps}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
    }
 }
 
@@ -1414,26 +1669,30 @@ object FractalSparkRunner extends Logging {
          .textFile(graphPath, graphClass = graphClass)
          .set("num_partitions", numPartitions)
 
+      // set time limit per step
+      val stepTimeLimit = nextArg.toLong
+      fractalGraph = fractalGraph.set("step_time_limit", stepTimeLimit)
+
       // set start time and time limit
       val timeLimit = nextArg.toLong
       fractalGraph = fractalGraph.set("time_limit", timeLimit)
       fractalGraph = fractalGraph.set("start_time", System.currentTimeMillis())
 
       // schedule termination according to time limit (if configured)
-      var terminated = false
-      import scala.concurrent.ExecutionContext.Implicits._
-      val timeLimitFuture = Future {
-         if (timeLimit > 0) {
-            Thread.sleep(timeLimit)
-            terminated = true
-            logInfo(s"TimeLimitReached timelimit=${timeLimit}")
-            fc.terminate()
-            fc.stop()
-            sc.cancelAllJobs()
-            sc.stop()
-            System.exit(0)
-         }
-      }
+      //var terminated = false
+      //import scala.concurrent.ExecutionContext.Implicits._
+      //val timeLimitFuture = Future {
+      //   if (timeLimit > 0) {
+      //      Thread.sleep(timeLimit + 10000)
+      //      terminated = true
+      //      logInfo(s"TimeLimitReached timelimit=${timeLimit}")
+      //      fc.terminate()
+      //      fc.stop()
+      //      sc.cancelAllJobs()
+      //      sc.stop()
+      //      System.exit(0)
+      //   }
+      //}
 
       def setRemainingConfigs(): Unit = {
          var arg = nextArg
@@ -1474,6 +1733,12 @@ object FractalSparkRunner extends Logging {
             InducedSubgraphsListingSamplePO(fractalGraph, explorationSteps,
                fraction)
 
+         case InducedSubgraphsListingSamplePA.appid =>
+            val fraction = nextArg.toDouble
+            setRemainingConfigs()
+            InducedSubgraphsListingSamplePA(fractalGraph, explorationSteps,
+               fraction)
+
          case MotifsPA.appid =>
             setRemainingConfigs()
             MotifsPA(fractalGraph, explorationSteps)
@@ -1486,6 +1751,11 @@ object FractalSparkRunner extends Logging {
             val fraction = nextArg.toDouble
             setRemainingConfigs()
             MotifsSamplePO(fractalGraph, explorationSteps, fraction)
+
+         case MotifsSamplePA.appid =>
+            val fraction = nextArg.toDouble
+            setRemainingConfigs()
+            MotifsSamplePA(fractalGraph, explorationSteps, fraction)
 
          case MotifsPO.appid =>
             setRemainingConfigs()
@@ -1622,24 +1892,21 @@ object FractalSparkRunner extends Logging {
                periodicThreshold)
 
          case LabelSearchPO.appid =>
-            val labelsSet = nextArg.split(",").map(str => str.trim.toInt)
-               .toSet
+            val labelsSet = nextArg.split(",").map(str => str.trim.toInt).toSet
             val gfiltering = nextArg.toBoolean
             setRemainingConfigs()
             LabelSearchPO(fractalGraph, explorationSteps, labelsSet,
                gfiltering)
 
          case LabelSearchPA.appid =>
-            val labelsSet = nextArg.split(",").map(str => str.trim.toInt)
-               .toSet
+            val labelsSet = nextArg.split(",").map(str => str.trim.toInt).toSet
             val gfiltering = nextArg.toBoolean
             setRemainingConfigs()
             LabelSearchPA(fractalGraph, explorationSteps, labelsSet,
                gfiltering)
 
          case KeywordSearchPO.appid =>
-            val keywords = nextArg.split(",").map(str => str.trim.toInt)
-               .toSet
+            val keywords = nextArg.split(",").map(str => str.trim.toInt).toSet
             val gfiltering = nextArg.toBoolean
             setRemainingConfigs()
             KeywordSearchPO(fractalGraph, explorationSteps, keywords,
@@ -1703,9 +1970,9 @@ object FractalSparkRunner extends Logging {
             throw new RuntimeException(s"Unknown app: ${appName}")
       }
 
-      if (terminated) {
-         Await.result(timeLimitFuture, Duration.Inf)
-      }
+      //if (terminated) {
+      //   Await.result(timeLimitFuture, Duration.Inf)
+      //}
 
       fc.stop()
       sc.stop()

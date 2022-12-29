@@ -1,6 +1,6 @@
 package br.ufmg.cs.systems.fractal.gmlib.fsm
 
-import br.ufmg.cs.systems.fractal.FractalGraph
+import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid, Primitive}
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplication
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternUtils, PatternUtilsRDD}
 import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph
@@ -15,6 +15,10 @@ import scala.util.{Failure, Success}
 
 class FSMPA(minSupport: Int, maxNumEdges: Int)
    extends BuiltInApplication[RDD[(Pattern,MinImageSupport)]] {
+
+   private var lastCurrentTimeMs: Long = System.currentTimeMillis()
+
+   private var frequentPatternsCurrentTimeMs: Long = System.currentTimeMillis()
 
    // type aliases
    protected type PatternsSupports = RDD[(Pattern,MinImageSupport)]
@@ -39,6 +43,50 @@ class FSMPA(minSupport: Int, maxNumEdges: Int)
          s1.aggregate(s2)
       }
 
+   private def getElapsedTimeMs: Long = {
+      val now = System.currentTimeMillis()
+      val elapsed = now - lastCurrentTimeMs
+      lastCurrentTimeMs = now
+      elapsed
+   }
+
+   private def getElapsedTimeFrequentPatternsMs: Long = {
+      val now = System.currentTimeMillis()
+      val elapsed = now - frequentPatternsCurrentTimeMs
+      frequentPatternsCurrentTimeMs = now
+      elapsed
+   }
+
+   private def materializeAndLogPartialResult
+   (fractoid: Fractoid[PatternInducedSubgraph],
+    freqRDD: RDD[(Pattern, MinImageSupport)]): (Long, Long) = {
+      freqRDD.cache()
+      freqRDD.foreachPartition(_ => {})
+      val elapsedMs = getElapsedTimeMs
+      val iter = freqRDD.toLocalIterator
+      var numEdges = fractoid.primitives.count(_ == Primitive.E)
+      var numSubgraphs = 0L
+      var numPatterns = 0L
+      while (iter.hasNext) {
+         val (pattern, support) = iter.next()
+         numSubgraphs += support.getNumSubgraphsAggregated
+         numPatterns += 1
+         logApp(s"FrequentPattern numEdges=${numEdges}" +
+            s" minSupport=${minSupport} pattern=${pattern} support=${support}")
+      }
+
+      logApp(s"StepResult fractoid=${fractoid}" +
+         s" numEdges=${numEdges}" +
+         s" support=${minSupport}" +
+         s" numSteps=1" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" numPatterns=${numPatterns}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+
+      (numPatterns, numSubgraphs)
+   }
+
    /**
     * Matches a pattern using Fractal, obtains the quick pattern -> supports
     * aggregation, transforms this aggregation into canonical aggregation and
@@ -48,9 +96,9 @@ class FSMPA(minSupport: Int, maxNumEdges: Int)
     * @return RDD of canonical patterns -> supports
     */
    protected def canonicalPatternsSupports(fg: FractalGraph, pattern: Pattern)
-   : PatternsSupports = {
-      fg.pfractoid(pattern)
-         .expand(pattern.getNumberOfVertices)
+   : (Fractoid[PatternInducedSubgraph], PatternsSupports) = {
+      val fractoid = fg.pfractoid(pattern).expand(pattern.getNumberOfVertices)
+      val aggregation = fractoid
          .aggregationObjObj[Pattern,MinImageSupport](
             key(pattern), value, aggregate, ReportFuncs.FSM_AGG_REPORT)
          .map { case (quickPatern,supp) =>
@@ -61,6 +109,7 @@ class FSMPA(minSupport: Int, maxNumEdges: Int)
             (canonicalPattern, supp)
          }
          .reduceByKey((s1,s2) => {s1.aggregate(s2); s1})
+      (fractoid, aggregation)
    }
 
    /**
@@ -164,7 +213,7 @@ class FSMPA(minSupport: Int, maxNumEdges: Int)
       // Frequent edges and labels {
 
       // patterns -> supports
-      val canonicalPatternsSupportsRDD = {
+      val (firstFractoid, canonicalPatternsSupportsRDD) = {
          val patternWithoutPlan = PatternUtils.singleEdgePattern()
          patternWithoutPlan.setVertexLabeled(false)
          val pattern = getPatternWithPlan(patternWithoutPlan)
@@ -178,10 +227,21 @@ class FSMPA(minSupport: Int, maxNumEdges: Int)
          frequentPatternsSupports(canonicalPatternsSupportsRDD)
 
       frequentPatternsSupportsRDD.cache()
-      val numFrequentPatternsPattern = frequentPatternsSupportsRDD.count()
+      val (numFrequentPatternsPattern, numSubgraphs) =
+         materializeAndLogPartialResult(firstFractoid, frequentPatternsSupportsRDD)
       if (numFrequentPatternsPattern > 0) {
          results += frequentPatternsSupportsRDD
       }
+      val elapsedMs = getElapsedTimeFrequentPatternsMs
+      var numEdges = 0
+      logApp(s"FrequentPatternsResult" +
+         s" numEdges=${numEdges + 1}" +
+         s" support=${minSupport}" +
+         s" numSteps=${1}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" numPatterns=${numFrequentPatternsPattern}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs}")
 
       // frequent labels
       val frequentLabelsBc = sc.broadcast(
@@ -194,11 +254,12 @@ class FSMPA(minSupport: Int, maxNumEdges: Int)
       // } Frequent edges and labels
 
       // stop condition
-      var numEdges = 1
+      numEdges += 1
       var continue = numEdges < maxNumEdges && numFrequentPatternsPattern > 0
 
       while (continue) {
          var numFrequentPatterns = 0L
+         var numSubgraphsTotal = 0L
 
          // get valid candidate patterns extended from previous step
          val validCandPatternsRDD = validPatternCandidates(
@@ -213,51 +274,45 @@ class FSMPA(minSupport: Int, maxNumEdges: Int)
          canonicalPatternsSupportsRDDs.foreach(_.unpersist())
          canonicalPatternsSupportsRDDs = List.empty
 
-         // compute patterns and supports in parallel
-         val futures = patterns
-            .map(patternWithoutPlan => {
-               patternWithoutPlan.setVertexLabeled(true)
-               val pattern = getPatternWithPlan(patternWithoutPlan)
-               val canonicalPatternsSupportsRDD = canonicalPatternsSupports(fg, pattern)
-               canonicalPatternsSupportsRDD.cache()
-               val rddFreq = frequentPatternsSupports(canonicalPatternsSupportsRDD)
-               rddFreq.cache()
-               val rddInfreq = infrequentPatterns(canonicalPatternsSupportsRDD)
-               Future {
-                  (canonicalPatternsSupportsRDD,
-                     rddFreq, rddFreq.count(), rddInfreq)
-               }
-            })
-
          // partial results (pattern by pattern)
          var lastFrequentPatternsRDDs = List.empty[PatternsSupports]
          var lastInfrequentPatternsRDDs = List.empty[Patterns]
 
-         // verify results
-         var failure = false
-         for (f <- futures) {
-            Await.ready(f, Duration.Inf)
-            f.value.get match {
-               case Success((canonicalPatternsSupportsRDD, rddFreq,
-               numFrequentPatternsPattern, rddInfreq)) =>
-                  lastFrequentPatternsRDDs = rddFreq :: lastFrequentPatternsRDDs
-                  lastInfrequentPatternsRDDs = rddInfreq :: lastInfrequentPatternsRDDs
-                  canonicalPatternsSupportsRDDs =
-                     canonicalPatternsSupportsRDD :: canonicalPatternsSupportsRDDs
-                  if (numFrequentPatternsPattern > 0) {
-                     numFrequentPatterns += numFrequentPatternsPattern
-                     results.synchronized {
-                        results += rddFreq
-                     }
-                  }
-
-               case Failure(e) =>
-                  logWarn(s"ExecutionFailed future=${f} exception=${e}")
-                  failure = true
+         val iter = validCandPatternsRDD.toLocalIterator
+         while (iter.hasNext) {
+            val patternWithoutPlan = iter.next()
+            patternWithoutPlan.setVertexLabeled(true)
+            val pattern = getPatternWithPlan(patternWithoutPlan)
+            val (fractoid, canonicalPatternsSupportsRDD) =
+               canonicalPatternsSupports(fg, pattern)
+            canonicalPatternsSupportsRDD.cache()
+            val rddFreq = frequentPatternsSupports(canonicalPatternsSupportsRDD)
+            rddFreq.cache()
+            val rddInfreq = infrequentPatterns(canonicalPatternsSupportsRDD)
+            val (numPatterns, numSubgraphs) =
+               materializeAndLogPartialResult(fractoid, rddFreq)
+            lastFrequentPatternsRDDs = rddFreq :: lastFrequentPatternsRDDs
+            lastInfrequentPatternsRDDs = rddInfreq :: lastInfrequentPatternsRDDs
+            canonicalPatternsSupportsRDDs =
+               canonicalPatternsSupportsRDD :: canonicalPatternsSupportsRDDs
+            if (numPatterns > 0) {
+               numFrequentPatterns += numPatterns
+               numSubgraphsTotal += numSubgraphs
+               results.synchronized {
+                  results += rddFreq
+               }
             }
          }
 
-         if (failure) throw new RuntimeException("SomeJobFailed")
+         val elapsedMs = getElapsedTimeFrequentPatternsMs
+         logApp(s"FrequentPatternsResult" +
+            s" numEdges=${numEdges + 1}" +
+            s" support=${minSupport}" +
+            s" numSteps=${patterns.size}" +
+            s" numSubgraphs=${numSubgraphsTotal}" +
+            s" numPatterns=${numFrequentPatterns}" +
+            s" elapsedMs=${elapsedMs}" +
+            s" throughput=${numSubgraphsTotal / elapsedMs}")
 
          // assemble results
          frequentPatternsSupportsRDD = sc.union(lastFrequentPatternsRDDs)

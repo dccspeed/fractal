@@ -244,6 +244,10 @@ public class PatternUtils {
       return newPatterns;
    }
 
+   public static Pattern emptyPattern() {
+      return configuration.createPattern();
+   }
+
    public static Pattern singleVertexPattern() {
       Pattern pattern = configuration.createPattern();
       pattern.addVertexStandalone();

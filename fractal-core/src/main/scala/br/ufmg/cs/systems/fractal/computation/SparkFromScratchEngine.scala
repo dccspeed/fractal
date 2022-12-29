@@ -29,11 +29,13 @@ class SparkFromScratchEngine[S <: Subgraph]
 
    @transient var slaveActorRef: ActorRef = _
 
+   private var workStealingSystem: WorkStealingSystem[S] = _
+
    private var subgraphAggregation: SubgraphAggregation[S] = _
 
    private var executionContext: ExecutionContextExecutorService = _
 
-   private var reportStatsExecutor: ScheduledExecutorService = _
+   private var scheduledExecutor: ScheduledExecutorService = _
 
    override def slaveActor(): ActorRef = slaveActorRef
 
@@ -44,6 +46,11 @@ class SparkFromScratchEngine[S <: Subgraph]
 
    private var computationWorkStealingTimeStart: Long = _
    private var computationWorkStealingTimeEnd: Long = _
+
+   private def ensureScheduledExecutor(): Unit = {
+      if (scheduledExecutor != null) return
+      scheduledExecutor = Executors.newScheduledThreadPool(1)
+   }
 
    private def ensureExecutionContext(): Unit = {
       if (executionContext != null) return
@@ -59,8 +66,7 @@ class SparkFromScratchEngine[S <: Subgraph]
    }
 
    private def ensureReportStatsExecutor(): Unit = {
-      if (reportStatsExecutor != null) return
-      reportStatsExecutor = Executors.newScheduledThreadPool(1)
+      ensureScheduledExecutor()
 
       import Configuration._
 
@@ -74,7 +80,8 @@ class SparkFromScratchEngine[S <: Subgraph]
          && timeLimit != CONF_TIME_LIMIT_MS_DEFAULT) {
          val lastNInfos = configuration
             .getInteger(INFO_PERIOD_LAST_N, INFO_PERIOD_LAST_N_DEFAULT)
-         (startTime + timeLimit) - (lastNInfos * infoPeriod)
+         if (lastNInfos <= 0) -1
+         else (startTime + timeLimit) - (lastNInfos * infoPeriod)
       } else {
          -1
       }
@@ -88,8 +95,31 @@ class SparkFromScratchEngine[S <: Subgraph]
          }
       }
 
-      reportStatsExecutor.scheduleAtFixedRate(periodicReport,
+      scheduledExecutor.scheduleAtFixedRate(periodicReport,
          infoPeriod, infoPeriod, TimeUnit.MILLISECONDS)
+   }
+
+   private def ensureTimeLimitExecutor(): Unit = {
+      val stepTimeLimitMs = configuration.getStepTimeLimitMs
+      if (stepTimeLimitMs < 0) return
+
+      ensureScheduledExecutor()
+      val engine = this
+      val stepTimeLimitExceeded = new Runnable {
+         override def run(): Unit = {
+            logInfo(s"StepTimeLimitReached step=${step}" +
+               s" stage=${stageId} thread=${partitionId}" +
+               s" stepTimeLimitMs=${stepTimeLimitMs}")
+            if (workStealingSystem != null) {
+               workStealingSystem.setActive(false)
+            }
+            engine.terminate()
+            scheduledExecutor.schedule(this, 1, TimeUnit.SECONDS)
+         }
+      }
+
+      scheduledExecutor.schedule(stepTimeLimitExceeded, stepTimeLimitMs,
+         TimeUnit.MILLISECONDS)
    }
 
    override def init(): Unit = {
@@ -196,7 +226,7 @@ class SparkFromScratchEngine[S <: Subgraph]
 
       // clear-up resources
       if (executionContext != null) executionContext.shutdown()
-      if (reportStatsExecutor != null) reportStatsExecutor.shutdown()
+      if (scheduledExecutor != null) scheduledExecutor.shutdownNow()
 
       if (previous == null && configuration.externalWsEnabled()) {
          slaveActorRef ! Stop
@@ -238,7 +268,7 @@ class SparkFromScratchEngine[S <: Subgraph]
       logInfo(s"WorkStealingStart step=${step} stageId=${stageId}" +
          s" id=${partitionId}")
       computationWorkStealingTimeStart = System.nanoTime()
-      val workStealingSystem = new WorkStealingSystem[S](computation)
+      workStealingSystem = new WorkStealingSystem[S](computation)
       workStealingSystem.workStealingCompute_WORK_STEALING(computation)
       computationWorkStealingTimeEnd = System.nanoTime()
    }
@@ -257,6 +287,7 @@ class SparkFromScratchEngine[S <: Subgraph]
       longSubgraphAggregation.init(configuration)
       init()
       ensureReportStatsExecutor()
+      ensureTimeLimitExecutor()
       compute()
       finalizeEngine()
       longSubgraphAggregation.value()

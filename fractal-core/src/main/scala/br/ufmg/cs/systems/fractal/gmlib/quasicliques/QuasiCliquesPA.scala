@@ -13,7 +13,7 @@ import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
  * @param minDensity
  */
 class QuasiCliquesPA(maxNumVertices: Int, minDensity: Double)
-   extends BuiltInApplication[Seq[Fractoid[PatternInducedSubgraph]]] {
+   extends BuiltInApplication[(Int,Iterator[Fractoid[PatternInducedSubgraph]])] {
 
    // reusable data structures
    private val vertexDegrees = new IntArrayList(maxNumVertices)
@@ -48,7 +48,8 @@ class QuasiCliquesPA(maxNumVertices: Int, minDensity: Double)
       valid
    }
 
-   override def apply(fg: FractalGraph): Seq[Fractoid[PatternInducedSubgraph]] = {
+   override def apply(fg: FractalGraph)
+   : (Int, Iterator[Fractoid[PatternInducedSubgraph]]) = {
       val fc = fg.fractalContext
       val sc = fc.sparkContext
       val minDegree = Math.ceil(minDensity * (maxNumVertices - 1)).toInt
@@ -62,9 +63,11 @@ class QuasiCliquesPA(maxNumVertices: Int, minDensity: Double)
             p
          })
 
-      val fractoids = quasiCliquePatterns.collect()
+      val numSteps = quasiCliquePatterns.count().toInt
+      val sortedPatterns = quasiCliquePatterns.sortBy(p => -p.getNumberOfEdges)
+      val fractoidsIter = sortedPatterns.toLocalIterator
          .map(p => fg.pfractoid(p).expand(p.getNumberOfVertices))
 
-      fractoids
+      (numSteps, fractoidsIter)
    }
 }

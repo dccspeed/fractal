@@ -42,11 +42,13 @@ public class Configuration implements Serializable {
    public static final String INFO_PERIOD = "fractal.info.period";
    public static final long INFO_PERIOD_DEFAULT_MS = 60000;
    public static final String INFO_PERIOD_LAST_N = "fractal.info.period.last.n";
-   public static final int INFO_PERIOD_LAST_N_DEFAULT = 10;
+   public static final int INFO_PERIOD_LAST_N_DEFAULT = -1;
    public static final String CONF_START_TIME_MS = "fractal.start.time.ms";
    public static final long CONF_START_TIME_MS_DEFAULT = -1;
    public static final String CONF_TIME_LIMIT_MS = "fractal.time.limit.ms";
    public static final long CONF_TIME_LIMIT_MS_DEFAULT = -1;
+   public static final String CONF_STEP_TIME_LIMIT_MS = "fractal.step.time.limit.ms";
+   public static final long CONF_STEP_TIME_LIMIT_MS_DEFAULT = -1;
    public static final String CONF_COMPUTATION_CLASS = "fractal.computation.class";
    public static final String CONF_COMPUTATION_CLASS_DEFAULT =
            "br.ufmg.cs.systems.fractal.computation.ComputationContainer";
@@ -67,6 +69,8 @@ public class Configuration implements Serializable {
    protected transient long infoPeriod;
    protected transient long startTime;
    protected transient long timeLimit;
+   protected transient long stepTimeLimitMs;
+   protected transient long overheadPerStepMs;
    protected transient MainGraph mainGraph;
    protected transient boolean initialized = false;
    protected transient boolean isGraphMulti;
@@ -316,6 +320,14 @@ public class Configuration implements Serializable {
       long deadline = startTime + timeLimit;
       long currentTime = System.currentTimeMillis();
       return currentTime >= deadline;
+   }
+
+   public long getTotalTimeLimitMs() {
+      return timeLimit;
+   }
+
+   public long getStepTimeLimitMs() {
+      return stepTimeLimitMs;
    }
 }
 

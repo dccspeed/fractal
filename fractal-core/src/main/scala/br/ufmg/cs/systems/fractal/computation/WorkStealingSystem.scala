@@ -69,10 +69,14 @@ class WorkStealingSystem [S <: Subgraph]
       if (active && !c.isActive) {
          newExternalRequestsAllowed = false
          requestsOnTheFly = 0
-         active = false
+         setActive(false)
       }
 
       externalSteals
+   }
+
+   def setActive(active: Boolean): Unit = {
+      this.active = active
    }
 
    def workStealingCompute_WORK_STEALING(c: Computation[S]): Unit = {

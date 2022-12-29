@@ -1,6 +1,6 @@
 package br.ufmg.cs.systems.fractal.gmlib.fsm
 
-import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
+import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid, Primitive}
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplication
 import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternUtilsRDD}
 import br.ufmg.cs.systems.fractal.subgraph.EdgeInducedSubgraph
@@ -11,6 +11,9 @@ import org.apache.spark.rdd.RDD
 
 class FSMPO(minSupport: Int, maxNumEdges: Int)
    extends BuiltInApplication[RDD[(Pattern,MinImageSupport)]] {
+
+   private var lastCurrentTimeMs: Long = System.currentTimeMillis()
+
 
    // reusable pattern key
    private val key: EdgeInducedSubgraph => Pattern = s => s.quickPattern()
@@ -29,6 +32,13 @@ class FSMPO(minSupport: Int, maxNumEdges: Int)
       (minImageSupp1, minImageSupp2) => {
          minImageSupp1.aggregate(minImageSupp2)
       }
+
+   private def getElapsedTimeMs: Long = {
+      val now = System.currentTimeMillis()
+      val elapsed = now - lastCurrentTimeMs
+      lastCurrentTimeMs = now
+      elapsed
+   }
 
    /**
     * Aggregates subgraphs by patterns (quick) and support
@@ -121,6 +131,43 @@ class FSMPO(minSupport: Int, maxNumEdges: Int)
       sc.broadcast(quickPatterns)
    }
 
+   private def materializeAndLogPartialResult
+   (fractoid: Fractoid[EdgeInducedSubgraph],
+    freqRDD: RDD[(Pattern, MinImageSupport)]): Unit = {
+      freqRDD.cache()
+      freqRDD.foreachPartition(_ => {})
+      val elapsedMs = getElapsedTimeMs
+      val iter = freqRDD.toLocalIterator
+      var numEdges = fractoid.primitives.count(_ == Primitive.E)
+      var numSubgraphs = 0L
+      var numPatterns = 0L
+      while (iter.hasNext) {
+         val (pattern, support) = iter.next()
+         numSubgraphs += support.getNumSubgraphsAggregated
+         numPatterns += 1
+         logApp(s"FrequentPattern numEdges=${numEdges}" +
+            s" minSupport=${minSupport} pattern=${pattern} support=${support}")
+      }
+
+      logApp(s"StepResult fractoid=${fractoid}" +
+         s" numEdges=${numEdges}" +
+         s" support=${minSupport}" +
+         s" numSteps=1" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" numPatterns=${numPatterns}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+
+      logApp(s"FrequentPatternsResult" +
+         s" numEdges=${numEdges}" +
+         s" support=${minSupport}" +
+         s" numSteps=1" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" numPatterns=${numPatterns}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs}")
+   }
+
    override def apply(fg: FractalGraph): RDD[(Pattern, MinImageSupport)] = {
       val sc = fg.fractalContext.sparkContext
       if (maxNumEdges < 1) return sc.emptyRDD
@@ -145,7 +192,8 @@ class FSMPO(minSupport: Int, maxNumEdges: Int)
          val rdd = frequentPatternsSupports(stepPatternSupportRDD).cache()
          val freqRDD = frequentCanonicalPatternsSupports(rdd).cache()
          frequentPatternSupportRDDs = freqRDD :: frequentPatternSupportRDDs
-         freqRDD.foreachPartition(_ => {})
+         //freqRDD.foreachPartition(_ => {})
+         materializeAndLogPartialResult(frac, freqRDD)
          rdd
       }
 
@@ -182,7 +230,8 @@ class FSMPO(minSupport: Int, maxNumEdges: Int)
             val rdd = frequentPatternsSupports(stepPatternSupportRDD).cache()
             val freqRDD = frequentCanonicalPatternsSupports(rdd).cache()
             frequentPatternSupportRDDs = freqRDD :: frequentPatternSupportRDDs
-            freqRDD.foreachPartition(_ => {})
+            //freqRDD.foreachPartition(_ => {})
+            materializeAndLogPartialResult(frac, freqRDD)
             rdd
          }
 

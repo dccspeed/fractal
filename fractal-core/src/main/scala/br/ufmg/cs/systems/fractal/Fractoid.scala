@@ -186,6 +186,43 @@ case class Fractoid[S <: Subgraph : ClassTag]
     */
    def aggregationLongWithCallback
    (_defaultValue: Long, _value: S => Long, _reduce: (Long, Long) => Long,
+    callback: (S, Computation[S], SubgraphCallback[S]) => Unit,
+   _report: (ExecutionEngine[_ <: Subgraph],LongSubgraphAggregation[_ <: Subgraph]) => Unit)
+   : Long = {
+      val _underlyingCallback = subgraphAggregationCallback
+      val providedCallback = customSubgraphAggregationCallback(
+         callback, _underlyingCallback)
+
+      val longSubgraphAggregation = new LongSubgraphAggregation[S] {
+         override def reduce(v1: Long, v2: Long): Long = _reduce(v1, v2)
+
+         override def aggregate_AGGREGATION_PRIMITIVE(subgraph: S): Unit = map(_value(subgraph))
+
+         override def defaultValue(): Long = _defaultValue
+
+         override def report(engine: ExecutionEngine[S]): Unit =
+            _report(engine, this)
+      }
+
+      withNextStepId
+         .withInitAggregations(c => providedCallback.init(c))
+         .withProcess((s, c) => providedCallback.apply(s, c))
+         .masterEngineImmutable
+         .longRDD(longSubgraphAggregation)
+         .reduce(_reduce)
+   }
+
+   /**
+    * Aggregates valid subgraphs into a single long with custom callback
+    *
+    * @param _defaultValue initial value for this aggregation
+    * @param _value        mapping function applied on each valid subgraph
+    * @param _reduce       reduce function to aggregate the results
+    * @param callback      custom user callback
+    * @return single final long
+    */
+   def aggregationLongWithCallback
+   (_defaultValue: Long, _value: S => Long, _reduce: (Long, Long) => Long,
     callback: (S, Computation[S], SubgraphCallback[S]) => Unit)
    : Long = {
       val _underlyingCallback = subgraphAggregationCallback
@@ -237,6 +274,19 @@ case class Fractoid[S <: Subgraph : ClassTag]
    (callback: (S, Computation[S], SubgraphCallback[S]) => Unit)
    : Long = {
       aggregationLongWithCallback(0L, _ => 1L, _ + _, callback)
+   }
+
+   /**
+    * Counts (listing) the number of valid subgraphs with custom callback
+    *
+    * @param callback user callback
+    * @return number of valid subgraphs
+    */
+   def aggregationCountWithCallback
+   (callback: (S, Computation[S], SubgraphCallback[S]) => Unit,
+    _report: (ExecutionEngine[_ <: Subgraph],LongSubgraphAggregation[_ <: Subgraph]) => Unit)
+   : Long = {
+      aggregationLongWithCallback(0L, _ => 1L, _ + _, callback, _report)
    }
 
    /**
@@ -1148,6 +1198,15 @@ case class Fractoid[S <: Subgraph : ClassTag]
       (this.copy(configBc = newConfigBc), diagKey)
    }
 
+   def withStepTimeLimit(stepTimeLimit: Long): Fractoid[S] = {
+      val newConfs = scala.collection.mutable.Map[String,Any]()
+      config.confs.foreach(kv => newConfs.update(kv._1, kv._2))
+      val newConfig = new SparkConfiguration(newConfs)
+      newConfig.set("step_time_limit", stepTimeLimit)
+      val newConfigBc = sparkContext.broadcast(newConfig)
+      this.copy(configBc = newConfigBc)
+   }
+
    /** **** Fractal Scala API: ComputationContainer ******/
 
    /**
@@ -1226,13 +1285,14 @@ case class Fractoid[S <: Subgraph : ClassTag]
    }
 
    override def toString: String = {
+      val parentStr = if (parent == null) "" else s"${parent}->"
       val subgraphClass = classTag[S].runtimeClass
       val className = subgraphClass.getSimpleName
-      val patternInfo = if (pattern == null) "" else s"pattern=${pattern}"
-      s"Fractoid${className}(" +
+      val patternInfo = if (pattern == null) "" else s",pattern=${pattern}"
+      s"${parentStr}Fractoid${className}(" +
          s"step=${step}" +
          s",primitives=${primitives.mkString("-")}" +
-         patternInfo +
+         s"${patternInfo}" +
          s")"
    }
 

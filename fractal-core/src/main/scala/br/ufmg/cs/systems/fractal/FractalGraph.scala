@@ -36,7 +36,7 @@ case class FractalGraph
 
    val name: String = new File(path).getName
 
-   private val config: SparkConfiguration = {
+   val config: SparkConfiguration = {
       val _config = new SparkConfiguration
       confs.foreach { case (k,v) =>
          _config.set(k, v)

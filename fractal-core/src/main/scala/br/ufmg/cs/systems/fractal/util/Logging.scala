@@ -14,19 +14,19 @@ trait Logging {
     *  building **/
 
    protected def logInfo(msg: => String): Unit = if (log.isInfoEnabled) {
-      log.info (msg)
+      log.info(msg)
    }
 
    protected def logWarn(msg: => String): Unit = if (log.isEnabledFor(Level.WARN)) {
-      log.warn (msg)
+      log.warn(msg)
    }
 
    protected def logDebug(msg: => String): Unit = if (log.isDebugEnabled) {
-      log.debug (msg)
+      log.debug(msg)
    }
 
    protected def logError(msg: => String): Unit = if (log.isEnabledFor(Level.ERROR)) {
-      log.error (msg)
+      log.error(msg)
    }
 
    protected def logApp(msg: => String): Unit = if (log.isEnabledFor(FractalAppLogLevel.APP)) {

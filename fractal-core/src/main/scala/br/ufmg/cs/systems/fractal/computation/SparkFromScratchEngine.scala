@@ -104,7 +104,8 @@ class SparkFromScratchEngine[S <: Subgraph]
       if (stepTimeLimitMs < 0) return
 
       ensureScheduledExecutor()
-      val engine = this
+      var engine: SparkFromScratchEngine[_ <: Subgraph] = this
+      while (engine.previous != null) engine = engine.previous
       val stepTimeLimitExceeded = new Runnable {
          override def run(): Unit = {
             logInfo(s"StepTimeLimitReached step=${step}" +

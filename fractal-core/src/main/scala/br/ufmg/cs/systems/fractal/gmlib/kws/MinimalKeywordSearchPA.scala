@@ -17,7 +17,7 @@ import com.koloboke.collect.set.hash.HashIntSets
  * not contain unnecessary vertices (minimal).
  */
 class MinimalKeywordSearchPA(keywords: Set[Int], numVertices: Int)
-   extends BuiltInApplication[Iterator[Fractoid[PatternInducedSubgraph]]] {
+   extends BuiltInApplication[(Int,Iterator[Fractoid[PatternInducedSubgraph]])] {
 
    if (numVertices < keywords.size)
       throw new RuntimeException(s"Number of keywords (labels) should be at " +
@@ -157,14 +157,16 @@ class MinimalKeywordSearchPA(keywords: Set[Int], numVertices: Int)
    }
 
    override def apply(fgraph: FractalGraph)
-   : Iterator[Fractoid[PatternInducedSubgraph]] = {
+   : (Int, Iterator[Fractoid[PatternInducedSubgraph]]) = {
       val sc = fgraph.fractalContext.sparkContext
       val patterns = PatternUtilsRDD.getOrGenerateVertexPatternsRDD(sc, numVertices)
+      val numSteps = patterns.count().toInt
+      val sortedPatterns = patterns.sortBy(p => -p.getNumberOfEdges)
 
       val _checkAndFillLabelCounts = checkAndFillLabelCounts _
       val _minimalKeywordSearchFilter = minimalKeywordSearchFilter _
 
-      patterns.toLocalIterator.map(pattern => {
+      (numSteps, sortedPatterns.toLocalIterator.map(pattern => {
          pattern.setVertexLabeled(false)
          pattern.setInduced(true)
          pattern.setEdgeLabeled(false)
@@ -173,6 +175,6 @@ class MinimalKeywordSearchPA(keywords: Set[Int], numVertices: Int)
             .filter(_checkAndFillLabelCounts)
             .explore(numVertices - 1)
             .filter(_minimalKeywordSearchFilter)
-      })
+      }))
    }
 }

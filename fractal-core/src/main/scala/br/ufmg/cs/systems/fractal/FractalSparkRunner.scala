@@ -599,13 +599,42 @@ object QuerySpecializationPO extends Logging {
       pattern.setInduced(false)
       pattern.setVertexLabeled(true)
       pattern.setEdgeLabeled(false)
-
-      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
+      val numSteps = 1
+      val timeLimitMs = fractalGraph.config.getTotalTimeLimitMs
+      val (numSubgraphs, elapsedMs) = FractalSparkRunner.time {
+         val stepTimeLimitMs = timeLimitMs
          val fractoid = fractalGraph.querySpecializationPO(pattern)
-         fractoid.aggregationCount(COUNT_AGG_REPORT)
+            .withStepTimeLimit(stepTimeLimitMs)
+         val (numSubgraphsTry, elapsedMs) = FractalSparkRunner.time {
+            fc.trySubmitFractalStep(fractoid)(
+               f => f.aggregationCount(COUNT_AGG_REPORT))
+         }
+
+         val (numSubgraphs, exception) = numSubgraphsTry match {
+            case Success(numSubgraphs) => (numSubgraphs, null)
+            case Failure(e) => (0L, e)
+         }
+
+         logApp(s"StepResult fractoid=${fractoid}" +
+            s" exception=${exception}" +
+            s" numVertices=${pattern.getNumberOfVertices}" +
+            s" patternQuery=${pattern}" +
+            s" numSteps=${numSteps}" +
+            s" stepTimeLimitMs=${stepTimeLimitMs}" +
+            s" numSubgraphs=${numSubgraphs}" +
+            s" elapsedMs=${elapsedMs}" +
+            s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+
+         numSubgraphs
       }
 
-      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"FinalResult" +
+         s" numVertices=${pattern.getNumberOfVertices}" +
+         s" patternQuery=${pattern}" +
+         s" numSteps=${numSteps}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
    }
 }
 
@@ -616,26 +645,58 @@ object QuerySpecializationPA extends Logging {
              patternPath: String): Unit = {
 
       val fc = fractalGraph.fractalContext
-
       val pattern = PatternUtils.fromFS(patternPath)
       pattern.setInduced(false)
       pattern.setVertexLabeled(true)
       pattern.setEdgeLabeled(false)
 
-      val (results, elapsed) = FractalSparkRunner.time {
-         val fractoids = fractalGraph.querySpecializationPA(pattern)
-         fc.trySubmitFractalSteps(fractoids)(f => {
-            val numSubgraphs = f.aggregationCount(COUNT_AGG_REPORT)
-            logApp(s"PartialResult fractoid=${f} numSubgraphs=${numSubgraphs}")
-            numSubgraphs
-         })
+      val ((numSteps,numSubgraphs), elapsedMs) = FractalSparkRunner.time {
+         val (numSteps, fractoidsIter) = fractalGraph
+            .querySpecializationPA(pattern)
+         var remainingTime = fractalGraph.config.getTotalTimeLimitMs
+         var remainingSteps = numSteps
+         var numSubgraphsTotal = 0L
+         while (fractoidsIter.hasNext) {
+            val stepTimeLimitMs = remainingTime / remainingSteps
+            val fractoid = fractoidsIter.next().withStepTimeLimit(stepTimeLimitMs)
+
+            val (numSubgraphsTry, elapsedMs) = FractalSparkRunner.time {
+               fc.trySubmitFractalStep(fractoid)(
+                  f => f.aggregationCount(COUNT_AGG_REPORT))
+            }
+
+            val (numSubgraphs, exception) = numSubgraphsTry match {
+               case Success(numSubgraphs) => (numSubgraphs, null)
+               case Failure(e) => (0L, e)
+            }
+
+            numSubgraphsTotal += numSubgraphs
+            remainingTime -= elapsedMs
+            remainingSteps -= 1
+
+            logApp(s"StepResult fractoid=${fractoid}" +
+               s" remainingTimeMs=${remainingTime}" +
+               s" remainingSteps=${remainingSteps}" +
+               s" exception=${exception}" +
+               s" numVertices=${pattern.getNumberOfVertices}" +
+               s" patternQuery=${pattern}" +
+               s" numSteps=${numSteps}" +
+               s" stepTimeLimitMs=${stepTimeLimitMs}" +
+               s" numSubgraphs=${numSubgraphs}" +
+               s" elapsedMs=${elapsedMs}" +
+               s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+         }
+
+         (numSteps, numSubgraphsTotal)
       }
 
-      val failure = results.exists(_.isFailure)
-      val numSubgraphs = results.filter(_.isSuccess).map(_.get).sum
-
-      logApp(s"failure=${failure} numSubgraphs=${numSubgraphs}" +
-         s" elapsed=${elapsed}")
+      logApp(s"FinalResult" +
+         s" numVertices=${pattern.getNumberOfVertices}" +
+         s" patternQuery=${pattern}" +
+         s" numSteps=${numSteps}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
    }
 }
 
@@ -645,17 +706,47 @@ object QuerySpecializationPAPO extends Logging {
    def apply(fractalGraph: FractalGraph, explorationSteps: Int,
              patternPath: String): Unit = {
 
+      val fc = fractalGraph.fractalContext
       val pattern = PatternUtils.fromFS(patternPath)
       pattern.setInduced(false)
       pattern.setVertexLabeled(true)
       pattern.setEdgeLabeled(false)
+      val numSteps = 1
+      val timeLimitMs = fractalGraph.config.getTotalTimeLimitMs
+      val (numSubgraphs, elapsedMs) = FractalSparkRunner.time {
+         val stepTimeLimitMs = timeLimitMs
+         val fractoid = fractalGraph.querySpecializationPAPO(pattern)
+            .withStepTimeLimit(stepTimeLimitMs)
+         val (numSubgraphsTry, elapsedMs) = FractalSparkRunner.time {
+            fc.trySubmitFractalStep(fractoid)(
+               f => f.aggregationCount(COUNT_AGG_REPORT))
+         }
 
-      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         val frac = fractalGraph.querySpecializationPAPO(pattern)
-         frac.aggregationCount(COUNT_AGG_REPORT)
+         val (numSubgraphs, exception) = numSubgraphsTry match {
+            case Success(numSubgraphs) => (numSubgraphs, null)
+            case Failure(e) => (0L, e)
+         }
+
+         logApp(s"StepResult fractoid=${fractoid}" +
+            s" exception=${exception}" +
+            s" numVertices=${pattern.getNumberOfVertices}" +
+            s" patternQuery=${pattern}" +
+            s" numSteps=${numSteps}" +
+            s" stepTimeLimitMs=${stepTimeLimitMs}" +
+            s" numSubgraphs=${numSubgraphs}" +
+            s" elapsedMs=${elapsedMs}" +
+            s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+
+         numSubgraphs
       }
 
-      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"FinalResult" +
+         s" numVertices=${pattern.getNumberOfVertices}" +
+         s" patternQuery=${pattern}" +
+         s" numSteps=${numSteps}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
    }
 }
 
@@ -868,6 +959,8 @@ object PatternQueryingPO extends Logging {
              subgraphPath: String, plabeling: String)
    : Unit = {
 
+      val fc = fractalGraph.fractalContext
+
       val pattern = plabeling match {
          case "n" =>
             val pattern = PatternUtils.fromFS(subgraphPath, false, false)
@@ -894,14 +987,43 @@ object PatternQueryingPO extends Logging {
             return
       }
 
-      val frac = fractalGraph.patternQueryingPO(pattern)
-         .explore(pattern.getNumberOfEdges - 1)
+      val numSteps = 1
+      val timeLimitMs = fractalGraph.config.getTotalTimeLimitMs
+      val (numSubgraphs, elapsedMs) = FractalSparkRunner.time {
+         val stepTimeLimitMs = timeLimitMs
+         val fractoid = fractalGraph.patternQueryingPO(pattern)
+            .explore(pattern.getNumberOfEdges - 1)
+            .withStepTimeLimit(stepTimeLimitMs)
+         val (numSubgraphsTry, elapsedMs) = FractalSparkRunner.time {
+            fc.trySubmitFractalStep(fractoid)(
+               f => f.aggregationCount(COUNT_AGG_REPORT))
+         }
 
-      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount(COUNT_AGG_REPORT)
+         val (numSubgraphs, exception) = numSubgraphsTry match {
+            case Success(numSubgraphs) => (numSubgraphs, null)
+            case Failure(e) => (0L, e)
+         }
+
+         logApp(s"StepResult fractoid=${fractoid}" +
+            s" exception=${exception}" +
+            s" numVertices=${pattern.getNumberOfVertices}" +
+            s" query=${pattern}" +
+            s" numSteps=${numSteps}" +
+            s" stepTimeLimitMs=${stepTimeLimitMs}" +
+            s" numSubgraphs=${numSubgraphs}" +
+            s" elapsedMs=${elapsedMs}" +
+            s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+
+         numSubgraphs
       }
 
-      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"FinalResult" +
+         s" numVertices=${pattern.getNumberOfVertices}" +
+         s" query=${pattern}" +
+         s" numSteps=${numSteps}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
    }
 }
 
@@ -910,6 +1032,8 @@ object PatternQueryingPA extends Logging {
 
    def apply(fractalGraph: FractalGraph, explorationSteps: Int,
              subgraphPath: String, plabeling: String): Unit = {
+      val fc = fractalGraph.fractalContext
+
       val pattern = plabeling match {
          case "n" =>
             val pattern = PatternUtils.fromFS(subgraphPath, false, false)
@@ -936,14 +1060,43 @@ object PatternQueryingPA extends Logging {
             return
       }
 
-      val frac = fractalGraph.patternQueryingPA(pattern)
-         .explore(pattern.getNumberOfVertices - 1)
+      val numSteps = 1
+      val timeLimitMs = fractalGraph.config.getTotalTimeLimitMs
+      val (numSubgraphs, elapsedMs) = FractalSparkRunner.time {
+         val stepTimeLimitMs = timeLimitMs
+         val fractoid = fractalGraph.patternQueryingPA(pattern)
+            .explore(pattern.getNumberOfVertices - 1)
+            .withStepTimeLimit(stepTimeLimitMs)
+         val (numSubgraphsTry, elapsedMs) = FractalSparkRunner.time {
+            fc.trySubmitFractalStep(fractoid)(
+               f => f.aggregationCount(COUNT_AGG_REPORT))
+         }
 
-      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount(COUNT_AGG_REPORT)
+         val (numSubgraphs, exception) = numSubgraphsTry match {
+            case Success(numSubgraphs) => (numSubgraphs, null)
+            case Failure(e) => (0L, e)
+         }
+
+         logApp(s"StepResult fractoid=${fractoid}" +
+            s" exception=${exception}" +
+            s" numVertices=${pattern.getNumberOfVertices}" +
+            s" query=${pattern}" +
+            s" numSteps=${numSteps}" +
+            s" stepTimeLimitMs=${stepTimeLimitMs}" +
+            s" numSubgraphs=${numSubgraphs}" +
+            s" elapsedMs=${elapsedMs}" +
+            s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+
+         numSubgraphs
       }
 
-      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"FinalResult" +
+         s" numVertices=${pattern.getNumberOfVertices}" +
+         s" query=${pattern}" +
+         s" numSteps=${numSteps}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
    }
 }
 
@@ -1001,6 +1154,8 @@ object PatternQueryingPAMCVCOld extends Logging {
    def apply(fractalGraph: FractalGraph, explorationSteps: Int,
              subgraphPath: String, plabeling: String): Unit = {
 
+      val fc = fractalGraph.fractalContext
+
       val pattern = plabeling match {
          case "n" =>
             val pattern = PatternUtils.fromFS(subgraphPath, false, false)
@@ -1027,20 +1182,54 @@ object PatternQueryingPAMCVCOld extends Logging {
             return
       }
 
-      val fracs = fractalGraph.patternQueryingPAMCVC_old(pattern)
+      val ((numSteps, numSubgraphs), elapsed) = FractalSparkRunner.time {
+         val (numSteps, fractoidsIter) = fractalGraph.patternQueryingPAMCVC_old(pattern)
+         var remainingTime = fractalGraph.config.getTotalTimeLimitMs
+         var remainingSteps = numSteps
+         var numSubgraphsTotal = 0L
+         while (fractoidsIter.hasNext) {
+            val stepTimeLimitMs = remainingTime / remainingSteps
+            val fractoid = fractoidsIter.next().withStepTimeLimit(stepTimeLimitMs)
+            val (numSubgraphsTry, elapsedMs) = FractalSparkRunner.time {
+               fc.trySubmitFractalStep(fractoid)(
+                  f => f.aggregationCountWithCallback(
+                     (s,c,cb) => s.completeMatch(c, c.getPattern, cb),
+                     COUNT_AGG_REPORT))
+            }
 
-      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         var numSubgraphs = 0L
-         for (frac <- fracs) {
-            numSubgraphs += frac.aggregationCountWithCallback(
-               (s,c,cb) => s.completeMatch(c, c.getPattern, cb),
-               COUNT_AGG_REPORT
-            )
+            val (numSubgraphs, exception) = numSubgraphsTry match {
+               case Success(numSubgraphs) => (numSubgraphs, null)
+               case Failure(e) => (0L, e)
+            }
+
+            numSubgraphsTotal += numSubgraphs
+            remainingTime -= elapsedMs
+            remainingSteps -= 1
+
+            logApp(s"StepResult fractoid=${fractoid}" +
+               s" remainingTimeMs=${remainingTime}" +
+               s" remainingSteps=${remainingSteps}" +
+               s" exception=${exception}" +
+               s" numVertices=${pattern.getNumberOfVertices}" +
+               s" query=${pattern}" +
+               s" explorationPlan=${fractoid.pattern.explorationPlan()}" +
+               s" numSteps=${numSteps}" +
+               s" stepTimeLimitMs=${stepTimeLimitMs}" +
+               s" numSubgraphs=${numSubgraphs}" +
+               s" elapsedMs=${elapsedMs}" +
+               s" throughput=${numSubgraphs / elapsedMs.toDouble}")
          }
-         numSubgraphs
+
+         (numSteps, numSubgraphsTotal)
       }
 
-      logApp(s"numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
+      logApp(s"FinalResult" +
+         s" numVertices=${pattern.getNumberOfVertices}" +
+         s" query=${pattern}" +
+         s" numSteps=${numSteps}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" elapsedMs=${elapsed}" +
+         s" throughput=${numSubgraphs / elapsed.toDouble}")
    }
 }
 
@@ -1211,7 +1400,6 @@ object LabelSearchPA extends Logging {
          s" throughput=${numSubgraphs / elapsed.toDouble}")
    }
 }
-
 object LabelSearchPO extends Logging {
    val appid: String = "label_search_po"
 
@@ -1305,34 +1493,7 @@ object MinimalKeywordSearchPO extends Logging {
    def apply(fractalGraph: FractalGraph, explorationSteps: Int,
              keywords: Set[Int], gfiltering: Boolean): Unit = {
 
-      val fg = if (gfiltering) {
-         fractalGraph.filterEdges(
-            (u,uLabels,v,vLabels,e,eLabels) => {
-               val uLabel = uLabels.getu(0)
-               val vLabel = vLabels.getu(0)
-               uLabel != vLabel || keywords.contains(uLabel)
-            })
-      } else {
-         fractalGraph
-      }
-
-      val frac = fg.minimalKeywordSearchPO(keywords, explorationSteps + 1)
-
-      val (numSubgraphs, elapsed) = FractalSparkRunner.time {
-         frac.aggregationCount(COUNT_AGG_REPORT)
-      }
-
-      logApp(s"labelsSet=${keywords} gfiltering=${gfiltering}" +
-         s" numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
-   }
-}
-
-object MinimalKeywordSearchPA extends Logging {
-   val appid: String = "minimal_keyword_search_pa"
-
-   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
-             keywords: Set[Int], gfiltering: Boolean): Unit = {
-
+      val fc = fractalGraph.fractalContext
       val numVertices = explorationSteps + 1
 
       val fg = if (gfiltering) {
@@ -1346,26 +1507,115 @@ object MinimalKeywordSearchPA extends Logging {
          fractalGraph
       }
 
-      val fractoidsIter = fg.minimalKeywordSearchPA(keywords, numVertices)
-      val fractoidsGroupedIter = fractoidsIter.grouped(10)
-
-      val (results, elapsed) = FractalSparkRunner.time {
-         val results = ArrayBuffer.empty[Try[Long]]
-         while (fractoidsGroupedIter.hasNext) {
-            val fractoids = fractoidsGroupedIter.next()
-            val partialResults = fg.fractalContext.trySubmitFractalSteps(
-               fractoids)(f => f.aggregationCount(COUNT_AGG_REPORT))
-            results ++= partialResults
+      val numSteps = 1
+      val timeLimitMs = fg.config.getTotalTimeLimitMs
+      val (numSubgraphs, elapsedMs) = FractalSparkRunner.time {
+         val stepTimeLimitMs = timeLimitMs
+         val fractoid = fg.minimalKeywordSearchPO(keywords, numVertices)
+            .withStepTimeLimit(stepTimeLimitMs)
+         val (numSubgraphsTry, elapsedMs) = FractalSparkRunner.time {
+            fc.trySubmitFractalStep(fractoid)(
+               f => f.aggregationCount(COUNT_AGG_REPORT))
          }
-         results
+
+         val (numSubgraphs, exception) = numSubgraphsTry match {
+            case Success(numSubgraphs) => (numSubgraphs, null)
+            case Failure(e) => (0L, e)
+         }
+
+         logApp(s"StepResult fractoid=${fractoid}" +
+            s" exception=${exception}" +
+            s" numVertices=${numVertices}" +
+            s" keywords=${keywords.toArray.sorted.mkString(",")}" +
+            s" gfiltering=${gfiltering}" +
+            s" numSteps=${numSteps}" +
+            s" stepTimeLimitMs=${stepTimeLimitMs}" +
+            s" numSubgraphs=${numSubgraphs}" +
+            s" elapsedMs=${elapsedMs}" +
+            s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+
+         numSubgraphs
       }
 
-      val failure = results.exists(_.isFailure)
-      val numSubgraphs = results.filter(_.isSuccess).map(_.get).sum
+      logApp(s"FinalResult" +
+         s" numVertices=${numVertices}" +
+         s" keywords=${keywords.toArray.sorted.mkString(",")}" +
+         s" gfiltering=${gfiltering}" +
+         s" numSteps=${numSteps}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+   }
+}
 
-      logApp(s"failure=${failure} labelsSet=${keywords}" +
-         s" gfiltering=${gfiltering} numSubgraphs=${numSubgraphs}" +
-         s" elapsed=${elapsed}")
+object MinimalKeywordSearchPA extends Logging {
+   val appid: String = "minimal_keyword_search_pa"
+
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             keywords: Set[Int], gfiltering: Boolean): Unit = {
+
+      val fc = fractalGraph.fractalContext
+      val numVertices = explorationSteps + 1
+
+      val fg = if (gfiltering) {
+         fractalGraph.filterEdges(
+            (u,uLabels,v,vLabels,e,eLabels) => {
+               val uLabel = uLabels.getu(0)
+               val vLabel = vLabels.getu(0)
+               uLabel != vLabel || keywords.contains(uLabel)
+            })
+      } else {
+         fractalGraph
+      }
+
+      val ((numSteps, numSubgraphs), elapsed) = FractalSparkRunner.time {
+         val (numSteps, fractoidsIter) = fg.minimalKeywordSearchPA(keywords, numVertices)
+         var remainingTime = fractalGraph.config.getTotalTimeLimitMs
+         var remainingSteps = numSteps
+         var numSubgraphsTotal = 0L
+         while (fractoidsIter.hasNext) {
+            val stepTimeLimitMs = remainingTime / remainingSteps
+            val fractoid = fractoidsIter.next().withStepTimeLimit(stepTimeLimitMs)
+            //val stepTimeLimitMs = fractoid.config.getStepTimeLimitMs
+            val (numSubgraphsTry, elapsedMs) = FractalSparkRunner.time {
+               fc.trySubmitFractalStep(fractoid)(
+                  f => f.aggregationCount(COUNT_AGG_REPORT))
+            }
+
+            val (numSubgraphs, exception) = numSubgraphsTry match {
+               case Success(numSubgraphs) => (numSubgraphs, null)
+               case Failure(e) => (0L, e)
+            }
+
+            numSubgraphsTotal += numSubgraphs
+            remainingTime -= elapsedMs
+            remainingSteps -= 1
+
+            logApp(s"StepResult fractoid=${fractoid}" +
+               s" remainingTimeMs=${remainingTime}" +
+               s" remainingSteps=${remainingSteps}" +
+               s" exception=${exception}" +
+               s" numVertices=${numVertices}" +
+               s" keywords=${keywords.toArray.sorted.mkString(",")}" +
+               s" gfiltering=${gfiltering}" +
+               s" numSteps=${numSteps}" +
+               s" stepTimeLimitMs=${stepTimeLimitMs}" +
+               s" numSubgraphs=${numSubgraphs}" +
+               s" elapsedMs=${elapsedMs}" +
+               s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+         }
+
+         (numSteps, numSubgraphsTotal)
+      }
+
+      logApp(s"FinalResult" +
+         s" numVertices=${numVertices}" +
+         s" keywords=${keywords.toArray.sorted.mkString(",")}" +
+         s" gfiltering=${gfiltering}" +
+         s" numSteps=${numSteps}" +
+         s" numSubgraphs=${numSubgraphs}" +
+         s" elapsedMs=${elapsed}" +
+         s" throughput=${numSubgraphs / elapsed.toDouble}")
    }
 }
 

@@ -595,32 +595,29 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
    }
 
    def patternQueryingPAMCVC_old(pattern: Pattern)
-   : Array[Fractoid[PatternInducedSubgraph]] = {
+   : (Int,Iterator[Fractoid[PatternInducedSubgraph]]) = {
       logInfo(s"PatternBeforePlan ${pattern}")
 
       val newPatterns = PatternExplorationPlanMCVC.apply(pattern)
-      val partialResults = new Array[Fractoid[PatternInducedSubgraph]](newPatterns.size())
+      val numSteps = newPatterns.size()
+      val patternsArray = newPatterns
+         .toArray(new Array[Pattern](numSteps))
 
-      var i = 0
-      while (i < newPatterns.size()) {
-         val nextPattern = newPatterns.getu(i)
+      (numSteps, patternsArray.iterator.map(nextPattern => {
          val explorationPlanMCVC = nextPattern.explorationPlan()
          val mcvcSize = explorationPlanMCVC.mcvcSize()
 
-         val gquerying = this.patternQueryingPA(nextPattern)
+         val fractoid = this.patternQueryingPA(nextPattern)
             .explore(mcvcSize - 1)
 
          logInfo(s"MCVCPartialResult pattern=${nextPattern}" +
             s" sbLower=${nextPattern.vsymmetryBreakerLowerBound()}" +
             s" sbUpper=${nextPattern.vsymmetryBreakerUpperBound()}" +
             s" plan=${explorationPlanMCVC}" +
-            s" fractoid=${gquerying}")
+            s" fractoid=${fractoid}")
 
-         partialResults(i) = gquerying
-         i += 1
-      }
-
-      partialResults
+         fractoid
+      }))
    }
 
    /**
@@ -830,7 +827,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * @return new fractoid
     */
    def minimalKeywordSearchPA(keywords: Set[Int], numVertices: Int)
-   : Iterator[Fractoid[PatternInducedSubgraph]] = {
+   : (Int,Iterator[Fractoid[PatternInducedSubgraph]]) = {
       val app = new MinimalKeywordSearchPA(keywords, numVertices)
       app.apply(self)
    }
@@ -889,7 +886,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * @return new fractoid
     */
    def querySpecializationPA(pattern: Pattern)
-   : Seq[Fractoid[PatternInducedSubgraph]] = {
+   : (Int, Iterator[Fractoid[PatternInducedSubgraph]]) = {
       pattern.setInduced(false)
       pattern.setVertexLabeled(true)
       pattern.setEdgeLabeled(false)
@@ -921,21 +918,21 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       val extendedPatterns = sc
          .union(internalExtendedPatterns, externalExtendedPatterns)
 
-      logApp(s"numPatterns=${extendedPatterns.count()}")
+      val sortedPatterns = extendedPatterns.sortBy(
+         p => (p.getNumberOfVertices, -p.getNumberOfEdges)
+      ) // less vertices and dense first
+      sortedPatterns.cache()
+      val numSteps = sortedPatterns.count().toInt
 
-      val fractoids = extendedPatterns
+      val fractoidsIter = sortedPatterns.toLocalIterator
          .map(pattern => {
             pattern.setInduced(false)
             pattern.setVertexLabeled(true)
             pattern.setEdgeLabeled(false)
-            pattern
-         })
-         .collect()
-         .map(pattern => {
             self.pfractoid(pattern).expand(pattern.getNumberOfVertices)
          })
 
-      fractoids
+      (numSteps, fractoidsIter)
    }
 
    /**

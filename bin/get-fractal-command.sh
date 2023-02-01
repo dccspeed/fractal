@@ -632,6 +632,8 @@ packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.
 extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties ${PROFILER_OPTIONS}\""
 args=${args:-"$labeling $inputgraph $app $total_cores $steps $log_level $steptimelimit $timelimit $fsmsupp $mindensity $query $plabeling $fraction $periodicthreshold $labelsset $gfiltering $seed $topk $outputdir $outputpath $configs"}
 
+echo "sdsdsdsd : $query" >&2
+
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\
    --driver-memory $master_memory \\

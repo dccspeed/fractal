@@ -32,7 +32,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
     */
    private val motifsGt: Map[(String, Int), Array[Long]] = {
       var motifsGt = Map.empty[(String, Int), Array[Long]]
-      val in = Source.fromFile("../data/motifs-test.gt")
+      val in = Source.fromFile("../data/test/motifs-test.gt")
       for (line <- in.getLines) {
          val toks = line.trim.split(" ")
          val (graph, numVertices, numMotifs) = (toks(0), toks(1), toks(2))
@@ -51,7 +51,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
     */
    private val patternMatchingGt: Map[(String, String, Int), Long] = {
       var patternMatchingGt = Map.empty[(String, String, Int), Long]
-      val in = Source.fromFile("../data/pattern-matching-test.gt")
+      val in = Source.fromFile("../data/test/pattern-matching-test.gt")
       for (line <- in.getLines) {
          val toks = line.trim.split(" ")
          val (graph, query, numVertices, numSubgraphs) = (toks(0), toks(1),
@@ -68,7 +68,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
     */
    private val fsmGt: Map[(String, Int), Long] = {
       var fsmGt = Map.empty[(String, Int), Long]
-      val in = Source.fromFile("../data/fsm-test.gt")
+      val in = Source.fromFile("../data/test/fsm-test.gt")
       for (line <- in.getLines) {
          val toks = line.trim.split(" ")
          val (graph, minSupport, numPatterns) = (toks(0), toks(1), toks(2))
@@ -83,7 +83,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
     */
    private val maximalCliqueGt: Map[(String, Int), Long] = {
       var maximalCliqueGt = Map.empty[(String, Int), Long]
-      val in = Source.fromFile("../data/maximal-clique-test.gt")
+      val in = Source.fromFile("../data/test/maximal-clique-test.gt")
       for (line <- in.getLines) {
          val toks = line.trim.split(" ")
          val (graph, maxSize, numSubgraphs) = (toks(0), toks(1), toks(2))
@@ -114,17 +114,14 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       }
 
       cubeGraph = withDefaultConfs(fc.textFile(
-         //"../data/cube.sc",
          "../data/cube",
          graphClass = "br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph"))
 
       citeseerSingleLabelGraph = withDefaultConfs(fc.textFile(
-         //"../data/citeseer-single-label.sc",
          "../data/citeseer",
          graphClass = "br.ufmg.cs.systems.fractal.graph.UnlabeledMainGraph"))
 
       citeseerGraph = withDefaultConfs(fc.textFile(
-         //"../data/citeseer.sc",
          "../data/citeseer",
          graphClass = "br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph"))
    }

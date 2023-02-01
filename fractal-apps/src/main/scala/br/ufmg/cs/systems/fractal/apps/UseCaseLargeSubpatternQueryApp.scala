@@ -1,10 +1,14 @@
 package br.ufmg.cs.systems.fractal.apps
 
+import java.util
+import java.util.Random
+import java.util.concurrent.ThreadLocalRandom
+
 import br.ufmg.cs.systems.fractal._
 import br.ufmg.cs.systems.fractal.computation.{Computation, SubgraphEnumerator, SupernodeEnumerator}
 import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.graph.MainGraph
-import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternUtils, PatternUtilsRDD}
+import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternEdge, PatternUtils, PatternUtilsRDD}
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph
 import br.ufmg.cs.systems.fractal.util.Logging
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView
@@ -23,15 +27,41 @@ object UseCaseLargeSubpatternQueryApp extends Logging {
       val sc = new SparkContext(conf)
       val fc = new FractalContext(sc, "app")
       val graphPath = args(0) // input graph
+      val numVertices = args(1).toInt
+      val random = new Random(args(2).toInt)
       val fg = fc.textFile(graphPath,
          graphClass = "br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph")
          .set("ws_external", false)
 
-      // sampled pattern not containing label 14
-      val targetLabel = 14
-      val pattern = fg.getPatternsFromSamples(1, 8).first()
+      val getLabelFromVertex: VertexInducedSubgraph => Long = s => {
+         s.getMainGraph.firstVertexLabel(s.getVertices.getLast)
+      }
+
+      // sampling pattern
+      val pattern = fg.getPatternsFromSamples(1, numVertices, random.nextInt()).first()
       pattern.setInduced(true)
       pattern.setVertexLabeled(true)
+      logApp(s"RandomPattern ${pattern}")
+
+      // random target label
+      val vlabels = fg.vfractoid.expand(1)
+         .aggregationLongLong(getLabelFromVertex, 0L, s => 0L, _ + _)
+         .keys
+         .collect()
+         .toSet
+      logApp(s"VertexLabels ${vlabels}")
+      val plabels = pattern.getEdges.toArray
+         .map(o => o.asInstanceOf[PatternEdge])
+         .flatMap(e => List(e.getDestLabel.toLong, e.getSrcLabel.toLong))
+         .toSet
+      logApp(s"PatternLabels ${plabels}")
+      val candidateLabels = vlabels.diff(plabels).toArray
+      util.Arrays.sort(candidateLabels)
+      logApp(s"CandidateLabels ${candidateLabels.mkString(",")}")
+      val targetLabelIdx = random.nextInt(candidateLabels.size)
+      logApp(s"TargetLabelIdx ${targetLabelIdx}")
+      val targetLabel = candidateLabels(targetLabelIdx).toInt
+      logApp(s"TargetLabel ${targetLabel}")
 
       // all extended patterns by one vertex with target label
       val extendedPatterns = PatternUtilsRDD.extendByVertexRDD(
@@ -41,32 +71,32 @@ object UseCaseLargeSubpatternQueryApp extends Logging {
 
       // count each pattern query concurrently
       val start1 = System.currentTimeMillis()
-      var futures: List[Future[(Pattern,Long)]] = List.empty
-      var numExtendedSubgraphsPA = 0L
+      var futures: List[Future[Long]] = List.empty
       var numExtendedPatternsWithZeroCount = 0L
       val cur = extendedPatterns.iterator
       while (cur.hasNext) {
          val extendedPattern = cur.next()
          extendedPattern.setInduced(true)
          extendedPattern.setVertexLabeled(true)
-         val future = Future((extendedPattern, fg
-            .pfractoid(extendedPattern)
-            .expand(extendedPattern.getNumberOfVertices)
-            .aggregationCount))
+         val future = Future({
+            val c = fg.pfractoid(extendedPattern)
+               .expand(extendedPattern.getNumberOfVertices)
+               .aggregationCount
+            logApp(s"ExtendedPatternPA ${extendedPattern} -> ${c}")
+            c
+         })
 
          futures = future :: futures
       }
 
+      var numExtendedSubgraphsPA = 0L
       futures.foreach(future => {
-         val (extendedPattern, numExtendedSubgraphsTmp) =
-            Await.result(future, Duration.Inf)
+         val numExtendedSubgraphsTmp = Await.result(future, Duration.Inf)
 
          if (numExtendedSubgraphsTmp == 0) {
             numExtendedPatternsWithZeroCount += 1
          }
 
-         logApp(s"ExtendedPatternPA ${extendedPattern} -> " +
-            s"${numExtendedSubgraphsTmp}")
          numExtendedSubgraphsPA += numExtendedSubgraphsTmp
       })
 

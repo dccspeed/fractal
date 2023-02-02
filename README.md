@@ -1,10 +1,11 @@
 # Fractal: A General-Purpose Graph Pattern Mining System
 [![Build Status](https://travis-ci.com/dccspeed/fractal.svg?branch=master)](https://travis-ci.com/dccspeed/fractal)
 
-*Current Version:* SPARK-2.4.3
+*Current Version:* SPARK-2.4.0
 
 Fractal is a high performance and high productivity system for supporting distributed graph
-pattern mining (GPM) applications. Our current version is built on top of Spark 2.4.3.
+pattern mining (GPM) applications. Our current version is was tested Spark 2.
+4.0.
 Fractal features include:
 * Interactive and intuitive API specifically designed for Graph Pattern Mining.
 * Scalable and efficient.
@@ -15,35 +16,24 @@ Fractal is open-source with the Apache 2.0 license. Fractal paper is available [
 ## Requirements for running
 
 * OpenJDK 8
-* Spark 2.4.3
+* Spark 2.4.0
 
 ## Preparing your input
-Fractal currently takes as input undirected multi-labeled graph.
+Fractal currently takes as input undirected labeled graph stored in a 
+directory with three files:
 
-* Vertices are numbered from ```0``` until ```nvertices - 1```.
-* Edges are numbered from ```0``` until ```nedges - 1```.
+* (mandatory) ```graph/metadata```: single line containing the number of 
+vertices (```n```) and the number edges (```m```) in the graph separated by 
+a single space.
+* (mandatory) ```graph/adjlists```: each line ```i = 0..n-1``` holds the 
+adjacency list of vertex ```i```. Each item in this list is a pair
+```(u,e)``` representing respectively, neighbor vertex u and edge id e.
+* (optional) ```graph/vlabels```: line ```i``` holds the label of vertex 
+```i```.
+* (optional) ```graph/elabels```: line ```i``` holds the label of edge
+  ```i```.
 
-The following adjacency lists format is used:
-```
-<nvertices> <nedges>
-<vertex data>( <neighbor data>)*
-<vertex data>( <neighbor data>)*
-...
-```
-
-Where:
-
-```
-<vertex data> := <vlabel>(,<vlabel>)*
-
-<neighbor data> := <vid>,<eid>(,<elabel>)*
-
-<nvertices> := <nedges> := <vlabel> := <elabel> := [0-9][0-9]* // 32 bit integer
-<vid> := [0-9][0-9]* // 32 bit integer within range [0,nvertices)
-<eid> := [0-9][0-9]* // 32 bit integer within range [0,nedges)
-```
-
-Directory ```data/```  includes a few examples (extension ```*.sc```).
+Example: directory ```data/citeseer``` illustrates a valid formatting.
 
 ## Installing Fractal
 
@@ -52,19 +42,18 @@ Directory ```data/```  includes a few examples (extension ```*.sc```).
 ```
 export JAVA_HOME=<openjdk-8-installation-folder>
 cd <repositories-folder>
-wget https://archive.apache.org/dist/spark/spark-2.4.3/spark-2.4.3-bin-hadoop2.7.tgz
-mv spark-2.4.3-bin-hadoop2.7.tgz spark
+wget https://archive.apache.org/dist/spark/spark-2.4.0/spark-2.4.0-bin-hadoop2.7.tgz
+mv spark-2.4.0-bin-hadoop2.7.tgz spark
 cd spark
 export SPARK_HOME=`pwd` 
 ```
 
 2. Clone and build Fractal:
 ```
-cd <repositories-folder>
-git clone https://github.com/dccspeed/fractal.git
+git clone https://github.com/dccspeed/fractal.git # or direct download
 cd fractal
 export FRACTAL_HOME=`pwd`
-./gradlew jar # alternatively, run './gradlew test jar' for tests
+./gradlew jar # download dependencies and build the project
 ```
 
 ## Running built-in applications
@@ -92,8 +81,15 @@ for an example.
 
 Next, we re-compile the project with ```./gradlew jar``` and run the
  application over
-the dataset ```data/citeseer-single-label.sc```:
+the dataset ```data/citeseer```:
 
 ```
-args=data/citeseer-single-label.sc app_class=br.ufmg.cs.systems.fractal.apps.MyMotifsApp ./bin/fractal-custom-app.sh
+args=data/citeseer app_class=br.ufmg.cs.systems.fractal.apps.MyMotifsApp ./bin/fractal-custom-app.sh
 ```
+
+## External software acknowledgements
+
+The following open-source projects are used in Fractal:
+
+- [Bliss](http://www.tcs.hut.fi/Software/bliss/)
+- [AsyncProfiler](https://github.com/jvm-profiling-tools/async-profiler)

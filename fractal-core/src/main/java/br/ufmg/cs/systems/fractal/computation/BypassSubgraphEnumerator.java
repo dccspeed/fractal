@@ -7,7 +7,7 @@ public class BypassSubgraphEnumerator<S extends Subgraph>
         extends SubgraphEnumerator<S> {
 
    @Override
-   public void computeExtensions() {
+   public void computeExtensions_EXTENSION_PRIMITIVE() {
    }
 
    @Override
@@ -15,12 +15,13 @@ public class BypassSubgraphEnumerator<S extends Subgraph>
    }
 
    @Override
-   public boolean extend() {
+   public boolean extend_EXTENSION_PRIMITIVE() {
       return false;
    }
 
    @Override
-   public synchronized boolean forkEnumerator(Computation<S> computation) {
+   public synchronized boolean forkEnumerator(Computation<S> computation,
+                                              boolean updateState) {
       return false;
    }
 

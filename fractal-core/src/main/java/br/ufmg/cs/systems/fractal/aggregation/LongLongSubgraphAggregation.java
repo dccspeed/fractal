@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal.aggregation;
 
+import br.ufmg.cs.systems.fractal.computation.ExecutionEngine;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.ProducerConsumerSignaling;
@@ -9,10 +10,6 @@ import com.koloboke.collect.map.LongLongMap;
 import com.koloboke.collect.map.hash.HashLongLongMaps;
 import com.koloboke.function.LongLongToLongFunction;
 import org.apache.log4j.Logger;
-import scala.Long;
-import scala.Tuple2;
-
-import java.util.Iterator;
 
 public abstract class LongLongSubgraphAggregation<S extends Subgraph>
         extends ProducerConsumerSignaling
@@ -54,4 +51,10 @@ public abstract class LongLongSubgraphAggregation<S extends Subgraph>
    public final long applyAsLong(long k, long existing) {
       return reduce(newValue, existing);
    }
+
+   @Override
+   public void report(ExecutionEngine<S> engine) {
+      // empty by default
+   }
+
 }

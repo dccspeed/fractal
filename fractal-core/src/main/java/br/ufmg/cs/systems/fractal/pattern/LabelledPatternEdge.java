@@ -1,7 +1,5 @@
 package br.ufmg.cs.systems.fractal.pattern;
 
-import br.ufmg.cs.systems.fractal.graph.Edge;
-import br.ufmg.cs.systems.fractal.graph.LabelledEdge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 
 import java.io.DataInput;
@@ -18,19 +16,6 @@ public class LabelledPatternEdge extends PatternEdge {
         label = 0;
     }
 
-    public LabelledPatternEdge(LabelledPatternEdge edge) {
-        super(edge);
-
-        this.label = edge.label;
-    }
-
-    public LabelledPatternEdge(MainGraph mainGraph,
-          int srcPos, int srcLabel, int destPos, int destLabel, int label) {
-        super(mainGraph, srcPos, srcLabel, destPos, destLabel);
-
-        this.label = label;
-    }
-
     @Override
     public void setFromOther(PatternEdge edge) {
         super.setFromOther(edge);
@@ -41,17 +26,18 @@ public class LabelledPatternEdge extends PatternEdge {
     }
 
     @Override
-    public void setFromEdge(MainGraph mainGraph, Edge edge, int srcPos, int dstPos, int srcId) {
-        super.setFromEdge(mainGraph, edge, srcPos, dstPos, srcId);
-
-        if (edge instanceof LabelledEdge) {
-            label = ((LabelledEdge) edge).getEdgeLabel();
-        }
+    public void setFromEdge(MainGraph mainGraph, int edgeId, int srcPos, int dstPos, int srcId) {
+        super.setFromEdge(mainGraph, edgeId, srcPos, dstPos, srcId);
+        label = mainGraph.firstEdgeLabel(edgeId);
     }
 
     @Override
     public int getLabel() {
         return label;
+    }
+
+    public void setLabel(int label) {
+        this.label = label;
     }
 
     @Override

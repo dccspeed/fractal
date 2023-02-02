@@ -3,6 +3,7 @@ package br.ufmg.cs.systems.fractal.util;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import com.koloboke.collect.IntCollection;
 
+import java.util.List;
 import java.util.function.IntConsumer;
 import java.util.function.IntPredicate;
 
@@ -207,5 +208,11 @@ public class Utils {
       }
 
       return cost;
+   }
+
+   public static void swap(IntArrayList arr1, int i1, int i2) {
+      int tmp = arr1.getu(i1);
+      arr1.setu(i1, arr1.getu(i2));
+      arr1.setu(i2, tmp);
    }
 }

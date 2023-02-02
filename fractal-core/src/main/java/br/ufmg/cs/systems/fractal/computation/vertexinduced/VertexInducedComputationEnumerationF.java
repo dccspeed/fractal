@@ -8,7 +8,7 @@ public class VertexInducedComputationEnumerationF<S extends VertexInducedSubgrap
         extends VertexInducedComputation<S> {
 
    @Override
-   public boolean filter(S subgraph) {
+   public boolean filter_FILTERING_PRIMITIVE(S subgraph) {
       throw new UnsupportedOperationException();
    }
 
@@ -24,7 +24,7 @@ public class VertexInducedComputationEnumerationF<S extends VertexInducedSubgrap
 
    @Override
    public long processCompute(SubgraphEnumerator<S> subgraphEnumerator) {
-      while (subgraphEnumerator.extend()) {
+      while (subgraphEnumerator.extend_EXTENSION_PRIMITIVE()) {
          nextComputation.compute();
       }
       return 0;

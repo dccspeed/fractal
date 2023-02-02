@@ -47,7 +47,7 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
       IntIntMapPool.instance().reclaimObject(labeling);
    }
 
-   private static int updateInitalPlan(Pattern pattern, IntArrayList mcvc) {
+   private static int updateInitialPlan(Pattern pattern, IntArrayList mcvc) {
       int numVertices = pattern.getNumberOfVertices();
       PatternExplorationPlan explorationPlan = pattern.explorationPlan();
       PatternEdgeArrayList patternEdges = pattern.getEdges();
@@ -58,6 +58,8 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
 
       explorationPlan.reset(pattern);
 
+      boolean edgeLabeled = pattern.edgeLabeled();
+
       /**
        * Create initial plan
        */
@@ -66,8 +68,13 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
          explorationPlan.intersectionIdxs.get(pedge.getDestPos()).add(pedge.getSrcPos());
          explorationPlan.vertexPredicates.get(pedge.getDestPos()).setLabel(pedge.getDestLabel());
          explorationPlan.vertexPredicates.get(pedge.getSrcPos()).setLabel(pedge.getSrcLabel());
-         EdgePredicate edgePredicate = new EdgePredicate();
-         edgePredicate.setLabel(pedge.getLabel());
+         EdgePredicate edgePredicate;
+         if (edgeLabeled) {
+            edgePredicate = new EdgePredicate();
+            edgePredicate.setLabel(pedge.getLabel());
+         } else {
+            edgePredicate = EdgePredicate.trueEdgePredicate;
+         }
          explorationPlan.edgePredicates.get(pedge.getDestPos()).add(edgePredicate);
          if (pedge.getSrcPos() < mcvc.size() && pedge.getDestPos() < mcvc.size()) {
             ++numCoverEdges;
@@ -125,9 +132,12 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
     * @return an array with a minimum connected vertex cover
     */
    public static ObjArrayList<IntArrayList> minimumConnectedVertexCover(Pattern pattern) {
+      int numVertices = pattern.getNumberOfVertices();
+      IntArrayList vertices = new IntArrayList(numVertices);
+      for (int u = 0; u < numVertices; ++u) vertices.add(u);
       ObjArrayList<IntArrayList> minCovers = new ObjArrayList<>();
       for (int numCoverVertices = 1; numCoverVertices <= pattern.getNumberOfVertices(); numCoverVertices++) {
-         Iterator<IntArrayList> covers = pattern.getVertices().combinations(numCoverVertices);
+         Iterator<IntArrayList> covers = vertices.combinations(numCoverVertices);
          while (covers.hasNext()) {
             IntArrayList coverCandidate = covers.next();
             Iterator<IntArrayList> iter = coverCandidate.permutations();
@@ -202,7 +212,7 @@ public class PatternExplorationPlanMCVC extends PatternExplorationPlan {
       PatternExplorationPlanMCVC explorationPlanMCVC = new PatternExplorationPlanMCVC();
       explorationPlanMCVC.mcvcSize = mcvc.size();
       newPattern.setExplorationPlan(explorationPlanMCVC);
-      updateInitalPlan(newPattern, mcvc);
+      updateInitialPlan(newPattern, mcvc);
       newPattern.updateSymmetryBreaker();
       newPatterns.add(newPattern);
       executions.add(newPatterns);

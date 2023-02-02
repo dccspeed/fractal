@@ -2,6 +2,9 @@ package br.ufmg.cs.systems.fractal.subgraph;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
+import br.ufmg.cs.systems.fractal.graph.MainGraph;
+import br.ufmg.cs.systems.fractal.pattern.Pattern;
+import br.ufmg.cs.systems.fractal.util.Logging$;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import com.koloboke.collect.set.IntSet;
 import com.koloboke.collect.set.hash.HashIntSets;
@@ -92,7 +95,7 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
 
    @Override
    public void computeExtensions(Computation computation,
-                                          IntArrayList extensions) {
+                                 IntArrayList extensions) {
       extensionsSet.clear();
       getConfig().getMainGraph()
               .validExtensionsEdgeInduced(computation, this, extensionsSet);
@@ -108,13 +111,24 @@ public class EdgeInducedSubgraph extends BasicSubgraph {
 
    @Override
    public void computeFirstLevelExtensions(Computation computation,
-                                                    IntArrayList extensions) {
+                                           IntArrayList extensions) {
       int totalNumWords = computation.getInitialNumWords();
       int numPartitions = computation.getNumberPartitions();
-      int myPartitionId = computation.getPartitionId();
-
-      for (int u = myPartitionId; u < totalNumWords; u += numPartitions) {
-         extensions.add(u);
+      int partitionId = computation.getPartitionId();
+      MainGraph graph = computation.getConfig().getMainGraph();
+      
+      computeFirstLevelExtensions(null, totalNumWords, numPartitions,
+              partitionId, graph, extensions);
+   }
+   
+   @Override
+   public void computeFirstLevelExtensions(Pattern pattern, int totalNumWords,
+                                           int numPartitions,
+                                           int partitionId,
+                                           MainGraph graph,
+                                           IntArrayList extensions) {
+      for (int e = partitionId; e < totalNumWords; e += numPartitions) {
+         if (graph.isEdgeValid(e)) extensions.add(e);
       }
    }
 

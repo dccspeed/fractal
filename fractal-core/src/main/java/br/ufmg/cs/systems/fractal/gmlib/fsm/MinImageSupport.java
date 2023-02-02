@@ -33,7 +33,6 @@ public class MinImageSupport implements Externalizable {
    private IntCollectionAddConsumer intAdderConsumer;
    private boolean setFromSubgraph;
    private Subgraph subgraph;
-
    public MinImageSupport() {
       this.numberOfDomains = 0;
       this.domainsReachedSupport = HashIntSets.newMutableSet();

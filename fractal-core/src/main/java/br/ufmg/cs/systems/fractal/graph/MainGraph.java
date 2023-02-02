@@ -1,69 +1,63 @@
 package br.ufmg.cs.systems.fractal.graph;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
+import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
-import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
 import br.ufmg.cs.systems.fractal.util.EdgePredicates;
 import br.ufmg.cs.systems.fractal.util.VertexPredicate;
-import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import com.koloboke.collect.IntCollection;
-import com.koloboke.function.IntIntConsumer;
 
+import java.io.IOException;
 import java.util.function.IntConsumer;
-import java.util.function.IntPredicate;
-import java.util.function.Predicate;
 
-public interface MainGraph<V, E> {
-   MainGraph addEdge(Edge edge);
+public interface MainGraph {
+   void init(Configuration configuration) throws IOException;
 
-   void addEdge(int u, int v, int e);
+   boolean isEdgeValid(int u, int v, int e);
 
-   void addEdgeLabel(int e, int label);
+   boolean isVertexValid(int u);
 
-   MainGraph addVertex(Vertex vertex);
+   int numVertices();
 
-   /* Revised API */
-   /* update graph */
-   void addVertex(int u);
+   IntArrayListView neighborhoodEdges(int u);
 
-   void addVertexLabel(int u, int label);
+   void neighborhoodEdges(int u, IntArrayListView view);
 
-   void afterGraphUpdate();
+   int numEdges();
 
-   boolean containsEdge(int e);
-
-   boolean containsVertex(int u);
-
-   int edgeDst(int e);
-
-   int edgeLabel(int e);
-
-   IntArrayListView edgeLabels(int e);
-
-   void edgeLabels(int e, IntArrayListView view);
+   boolean isEdgeValid(int e);
 
    int edgeSrc(int e);
 
-   int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag);
+   int edgeDst(int e);
 
-   int filterEdges(Predicate<Edge<E>> epred);
+   int firstEdgeLabel(int e);
 
-   int filterVertices(Predicate<Vertex<V>> vpred);
-
-   void forEachCommonEdgeLabels(IntArrayList edges, IntConsumer consumer);
-
-   void forEachEdge(IntConsumer consumer);
+   int firstVertexLabel(int u);
 
    void forEachEdge(int u, int v, IntConsumer consumer);
 
-   Edge getEdge(int edgeId);
+   IntArrayListView neighborhoodVertices(int u);
 
-   int getId();
+   void neighborhoodVertices(int u, IntArrayListView view);
+
+   void forEachCommonEdgeLabels(IntArrayList edges, IntConsumer consumer);
+
+   // Canonical subgraph enumeration
 
    void validExtensionsPatternInducedLabeled(Computation computation,
-                                             Subgraph subgraph, IntArrayList intersectionVertexIdxs, IntArrayList differenceVertexIdxs, IntArrayList starts, IntArrayList ends, int vertexLowerBound, int vertexUpperBound, VertexPredicate vpred, EdgePredicates epreds, IntCollection result);
+                                             Subgraph subgraph,
+                                             IntArrayList intersectionVertexIdxs,
+                                             IntArrayList differenceVertexIdxs,
+                                             IntArrayList starts,
+                                             IntArrayList ends,
+                                             int vertexLowerBound,
+                                             int vertexUpperBound,
+                                             VertexPredicate vpred,
+                                             EdgePredicates epreds,
+                                             IntCollection result);
 
    void validExtensionsPatternInduced(Computation computation,
                                       Subgraph subgraph,
@@ -74,18 +68,6 @@ public interface MainGraph<V, E> {
                                       int vertexUpperBound,
                                       IntCollection result);
 
-   Vertex getVertex(int vertexId);
-
-   VertexNeighbourhood getVertexNeighbourhood(int vertexId);
-
-   IntCollection getVertexNeighbours(int vertexId);
-
-   boolean isEdgeLabelled();
-
-   boolean isMultiGraph();
-
-   /* graph traversals */
-
    void validExtensionsEdgeInduced(Computation computation, Subgraph subgraph,
                                    IntCollection validExtensions);
 
@@ -93,22 +75,6 @@ public interface MainGraph<V, E> {
                                      Subgraph subgraph,
                                      IntCollection validExtensions);
 
-   IntArrayListView neighborhoodVertices(int u);
 
-   void neighborhoodVertices(int u, IntArrayListView view);
-
-   int numEdges();
-
-   /* query graph properties */
-   int numVertices();
-
-   int undoEdgeFilter();
-
-   int undoVertexFilter();
-
-   int vertexLabel(int u);
-
-   IntArrayListView vertexLabels(int u);
-
-   void vertexLabels(int u, IntArrayListView view);
+   int vertexDegree(int u);
 }

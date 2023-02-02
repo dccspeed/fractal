@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal.aggregation;
 
+import br.ufmg.cs.systems.fractal.computation.ExecutionEngine;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 
@@ -21,4 +22,10 @@ public abstract class LongSubgraphAggregation<S extends Subgraph>
    }
 
    public long value() { return value; }
+
+   @Override
+   public void report(ExecutionEngine<S> engine) {
+      // empty by default
+   }
+
 }

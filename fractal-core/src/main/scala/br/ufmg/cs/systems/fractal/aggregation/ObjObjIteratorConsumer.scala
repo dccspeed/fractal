@@ -5,7 +5,8 @@ import com.koloboke.collect.map.ObjObjCursor
 
 class ObjObjIteratorConsumer
 [S <: Subgraph, K <: java.io.Serializable, V <: java.io.Serializable]
-(val agg: ObjObjSubgraphAggregation[S, K, V]) extends Iterator[(K, V)] {
+(val agg: ObjObjSubgraphAggregation[S, K, V], finishCallback: () => Unit)
+   extends Iterator[(K, V)] {
 
    private var cursor: ObjObjCursor[K, V] = _
    private var readyToFinish: Boolean = false
@@ -49,6 +50,7 @@ class ObjObjIteratorConsumer
          true
       } else {
          finished = true
+         finishCallback()
          false
       }
    }

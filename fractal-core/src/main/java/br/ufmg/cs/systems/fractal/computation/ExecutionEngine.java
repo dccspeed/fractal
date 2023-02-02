@@ -9,6 +9,8 @@ import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 public interface ExecutionEngine<S extends Subgraph> {
    Configuration getConfig();
 
+   Computation<S> getComputation();
+
    int getPartitionId();
 
    int getStageId();
@@ -22,4 +24,21 @@ public interface ExecutionEngine<S extends Subgraph> {
    Primitive[] primitives();
 
    ActorRef slaveActor();
+
+   long getComputationTimeStart();
+   long getComputationTimeEnd();
+
+   long getInitTimeStart();
+   long getInitTimeEnd();
+
+   long getComputationWorkStealingTimeStart();
+   long getComputationWorkStealingTimeEnd();
+
+   ExecutionEngine getNextEngine();
+
+   ExecutionEngine getPreviousEngine();
+
+   void terminate();
+
+   void initialWorkCompute();
 }

@@ -8,6 +8,7 @@ import org.apache.spark.{SparkConf, SparkContext}
 
 import scala.collection.JavaConverters._
 
+// TODO: merge this into the FractalGraphRDD -- support for GraphX convertions
 object GraphConverter {
 
    type GraphXType = Graph[IntArrayList, IntArrayList]

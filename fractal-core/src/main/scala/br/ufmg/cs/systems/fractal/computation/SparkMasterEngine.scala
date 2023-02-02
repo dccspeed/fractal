@@ -1,43 +1,38 @@
 package br.ufmg.cs.systems.fractal.computation
 
-import java.io.Serializable
-
 import br.ufmg.cs.systems.fractal.Fractoid
-import br.ufmg.cs.systems.fractal.aggregation.{LongLongSubgraphAggregation, LongObjSubgraphAggregation, LongSubgraphAggregation, ObjLongSubgraphAggregation, ObjObjSubgraphAggregation}
-import br.ufmg.cs.systems.fractal.conf.{Configuration, SparkConfiguration}
+import br.ufmg.cs.systems.fractal.aggregation._
+import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util.Logging
-import com.koloboke.collect.map.LongLongMap
-import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
+import java.io.Serializable
 import scala.reflect.ClassTag
 
 trait SparkMasterEngine[S <: Subgraph] extends Logging {
 
    val step: Int
-   var sc: SparkContext = _
+
+   val fractoid: Fractoid[S]
+
+   def sc: SparkContext
 
    def config: SparkConfiguration
 
    var stepRDD: RDD[Unit] = _
 
-   def init(computation: Computation[S]): Unit = {
+   def computation: Computation[S]
+
+   def init(): Unit = {
       if (!config.isInitialized()) {
          config.initialize(isMaster = true)
       }
 
       // set log level
-      logInfo(s"Setting num_partitions to " +
+      logDebug(s"Setting num_partitions to " +
          s"${config.getInteger("num_partitions", sc.defaultParallelism)}")
-
-      // master must know aggregators metadata
-      var currComp = computation
-      while (currComp != null) {
-         currComp.initAggregations(config)
-         currComp = currComp.nextComputation()
-      }
 
       // set initial state
       stepRDD = sc.makeRDD(Seq.empty[Unit], numPartitions)
@@ -72,18 +67,13 @@ trait SparkMasterEngine[S <: Subgraph] extends Logging {
    def longObjRDD[V <: Serializable : ClassTag]
    (longObjSubgraphAggregation: LongObjSubgraphAggregation[S, V])
    : RDD[(Long, V)]
+
+   def intIntRDD
+   (intIngSubgraphAggregation: IntIntSubgraphAggregation[S])
+   : RDD[(Int,Int)]
 }
 
 object SparkMasterEngine {
-
-   import Configuration._
-   import SparkConfiguration._
-
-   def apply[S <: Subgraph]
-   (frac: Fractoid[S]): SparkMasterEngine[S] =
-      frac.config.getString(CONF_COMM_STRATEGY, CONF_COMM_STRATEGY_DEFAULT)
-      match {
-         case COMM_FROM_SCRATCH =>
-            new SparkFromScratchMasterEngineAggregation[S](frac)
-      }
+   def apply[S <: Subgraph](frac: Fractoid[S]): SparkMasterEngine[S] =
+      new SparkFromScratchMasterEngineAggregation[S](frac)
 }

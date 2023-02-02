@@ -5,17 +5,32 @@ import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import com.koloboke.collect.map.IntIntMap;
+import com.koloboke.collect.set.ObjSet;
 
 import java.io.Externalizable;
 
 public interface Pattern extends Externalizable {
     Pattern copy();
 
+   ObjArrayList<IntArrayList> getVertexPosToEdgeIndices();
+
+   void setVertexLabels(int... vlabels);
+
    int getFirstVertexLabel();
+
+   void addVertexStandalone(int vlabel);
+
+   void addVertexStandalone();
 
    void init(Configuration config);
 
    void removeLastNEdges(int n);
+
+   void removeLastNVertices(int n);
+
+   IntArrayList getVertexLabels(boolean shouldConsiderVertexLabels);
+
+   IntArrayList getEdgeLabels(boolean shouldConsiderEdgeLabels);
 
    PatternExplorationPlan explorationPlan();
 
@@ -31,7 +46,9 @@ public interface Pattern extends Externalizable {
 
     boolean addEdge(PatternEdge patternEdge);
 
-    int getNumberOfEdges();
+   void addEdgeStandalone(PatternEdge edge);
+
+   int getNumberOfEdges();
 
     boolean relabel(IntIntMap labeling);
 
@@ -43,13 +60,9 @@ public interface Pattern extends Externalizable {
 
     VertexPositionEquivalences getVertexPositionEquivalences();
     
-    VertexPositionEquivalences getVertexPositionEquivalences(IntArrayList vertexLabels);
-    
-    EdgePositionEquivalences getEdgePositionEquivalences();
-    
-    EdgePositionEquivalences getEdgePositionEquivalences(IntArrayList edgeLabels);
+    VertexPositionEquivalences getVertexPositionEquivalences(IntArrayList vertexLabels, IntArrayList edgeLabels);
 
-    IntIntMap getCanonicalLabeling();
+   IntIntMap getCanonicalLabeling();
 
    ObjArrayList<IntArrayList> vsymmetryBreakerUpperBound();
 
@@ -75,13 +88,14 @@ public interface Pattern extends Externalizable {
 
    boolean vertexLabeled();
 
+   boolean edgeLabeled();
+
    void setVertexLabeled(boolean vertexLabeled);
+
+   void setEdgeLabeled(boolean edgeLabeled);
 
    Configuration getConfig();
 
-    String toOutputString();
-   
-    ////////
-    boolean equals(Object o, int upTo);
+   boolean equals(Object o, int upTo);
     
 }

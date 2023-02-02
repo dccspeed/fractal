@@ -8,7 +8,7 @@ import br.ufmg.cs.systems.fractal.pattern.PatternEdge;
 import br.ufmg.cs.systems.fractal.pattern.PatternEdgeArrayList;
 import br.ufmg.cs.systems.fractal.pattern.PatternExplorationPlan;
 import br.ufmg.cs.systems.fractal.util.EdgePredicates;
-import br.ufmg.cs.systems.fractal.util.SubgraphCallback;
+import br.ufmg.cs.systems.fractal.callback.SubgraphCallback;
 import br.ufmg.cs.systems.fractal.util.Utils;
 import br.ufmg.cs.systems.fractal.util.VertexPredicate;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
@@ -76,8 +76,8 @@ public class PatternInducedSubgraph extends BasicSubgraph {
          for (int i = 0; i < patternEdges.size(); ++i) {
             PatternEdge pedge = patternEdges.getu(i);
             pedge.setSrcLabel(
-                    graph.vertexLabel(patternVertices.getu(pedge.getSrcPos())));
-            pedge.setDestLabel(graph.vertexLabel(
+                    graph.firstVertexLabel(patternVertices.getu(pedge.getSrcPos())));
+            pedge.setDestLabel(graph.firstVertexLabel(
                     patternVertices.getu(pedge.getDestPos())));
          }
 
@@ -130,14 +130,16 @@ public class PatternInducedSubgraph extends BasicSubgraph {
        * Maybe change the minimum cover match order to reflect the new ordering
        */
       if (nextOrdering - 1 >= 0) {
-         verticesBackup.clear();
-         verticesBackup.addAll(vertices);
+         //verticesBackup.clear();
+         //verticesBackup.addAll(vertices);
          IntArrayList previousOrdering =
                  explorationPlan.ordering(nextOrdering - 1);
          IntArrayList ordering = explorationPlan.ordering(nextOrdering);
          for (int j = 0; j < ordering.size(); ++j) {
+            //vertices.setu(previousOrdering.getu(j),
+            //        verticesBackup.getu(ordering.getu(j)));
             vertices.setu(previousOrdering.getu(j),
-                    verticesBackup.getu(ordering.getu(j)));
+                    originalVertices.getu(ordering.getu(j)));
          }
       }
 
@@ -331,13 +333,14 @@ public class PatternInducedSubgraph extends BasicSubgraph {
 
    private void ensureEdges(Pattern pattern) {
       int numVertices = getNumVertices();
+      edges.clear();
 
       PatternExplorationPlan explorationPlan = pattern.explorationPlan();
-      int edgeIdx = 0;
+      //int edgeIdx = 0;
       for (int u = 1; u < numVertices; ++u) {
          IntArrayList edgesIdxs = explorationPlan.vertexEdges(u);
-         edgeIdx += edgesIdxs.size();
-         if (edgeIdx > edges.size()) {
+         //edgeIdx += edgesIdxs.size();
+         //if (edgeIdx > edges.size()) {
             // add edges
             for (int i = 0; i < edgesIdxs.size(); ++i) {
                PatternEdge pedge = pattern.getEdges().getu(edgesIdxs.getu(i));
@@ -346,11 +349,11 @@ public class PatternInducedSubgraph extends BasicSubgraph {
                                vertices.getu(pedge.getDestPos()),
                                updateEdgesConsumer);
             }
-         }
+         //}
       }
 
       // remove old edges, if any
-      edges.removeLast(edges.size() - edgeIdx);
+      //edges.removeLast(edges.size() - edgeIdx);
    }
 
    @Override
@@ -387,7 +390,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
 
    @Override
    public void computeExtensions(Computation computation,
-                                          IntArrayList extensions) {
+                                 IntArrayList extensions) {
       int numVertices = getNumVertices();
       Pattern pattern = computation.getPattern();
       PatternExplorationPlan explorationPlan = pattern.explorationPlan();
@@ -429,20 +432,31 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       extensions.setFrom(extensionsSet);
    }
 
-   @Override
    public void computeFirstLevelExtensions(Computation computation,
                                            IntArrayList extensions) {
       Pattern pattern = computation.getPattern();
       int totalNumWords = computation.getInitialNumWords();
       int numPartitions = computation.getNumberPartitions();
       int myPartitionId = computation.getPartitionId();
+      MainGraph graph = computation.getConfig().getMainGraph();
 
+      computeFirstLevelExtensions(pattern, totalNumWords, numPartitions,
+              myPartitionId, graph, extensions);
+   }
+
+   @Override
+   public void computeFirstLevelExtensions(Pattern pattern,
+                                           int totalNumWords,
+                                           int numPartitions, int partitionId,
+                                           MainGraph graph,
+                                           IntArrayList extensions) {
       VertexPredicate vertexPredicate =
               pattern.explorationPlan().vertexPredicate(0);
       boolean vertexLabeled = pattern.vertexLabeled();
 
-      for (int u = myPartitionId; u < totalNumWords; u += numPartitions) {
-         if (!vertexLabeled || vertexPredicate.test(u)) extensions.add(u);
+      for (int u = partitionId; u < totalNumWords; u += numPartitions) {
+         if (graph.isVertexValid(u) &&
+                 (!vertexLabeled || vertexPredicate.test(u))) extensions.add(u);
       }
    }
 

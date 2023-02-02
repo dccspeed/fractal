@@ -2,6 +2,7 @@ package br.ufmg.cs.systems.fractal.subgraph;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
+import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import com.koloboke.collect.set.hash.HashIntSet;
@@ -88,9 +89,20 @@ public class VertexInducedSubgraph extends BasicSubgraph {
       int totalNumWords = computation.getInitialNumWords();
       int numPartitions = computation.getNumberPartitions();
       int myPartitionId = computation.getPartitionId();
+      MainGraph graph = computation.getConfig().getMainGraph();
 
-      for (int u = myPartitionId; u < totalNumWords; u += numPartitions) {
-         extensions.add(u);
+      computeFirstLevelExtensions(null, totalNumWords, numPartitions,
+              myPartitionId, graph, extensions);
+   }
+
+   @Override
+   public void computeFirstLevelExtensions(Pattern pattern, int totalNumWords,
+                                           int numPartitions,
+                                           int partitionId, MainGraph graph,
+                                           IntArrayList extensions) {
+      // round-robin
+      for (int u = partitionId; u < totalNumWords; u += numPartitions) {
+         if (graph.isVertexValid(u)) extensions.add(u);
       }
    }
 
@@ -103,20 +115,11 @@ public class VertexInducedSubgraph extends BasicSubgraph {
 
    @Override
    public void removeLastWord() {
-      if (getNumVertices() == 0) {
-         return;
-      }
-
       vertices.removeLast();
       int numEdgesToRemove = numEdgesAddedWithWord.pop();
       edges.removeLast(numEdgesToRemove);
 
       super.removeLastWord();
-   }
-
-   @Override
-   public Pattern quickPattern() {
-      return super.quickPattern();
    }
 
    /**

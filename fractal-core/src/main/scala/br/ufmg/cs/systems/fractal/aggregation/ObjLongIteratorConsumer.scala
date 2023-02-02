@@ -4,7 +4,8 @@ import br.ufmg.cs.systems.fractal.subgraph.Subgraph
 import com.koloboke.collect.map.ObjLongCursor
 
 class ObjLongIteratorConsumer[S <: Subgraph, K <: java.io.Serializable]
-(val agg: ObjLongSubgraphAggregation[S, K]) extends Iterator[(K, Long)] {
+(val agg: ObjLongSubgraphAggregation[S, K], finishCallback: () => Unit)
+   extends Iterator[(K, Long)] {
 
    private var cursor: ObjLongCursor[K] = _
    private var readyToFinish: Boolean = false
@@ -48,6 +49,7 @@ class ObjLongIteratorConsumer[S <: Subgraph, K <: java.io.Serializable]
          true
       } else {
          finished = true
+         finishCallback()
          false
       }
    }

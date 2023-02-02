@@ -1,9 +1,10 @@
 package br.ufmg.cs.systems.fractal.aggregation;
 
+import br.ufmg.cs.systems.fractal.computation.ExecutionEngine;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.ProducerConsumerSignaling;
-import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
+import br.ufmg.cs.systems.fractal.util.ReflectionSerializationUtils;
 import com.koloboke.collect.hash.HashConfig;
 import com.koloboke.collect.map.ObjLongMap;
 import com.koloboke.collect.map.hash.HashObjLongMap;
@@ -38,7 +39,7 @@ public abstract class ObjLongSubgraphAggregation
       newValue = value;
       keyValueMap.compute(key, this);
       if (lastValue == keyValueMap.defaultValue()) {
-         keyValueMap.put(ReflectionUtils.clone(key),
+         keyValueMap.put(ReflectionSerializationUtils.clone(key),
                  keyValueMap.removeAsLong(key));
 
          if (keyValueMap.size() > MAX_SIZE) {
@@ -61,4 +62,10 @@ public abstract class ObjLongSubgraphAggregation
       lastValue = existing;
       return reduce(newValue, existing);
    }
+
+   @Override
+   public void report(ExecutionEngine<S> engine) {
+      // empty by default
+   }
+
 }

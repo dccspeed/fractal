@@ -1,10 +1,12 @@
 package br.ufmg.cs.systems.fractal.aggregation
 
+import br.ufmg.cs.systems.fractal.computation.SparkEngine
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph
 import com.koloboke.collect.map.LongLongCursor
 
 class LongLongIteratorConsumer[S <: Subgraph]
-(val agg: LongLongSubgraphAggregation[S]) extends Iterator[(Long, Long)] {
+(val agg: LongLongSubgraphAggregation[S], finishCallback: () => Unit)
+   extends Iterator[(Long, Long)] {
 
    private var cursor: LongLongCursor = _
    private var readyToFinish: Boolean = false
@@ -48,6 +50,7 @@ class LongLongIteratorConsumer[S <: Subgraph]
          true
       } else {
          finished = true
+         finishCallback()
          false
       }
    }

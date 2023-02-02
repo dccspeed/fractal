@@ -1,16 +1,12 @@
 package br.ufmg.cs.systems.fractal.conf
 
-import java.io._
-import java.net.InetAddress
-import java.util.function.Predicate
-
 import br.ufmg.cs.systems.fractal.computation._
 import br.ufmg.cs.systems.fractal.conf.Configuration._
 import br.ufmg.cs.systems.fractal.graph._
 import br.ufmg.cs.systems.fractal.pattern.Pattern
-import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray
 import br.ufmg.cs.systems.fractal.util.Logging
 
+import java.net.InetAddress
 import scala.collection.mutable.Map
 
 /**
@@ -64,110 +60,55 @@ case class SparkConfiguration(confs: Map[String, Any])
          case None =>
       }
 
+      // collect thread stats
+      updateIfExists("collect_thread_stats", CONF_COLLECT_THREAD_STATS)
+
+      // thread stats key
+      updateIfExists("thread_stats_key", CONF_THREAD_STATS_KEY)
+
       // log level
       updateIfExists("log_level", CONF_LOG_LEVEL)
 
       // info period
       updateIfExists("info_period", INFO_PERIOD)
 
+      // start time
+      updateIfExists("start_time", CONF_START_TIME_MS)
+
+      // time limit
+      updateIfExists("time_limit", CONF_TIME_LIMIT_MS)
+
+      // step time limit
+      updateIfExists("step_time_limit", CONF_STEP_TIME_LIMIT_MS)
+
       // computation classes
       updateIfExists("computation", CONF_COMPUTATION_CLASS)
-
-      // communication strategy
-      updateIfExists("comm_strategy", CONF_COMM_STRATEGY)
 
       // work stealing
       updateIfExists("ws_internal", CONF_WS_INTERNAL)
       updateIfExists("ws_external", CONF_WS_EXTERNAL)
       updateIfExists("ws_external_batchsize", CONF_WS_EXTERNAL_BATCHSIZE)
 
-      // enumerator class
-      updateIfExists("subgraph_enumerator", CONF_ENUMERATOR_CLASS)
-
       // input
       updateIfExists("input_graph_class", CONF_MAINGRAPH_CLASS)
       updateIfExists("input_graph_path", CONF_MAINGRAPH_PATH)
-      updateIfExists("input_graph_local", CONF_MAINGRAPH_LOCAL)
-      updateIfExists("edge_labelled", CONF_MAINGRAPH_EDGE_LABELLED)
+      updateIfExists("edge_labeled", CONF_MAINGRAPH_EDGE_LABELED)
+      updateIfExists("vertex_labeled", CONF_MAINGRAPH_VERTEX_LABELED)
 
       // multigraph
       updateIfExists("multigraph", CONF_MAINGRAPH_MULTIGRAPH)
-   }
 
-   var tagApplied = false
+      // edge filtering predicate
+      updateIfExists("edge_filtering_predicate",
+         CONF_MAINGRAPH_EDGE_FILTERING_PREDICATE)
+
+      // vertex filtering predicate
+      updateIfExists("vertex_filtering_predicate",
+         CONF_MAINGRAPH_VERTEX_FILTERING_PREDICATE)
+   }
 
    def initializeWithTag(isMaster: Boolean): Unit = synchronized {
       initialize(isMaster)
-      if (!tagApplied) {
-
-         val startTag = System.currentTimeMillis
-
-         val ret = (confs.get("vtag"), confs.get("etag")) match {
-            case (Some(vtag: AtomicBitSetArray), Some(
-            etag: AtomicBitSetArray)) =>
-               tagApplied = true
-               getMainGraph[MainGraph[_, _]].filter(vtag, etag)
-
-            case other =>
-               0
-         }
-
-         val elapsedTag = System.currentTimeMillis - startTag
-
-         if (ret > 0) {
-            logInfo(s"GraphTagging took ${elapsedTag} return=${ret}")
-         }
-
-         val startFilter = System.currentTimeMillis
-
-         //if (!confs.contains("vfilter")) {
-         getMainGraph[MainGraph[_, _]].undoVertexFilter()
-         //}
-
-         //if (!confs.contains("efilter")) {
-         getMainGraph[MainGraph[_, _]].undoEdgeFilter()
-         //}
-
-         def filterVertices[V, E](graph: MainGraph[V, E],
-                                  vpred: Predicate[_]): Int = {
-            graph.filterVertices(vpred.asInstanceOf[Predicate[Vertex[V]]])
-         }
-
-         val removedVertices = confs.get("vfilter") match {
-            case Some(vpred: Predicate[_]) =>
-               tagApplied = true
-               filterVertices(getMainGraph[MainGraph[_, _]], vpred)
-
-            case other =>
-               0
-         }
-
-         def filterEdges[V, E](graph: MainGraph[V, E],
-                               epred: Predicate[_]): Int = {
-            graph.filterEdges(epred.asInstanceOf[Predicate[Edge[E]]])
-         }
-
-         val removedEdges = confs.get("efilter") match {
-            case Some(epred: Predicate[_]) =>
-               tagApplied = true
-               filterEdges(getMainGraph[MainGraph[_, _]], epred)
-
-            case other =>
-               0
-         }
-
-         val elapsedFilter = System.currentTimeMillis - startFilter
-
-         if (removedVertices + removedEdges > 0) {
-            logInfo(s"GraphFiltering took ${elapsedFilter} ms" +
-               s" removedVertices=${removedVertices} " +
-               s"removedEdges=${removedEdges}")
-         }
-
-         if (ret + removedVertices + removedEdges > 0) {
-            getMainGraph[MainGraph[_, _]].afterGraphUpdate()
-         }
-      }
    }
 
    /**
@@ -191,7 +132,13 @@ case class SparkConfiguration(confs: Map[String, Any])
       }
 
       if (!isMaster && !isMainGraphRead()) {
-         setGraph()
+         //setGraph()
+         mainGraph.synchronized {
+            if (!isMainGraphRead) {
+               logInfo("MainGraph is empty, gonna try reading it")
+               readMainGraph()
+            }
+         }
       }
    }
 
@@ -203,15 +150,21 @@ case class SparkConfiguration(confs: Map[String, Any])
 
       // periodic information about execution
       infoPeriod = getLong(INFO_PERIOD, INFO_PERIOD_DEFAULT_MS)
+      startTime = getLong(CONF_START_TIME_MS, CONF_START_TIME_MS_DEFAULT)
+      timeLimit = getLong(CONF_TIME_LIMIT_MS, CONF_TIME_LIMIT_MS_DEFAULT)
+      stepTimeLimitMs = getLong(CONF_STEP_TIME_LIMIT_MS, CONF_STEP_TIME_LIMIT_MS_DEFAULT)
 
       // common configs
       setMainGraphClass(
          getClass(CONF_MAINGRAPH_CLASS, CONF_MAINGRAPH_CLASS_DEFAULT).
-            asInstanceOf[Class[_ <: MainGraph[_, _]]]
+            asInstanceOf[Class[_ <: MainGraph]]
       )
 
-      setIsGraphEdgeLabelled(getBoolean(CONF_MAINGRAPH_EDGE_LABELLED,
-         CONF_MAINGRAPH_EDGE_LABELLED_DEFAULT))
+      setIsGraphEdgeLabeled(getBoolean(CONF_MAINGRAPH_EDGE_LABELED,
+         CONF_MAINGRAPH_EDGE_LABELED_DEFAULT))
+
+      setIsGraphVertexLabeled(getBoolean(CONF_MAINGRAPH_VERTEX_LABELED,
+         CONF_MAINGRAPH_VERTEX_LABELED_DEFAULT))
 
       setComputationClass(
          getClass(CONF_COMPUTATION_CLASS, CONF_COMPUTATION_CLASS_DEFAULT).
@@ -223,31 +176,20 @@ case class SparkConfiguration(confs: Map[String, Any])
             asInstanceOf[Class[_ <: Pattern]]
       )
 
-      setSubgraphEnumClass(
-         getClass(CONF_ENUMERATOR_CLASS, CONF_ENUMERATOR_CLASS_DEFAULT).
-            asInstanceOf[Class[_ <: SubgraphEnumerator[_]]]
-      )
-
       isGraphMulti = getBoolean(CONF_MAINGRAPH_MULTIGRAPH,
          CONF_MAINGRAPH_MULTIGRAPH_DEFAULT)
 
+      setEdgeFilteringPredicate(
+         getValue(CONF_MAINGRAPH_EDGE_FILTERING_PREDICATE, null)
+            .asInstanceOf[EdgeFilteringPredicate]
+      )
+
+      setVertexFilteringPredicate(
+         getValue(CONF_MAINGRAPH_VERTEX_FILTERING_PREDICATE, null)
+            .asInstanceOf[VertexFilteringPredicate]
+      )
+
       initialized = true
-   }
-
-   private def setGraph(): Boolean = {
-      var graphRead = false
-
-      // in case of the mainGraph is empty (no vertices and no edges), we try to
-      // read it
-      getMainGraph[MainGraph[_, _]].synchronized {
-         if (!isMainGraphRead) {
-            logInfo("MainGraph is empty, gonna try reading it")
-            readMainGraph()
-            graphRead = true
-         }
-      }
-
-      graphRead
    }
 
    def getValue(key: String, defaultValue: Any): Any = confs.get(key) match {
@@ -260,19 +202,19 @@ case class SparkConfiguration(confs: Map[String, Any])
    }
 
    override def getInteger(key: String, defaultValue: Integer) =
-      getValue(key, defaultValue).asInstanceOf[Int]
+      getValue(key, defaultValue).toString.toInt
 
    override def getLong(key: String, defaultValue: java.lang.Long) =
-      getValue(key, defaultValue).asInstanceOf[Long]
+      getValue(key, defaultValue).toString.toLong
 
    override def getDouble(key: String, defaultValue: java.lang.Double) =
-      getValue(key, defaultValue).asInstanceOf[Double]
+      getValue(key, defaultValue).toString.toDouble
 
    override def getFloat(key: String, defaultValue: java.lang.Float) =
-      getValue(key, defaultValue).asInstanceOf[Float]
+      getValue(key, defaultValue).toString.toFloat
 
    override def getString(key: String, defaultValue: String) =
-      getValue(key, defaultValue).asInstanceOf[String]
+      getValue(key, defaultValue).toString
 
    override def getBoolean(key: String, defaultValue: java.lang.Boolean) = {
       val value = getValue(key, defaultValue)
@@ -287,33 +229,5 @@ case class SparkConfiguration(confs: Map[String, Any])
 
    override def toString: String = {
       s"SparkConfiguration(${confs})"
-   }
-}
-
-object SparkConfiguration extends Logging {
-   // re-enumerates from scratch every superstep (aggregation based)
-   val COMM_FROM_SCRATCH = "scratch"
-
-   // auxiliary functions
-   def serialize[T](obj: T): Array[Byte] = {
-      val baos = new ByteArrayOutputStream
-      val oos = new ObjectOutputStream(baos)
-      oos.writeObject(obj)
-      oos.close
-      baos.toByteArray
-   }
-
-   def deserialize[T](bytes: Array[Byte]): T = {
-      val bais = new ByteArrayInputStream(bytes)
-      deserialize(bais)
-   }
-
-   def deserialize[T](is: InputStream): T = {
-      val ois = new ObjectInputStream(is)
-      ois.readObject().asInstanceOf[T]
-   }
-
-   def clone[T](obj: T): T = {
-      deserialize(serialize(obj))
    }
 }

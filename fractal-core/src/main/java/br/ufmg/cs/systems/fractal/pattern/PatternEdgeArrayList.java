@@ -18,7 +18,7 @@ public class PatternEdgeArrayList extends ObjArrayList<PatternEdge> implements C
       this.patternEdgePool = patternEdgePool;
    }
 
-   protected PatternEdge createObject() {
+   public PatternEdge createObject() {
       return patternEdgePool.createObject();
    }
 

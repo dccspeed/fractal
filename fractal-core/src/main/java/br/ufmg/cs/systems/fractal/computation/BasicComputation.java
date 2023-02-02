@@ -5,6 +5,7 @@ import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
+import br.ufmg.cs.systems.fractal.util.ReflectionSerializationUtils;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import org.apache.log4j.Logger;
 
@@ -22,6 +23,7 @@ public abstract class BasicComputation<S extends Subgraph>
    protected transient MainGraph mainGraph;
    protected transient Configuration configuration;
    protected transient Computation<S> nextComputation;
+   protected transient Computation<S> previousComputation;
    protected transient Computation<S> lastComputation;
 
    // basic counters
@@ -29,6 +31,21 @@ public abstract class BasicComputation<S extends Subgraph>
    private transient long expansionCandidates;
    private transient long canonicalSubgraphs;
    private transient long validSubgraphs;
+   private transient long internalWorkSteals;
+   private transient long externalWorkSteals;
+   private transient boolean forcedTermination;
+
+   private transient boolean active;
+
+   @Override
+   public void setForcedTermination(boolean forcedTermination) {
+      this.forcedTermination = forcedTermination;
+   }
+
+   @Override
+   public boolean getForcedTermination() {
+      return this.forcedTermination;
+   }
 
    @Override
    public void addCanonicalSubgraphs(long inc) {
@@ -57,13 +74,33 @@ public abstract class BasicComputation<S extends Subgraph>
    }
 
    @Override
+   public long getInternalWorkSteals() {
+      return internalWorkSteals;
+   }
+
+   @Override
+   public long getExternalWorkSteals() {
+      return externalWorkSteals;
+   }
+
+   @Override
+   public void addInternalWorkSteals(long inc) {
+      this.internalWorkSteals += inc;
+   }
+
+   @Override
+   public void addExternalWorkSteals(long inc) {
+      this.externalWorkSteals += inc;
+   }
+
+   @Override
    public void compute() {
-      subgraphEnumerator.computeExtensions();
+      subgraphEnumerator.computeExtensions_EXTENSION_PRIMITIVE();
       processCompute(subgraphEnumerator);
    }
 
    @Override
-   public boolean filter(S subgraph) {
+   public boolean filter_FILTERING_PRIMITIVE(S subgraph) {
       return true;
    }
 
@@ -112,6 +149,11 @@ public abstract class BasicComputation<S extends Subgraph>
    }
 
    @Override
+   public void setPattern(Pattern pattern) {
+
+   }
+
+   @Override
    public final int getStep() {
       return executionEngine.getStep();
    }
@@ -137,13 +179,19 @@ public abstract class BasicComputation<S extends Subgraph>
 
    @Override
    public void init(Configuration config) {
+      active = true;
       configuration = config;
       mainGraph = configuration.getMainGraph();
-      subgraphEnumerator = configuration.createSubgraphEnumerator(this);
-      lastComputation = this;
+      subgraphEnumerator = ReflectionSerializationUtils.newInstance(
+              getSubgraphEnumeratorClass()
+      );
+      subgraphEnumerator.init(config, this);
       nextComputation = nextComputation();
+      lastComputation = this;
       while (lastComputation.nextComputation() != null) {
-         lastComputation = lastComputation.nextComputation();
+         Computation<S> currNextComputation = lastComputation.nextComputation();
+         currNextComputation.setPreviousComputation(lastComputation);
+         lastComputation = currNextComputation;
       }
    }
 
@@ -181,6 +229,16 @@ public abstract class BasicComputation<S extends Subgraph>
    }
 
    @Override
+   public final Computation<S> previousComputation() {
+      return previousComputation;
+   }
+
+   @Override
+   public final void setPreviousComputation(Computation<S> previousComputation) {
+      this.previousComputation = previousComputation;
+   }
+
+   @Override
    public void process(S subgraph) {
       // Empty by default
    }
@@ -202,11 +260,23 @@ public abstract class BasicComputation<S extends Subgraph>
    }
 
    @Override
-   public boolean shouldBypass() {
-      return false;
+   public void terminate() {
+      setForcedTermination(true);
+      this.active = false;
+      getSubgraphEnumerator().terminate();
+   }
+
+   @Override
+   public boolean isActive() {
+      return active;
    }
 
    public MainGraph getMainGraph() {
       return mainGraph;
+   }
+
+   @Override
+   public Class<? extends SubgraphEnumerator<S>> getSubgraphEnumeratorClass() {
+      return null;
    }
 }

@@ -1,12 +1,12 @@
 package br.ufmg.cs.systems.fractal.computation
 
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.{ConcurrentLinkedQueue, ThreadLocalRandom}
 import java.util.{Arrays, Comparator, Properties}
 
 import akka.actor._
-import akka.dispatch.MessageDispatcher
 import akka.routing._
+import br.ufmg.cs.systems.fractal.FractalContext
 import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph
 import br.ufmg.cs.systems.fractal.util.Logging
@@ -22,14 +22,26 @@ sealed trait SeqNum {
    def seqNum: Long
 }
 
+/**
+ * Message sent to confirm a reponse sent (idempotent)
+ */
 case class ResponseAck(seqNum: Long, rejected: Boolean) extends SeqNum
 
-case class Retry(msg: SeqNum, dest: ActorRef)
+/**
+ * Retry message used to re-send a message periodically
+ */
+case class Retry(msg: SeqNum, dest: ActorRef, delayMs: Int)
 
 /**
- * Message sent by the master at the end of each superstep
+ * Message broadcasted by worker threads to indicate that the termination
+ * barrier has been reached
  */
-case object Reset
+case class TerminationBarrier(seqNum: Long, partitionId: Int) extends SeqNum
+
+/**
+ * Message used to confirm that the termination barrier sent has been received
+ */
+case class TerminationBarrierAck(seqNum: Long) extends SeqNum
 
 /**
  * Message sent by slaves to the master for registering
@@ -41,7 +53,7 @@ case class HelloMaster(partitionId: Int, slaveRef: ActorRef)
  */
 case class ByeMaster(partitionId: Int, slaveRef: ActorRef)
 
-/*
+/**
  * Message sent by the master to a slave to inform the references of all other
  * slaves
  */
@@ -52,13 +64,18 @@ case class HelloSlave(slaveRefs: Array[ActorRef])
  */
 case object StealWork
 
+/**
+ * Message sent to indicate that the worker thread must drain any rejected
+ * work (sent to requester but not confirmed) to the local work queue to be
+ * consumed locally.
+ */
 case object DrainRejectedWork
 
 /**
  * Message sent by a slave to other slaves to indicate a ready state for
  * termination
  */
-case class ReadyToFinish(partitionId: Int)
+case class ReadyToFinish(partitionId: Int, knowsEveryoneIsReadyToFinish: Boolean)
 
 /**
  * This message is sent externally to the slave, providing a shared queue for
@@ -77,15 +94,8 @@ case class StealWorkRequest(thief: ActorRef, nextPivot: Int, lastPivot: Int,
  * Response message to the sender of a 'StealWork'. If available, the work will
  * be serialized as an array of bytes.
  */
-//case class StealWorkResponse(workOpt: Option[Array[Byte]], numPeers: Int,
-//                             seqNum: Long) extends SeqNum
 case class StealWorkResponse(workUnit: IntArrayList, numPeers: Int,
                              reqSeqNum: Long, seqNum: Long) extends SeqNum
-
-/**
- * Log message
- */
-case class Log(msg: String)
 
 /**
  * Self-sent periodically by slave actors to report stats to the master
@@ -104,7 +114,17 @@ case class Stats(partitionId: Int, validSubgraphs: Long, maxMemory: Double,
 case object Terminate
 
 /**
- * Gtag actor
+ * Message used to terminate early any fractal job associated with a context
+ */
+case class TerminateFractalContext(fc: FractalContext, mastersRouter: Router)
+
+/**
+ * Stop message
+ */
+case object Stop
+
+/**
+ * Step actor
  */
 abstract class MSActor(masterPath: String) extends Actor with Logging {
    /**
@@ -116,11 +136,31 @@ abstract class MSActor(masterPath: String) extends Actor with Logging {
    logInfo(s"Actor ${self} started")
 }
 
+object MasterActor {
+   class Args[S <: Subgraph](_masterPath: String,
+                             _engine: SparkMasterEngine[S]) {
+      private var masterPath: String = _masterPath
+      private var engine: SparkMasterEngine[S] = _engine
+
+      def getMasterPath: String = masterPath
+      def getEngine: SparkMasterEngine[S] = engine
+
+      def clear(): Unit = {
+         masterPath = null
+         engine = null
+      }
+   }
+}
+
 /**
  * Master actor
  */
-class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
-   extends MSActor(masterPath) {
+class MasterActor(args: MasterActor.Args[_])
+   extends MSActor(args.getMasterPath) {
+
+   private val masterPath: String = args.getMasterPath
+
+   private val engine: SparkMasterEngine[_] = args.getEngine
 
    override def masterRef: ActorRef = self
 
@@ -135,6 +175,10 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
    private var registeredSlaves: Int = _
    private var totalValidSubgraphs: Long = _
    private var maxValidSubgraphs: Long = _
+   private var askedForTermination: Boolean = false
+
+   // clear args
+   args.clear()
 
    // initial reset
    reset()
@@ -156,6 +200,10 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
    }
 
    def receive = {
+      case HelloMaster(partitionId, slaveRef) if askedForTermination =>
+         slaveRef ! Terminate
+         logInfo(s"Already asked for termination. Terminating ${slaveRef}")
+
       case HelloMaster(partitionId, slaveRef) =>
          if (slaves(partitionId) == null) {
             registeredSlaves += 1
@@ -167,9 +215,13 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
          slaves(partitionId) = slaveRef
 
          if (registeredSlaves == numSlaves) {
-            val helloMsg = HelloSlave(slaves)
-            slavesRouter.route(helloMsg, self)
-            logInfo(s"Publishing ${numSlaves} slaves.")
+            var publishSlaves = true
+
+            if (publishSlaves) {
+               val helloMsg = HelloSlave(slaves)
+               slavesRouter.route(helloMsg, self)
+               logInfo(s"Publishing ${numSlaves} slaves.")
+            }
          }
 
       case ByeMaster(partitionId, slaveRef) =>
@@ -185,13 +237,10 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
             reset()
          }
 
-      case Log(msg) =>
-         logInfo(msg)
-
       case Stats(partitionId, _validSubgraphs, maxMemory, totalMemory,
       freeMemory, usedMemory) =>
 
-         logInfo(s"MemoryStats threadId=${partitionId}" +
+         logInfo(s"MemoryStats step=${engine.step} threadId=${partitionId}" +
             s" maxMemory=${maxMemory} totalMemory=${totalMemory}" +
             s" freeMemory=${freeMemory} usedMemory=${usedMemory}" +
             s" validSubgraphs=${_validSubgraphs}")
@@ -208,7 +257,8 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
             totalValidSubgraphs += diff
          }
 
-         logInfo(s"ValidSubgraphsUpdate [${validSubgraphs.mkString(",")}]" +
+         logInfo(s"ValidSubgraphsUpdate step=${engine.step}" +
+            s" [${validSubgraphs.mkString(",")}]" +
             s" total=${totalValidSubgraphs}" +
             (
                if (maxValidSubgraphs < Long.MaxValue)
@@ -222,36 +272,48 @@ class MasterActor(masterPath: String, engine: SparkMasterEngine[_])
 
          // if we reach *maxValidSubgraphs* then stop execution, we are done
          if (totalValidSubgraphs >= maxValidSubgraphs) {
-            logInfo(
+            logWarn(
                s"Reached the limit of ${maxValidSubgraphs} valid subgraphs." +
                   s" Terminating slaves=${slaves.mkString(",")}")
 
-            // send termination messages to all known slaves
-            var i = 0
-            while (i < slaves.length) {
-               val s = slaves(i)
-               if (s != null) {
-                  logInfo(s"Sending termination message to ${s} (id=${i})")
-                  s ! Terminate
-               }
-               i += 1
-            }
+            slavesRouter.route(Terminate, self)
          }
 
-      case Reset =>
-         reset()
+      case Terminate =>
+         askedForTermination = true
+         slavesRouter.route(Terminate, self)
+         import context.dispatcher
+         context.system.scheduler.scheduleOnce(2 seconds, self, Terminate)
 
-      case Terminated(p: ActorRef) =>
+      case other =>
+         logWarn(s"${self} ignoring message: ${other}.")
+   }
+}
 
-      case _ =>
+object SlaveActor {
+   class Args[S <: Subgraph](_masterPath: String, _engine: SparkEngine[S]) {
+      private var masterPath: String = _masterPath
+      private var engine: SparkEngine[S] = _engine
+
+      def getMasterPath: String = masterPath
+      def getEngine: SparkEngine[S] = engine
+
+      def clear(): Unit = {
+         masterPath = null
+         engine = null
+      }
    }
 }
 
 /**
  * Slave actor
  */
-class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
-   extends MSActor(masterPath) {
+class SlaveActor[S <: Subgraph](args: SlaveActor.Args[S])
+   extends MSActor(args.getMasterPath) {
+
+   private val engine: SparkEngine[S] = args.getEngine
+
+   private val masterPath: String = args.getMasterPath
 
    private val computation: Computation[S] = engine.computation
 
@@ -312,13 +374,22 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
 
    private val workUnit: IntArrayList = new IntArrayList()
 
+   private var reachedTerminationBarrierSlaves: Array[Boolean] = _
+
+   private var reachedTerminationBarrierCount: Int = 0
+
+   private var forcedTermination: Boolean = false
+
+   // clear args
+   args.clear()
+
    // register with master
    sendIdentifyRequest()
 
    // report execution stats from time to time
    reportStatsScheduler()
 
-   def receive = identifying
+   def receive: Actor.Receive = identifying
 
    def identifying: Actor.Receive = {
       case ActorIdentity(`masterPath`, Some(actor)) =>
@@ -327,6 +398,14 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
          masterRef ! HelloMaster(partitionId, self)
          reportStats()
          logInfo(s"${self} knows master: ${masterRef}")
+
+      case Terminate | ActorIdentity(`masterPath`, None) =>
+         context.become(terminating(null))
+         self ! Terminate
+
+      case Stop =>
+         context.become(terminating(null))
+         self ! Stop
 
       case WorkQueue(_outbox) =>
          outbox = _outbox
@@ -338,7 +417,8 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
          sendIdentifyRequest()
 
       case other =>
-         logWarning(s"${self} is not ready. Ignoring message: ${other}.")
+         logWarn(s"Identifying: ${self} is not ready. Ignoring " +
+            s"message ${other} from ${sender()}.")
    }
 
    def active(actor: ActorRef): Actor.Receive = {
@@ -372,6 +452,7 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
             }
 
             readyToFinishSlaves = new Array[Boolean](slaves.length)
+            reachedTerminationBarrierSlaves = new Array[Boolean](slaves.length)
 
             logInfo(s"${self} knows ${slaves.length} slaves" +
                s" (${pivots.length} pivots)" +
@@ -385,27 +466,46 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
       case WorkQueue(_outbox) =>
          outbox = _outbox
 
-      case ReadyToFinish(slaveId) =>
+      case ReadyToFinish(slaveId, knowsEveryoneIsReadyToFinish) =>
          if (readyToFinishSlaves != null) {
             if (!readyToFinishSlaves(slaveId)) {
                readyToFinishSlaves(slaveId) = true
                newSlaveReadyToFinish
             }
-            sender() ! ReadyToFinish(partitionId)
+            if (!knowsEveryoneIsReadyToFinish) {
+               sender() ! ReadyToFinish(partitionId,
+                  readyToFinishCount == slaves.length)
+            }
          }
 
       case DrainRejectedWork =>
          if (unackMessages.isEmpty) {
             if (rejectedResponses.isEmpty) {
-               outbox.add(emptyResponseReusable)
+               addToOutbox(emptyResponseReusable)
             } else {
-               outbox.addAll(rejectedResponses)
+               addAllToOutbox(rejectedResponses)
                rejectedResponses.clear()
             }
+
+            // start termination phase
+            context.become(terminating(actor))
+
+            // tell every other thread that this thread has reached the
+            // termination barrier
+            var i = 0
+            while (i < slaves.length) {
+               val terminationMsg = TerminationBarrier(nextSeqNum, partitionId)
+               sendMsgWithRetransmission(terminationMsg, slaves(i), 100)
+               i += 1
+            }
+
             outbox.synchronized {
                outbox.notify()
             }
+
          } else { // wait for all rejected work
+            logInfo(s"Could not drain rejected work, there are unacked " +
+               s"messages. ${unackMessages}")
             // schedule for later
             import context.dispatcher
             context.system.scheduler.scheduleOnce(
@@ -561,36 +661,130 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
        * } Work stealing
        */
 
-      case inMsg@Log(msg) =>
-         masterRef ! inMsg
-
-      case Terminated(`actor`) =>
-         sendIdentifyRequest()
-         context.become(identifying)
-         logInfo(s"Master ${actor} terminated")
-
       case Terminate =>
-         // stop all subgraph enumerators
-         logInfo(s"Terminating computation ${computation}")
-         var currComp = computation
-         while (currComp != null) {
-            val senum = currComp.getSubgraphEnumerator()
-            if (senum != null) senum.terminate()
-            currComp = currComp.nextComputation()
-         }
-         masterRef ! ByeMaster(partitionId, self)
+         context.become(terminating(actor))
+         self ! Terminate
 
-      case Retry(msg, dest) =>
+      case Stop =>
+         context.become(terminating(actor))
+         self ! Stop
+
+      case Retry(msg, dest, delay) =>
          if (unackMessages.containsKey(msg.seqNum)) {
-            sendMsgWithRetransmission(msg, dest)
-            logWarning(s"Retrying message ${msg}")
+            sendMsgWithRetransmission(msg, dest, delay)
+            logWarn(s"Active: Retrying message step=${engine.step}" +
+               s" stageId=${engine.stageId} ${msg}")
          }
+
+      case TerminationBarrier(seqNum, partitionId) =>
+         if (!reachedTerminationBarrierSlaves(partitionId)) {
+            reachedTerminationBarrierSlaves(partitionId) = true
+            reachedTerminationBarrierCount += 1
+         }
+
+         val ack = TerminationBarrierAck(seqNum)
+         sender() ! ack
 
       case ReceiveTimeout =>
       // nothing
 
       case other =>
-         logWarning(s"${self} is not ready. Ignoring message: ${other}.")
+         logWarn(s"Active: ${self} is not ready. Ignoring message: ${other}.")
+   }
+
+   def terminating(actor: ActorRef): Actor.Receive = {
+      case TerminationBarrier(seqNum, partitionId) =>
+         if (!reachedTerminationBarrierSlaves(partitionId)) {
+            reachedTerminationBarrierSlaves(partitionId) = true
+            reachedTerminationBarrierCount += 1
+         }
+
+         val ack = TerminationBarrierAck(seqNum)
+         sender() ! ack
+
+         // every slave reached the barrier and every slave knows that this
+         // thread reached the barrier --> safe to terminate
+         if (reachedTerminationBarrierCount == slaves.length
+            && unackMessages.isEmpty) {
+            addToOutbox(emptyResponseReusable)
+         }
+
+      case TerminationBarrierAck(seqNum) =>
+         val msgRetry = unackMessages.remove(seqNum)
+         if (msgRetry != null) {
+            msgRetry._2.cancel()
+         }
+
+         // every slave reached the barrier and every slave knows that this
+         // thread reached the barrier --> safe to terminate
+         if (reachedTerminationBarrierCount == slaves.length
+            && unackMessages.isEmpty) {
+            addToOutbox(emptyResponseReusable)
+         }
+
+      case Retry(msg, dest, delay) =>
+         if (unackMessages.containsKey(msg.seqNum)) {
+            sendMsgWithRetransmission(msg, dest, delay)
+            logWarn(s"Terminating: Retrying message step=${engine.step}" +
+               s" stageId=${engine.stageId} ${msg}")
+         }
+
+      case ReadyToFinish(slaveId, knowsEveryoneIsReadyToFinish) =>
+         if (readyToFinishSlaves != null) {
+            if (!readyToFinishSlaves(slaveId)) {
+               readyToFinishSlaves(slaveId) = true
+               newSlaveReadyToFinish
+            }
+
+            if (!knowsEveryoneIsReadyToFinish) {
+               sender() ! ReadyToFinish(partitionId,
+                  readyToFinishCount == slaves.length)
+            }
+         }
+
+      case req: StealWorkRequest =>
+         val msg = StealWorkResponse(null, slaves.length,
+            req.seqNum, nextSeqNum)
+         req.thief ! msg
+
+      // sent response confirmed, reject or not the response
+      case ack: ResponseAck =>
+         val msgRetry = unackMessages.remove(ack.seqNum)
+         if (msgRetry != null) {
+            if (msgRetry._2 != null) msgRetry._2.cancel()
+            val resp = msgRetry._1.msg.asInstanceOf[StealWorkResponse]
+            if (ack.rejected && resp.workUnit != null) {
+               rejectedResponses.add(resp)
+            }
+         }
+
+      case Terminate =>
+         // stop all subgraph enumerators
+         logInfo(s"Forcing termination of computation ${computation}")
+         forcedTermination = true
+         engine.terminate()
+         masterRef ! ByeMaster(partitionId, self)
+         context.stop(self)
+
+      case Stop =>
+         logInfo(s"Safe termination of computation ${computation}")
+         masterRef ! ByeMaster(partitionId, self)
+         context.stop(self)
+
+      case ReceiveTimeout =>
+      // nothing
+
+      case other =>
+         logWarn(s"Terminating: ${self} is not ready. Ignoring " +
+            s"message: ${other}. ${readyToFinishSlaves.mkString(",")}")
+   }
+
+   private def addAllToOutbox(msgs: java.util.Collection[StealWorkResponse])
+   : Unit = {
+      outbox.addAll(msgs)
+      outbox.synchronized {
+         outbox.notify()
+      }
    }
 
    private def addToOutbox(msg: StealWorkResponse): Unit = {
@@ -605,7 +799,7 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
       // send first time
       dest ! msg
 
-      val reqRetry = Retry(msg, dest)
+      val reqRetry = Retry(msg, dest, 1000)
 
       val respTimeout = StealWorkResponse(null, 0, msg.seqNum, nextSeqNum)
 
@@ -617,7 +811,8 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
       unackMessages.put(msg.seqNum, (reqRetry, cancellable))
    }
 
-   private def sendMsgWithRetransmission(msg: SeqNum, dest: ActorRef): Unit = {
+   private def sendMsgWithRetransmission(msg: SeqNum, dest: ActorRef,
+                                         delayMs: Int = 2000): Unit = {
       // send first time
       dest ! msg
 
@@ -628,13 +823,13 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
             retryMsgCancellable._2.cancel()
             retryMsgCancellable._1
          }
-         else Retry(msg, dest)
+         else Retry(msg, dest, delayMs)
       }
 
       // schedule timeout for this message
       import context.dispatcher
       val cancellable = context.system.scheduler.scheduleOnce(
-         2 second, self, retryMsg)
+         delayMs millis, self, retryMsg)
 
       // mark as not acknowledged
       unackMessages.put(msg.seqNum, (retryMsg, cancellable))
@@ -656,12 +851,8 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
    private def maybeCheckReadyToFinishSlaves(): Unit = {
       if (outbox != null && slaves != null &&
          readyToFinishCount != slaves.length) {
-         val msg = ReadyToFinish(partitionId)
-         var i = 0
-         while (i < slaves.length) {
-            if (!readyToFinishSlaves(i)) slaves(i) ! msg
-            i += 1
-         }
+         val msg = ReadyToFinish(partitionId, false)
+         slavesRouter.route(msg, self)
       }
    }
 
@@ -713,7 +904,7 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
          val thatComp = computations.getu(i)
          if (thatComp != null) {
             val thatSubgraphEnumertor = thatComp.getSubgraphEnumerator
-            if (thatSubgraphEnumertor.forkEnumerator(thisComp)) {
+            if (thatSubgraphEnumertor.forkEnumerator(thisComp, false)) {
                val workStealed = serializeSubgraphBatch(
                   thisSubgraphEnumerator, batchSize, workUnit)
                if (workStealed > 0) {
@@ -740,7 +931,7 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
          while (continue && i < numUnvisitedComputations) {
             val thatComp = unvisitedComputations.getu(i)
             val thatSubgraphEnumerator = thatComp.getSubgraphEnumerator
-            if (thatSubgraphEnumerator.forkEnumerator(thisComp)) {
+            if (thatSubgraphEnumerator.forkEnumerator(thisComp, false)) {
                val workStealed = serializeSubgraphBatch(
                   thisComp.getSubgraphEnumerator, batchSize, workUnit)
                if (workStealed > 0) {
@@ -779,14 +970,14 @@ class SlaveActor[S <: Subgraph](masterPath: String, engine: SparkEngine[S])
    }
 
    override def postStop(): Unit = {
-      if (!unackMessages.isEmpty) {
+      if (!forcedTermination && !unackMessages.isEmpty) {
          throw new RuntimeException(s"Unacknowledge messages " +
             s"partitionId=${partitionId}" +
             s" stepId=${engine.getStep()}" +
             s" ${unackMessages}")
       }
 
-      if (!rejectedResponses.isEmpty) {
+      if (!forcedTermination && !rejectedResponses.isEmpty) {
          throw new RuntimeException(s"Rejected responses: ${unackMessages}")
       }
 
@@ -803,13 +994,9 @@ object ActorMessageSystem extends Logging {
       }
    }
 
-   private var _akkaSysOpt: Option[ActorSystem] = None
-
    private var _masterAkkaSysOpt: Option[ActorSystem] = None
 
    private var _executorAkkaSysOpt: Option[ActorSystem] = None
-
-   def akkaSysOpt: Option[ActorSystem] = _akkaSysOpt
 
    def executorAkkaSysOpt: Option[ActorSystem] = _executorAkkaSysOpt
 
@@ -818,15 +1005,6 @@ object ActorMessageSystem extends Logging {
    private val nextActorId: AtomicInteger = new AtomicInteger(0)
 
    def getNextActorId: Int = nextActorId.getAndIncrement
-
-   private val nextRequestId: AtomicInteger = new AtomicInteger(0)
-
-   def getNextRequestId: Int = nextRequestId.getAndIncrement
-
-   def akkaExecutorContext: MessageDispatcher = {
-      _akkaSysOpt.map(_.dispatchers.lookup("akka.actor.default-dispatcher")).
-         getOrElse(null)
-   }
 
    private def getDefaultProperties: Properties = {
       val props = new Properties()
@@ -843,35 +1021,33 @@ object ActorMessageSystem extends Logging {
       ConfigFactory.load(combinedConfig)
    }
 
-   private lazy val _executorAkkaSys: ActorSystem = {
+   private lazy val executorAkkaSys: ActorSystem = {
       val props = getDefaultProperties
       // setting "0" means to allocate the first/any OS port available
       props.setProperty("akka.remote.netty.tcp.port", "0")
       val as = ActorSystem("fractal-msgsys",
          config = Some(getAkkaConfig(props)))
-      _akkaSysOpt = Option(as)
       _executorAkkaSysOpt = Option(as)
       logInfo(s"Started akka-sys: ${as} - executor - waiting for messages")
       as
    }
 
-   private lazy val _masterAkkaSys: ActorSystem = {
+   private lazy val masterAkkaSys: ActorSystem = {
       val props = getDefaultProperties
       props.setProperty("akka.remote.netty.tcp.port", "2552")
       val as = ActorSystem("fractal-msgsys",
          config = Some(getAkkaConfig(props)))
-      _akkaSysOpt = Option(as)
       _masterAkkaSysOpt = Option(as)
       logInfo(s"Started akka-sys: ${as} - master - waiting for messages")
       as
    }
 
-   def akkaSys(engine: SparkMasterEngine[_]): ActorSystem = synchronized {
-      _masterAkkaSys
-   }
+   private[fractal] var mastersRouter: Router =
+      new Router(new BroadcastRoutingLogic)
 
-   def akkaSys(engine: SparkEngine[_]): ActorSystem = synchronized {
-      _executorAkkaSys
+   def terminate(): Unit = synchronized {
+      logInfo(s"Terminating masters ${mastersRouter}.")
+      mastersRouter.route(Terminate, null)
    }
 
    def shutdown() = {
@@ -883,28 +1059,35 @@ object ActorMessageSystem extends Logging {
       }
    }
 
-   def createActor(engine: SparkMasterEngine[_]): ActorRef = {
+   def createActor(engine: SparkMasterEngine[_ <: Subgraph]): ActorRef =
+      synchronized {
+      val fc = engine.fractoid.fractalContext
+      if (!fc.acceptingNewJobs) {
+         throw new InterruptedException(s"${fc} not accepting new jobs.")
+      }
       val remotePath = s"akka.tcp://fractal-msgsys@" +
          s"${engine.config.getMasterHostname}:2552" +
          s"/user/master-actor-${engine.step}"
-      akkaSys(engine).actorOf(
-         Props(classOf[MasterActor], remotePath, engine).
+      val args = new MasterActor.Args(remotePath, engine)
+      val masterRef = masterAkkaSys.actorOf(
+         Props(classOf[MasterActor], args).
             withDispatcher("akka.actor.default-dispatcher"),
          s"master-actor-${engine.step}")
+      mastersRouter = mastersRouter.addRoutee(ActorRefRoutee(masterRef))
+      masterRef
    }
 
-   def createActor[E <: Subgraph](engine: SparkEngine[E]): ActorRef = {
+   def createActor[S <: Subgraph](engine: SparkEngine[S]): ActorRef = {
       val remotePath = s"akka.tcp://fractal-msgsys@" +
          s"${engine.configuration.getMasterHostname}:2552" +
          s"/user/master-actor-${engine.step}"
-      val slaveActorRef = akkaSys(engine).actorOf(
-         Props(classOf[SlaveActor[E]], remotePath, engine).
+      val args = new SlaveActor.Args(remotePath, engine)
+      val slaveActorRef = executorAkkaSys.actorOf(
+         Props(classOf[SlaveActor[S]], args).
             withDispatcher("akka.actor.default-dispatcher"),
          s"slave-actor" +
             s"-${engine.stageId}-${engine.step}" +
             s"-${engine.partitionId}-${getNextActorId}")
-
       slaveActorRef
    }
-
 }

@@ -19,7 +19,7 @@ public class VertexInducedComputationEnumerationM<S extends VertexInducedSubgrap
 
    @Override
    public long processCompute(SubgraphEnumerator<S> subgraphEnumerator) {
-      while (subgraphEnumerator.extend()) {
+      while (subgraphEnumerator.extend_EXTENSION_PRIMITIVE()) {
          nextComputation.compute();
       }
       return 0;

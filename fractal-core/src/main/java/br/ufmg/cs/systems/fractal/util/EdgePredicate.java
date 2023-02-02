@@ -6,6 +6,9 @@ import java.io.*;
 import java.util.function.IntPredicate;
 
 public class EdgePredicate implements IntPredicate, Externalizable {
+   public static final EdgePredicate.DefaultEdgePredicate trueEdgePredicate =
+           new EdgePredicate.DefaultEdgePredicate();
+
    private int edgeLabel;
    private MainGraph graph;
 
@@ -19,7 +22,7 @@ public class EdgePredicate implements IntPredicate, Externalizable {
 
    @Override
    public boolean test(int e) {
-      return graph.edgeLabel(e) == edgeLabel;
+      return graph.firstEdgeLabel(e) == edgeLabel;
    }
 
    public void write(DataOutput out) throws IOException {
@@ -43,6 +46,18 @@ public class EdgePredicate implements IntPredicate, Externalizable {
    @Override
    public String toString() {
       return "epred{" + edgeLabel + "}";
+   }
+
+   private static class DefaultEdgePredicate extends EdgePredicate {
+      @Override
+      public boolean test(int u) {
+         return true;
+      }
+
+      @Override
+      public String toString() {
+         return "epred{true}";
+      }
    }
 }
 

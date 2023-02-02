@@ -1,28 +1,34 @@
 package br.ufmg.cs.systems.fractal.gmlib
 
-import br.ufmg.cs.systems.fractal.computation.Computation
-import br.ufmg.cs.systems.fractal.gmlib.fsm.{FSMPF, FSMPFMCVC, FSMSF, MinImageSupport}
-import br.ufmg.cs.systems.fractal.gmlib.motifs.{MotifsPF, MotifsPFMCVC, MotifsSF}
-import br.ufmg.cs.systems.fractal.gmlib.periodic.{InducedPeriodicSubgraphsPF, InducedPeriodicSubgraphsPFMCVC, InducedPeriodicSubgraphsSF}
-import br.ufmg.cs.systems.fractal.graph.MainGraph
+import br.ufmg.cs.systems.fractal.computation.{AllEdgesSubgraphEnumerator, Computation, RandomWalkEnumerator, SamplingEnumerator}
+import br.ufmg.cs.systems.fractal.conf.Configuration
+import br.ufmg.cs.systems.fractal.gmlib.clique.{KClistEnumerator, MaximalCliquesEnumerator}
+import br.ufmg.cs.systems.fractal.gmlib.fsm._
+import br.ufmg.cs.systems.fractal.gmlib.kws.{KeywordSearchPO, MinimalKeywordSearchPA, MinimalKeywordSearchPO}
+import br.ufmg.cs.systems.fractal.gmlib.mcvc.MCVCEnumerator
+import br.ufmg.cs.systems.fractal.gmlib.motifs.{MotifsHybrid, MotifsPA, MotifsPAMCVC, MotifsPO}
+import br.ufmg.cs.systems.fractal.gmlib.periodic.{InducedPeriodicSubgraphsPA, InducedPeriodicSubgraphsPAMCVC, InducedPeriodicSubgraphsPO}
+import br.ufmg.cs.systems.fractal.gmlib.quasicliques.{QuasiCliquesPA, QuasiCliquesPAPO, QuasiCliquesPO}
+import br.ufmg.cs.systems.fractal.gmlib.queryspecialization.{QuerySpecializationPAPO, QuerySpecializationPO}
 import br.ufmg.cs.systems.fractal.pattern._
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
-import br.ufmg.cs.systems.fractal.util.collection.ObjSet
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
 import br.ufmg.cs.systems.fractal.util.pool.{IntArrayListPool, IntArrayListViewPool}
-import br.ufmg.cs.systems.fractal.util.{Logging, SubgraphCallback, Utils}
-import br.ufmg.cs.systems.fractal.{FSMSF, FractalGraph, Fractoid}
+import br.ufmg.cs.systems.fractal.util.{Logging, Utils}
+import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
+import com.koloboke.collect.set.hash.{HashIntSets, HashObjSets}
 import org.apache.spark.rdd.RDD
 
-import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 
 /**
  * Built-in algorithms with the following alternative implementations:
  *
- * SF: Subgraph-first paradigm
- * PF: Pattern-first paradigm
- * PFMCVC: Pattern-first paradigm optimized by matching the minimum connected
+ * PO: Subgraph-first paradigm
+ * PA: Pattern-first paradigm
+ * PAMCVC: Pattern-first paradigm optimized by matching the minimum connected
  * vertex cover of the pattern first and then, finishing the matching in one
  * step because the cover gives access to all remaining neighborhoods
  * necessary for the whole pattern matching
@@ -31,11 +37,11 @@ import scala.concurrent.duration.Duration
 class BuiltInApplications(self: FractalGraph) extends Logging {
 
    /**
-    * Generated all subgraphs using the PF approach
+    * Generated all subgraphs using the PA approach
     * @param numEdges number of edges in the subgraphs
     * @param callback to be applied to each partial result of this computation
     */
-   def subgraphsMaxEdgesPF
+   def subgraphsMaxEdgesPA
    (numEdges: Int, callback: Fractoid[PatternInducedSubgraph] => Unit)
    : Unit = {
 
@@ -57,7 +63,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
          pattern.updateSymmetryBreakerVertexUnlabeled()
 
          // callback
-         val partialResult = patternMatchingPF(pattern)
+         val partialResult = patternQueryingPA(pattern)
             .explore(pattern.getNumberOfVertices - 1)
          val future = Future(callback(partialResult))
          futures = future :: futures
@@ -67,15 +73,15 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
    }
 
    /**
-    * Generated all subgraphs using the PF approach
+    * Generated all subgraphs using the PA approach
     * @param numVertices number of vertices in the subgraphs
     * @param callback to be applied to each partial result of this computation
     */
-   def subgraphsPF
+   def subgraphsPA
    (numVertices: Int, callback: Fractoid[PatternInducedSubgraph] => Unit)
    : Unit = {
 
-      val canonicalPatternsRDD = PatternUtilsRDD.vertexPatternsRDD(
+      val canonicalPatternsRDD = PatternUtilsRDD.getOrGenerateVertexPatternsRDD(
          self.fractalContext.sparkContext, numVertices)
 
       // local iterator for better memory footprint
@@ -91,22 +97,22 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
          pattern.updateSymmetryBreakerVertexUnlabeled()
 
          // callback
-         val partialResult = patternMatchingPF(pattern).explore(numVertices - 1)
+         val partialResult = patternQueryingPA(pattern).explore(numVertices - 1)
          callback(partialResult)
       }
    }
 
    /**
-    * Generated all induced subgraphs using the PFMCVC approach
+    * Generated all induced subgraphs using the PAMCVC approach
     * @param numVertices number of vertices in the induced subgraphs
     * @param callback to be applied to each partial result of this computation
     */
-   def inducedSubgraphsPFMCVC
+   def inducedSubgraphsPAMCVC
    (numVertices: Int,
     callback: Fractoid[PatternInducedSubgraph] => Unit): Unit = {
 
       // generate all canonical patterns with *numVertices* vertices
-      val canonicalPatternsRDD = PatternUtilsRDD.vertexPatternsRDD(
+      val canonicalPatternsRDD = PatternUtilsRDD.getOrGenerateVertexPatternsRDD(
          self.fractalContext.sparkContext, numVertices)
 
       // local iterator for better memory footprint
@@ -123,22 +129,22 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
          while (newPatternsCur.moveNext()) {
             val pattern = newPatternsCur.elem()
             val mcvcSize = pattern.explorationPlan.mcvcSize()
-            val partialResult = patternMatchingPF(pattern).explore(mcvcSize - 1)
+            val partialResult = patternQueryingPA(pattern).explore(mcvcSize - 1)
             callback(partialResult)
          }
       }
    }
 
    /**
-    * Generated all induced subgraphs using the PF approach
+    * Generated all induced subgraphs using the PA approach
     * @param numVertices number of vertices in the induced subgraphs
     * @param callback to be applied to each partial result of this computation
     */
-   def inducedSubgraphsPF
+   def inducedSubgraphsPA
    (numVertices: Int, callback: Fractoid[PatternInducedSubgraph] => Unit)
    : Unit = {
 
-      val canonicalPatternsRDD = PatternUtilsRDD.vertexPatternsRDD(
+      val canonicalPatternsRDD = PatternUtilsRDD.getOrGenerateVertexPatternsRDD(
          self.fractalContext.sparkContext, numVertices)
 
       // local iterator for better memory footprint
@@ -155,64 +161,103 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
          pattern.updateSymmetryBreakerVertexUnlabeled()
 
          // callback
-         val partialResult = patternMatchingPF(pattern).explore(numVertices - 1)
+         val partialResult = patternQueryingPA(pattern).explore(numVertices - 1)
          callback(partialResult)
       }
    }
 
    /**
-    * Motifs counting by listing and using the SF paradigm
+    * Motifs counting by listing and using the PO paradigm
     * @param numVertices motifs size
     * @return RDD representing a mapping (CanonicalPattern -> Count)
     */
-   def motifsSF(numVertices: Int): RDD[(Pattern,Long)] = {
-      val app = new MotifsSF(numVertices)
+   def motifsPO(numVertices: Int): RDD[(Pattern,Long)] = {
+      val app = new MotifsPO(numVertices)
       app.apply(self)
    }
 
    /**
-    * Motifs counting by listing and using the PFMCVC paradigm
+    * Motifs counting by listing and using the PAMCVC paradigm
     * @param numVertices motifs size
     * @return RDD representing a mapping (CanonicalPattern -> Count)
     */
-   def motifsPFMCVC(numVertices: Int): RDD[(Pattern,Long)] = {
-      val app = new MotifsPFMCVC(numVertices)
+   def motifsPAMCVC(numVertices: Int): RDD[(Pattern,Long)] = {
+      val app = new MotifsPAMCVC(numVertices)
       app.apply(self)
    }
 
    /**
-    * Motifs counting by listing and using the PF paradigm
+    * Motifs counting by listing and using the PA paradigm
     * @param numVertices motifs size
     * @return RDD representing a mapping (CanonicalPattern -> Count)
     */
-   def motifsPF(numVertices: Int): RDD[(Pattern,Long)] = {
-      val app = new MotifsPF(numVertices)
+   def motifsPA(numVertices: Int): RDD[(Pattern,Long)] = {
+      val app = new MotifsPA(numVertices)
+      app.apply(self)
+   }
+
+   /**
+    * Motifs counting by listing and using hybrid paradigm
+    * @param numVertices motifs size
+    * @return RDD representing a mapping (CanonicalPattern -> Count)
+    */
+   def motifsHybrid(numVertices: Int): RDD[(Pattern,Long)] = {
+      val app = new MotifsHybrid(numVertices)
       app.apply(self)
    }
 
    /**
     * Motifs counting by listing a sample of subgraphs uniformly at random
-    * and using the SF paradigm
+    * and using the PO paradigm
     * @param numVertices motifs size
     * @param fraction sample fraction
     * @return RDD representing a mapping (CanonicalPattern -> FractionCount)
     */
-   def motifsSampleSF(numVertices: Int, fraction: Double)
+   def motifsSamplePO(numVertices: Int, fraction: Double)
    : RDD[(Pattern,Long)] = {
-      self.svfractoid(fraction).expand(numVertices).
-         aggregationCanonicalPatternLong(
+      val senumClass = classOf[SamplingEnumerator[VertexInducedSubgraph]]
+      val fractionKey = "sampling_fraction"
+      self.set(fractionKey, fraction)
+         .vfractoid
+         .expand(numVertices, senumClass)
+         .aggregationCanonicalPatternLong(
             s => s.quickPattern(), 0, _ => 1L, _ + _)
    }
 
    /**
-    * All-cliques listing using the SF paradigm
+    * All-cliques listing using the PO (pattern oblivious) paradigm
     * @param numVertices number of vertices in the cliques
     * @return fractoid with cliques computation
     */
-   def cliquesSF(numVertices: Int): Fractoid[VertexInducedSubgraph] = {
+   def cliquesPO(numVertices: Int): Fractoid[VertexInducedSubgraph] = {
       self.vfractoid.expand(1)
-         .filter((e,c) => e.numEdgesAdded == e.getNumVertices - 1)
+         .filter((s,c) => s.numEdgesAdded == s.getNumVertices - 1)
          .explore(numVertices - 1)
+   }
+
+   /**
+    * All-cliques listing using the PA (pattern-aware) paradigm
+    * @param numVertices number of vertices in the cliques
+    * @return fractoid with cliques computation
+    */
+   def cliquesPA(numVertices: Int): Fractoid[PatternInducedSubgraph] = {
+      // single vertex cliques
+      var pattern = PatternUtils.singleVertexPattern()
+      pattern.setVertexLabeled(false)
+
+      // explore and extend cliques
+      while (pattern.getNumberOfVertices < numVertices) {
+         pattern.setVertexLabeled(false)
+         // extend to next clique
+         val newEdges = (0 until pattern.getNumberOfVertices).toArray
+         pattern = PatternUtils.addVertex(pattern, newEdges:_*)
+      }
+
+      val frac = patternQueryingPA(pattern)
+         .explore(pattern.getNumberOfVertices - 1)
+
+      frac
+
    }
 
    /**
@@ -220,27 +265,89 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * [[https://dl.acm.org/citation.cfm?id=3186125]]
     * @return Fractoid with the cliques computation
     */
-   def cliquesKClistSF(numVertices: Int): Fractoid[VertexInducedSubgraph] = {
-      val enumClass = "br.ufmg.cs.systems.fractal.gmlib.clique.KClistEnumerator"
-      self.set("subgraph_enumerator", enumClass).vfractoid.expand(numVertices)
+   def cliquesCustomKClist(numVertices: Int): Fractoid[VertexInducedSubgraph] = {
+      val senumClass = classOf[KClistEnumerator[VertexInducedSubgraph]]
+      self.set("clique_size", numVertices)
+         .vfractoidNoEdgeUpdate
+         .expand(numVertices, senumClass)
    }
 
    /**
     * All maximal cliques up to a upper bound on the number of vertices using
-    * the PF approach (naive)
+    * the PO (pattern oblivious) approach
     * @param maxNumVertices upper bound on the number of vertices
-    * @param callback user defined function to be applied to each partial
-    *                 computation
     */
-   def maximalCliquesPF(maxNumVertices: Int,
-                        callback: Fractoid[PatternInducedSubgraph] => Unit)
-   : Unit = {
+   def maximalCliquesPO(maxNumVertices: Int)
+   : Fractoid[VertexInducedSubgraph] = {
+
+      // function that verifies whether a subgraph (clique) is maximal
+      val isMaximal = (s: VertexInducedSubgraph,
+                       c: Computation[VertexInducedSubgraph]) => {
+         val vertices = s.getVertices
+         val graph = c.getConfig.getMainGraph
+         val neighborhood = IntArrayListViewPool.instance().createObject()
+         var intersectionEmpty = false
+
+         if (vertices.size() == 1) {
+            graph.neighborhoodVertices(vertices.getu(0), neighborhood)
+            intersectionEmpty = neighborhood.isEmpty
+         } else {
+
+            var intersection = IntArrayListPool.instance().createObject()
+            var previous = IntArrayListPool.instance().createObject()
+
+            // first neighborhood
+            val n1 = graph.neighborhoodVertices(vertices.getu(0))
+            val n2 = graph.neighborhoodVertices(vertices.getu(1))
+            Utils.sintersect(n1, n2, 0, n1.size(), 0, n2.size(), intersection)
+            n1.reclaim()
+            n2.reclaim()
+
+            intersectionEmpty = intersection.isEmpty
+
+            var i = 2
+            while (!intersectionEmpty && i < vertices.size()) {
+               val aux = intersection
+               intersection = previous
+               previous = aux
+               graph.neighborhoodVertices(vertices.getu(i), neighborhood)
+               intersection.clear()
+               Utils.sintersect(previous, neighborhood, 0, previous.size(), 0,
+                  neighborhood.size(), intersection)
+               intersectionEmpty = intersection.isEmpty
+               i += 1
+            }
+
+            intersection.reclaim()
+            previous.reclaim()
+         }
+
+         neighborhood.reclaim()
+         intersectionEmpty
+      }
+
+      val frac = self.vfractoid
+         .expand(1)
+         .filter((s,c) => s.numEdgesAdded() == s.getNumVertices - 1)
+         .explore(maxNumVertices - 1)
+         .filter(isMaximal)
+
+      frac
+   }
+
+   /**
+    * All maximal cliques up to a upper bound on the number of vertices using
+    * the PA (pattern aware) approach
+    * @param maxNumVertices upper bound on the number of vertices
+    */
+   def maximalCliquesPA(maxNumVertices: Int)
+   : Fractoid[PatternInducedSubgraph] = {
 
       // function that verifies whether a subgraph (clique) is maximal
       val isMaximal = (s: PatternInducedSubgraph,
          c: Computation[PatternInducedSubgraph]) => {
          val vertices = s.getVertices
-         val graph = c.getConfig.getMainGraph[MainGraph[_,_]]
+         val graph = c.getConfig.getMainGraph
          val neighborhood = IntArrayListViewPool.instance().createObject()
          var intersectionEmpty = false
 
@@ -284,21 +391,21 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
 
       // single vertex cliques
       var pattern = PatternUtils.singleVertexPattern()
+      pattern.setVertexLabeled(false)
 
       // explore and extend cliques
-      while (pattern.getNumberOfVertices <= maxNumVertices) {
+      while (pattern.getNumberOfVertices < maxNumVertices) {
          pattern.setVertexLabeled(false)
-         val frac = patternMatchingPF(pattern)
-            .explore(pattern.getNumberOfVertices - 1)
-            .filter(isMaximal)
-
-         // user callback
-         callback(frac)
-
          // extend to next clique
          val newEdges = (0 until pattern.getNumberOfVertices).toArray
          pattern = PatternUtils.addVertex(pattern, newEdges:_*)
       }
+
+      val frac = patternQueryingPA(pattern)
+         .explore(pattern.getNumberOfVertices - 1)
+         .filter(isMaximal)
+
+      frac
    }
 
    /**
@@ -308,13 +415,59 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * @param maxNumVertices upper bound on the number of vertices
     * @return new fractoid with the initial state for maximal cliques
     */
-   def maximalCliquesQuickSF(maxNumVertices: Int)
+   def maximalCliquesCustomQuick(maxNumVertices: Int)
    : Fractoid[VertexInducedSubgraph] = {
-      val enumClass = "br.ufmg.cs.systems.fractal.gmlib.clique.MaximalCliquesEnumerator"
-      self.set("subgraph_enumerator", enumClass).vfractoid
-         // explore one step further to ensure that *maxNumVertices* sized
-         // cliques are considered
-         .expand(maxNumVertices + 1)
+
+      // function that verifies whether a subgraph (clique) is maximal
+      val isMaximal = (s: VertexInducedSubgraph,
+                       c: Computation[VertexInducedSubgraph]) => {
+         val vertices = s.getVertices
+         val graph = c.getConfig.getMainGraph
+         val neighborhood = IntArrayListViewPool.instance().createObject()
+         var intersectionEmpty = false
+
+         if (vertices.size() == 1) {
+            graph.neighborhoodVertices(vertices.getu(0), neighborhood)
+            intersectionEmpty = neighborhood.isEmpty
+         } else {
+
+            var intersection = IntArrayListPool.instance().createObject()
+            var previous = IntArrayListPool.instance().createObject()
+
+            // first neighborhood
+            val n1 = graph.neighborhoodVertices(vertices.getu(0))
+            val n2 = graph.neighborhoodVertices(vertices.getu(1))
+            Utils.sintersect(n1, n2, 0, n1.size(), 0, n2.size(), intersection)
+            n1.reclaim()
+            n2.reclaim()
+
+            intersectionEmpty = intersection.isEmpty
+
+            var i = 2
+            while (!intersectionEmpty && i < vertices.size()) {
+               val aux = intersection
+               intersection = previous
+               previous = aux
+               graph.neighborhoodVertices(vertices.getu(i), neighborhood)
+               intersection.clear()
+               Utils.sintersect(previous, neighborhood, 0, previous.size(), 0,
+                  neighborhood.size(), intersection)
+               intersectionEmpty = intersection.isEmpty
+               i += 1
+            }
+
+            intersection.reclaim()
+            previous.reclaim()
+         }
+
+         neighborhood.reclaim()
+         intersectionEmpty
+      }
+
+      val senumClass = classOf[MaximalCliquesEnumerator[VertexInducedSubgraph]]
+      self.vfractoid
+         .expand(maxNumVertices, senumClass)
+         .filter(isMaximal)
    }
 
    /**
@@ -324,9 +477,9 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * @param maxNumEdges Hard limit on the size of the interesting patterns
     * @return an RDD with frequent patterns and their current support
     */
-   def fsmPF(minSupport: Int, maxNumEdges: Int)
+   def fsmPA(minSupport: Int, maxNumEdges: Int)
    : RDD[(Pattern,MinImageSupport)] = {
-      val app = new FSMPF(minSupport, maxNumEdges)
+      val app = new FSMPA(minSupport, maxNumEdges)
       app.apply(self)
    }
 
@@ -338,9 +491,9 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * @param maxNumEdges Hard limit on the size of the interesting patterns
     * @return an RDD with frequent patterns and their current support
     */
-   def fsmPFMCVC(supportThreshold: Int, maxNumEdges: Int)
+   def fsmPAMCVC(supportThreshold: Int, maxNumEdges: Int)
    : RDD[(Pattern, MinImageSupport)] = {
-      val app = new FSMPFMCVC(supportThreshold, maxNumEdges)
+      val app = new FSMPAMCVC(supportThreshold, maxNumEdges)
       app.apply(self)
    }
 
@@ -351,10 +504,59 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * @param maxNumEdges
     * @return an RDD with frequent patterns and their support
     */
-   def fsmSF(support: Int, maxNumEdges: Int)
+   def fsmPO(support: Int, maxNumEdges: Int)
    : RDD[(Pattern,MinImageSupport)] = {
-      val app = new FSMSF(support, maxNumEdges)
+      val app = new FSMPO(support, maxNumEdges)
       app.apply(self)
+   }
+
+   /**
+    * Frequent subgraph mining (FSM) combining a pattern-aware and
+    * pattern-oblivious subgraph exploration strategy
+    * @param support
+    * @param maxNumEdges
+    * @return an RDD with frequent patterns and their support
+    */
+   def fsmPAPO(support: Int, maxNumEdges: Int)
+   : RDD[(Pattern,MinImageSupport)] = {
+      val app = new FSMPAPO(support, maxNumEdges)
+      app.apply(self)
+   }
+
+   /**
+    * Subgraph querying (pattern matching) using edge-by-edge exploration
+    * @param pattern representing the subgraphs structure
+    * @return new fractoid
+    */
+   def patternQueryingPO(pattern: Pattern): Fractoid[EdgeInducedSubgraph] = {
+      val numEdges = pattern.getNumberOfEdges
+      val quickPatterns = PatternUtils.quickPatterns(pattern)
+      val quickPatternsPerLevel = PatternUtils.quickPatternsPerLevel(quickPatterns)
+
+      var i = 0
+      while (i < numEdges) {
+         logApp(s"QuickPatterns size=${quickPatternsPerLevel(i).size}" +
+            s" ${quickPatternsPerLevel(i)}")
+         i += 1
+      }
+
+      val sc = self.fractalContext.sparkContext
+      val quickPatternsPerLevelBc = sc.broadcast(quickPatternsPerLevel)
+
+      // filtering function: last edge must exist in the map
+      val edgeFilterFunc
+      : (EdgeInducedSubgraph, Computation[EdgeInducedSubgraph]) => Boolean =
+         (s,c) => {
+            val quickPattern = s.quickPattern()
+            val numEdges = quickPattern.getNumberOfEdges
+            quickPatternsPerLevelBc.value(numEdges - 1).contains(quickPattern)
+         }
+
+      val frac = self.efractoid
+         .expand(1)
+         .filter(edgeFilterFunc)
+
+      frac
    }
 
    /**
@@ -364,7 +566,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * @param pattern representing a query
     * @return an array of fractoids with partial query results
     */
-   def patternMatchingPFMCVC(pattern: Pattern)
+   def patternQueryingPAMCVC(pattern: Pattern)
    : Array[Fractoid[PatternInducedSubgraph]] = {
       logInfo(s"PatternBeforePlan ${pattern}")
 
@@ -375,10 +577,9 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       while (i < newPatterns.size()) {
          val nextPattern = newPatterns.getu(i)
          val explorationPlanMCVC = nextPattern.explorationPlan()
-         val mcvcSize = explorationPlanMCVC.mcvcSize()
 
-         val gquerying = this.patternMatchingPF(nextPattern)
-            .explore(mcvcSize - 1)
+         val gquerying = self.pfractoid(nextPattern)
+            .expand(nextPattern.getNumberOfVertices, classOf[MCVCEnumerator])
 
          logInfo(s"MCVCPartialResult pattern=${nextPattern}" +
             s" sbLower=${nextPattern.vsymmetryBreakerLowerBound()}" +
@@ -393,12 +594,38 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       partialResults
    }
 
+   def patternQueryingPAMCVC_old(pattern: Pattern)
+   : (Int,Iterator[Fractoid[PatternInducedSubgraph]]) = {
+      logInfo(s"PatternBeforePlan ${pattern}")
+
+      val newPatterns = PatternExplorationPlanMCVC.apply(pattern)
+      val numSteps = newPatterns.size()
+      val patternsArray = newPatterns
+         .toArray(new Array[Pattern](numSteps))
+
+      (numSteps, patternsArray.iterator.map(nextPattern => {
+         val explorationPlanMCVC = nextPattern.explorationPlan()
+         val mcvcSize = explorationPlanMCVC.mcvcSize()
+
+         val fractoid = this.patternQueryingPA(nextPattern)
+            .explore(mcvcSize - 1)
+
+         logInfo(s"MCVCPartialResult pattern=${nextPattern}" +
+            s" sbLower=${nextPattern.vsymmetryBreakerLowerBound()}" +
+            s" sbUpper=${nextPattern.vsymmetryBreakerUpperBound()}" +
+            s" plan=${explorationPlanMCVC}" +
+            s" fractoid=${fractoid}")
+
+         fractoid
+      }))
+   }
+
    /**
     * Subgraph querying (pattern matching)
     * @param pattern representing the subgraphs structure
     * @return new fractoid
     */
-   def patternMatchingPF(pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
+   def patternQueryingPA(pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
       logInfo (s"Querying pattern ${pattern} in ${this}.")
       self.pfractoid(pattern).expand(1)
    }
@@ -408,47 +635,47 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * @param pattern representing the subgraphs structure
     * @return new fractoid
     */
-   def patternMatchingPF(pattern: Pattern, fraction: Double): Fractoid[PatternInducedSubgraph] = {
+   def patternQueryingPA(pattern: Pattern, fraction: Double): Fractoid[PatternInducedSubgraph] = {
       logInfo (s"Querying fraction=${fraction} of pattern ${pattern} in ${this}.")
-      self.spfractoid(pattern, fraction).expand(1)
+      val fractionKey = "sampling_fraction"
+      val senumClass = classOf[SamplingEnumerator[PatternInducedSubgraph]]
+      self.set(fractionKey, fraction).pfractoid(pattern).expand(1, senumClass)
    }
 
    /**
-    * Vertex-induced implementation of quasi-cliques
-    * @param numSteps maximum number of steps
+    * Pattern-oblivious implementation of quasi-cliques
+    * @param numVertices number of vertices
     * @param minDensity density of edges between 0 and 1.
     * @return Fractoid with the initial state for quasi-cliques
     */
-   def quasiCliques(
-                      numSteps: Int,
+   def quasiCliquesPO(numVertices: Int,
                       minDensity: Double): Fractoid[VertexInducedSubgraph] = {
+      val app = new QuasiCliquesPO(numVertices, minDensity)
+      app.apply(self)
+   }
 
-      if (numSteps < 1) {
-         throw new RuntimeException(
-            "Quasi-Cliques: numSteps should be at least 1.")
-      }
+   /**
+    * Pattern-aware implementation of quasi-cliques
+    * @param numVertices number of vertices
+    * @param minDensity density of edges between 0 and 1.
+    * @return Fractoid with the initial state for quasi-cliques
+    */
+   def quasiCliquesPA(numVertices: Int, minDensity: Double)
+   : (Int, Iterator[Fractoid[PatternInducedSubgraph]]) = {
+      val app = new QuasiCliquesPA(numVertices, minDensity)
+      app.apply(self)
+   }
 
-      // if the quasi-cliques size is bounded by *maxSize* we can actually set min
-      // bounds for density at each position, the idea is that if this minimum
-      // value is not met in given position, it will be impossible for
-      // *minDensity* e reached later on
-      val maxDensity = (numSteps + 1) * numSteps / 2.0
-      val cummDensities = new Array[Double](numSteps + 1)
-      cummDensities(cummDensities.length - 1) = 0.0
-      var i = cummDensities.length - 2
-      while (i >= 0) {
-         cummDensities(i) = cummDensities(i + 1) + (i + 1) / maxDensity
-         i -= 1
-      }
-
-      logInfo(s"QuasiCliques: maxDensity=${maxDensity}" +
-         s" cummDensities=${cummDensities.mkString(",")}")
-
-      self.vfractoid.
-         expand(1).
-         filter((e,c) => (e.getNumEdges() / maxDensity) +
-            cummDensities(e.getNumVertices() - 1) >= minDensity).
-         explore(numSteps)
+   /**
+    * Pattern-aware and pattern-oblivious hybrid implementation of quasi-cliques
+    * @param numVertices number of vertices
+    * @param minDensity density of edges between 0 and 1.
+    * @return Fractoid with the initial state for quasi-cliques
+    */
+   def quasiCliquesPAPO(numVertices: Int, minDensity: Double)
+   : (Int,Iterator[Fractoid[VertexInducedSubgraph]]) = {
+      val app = new QuasiCliquesPAPO(numVertices, minDensity)
+      app.apply(self)
    }
 
    /**
@@ -458,9 +685,9 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     *                    graph to be considered periodic
     * @return fractoid containing the computation
     */
-   def periodicInducedSubgraphsSF(periodicity: Int)
+   def periodicInducedSubgraphsPO(periodicity: Int)
    : Fractoid[VertexInducedSubgraph] = {
-      val app = new InducedPeriodicSubgraphsSF(periodicity)
+      val app = new InducedPeriodicSubgraphsPO(periodicity)
       app.apply(self)
    }
 
@@ -472,10 +699,10 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     *                    graph to be considered periodic
     * @param callback callback to be applied to each partial result
     */
-   def periodicInducedSubgraphsPF
+   def periodicInducedSubgraphsPA
    (periodicity: Int, numVertices: Int,
     callback: (Pattern, Fractoid[PatternInducedSubgraph]) => Unit): Unit = {
-      val app = new InducedPeriodicSubgraphsPF(periodicity,
+      val app = new InducedPeriodicSubgraphsPA(periodicity,
          numVertices, callback)
       app.apply(self)
    }
@@ -488,12 +715,267 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     *                    graph to be considered periodic
     * @param callback callback to be applied to each partial result
     */
-   def periodicInducedSubgraphsPFMCVC
+   def periodicInducedSubgraphsPAMCVC
    (periodicity: Int, numVertices: Int,
-    callback: (InducedPeriodicSubgraphsPFMCVC, Pattern,
+    callback: (InducedPeriodicSubgraphsPAMCVC, Pattern,
        Fractoid[PatternInducedSubgraph]) => Unit): Unit = {
-      val app = new InducedPeriodicSubgraphsPFMCVC(periodicity,
+      val app = new InducedPeriodicSubgraphsPAMCVC(periodicity,
          numVertices, callback)
       app.apply(self)
+   }
+
+   /**
+    * Finds induced subgraphs containing only given labels (pattern-aware)
+    * @param labelsSet target labels
+    * @param numVertices number of vertices in the induced subgraphs
+    * @return number of fractoids, fractoid representing the computation
+    */
+   def labelSearchPA(labelsSet: Set[Int], numVertices: Int)
+   : (Int, Iterator[Fractoid[PatternInducedSubgraph]]) = {
+      val labelFilter
+      : (PatternInducedSubgraph, Computation[PatternInducedSubgraph]) => Boolean =
+         (s,c) => {
+            val graph = s.getMainGraph
+            val vertices = s.getVertices
+            val numVertices = vertices.size()
+            var valid = true
+            var i = 0
+            while (valid && i < numVertices) {
+               val u = vertices.getu(i)
+               if (!labelsSet.contains(graph.firstVertexLabel(u))) {
+                  valid = false
+               }
+               i += 1
+            }
+            valid
+         }
+
+      val sc = self.fractalContext.sparkContext
+      val patterns = PatternUtilsRDD
+         .getOrGenerateVertexPatternsRDD(sc, numVertices)
+
+      val numSteps = patterns.count().toInt
+      val sortedPatterns = patterns.sortBy(p => -p.getNumberOfEdges)
+      (numSteps, sortedPatterns.toLocalIterator.map(pattern => {
+         pattern.setInduced(true)
+         pattern.setVertexLabeled(false)
+         self.pfractoid(pattern)
+            .expand(1).filter(labelFilter)
+            .explore(numVertices - 1)
+      }))
+   }
+
+   /**
+    * Finds induced subgraphs containing only given labels
+    * @param labelsSet target labels
+    * @param numVertices number of vertices in the subgraphs
+    * @return fractoid representing the computation
+    */
+   def labelSearchPO(labelsSet: Set[Int], numVertices: Int)
+   : Fractoid[VertexInducedSubgraph] = {
+      val labelFilter
+      : (VertexInducedSubgraph, Computation[VertexInducedSubgraph]) => Boolean =
+         (s,c) => {
+            val graph = s.getMainGraph
+            val vertices = s.getVertices
+            val numVertices = vertices.size()
+            var valid = true
+            var i = 0
+            while (valid && i < numVertices) {
+               val u = vertices.getu(i)
+               if (!labelsSet.contains(graph.firstVertexLabel(u))) {
+                  valid = false
+               }
+               i += 1
+            }
+            valid
+         }
+
+     self.vfractoid.expand(1).filter(labelFilter).explore(numVertices - 1)
+   }
+
+   /**
+    * Given a set of words (labels) find subgraphs such that each edge in it
+    * covers some uncovered word by the others edges of the subgraph
+    * @param keywords
+    * @return new fractoid
+    */
+   def keywordSearchPO(keywords: Set[Int], numEdges: Int)
+   : Fractoid[EdgeInducedSubgraph] = {
+      val app = new KeywordSearchPO(keywords, numEdges)
+      app.apply(self)
+   }
+
+   /**
+    * Given a set of words (labels) find subgraphs such that each keyword is
+    * covered by some vertex and this subgraph should be minimal.
+    * @param keywords
+    * @param numVertices
+    * @return new fractoid
+    */
+   def minimalKeywordSearchPO(keywords: Set[Int], numVertices: Int)
+   : Fractoid[VertexInducedSubgraph] = {
+      val app = new MinimalKeywordSearchPO(keywords, numVertices)
+      app.apply(self)
+   }
+
+   /**
+    * Given a set of words (labels) find subgraphs such that each keyword is
+    * covered by some vertex and this subgraph should be minimal.
+    * @param keywords
+    * @param numVertices
+    * @return new fractoid
+    */
+   def minimalKeywordSearchPA(keywords: Set[Int], numVertices: Int)
+   : (Int,Iterator[Fractoid[PatternInducedSubgraph]]) = {
+      val app = new MinimalKeywordSearchPA(keywords, numVertices)
+      app.apply(self)
+   }
+
+   /**
+    * Pattern-oblivious implementation of query specialization result set
+    * computation: given a pattern, obtain subgraph instances of pattern
+    * specializations of that pattern. A pattern specialization is defined as
+    * the given pattern with an additional edge.
+    * @param pattern query
+    * @return new fractoid
+    */
+   def querySpecializationPO(pattern: Pattern)
+   : Fractoid[EdgeInducedSubgraph] = {
+      val sc = self.fractalContext.sparkContext
+      pattern.setInduced(false)
+      pattern.setVertexLabeled(true)
+      pattern.setEdgeLabeled(false)
+
+      // graph vertex labels
+      val vertexLabels = self.vfractoid.expand(1)
+         .aggregationLongLong(
+            s => {
+               val graph = s.getMainGraph()
+               graph.firstVertexLabel(s.getVertices.getLast)
+            },
+            0L,
+            s => 1L,
+            (a, _) => a
+         )
+         .keys.distinct().map(_.toInt)
+
+      val internalExtendedPatterns = PatternUtilsRDD
+         .extendByEdgeInternalRDD(sc.makeRDD(List(pattern)), 1)
+
+      val externalExtendedPatterns = vertexLabels
+         .flatMap(vlabel => {
+            val patterns = PatternUtils.extendByEdgeExternal(pattern, vlabel, 1)
+            patterns.toArray.map(_.asInstanceOf[Pattern])
+         })
+
+      val patterns = sc
+         .union(internalExtendedPatterns, externalExtendedPatterns)
+
+      val patternsBc = sc.broadcast(patterns.collect())
+      val app = new QuerySpecializationPO(patternsBc)
+      app.apply(self)
+   }
+
+   /**
+    * Pattern-aware implementation of query specialization result set
+    * computation: given a pattern, obtain subgraph instances of pattern
+    * specializations of that pattern. A pattern specialization is defined as
+    * the given pattern with an additional edge.
+    * @param pattern query
+    * @return new fractoid
+    */
+   def querySpecializationPA(pattern: Pattern)
+   : (Int, Iterator[Fractoid[PatternInducedSubgraph]]) = {
+      pattern.setInduced(false)
+      pattern.setVertexLabeled(true)
+      pattern.setEdgeLabeled(false)
+
+      val sc = self.fractalContext.sparkContext
+
+      // graph vertex labels
+      val vertexLabels = self.vfractoid.expand(1)
+         .aggregationLongLong(
+            s => {
+               val graph = s.getMainGraph()
+               graph.firstVertexLabel(s.getVertices.getLast)
+            },
+            0L,
+            s => 1L,
+            (a, _) => a
+         )
+         .keys.distinct().map(_.toInt)
+
+      val internalExtendedPatterns = PatternUtilsRDD
+         .extendByEdgeInternalRDD(sc.makeRDD(List(pattern)), 1)
+
+      val externalExtendedPatterns = vertexLabels
+         .flatMap(vlabel => {
+            val patterns = PatternUtils.extendByEdgeExternal(pattern, vlabel, 1)
+            patterns.toArray.map(_.asInstanceOf[Pattern])
+         })
+
+      val extendedPatterns = sc
+         .union(internalExtendedPatterns, externalExtendedPatterns)
+
+      val sortedPatterns = extendedPatterns.sortBy(
+         p => (p.getNumberOfVertices, -p.getNumberOfEdges)
+      ) // less vertices and dense first
+      sortedPatterns.cache()
+      val numSteps = sortedPatterns.count().toInt
+
+      val fractoidsIter = sortedPatterns.toLocalIterator
+         .map(pattern => {
+            pattern.setInduced(false)
+            pattern.setVertexLabeled(true)
+            pattern.setEdgeLabeled(false)
+            self.pfractoid(pattern).expand(pattern.getNumberOfVertices)
+         })
+
+      (numSteps, fractoidsIter)
+   }
+
+   /**
+    * Pattern-aware and pattern-oblivious hybrid implementation of query
+    * specialization result set
+    * computation: given a pattern, obtain subgraph instances of pattern
+    * specializations of that pattern. A pattern specialization is defined as
+    * the given pattern with an additional edge.
+    * @param _pattern query
+    * @return new fractoid
+    */
+   def querySpecializationPAPO(_pattern: Pattern)
+   : Fractoid[EdgeInducedSubgraph] = {
+      _pattern.setInduced(false)
+      _pattern.setVertexLabeled(true)
+      _pattern.setEdgeLabeled(false)
+      val pattern = self.pfractoid(_pattern).pattern
+      val app = new QuerySpecializationPAPO(pattern)
+      app.apply(self)
+   }
+
+   /**
+    * Attempt to extract a set of canonical patterns draw from *numSamples*
+    * subgraph samples with *numVertices* vertices.
+    * @param numSamples
+    * @param numVertices
+    * @return a collection of canonical patterns
+    */
+   def getPatternsFromSamples
+   (numSamples: Int, numVertices: Int, seed: Long = 1L): RDD[Pattern] = {
+      val numThreads = if (self.numPartitions > numSamples) 1 else self.numPartitions
+      val samplesPerThread = Math.max(numSamples / numThreads, 1)
+      val patternsRDD = self
+         .set("samples_per_thread", samplesPerThread)
+         .set("random_walk_seed", seed)
+         .set("num_partitions", numThreads)
+         .vfractoid
+         .expand(numVertices,
+            classOf[RandomWalkEnumerator[VertexInducedSubgraph]])
+         .aggregationCanonicalPatternLong(
+            s => s.quickPattern(), 0L, s => 0L, (v, _) => v)
+         .keys
+
+      patternsRDD
    }
 }

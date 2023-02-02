@@ -2,8 +2,10 @@ package br.ufmg.cs.systems.fractal.subgraph;
 
 import br.ufmg.cs.systems.fractal.computation.Computation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
+import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import jdk.jfr.internal.tool.Main;
 
 public interface Subgraph {
    void addWord(int word);
@@ -15,6 +17,12 @@ public interface Subgraph {
    void computeFirstLevelExtensions(Computation computation,
                                     IntArrayList extensions);
 
+   void computeFirstLevelExtensions(Pattern pattern,
+                                    int totalNumWords,
+                                    int numPartitions,
+                                    int partitionId, MainGraph graph,
+                                    IntArrayList extensions);
+
    Configuration getConfig();
 
    IntArrayList getEdges();
@@ -24,6 +32,8 @@ public interface Subgraph {
    int getNumVertices();
 
    int getNumWords();
+
+   MainGraph getMainGraph();
 
    IntArrayList getVertices();
 

@@ -4,8 +4,6 @@ import br.ufmg.cs.systems.fractal.Primitive;
 import br.ufmg.cs.systems.fractal.computation.SubgraphEnumerator;
 import br.ufmg.cs.systems.fractal.subgraph.VertexInducedSubgraph;
 
-import javax.annotation.OverridingMethodsMustInvokeSuper;
-
 public class VertexInducedComputationEnumerationL<S extends VertexInducedSubgraph>
         extends VertexInducedComputation<S> {
 
@@ -21,12 +19,12 @@ public class VertexInducedComputationEnumerationL<S extends VertexInducedSubgrap
 
    @Override
    public long processCompute(SubgraphEnumerator<S> subgraphEnumerator) {
-      while (subgraphEnumerator.extend()) process(subgraph);
+      while (subgraphEnumerator.extend_EXTENSION_PRIMITIVE()) process(subgraph);
       return 0;
    }
 
    @Override
-   public boolean filter(S subgraph) {
+   public boolean filter_FILTERING_PRIMITIVE(S subgraph) {
       throw new UnsupportedOperationException();
    }
 

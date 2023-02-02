@@ -23,43 +23,27 @@ public class IntArrayList implements ReclaimableIntCollection, Externalizable {
    private IntConsumer intAdder = new IntAdderConsumer();
 
    public IntArrayList() {
-      this(16);
+      init(16);
+      numElements = 0;
    }
 
    public IntArrayList(int capacity) {
-      ensureCapacity(capacity);
+      init(capacity);
       this.numElements = 0;
    }
 
-   public IntArrayList(boolean preventReclaim) {
-      this();
-      this.preventReclaim = preventReclaim;
-   }
-
    public IntArrayList(IntArrayList intArrayList) {
-      this(intArrayList.backingArray, intArrayList.numElements);
-   }
-
-   public IntArrayList(int[] intArray, int numElements) {
-      set(intArray, numElements);
+      this.numElements = intArrayList.numElements;
+      backingArray = Arrays.copyOf(intArrayList.backingArray, numElements);
    }
 
    public IntArrayList(int[] intArray) {
-      set(intArray);
-   }
-
-   public void set(IntArrayList intArrayList) {
-      set(intArrayList.backingArray, intArrayList.numElements);
-   }
-
-   public void set(int[] intArray, int numElements) {
-      this.numElements = numElements;
-      backingArray = Arrays.copyOf(intArray, numElements);
-   }
-
-   public void set(int[] intArray) {
       this.numElements = intArray.length;
       backingArray = intArray;
+   }
+
+   protected void init(int capacity) {
+      backingArray = new int[capacity];
    }
 
    public int getSize() {
@@ -198,6 +182,7 @@ public class IntArrayList implements ReclaimableIntCollection, Externalizable {
    }
 
    public void setFrom(IntCollection collection) {
+      if (collection == this) return;
       ensureCapacity(collection.size());
       clear();
       collection.forEach(intAdder);
@@ -696,7 +681,7 @@ public class IntArrayList implements ReclaimableIntCollection, Externalizable {
       if (numElements != intArrayList.numElements) return false;
 
       for (int i = 0; i < numElements; ++i) {
-         if (backingArray[i] != intArrayList.backingArray[i]) {
+         if (getu(i) != intArrayList.getu(i)) {
             return false;
          }
       }
@@ -928,13 +913,24 @@ public class IntArrayList implements ReclaimableIntCollection, Externalizable {
 
    public IntArrayListView view(int from, int to) {
       IntArrayListView view = IntArrayListViewPool.instance().createObject();
-      view.set(this, from, to);
+      view(view, from, to);
       return view;
+   }
+
+   public void view(IntArrayListView view, int from, int to) {
+      view.backingArray = backingArray;
+      view.numElements = to - from;
+      view.offset = from;
+   }
+
+   public void swap(int i, int j) {
+      int elem = backingArray[i];
+      backingArray[i] = backingArray[j];
+      backingArray[j] = elem;
    }
 
    private class IntAdderConsumer implements IntConsumer {
       @Override
-
       public void accept(int elem) {
          IntArrayList.this.backingArray[IntArrayList.this.numElements++] = elem;
       }

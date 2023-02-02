@@ -37,54 +37,59 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
       this.inducedGraphCleaner = new InducedGraphCleaner();
    }
 
+   //@Override
+   //public void rebuildState() {
+   //   if (subgraph.getNumVertices() == 0) return;
+   //   MainGraph graph = computation.getConfig().getMainGraph();
+   //   IntArrayList candTmp = IntArrayListPool.instance().createObject();
+   //   IntArrayList finiTmp = IntArrayListPool.instance().createObject();
+
+   //   bootstrap(graph);
+
+   //   // compute extensions
+   //   int pivot = generatePivot();
+   //   IntArrayList uneighbors = inducedGraph.get(pivot);
+   //   exts.clear();
+   //   Utils.sdifference(cand, uneighbors, 0, cand.size(), 0,
+   //           uneighbors.size(), exts);
+
+   //   IntArrayList tmp;
+
+   //   for (int i = 1; i < subgraph.getNumWords(); ++i) {
+   //      // extend
+   //      int u = subgraph.getVertices().getu(i);
+   //      computeSets(u, candTmp, finiTmp);
+
+   //      // swap
+   //      tmp = candTmp;
+   //      candTmp = cand;
+   //      cand = tmp;
+   //      tmp = finiTmp;
+   //      finiTmp = fini;
+   //      fini = tmp;
+
+   //      // compute extensions
+   //      pivot = generatePivot();
+   //      graph.neighborhoodVertices(pivot, neighborhood);
+   //      exts.clear();
+   //      Utils.sdifference(cand, neighborhood, 0, cand.size(), 0,
+   //              neighborhood.size(), exts);
+   //   }
+
+   //   finiTmp.reclaim();
+   //   candTmp.reclaim();
+   //}
+
    @Override
-   public void rebuildState() {
-      if (subgraph.getNumVertices() == 0) return;
-      MainGraph graph = computation.getConfig().getMainGraph();
-      IntArrayList candTmp = IntArrayListPool.instance().createObject();
-      IntArrayList finiTmp = IntArrayListPool.instance().createObject();
-
-      bootstrap(graph);
-
-      // compute extensions
-      int pivot = generatePivot();
-      IntArrayList uneighbors = inducedGraph.get(pivot);
-      exts.clear();
-      Utils.sdifference(cand, uneighbors, 0, cand.size(), 0,
-              uneighbors.size(), exts);
-
-      IntArrayList tmp;
-
-      for (int i = 1; i < subgraph.getNumWords(); ++i) {
-         // extend
-         int u = subgraph.getVertices().getu(i);
-         computeSets(u, candTmp, finiTmp);
-
-         // swap
-         tmp = candTmp;
-         candTmp = cand;
-         cand = tmp;
-         tmp = finiTmp;
-         finiTmp = fini;
-         fini = tmp;
-
-         // compute extensions
-         pivot = generatePivot();
-         graph.neighborhoodVertices(pivot, neighborhood);
-         exts.clear();
-         Utils.sdifference(cand, neighborhood, 0, cand.size(), 0,
-                 neighborhood.size(), exts);
-      }
-
-      finiTmp.reclaim();
-      candTmp.reclaim();
+   public boolean shouldRebuildState() {
+      return true;
    }
 
    @Override
-   public void computeExtensions() {
+   public void computeExtensions_EXTENSION_PRIMITIVE() {
       int numVertices = subgraph.getNumVertices();
       if (numVertices == 0) {
-         super.computeExtensions();
+         super.computeExtensions_EXTENSION_PRIMITIVE();
          return;
       }
 
@@ -94,12 +99,10 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
          bootstrap(graph);
       }
 
-      //LOG.warn("ComputeExtensions2 " + this);
-
       if (cand.isEmpty() && fini.isEmpty()) {
          exts.clear();
          newExtensions(exts);
-         computation.lastComputation().process(subgraph);
+         //computation.lastComputation().process(subgraph);
          return;
       }
 
@@ -132,6 +135,9 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
       fini.ensureCapacity(neighborhood.size());
       for (int i = 0; i < neighborhood.size(); ++i) {
          int v = neighborhood.getu(i);
+         if (v == -1) {
+            LOG.warn(neighborhood);
+         }
          inducedGraph.put(v, IntArrayListPool.instance().createObject());
          if (v > u) cand.add(v);
          else fini.add(v);
@@ -181,16 +187,20 @@ public class MaximalCliquesEnumerator<S extends Subgraph> extends SubgraphEnumer
    }
 
    @Override
-   public boolean extend() {
-      if (getPrefix().size() == 0) return super.extend();
+   public boolean extend_EXTENSION_PRIMITIVE() {
+      if (getPrefix().size() == 0) return super.extend_EXTENSION_PRIMITIVE();
 
-      if (super.extend()) {
+      if (super.extend_EXTENSION_PRIMITIVE()) {
          if (computation.nextComputation() == null) return true;
-         MaximalCliquesEnumerator<S> nextEnumerator =
-                 (MaximalCliquesEnumerator<S>) computation.nextComputation().getSubgraphEnumerator();
+
+         SubgraphEnumerator<S> nextEnumerator = nextEnumerator();
+         if (!(nextEnumerator instanceof MaximalCliquesEnumerator)) return true;
+
+         MaximalCliquesEnumerator<S> nextMaximalCliquesEnumerator =
+                 (MaximalCliquesEnumerator<S>) nextEnumerator;
          int u = subgraph.getVertices().getLast();
-         computeSets(u, nextEnumerator.cand, nextEnumerator.fini);
-         nextEnumerator.inducedGraph = inducedGraph;
+         computeSets(u, nextMaximalCliquesEnumerator.cand, nextMaximalCliquesEnumerator.fini);
+         nextMaximalCliquesEnumerator.inducedGraph = inducedGraph;
          return true;
       }
       return false;

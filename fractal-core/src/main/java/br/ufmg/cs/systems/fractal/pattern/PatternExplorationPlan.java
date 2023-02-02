@@ -38,10 +38,6 @@ public class PatternExplorationPlan implements Externalizable {
       }
    }
 
-   public boolean isEmpty() {
-      return intersectionIdxs.isEmpty();
-   }
-
    protected void reset(Pattern pattern) {
       int numVertices = pattern.getNumberOfVertices();
       boolean vertexLabeled = pattern.vertexLabeled();
@@ -86,12 +82,21 @@ public class PatternExplorationPlan implements Externalizable {
 
       reset(pattern);
 
+      boolean edgeLabeled = pattern.edgeLabeled();
+
+      vertexPredicates.get(0).setLabel(pattern.getFirstVertexLabel());
+
       for (PatternEdge pedge : pattern.getEdges()) {
          intersectionIdxs.get(pedge.getDestPos()).add(pedge.getSrcPos());
          vertexPredicates.get(pedge.getDestPos()).setLabel(pedge.getDestLabel());
          vertexPredicates.get(pedge.getSrcPos()).setLabel(pedge.getSrcLabel());
-         EdgePredicate edgePredicate = new EdgePredicate();
-         edgePredicate.setLabel(pedge.getLabel());
+         EdgePredicate edgePredicate;
+         if (edgeLabeled) {
+            edgePredicate = new EdgePredicate();
+            edgePredicate.setLabel(pedge.getLabel());
+         } else {
+            edgePredicate = EdgePredicate.trueEdgePredicate;
+         }
          edgePredicates.get(pedge.getDestPos()).add(edgePredicate);
       }
 

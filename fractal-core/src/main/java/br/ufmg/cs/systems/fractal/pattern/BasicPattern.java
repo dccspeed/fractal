@@ -1,12 +1,10 @@
 package br.ufmg.cs.systems.fractal.pattern;
 
 import br.ufmg.cs.systems.fractal.conf.Configuration;
-import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import br.ufmg.cs.systems.fractal.graph.Vertex;
 import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgeThreadUnsafePool;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
-import br.ufmg.cs.systems.fractal.util.ReflectionUtils;
+import br.ufmg.cs.systems.fractal.util.ReflectionSerializationUtils;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.IntCollectionAddConsumer;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
@@ -18,7 +16,6 @@ import com.koloboke.collect.map.IntIntMap;
 import com.koloboke.collect.map.hash.HashIntIntMapFactory;
 import com.koloboke.collect.map.hash.HashIntIntMaps;
 import com.koloboke.collect.set.IntSet;
-import org.apache.commons.lang.StringUtils;
 import org.apache.log4j.Logger;
 
 import java.io.*;
@@ -49,25 +46,26 @@ public abstract class BasicPattern implements Pattern {
    private IntArrayList vertices;
    private PatternEdgeArrayList edges;
    private int firstVertexLabel;
+   private ObjArrayList<IntArrayList> vertexPosToEdgeIndices;
+   private boolean dirtyVertexPosToEdgeIndices;
 
    // K = vertex id, V = vertex position
    private IntIntMap vertexPositions;
-   // Incremental building {{
+
+   // Incremental building
    private IntArrayList previousWords; // TODO: is it previous or current ?
    private int numVerticesAddedFromPrevious;
    private int numAddedEdgesFromPrevious;
-   // Isomorphisms {{
+
+   // Isomorphisms
    private VertexPositionEquivalences vertexPositionEquivalences;
-   // }}
-   private EdgePositionEquivalences edgePositionEquivalences;
    private IntIntMap canonicalLabelling;
    private ObjArrayList<IntArrayList> vsymmetryBreakerLowerBound;
    private ObjArrayList<IntArrayList> vsymmetryBreakerUpperBound;
-   // Others {{
-   //private PatternEdgePool patternEdgePool;
+
+   // Others
    private PatternEdgeThreadUnsafePool patternEdgePool;
    private PatternExplorationPlan explorationPlan;
-   // }}
 
    public BasicPattern(BasicPattern basicPattern) {
       this();
@@ -78,6 +76,7 @@ public abstract class BasicPattern implements Pattern {
       edgeLabeled = basicPattern.edgeLabeled;
       induced = basicPattern.induced;
       vertexLabeled = basicPattern.vertexLabeled;
+      firstVertexLabel = basicPattern.firstVertexLabel;
 
       edges = createPatternEdgeArrayList(edgeLabeled);
 
@@ -118,6 +117,7 @@ public abstract class BasicPattern implements Pattern {
       dirtyCanonicalLabelling = true;
       dirtyVertexPositionEquivalences = true;
       dirtyEdgePositionEquivalences = true;
+      dirtyVertexPosToEdgeIndices = true;
    }
 
    private void resetIncremental() {
@@ -129,12 +129,14 @@ public abstract class BasicPattern implements Pattern {
    }
 
    private static void vsymmetryBreakerRec(Pattern pattern, int[][] sbreaker,
-                                           IntArrayList vertexLabels, int nextLabel) {
+                                           IntArrayList vertexLabels,
+                                           IntArrayList edgeLabels,
+                                           int nextLabel) {
       int numVertices = sbreaker.length;
       VertexPositionEquivalences vertexPositionEquivalences =
-              pattern.getVertexPositionEquivalences(vertexLabels);
+              pattern.getVertexPositionEquivalences(vertexLabels, edgeLabels);
 
-      LOG.info(String.format(
+      LOG.debug(String.format(
               "symmetryBreakerRec{pattern=%s,vertices=%s,vertexLabels=%s," +
                       "vertexEquivalences=%s,nextLabel=%s}\n",
               pattern, pattern.getVertices(), vertexLabels,
@@ -166,7 +168,8 @@ public abstract class BasicPattern implements Pattern {
          vertexLabels.set(fixed, nextLabel);
 
          // recursive call
-         vsymmetryBreakerRec(pattern.copy(), sbreaker, vertexLabels, --nextLabel);
+         vsymmetryBreakerRec(pattern.copy(), sbreaker, vertexLabels, edgeLabels,
+                 nextLabel + 1);
       }
    }
 
@@ -174,7 +177,7 @@ public abstract class BasicPattern implements Pattern {
 
       // this is only to be used for single-vertex patterns
       if (vertices.isEmpty()) {
-         firstVertexLabel = getMainGraph().vertexLabel(vertexId);
+         firstVertexLabel = getMainGraph().firstVertexLabel(vertexId);
       }
 
       int pos = vertexPositions.get(vertexId);
@@ -186,6 +189,22 @@ public abstract class BasicPattern implements Pattern {
       }
 
       return pos;
+   }
+
+   @Override
+   public void addVertexStandalone(int vlabel) {
+      int vertex = vertices.size();
+      vertices.add(vertex);
+
+      if (vertex == 0) {
+         firstVertexLabel = vlabel;
+      }
+   }
+
+   @Override
+   public void addVertexStandalone() {
+      int vertex = vertices.size();
+      vertices.add(vertex);
    }
 
    /**
@@ -219,15 +238,6 @@ public abstract class BasicPattern implements Pattern {
       return patternEdge;
    }
 
-   protected PatternEdge createPatternEdge(Edge edge, int srcPos, int dstPos, int srcId) {
-      PatternEdge patternEdge = patternEdgePool.createObject();
-
-      patternEdge.setFromEdge(getConfig().getMainGraph(),
-              edge, srcPos, dstPos, srcId);
-
-      return patternEdge;
-   }
-
    private void ensureCanStoreNewEdges(int numAddedEdgesFromPrevious) {
       int newNumEdges = edges.size() + numAddedEdgesFromPrevious;
 
@@ -243,9 +253,7 @@ public abstract class BasicPattern implements Pattern {
 
    @Override
    public int hashCode() {
-      // TODO
-      return //edges.isEmpty() ? mainGraph.getVertex(vertices.getUnchecked(0)).getVertexLabel() :
-              edges.hashCode();
+      return edges.isEmpty() ? firstVertexLabel : edges.hashCode();
    }
 
    @Override
@@ -259,11 +267,6 @@ public abstract class BasicPattern implements Pattern {
 
    }
 
-   @Override
-   public String toString() {
-      return toOutputString();
-   }
-
    public MainGraph getMainGraph() {
       return getConfig().getMainGraph();
    }
@@ -274,7 +277,7 @@ public abstract class BasicPattern implements Pattern {
 
       configuration = config;
 
-      edgeLabeled = config.isGraphEdgeLabelled();
+      edgeLabeled = config.isGraphEdgeLabeled();
 
       if (edges == null) {
          edges = createPatternEdgeArrayList(edgeLabeled);
@@ -316,16 +319,17 @@ public abstract class BasicPattern implements Pattern {
 
    @Override
    public void setSubgraph(Subgraph subgraph) {
-      try {
+      //try {
          if (canDoIncremental(subgraph)) {
             setSubgraphIncremental(subgraph);
          } else {
             setSubgraphFromScratch(subgraph);
          }
-      } catch (RuntimeException e) {
-         LOG.error("subgraph: " + subgraph + " " + e);
-         throw e;
-      }
+      //}
+      //catch (RuntimeException e) {
+      //   LOG.error("subgraph: " + subgraph + " " + e);
+      //   throw e;
+      //}
    }
 
    @Override
@@ -342,6 +346,7 @@ public abstract class BasicPattern implements Pattern {
       return addEdge(patternEdge);
    }
 
+   @Override
    public boolean addEdge(PatternEdge edge) {
       // TODO: Remove when we have directed edges
       if (edge.getSrcPos() > edge.getDestPos()) {
@@ -353,6 +358,20 @@ public abstract class BasicPattern implements Pattern {
       setDirty();
 
       return true;
+   }
+
+   @Override
+   public void addEdgeStandalone(PatternEdge edge) {
+      int numVertices = getNumberOfVertices();
+      int src = edge.getSrcPos();
+      if (src >= numVertices) throw new RuntimeException();
+
+      int dst = edge.getDestPos();
+      if (dst >= numVertices) throw new RuntimeException();
+
+      if (src > dst) edge.invert();
+
+      edges.add(edge);
    }
 
    @Override
@@ -376,7 +395,7 @@ public abstract class BasicPattern implements Pattern {
       }
 
       if (allEqual) {
-         edges.sort();
+         //edges.sort();
          return false;
       }
 
@@ -444,11 +463,11 @@ public abstract class BasicPattern implements Pattern {
 
    @Override
    public VertexPositionEquivalences getVertexPositionEquivalences() {
-      return getVertexPositionEquivalences(null);
+      return getVertexPositionEquivalences(null, null);
    }
 
    @Override
-   public VertexPositionEquivalences getVertexPositionEquivalences(IntArrayList vertexLabels) {
+   public VertexPositionEquivalences getVertexPositionEquivalences(IntArrayList vertexLabels, IntArrayList edgeLabels) {
       if (dirtyVertexPositionEquivalences) {
          synchronized (this) {
             if (dirtyVertexPositionEquivalences) {
@@ -456,10 +475,14 @@ public abstract class BasicPattern implements Pattern {
                   vertexPositionEquivalences = new VertexPositionEquivalences();
                }
 
-               vertexPositionEquivalences.setNumVertices(getNumberOfVertices());
+               int numVertices = getNumberOfVertices();
+               if (edgeLabels != null) numVertices += getNumberOfEdges();
+
+               vertexPositionEquivalences.setNumVertices(numVertices);
                vertexPositionEquivalences.clear();
 
-               fillVertexPositionEquivalences(vertexPositionEquivalences, vertexLabels);
+               fillVertexPositionEquivalences(vertexPositionEquivalences,
+                       vertexLabels, edgeLabels);
 
                dirtyVertexPositionEquivalences = false;
             }
@@ -467,29 +490,6 @@ public abstract class BasicPattern implements Pattern {
       }
 
       return vertexPositionEquivalences;
-   }
-
-   @Override
-   public EdgePositionEquivalences getEdgePositionEquivalences() {
-      return getEdgePositionEquivalences(null);
-   }
-
-   @Override
-   public EdgePositionEquivalences getEdgePositionEquivalences(IntArrayList edgeLabels) {
-      if (dirtyEdgePositionEquivalences) {
-         synchronized (this) {
-            if (dirtyEdgePositionEquivalences) {
-               if (edgePositionEquivalences == null) {
-                  edgePositionEquivalences = new EdgePositionEquivalences();
-               }
-               edgePositionEquivalences.setNumEdges(getNumberOfEdges());
-               edgePositionEquivalences.clear();
-               fillEdgePositionEquivalences(edgePositionEquivalences, edgeLabels);
-               dirtyEdgePositionEquivalences = false;
-            }
-         }
-      }
-      return edgePositionEquivalences;
    }
 
    @Override
@@ -519,7 +519,7 @@ public abstract class BasicPattern implements Pattern {
             }
          }
 
-         LOG.info("vsymmetryBreakerUpperBound " + vsymmetryBreakerUpperBound);
+         LOG.debug("vsymmetryBreakerUpperBound " + vsymmetryBreakerUpperBound);
       }
 
       return vsymmetryBreakerUpperBound;
@@ -534,7 +534,7 @@ public abstract class BasicPattern implements Pattern {
             }
          }
 
-         LOG.info("vsymmetryBreakerLowerBound " + vsymmetryBreakerLowerBound);
+         LOG.debug("vsymmetryBreakerLowerBound " + vsymmetryBreakerLowerBound);
       }
 
       return vsymmetryBreakerLowerBound;
@@ -542,14 +542,14 @@ public abstract class BasicPattern implements Pattern {
 
    @Override
    public void updateSymmetryBreaker() {
-      int[][] symmetryBreaker = vsymmetryBreakerMatrix(vertexLabeled);
+      int[][] symmetryBreaker = vsymmetryBreakerMatrix(vertexLabeled, edgeLabeled);
       vsymmetryBreakerLowerBound = computeVsymmetryBreakerLowerBound(symmetryBreaker);
       vsymmetryBreakerUpperBound = computeVsymmetryBreakerUpperBound(symmetryBreaker);
    }
 
    @Override
    public void updateSymmetryBreakerVertexUnlabeled() {
-      int[][] symmetryBreaker = vsymmetryBreakerMatrix(false);
+      int[][] symmetryBreaker = vsymmetryBreakerMatrix(false, false);
       vsymmetryBreakerLowerBound = computeVsymmetryBreakerLowerBound(symmetryBreaker);
       vsymmetryBreakerUpperBound = computeVsymmetryBreakerUpperBound(symmetryBreaker);
    }
@@ -684,12 +684,17 @@ public abstract class BasicPattern implements Pattern {
    }
 
    @Override
+   public void setEdgeLabeled(boolean edgeLabeled) {
+      this.edgeLabeled = edgeLabeled;
+   }
+
+   @Override
    public Configuration getConfig() {
       return configuration;
    }
 
    @Override
-   public String toOutputString() {
+   public String toString() {
       if (getNumberOfEdges() > 0) {
          StringBuffer sb = new StringBuffer("edges=[");
          IntArrayList vlabels = IntArrayListPool.instance().createObject();
@@ -707,7 +712,6 @@ public abstract class BasicPattern implements Pattern {
          }
          sb.append("],vlabels=" + vlabels + ",elabels=" + elabels);
          return sb.toString();
-         //return StringUtils.join(edges, ",");
       } else if (getNumberOfVertices() == 1) {
          return "O(" + firstVertexLabel + ")";
       } else {
@@ -764,13 +768,10 @@ public abstract class BasicPattern implements Pattern {
       return vsymmetryBreaker;
    }
 
-   protected abstract void fillEdgePositionEquivalences(
-           EdgePositionEquivalences edgePositionEquivalences,
-           IntArrayList edgeLabels);
-
    protected abstract void fillVertexPositionEquivalences(
            VertexPositionEquivalences vertexPositionEquivalences,
-           IntArrayList vertexLabels);
+           IntArrayList vertexLabels,
+           IntArrayList edgeLabels);
 
    protected abstract void fillCanonicalLabelling(IntIntMap canonicalLabelling);
 
@@ -783,7 +784,8 @@ public abstract class BasicPattern implements Pattern {
       }
    }
 
-   private void removeLastNVertices(int n) {
+   @Override
+   public void removeLastNVertices(int n) {
       int targetI = vertices.size() - n;
 
       for (int i = vertices.size() - 1; i >= targetI; --i) {
@@ -824,18 +826,18 @@ public abstract class BasicPattern implements Pattern {
       ensureCanStoreNewVertices(numVerticesInSubgraph);
       ensureCanStoreNewEdges(numEdgesInSubgraph);
 
-      IntArrayList SubgraphVertices = subgraph.getVertices();
+      IntArrayList subgraphVertices = subgraph.getVertices();
 
       for (int i = 0; i < numVerticesInSubgraph; ++i) {
-         addVertex(SubgraphVertices.getu(i));
+         addVertex(subgraphVertices.getu(i));
       }
 
       numVerticesAddedFromPrevious = subgraph.numVerticesAdded();
 
-      IntArrayList SubgraphEdges = subgraph.getEdges();
+      IntArrayList subgraphEdges = subgraph.getEdges();
 
       for (int i = 0; i < numEdgesInSubgraph; ++i) {
-         addEdge(SubgraphEdges.getu(i));
+         addEdge(subgraphEdges.getu(i));
       }
 
       numAddedEdgesFromPrevious = subgraph.numEdgesAdded();
@@ -857,16 +859,16 @@ public abstract class BasicPattern implements Pattern {
       ensureCanStoreNewVertices(numVerticesAddedFromPrevious);
       ensureCanStoreNewEdges(numAddedEdgesFromPrevious);
 
-      IntArrayList SubgraphVertices = subgraph.getVertices();
+      IntArrayList subgraphVertices = subgraph.getVertices();
       int numVerticesInSubgraph = subgraph.getNumVertices();
       for (int i = (numVerticesInSubgraph - numVerticesAddedFromPrevious); i < numVerticesInSubgraph; ++i) {
-         addVertex(SubgraphVertices.getu(i));
+         addVertex(subgraphVertices.getu(i));
       }
 
-      IntArrayList SubgraphEdges = subgraph.getEdges();
+      IntArrayList subgraphEdges = subgraph.getEdges();
       int numEdgesInSubgraph = subgraph.getNumEdges();
       for (int i = (numEdgesInSubgraph - numAddedEdgesFromPrevious); i < numEdgesInSubgraph; ++i) {
-         addEdge(SubgraphEdges.getu(i));
+         addEdge(subgraphEdges.getu(i));
       }
 
       updateUsedSubgraphIncremental(subgraph);
@@ -875,13 +877,13 @@ public abstract class BasicPattern implements Pattern {
    private void updateUsedSubgraphFromScratch(Subgraph subgraph) {
       previousWords.clear();
 
-      int SubgraphNumWords = subgraph.getNumWords();
+      int subgraphNumWords = subgraph.getNumWords();
 
-      previousWords.ensureCapacity(SubgraphNumWords);
+      previousWords.ensureCapacity(subgraphNumWords);
 
       IntArrayList words = subgraph.getWords();
 
-      for (int i = 0; i < SubgraphNumWords; i++) {
+      for (int i = 0; i < subgraphNumWords; i++) {
          previousWords.add(words.getu(i));
       }
    }
@@ -896,10 +898,12 @@ public abstract class BasicPattern implements Pattern {
    }
 
    private int[][] vsymmetryBreakerMatrix() {
-      return vsymmetryBreakerMatrix(true);
+      //return vsymmetryBreakerMatrix(true, true);
+      return vsymmetryBreakerMatrix(vertexLabeled, edgeLabeled);
    }
 
-   private IntArrayList getVertexLabels(boolean shouldConsiderVertexLabels) {
+   @Override
+   public IntArrayList getVertexLabels(boolean shouldConsiderVertexLabels) {
       int numVertices = getNumberOfVertices();
       IntArrayList vertexLabels = new IntArrayList(numVertices);
 
@@ -915,11 +919,28 @@ public abstract class BasicPattern implements Pattern {
       return vertexLabels;
    }
 
-   private int[][] vsymmetryBreakerMatrix(boolean shouldConsiderVertexLabels) {
+   @Override
+   public IntArrayList getEdgeLabels(boolean shouldConsiderEdgeLabels) {
+      if (shouldConsiderEdgeLabels) {
+         int numEdges = getNumberOfEdges();
+         IntArrayList edgeLabels = new IntArrayList(numEdges);
+         for (int i = 0; i < numEdges; ++i) {
+            LabelledPatternEdge lpedge = (LabelledPatternEdge) edges.get(i);
+            edgeLabels.add(lpedge.getLabel());
+         }
+         return edgeLabels;
+      } else {
+         return null;
+      }
+   }
+
+   private int[][] vsymmetryBreakerMatrix(boolean shouldConsiderVertexLabels,
+                                          boolean shouldConsiderEdgeLabels) {
       int numVertices = getNumberOfVertices();
       int[][] symmetryBreaker = new int[numVertices][numVertices];
 
       IntArrayList vertexLabels = getVertexLabels(shouldConsiderVertexLabels);
+      IntArrayList edgeLabels = getEdgeLabels(shouldConsiderEdgeLabels);
 
       //IntArrayList vertexLabels = new IntArrayList(numVertices);
       //IntCursor vertexCursor = vertices.cursor();
@@ -934,7 +955,13 @@ public abstract class BasicPattern implements Pattern {
       //   }
       //}
 
-      vsymmetryBreakerRec(this.copy(), symmetryBreaker, vertexLabels, -1);
+      int maxLabel = Integer.MIN_VALUE;
+      for (int i = 0; i < vertexLabels.size(); ++i) {
+         maxLabel = Math.max(maxLabel, vertexLabels.get(i));
+      }
+
+      vsymmetryBreakerRec(this.copy(), symmetryBreaker, vertexLabels,
+              edgeLabels, maxLabel + 1);
 
       StringBuffer sb = new StringBuffer();
       sb.append("symmetryBreaker {");
@@ -946,7 +973,7 @@ public abstract class BasicPattern implements Pattern {
       }
       sb.append("}");
 
-      LOG.info(sb.toString());
+      LOG.debug(sb.toString());
 
       return symmetryBreaker;
    }
@@ -966,7 +993,9 @@ public abstract class BasicPattern implements Pattern {
       dataOutput.writeBoolean(vertexLabeled);
       dataOutput.writeBoolean(edgeLabeled);
       dataOutput.writeInt(edges.size());
-      for (int i = 0; i < edges.size(); ++i) edges.getu(i).write(dataOutput);
+      for (int i = 0; i < edges.size(); ++i) {
+         edges.getu(i).write(dataOutput);
+      }
       vertices.write(dataOutput);
       dataOutput.writeInt(firstVertexLabel);
 
@@ -997,7 +1026,6 @@ public abstract class BasicPattern implements Pattern {
       } else {
          dataOutput.writeBoolean(false);
       }
-
    }
 
    public void readFields(DataInput dataInput) throws IOException {
@@ -1024,6 +1052,7 @@ public abstract class BasicPattern implements Pattern {
       }
       vertices.readFields(dataInput);
       firstVertexLabel = dataInput.readInt();
+
 
       for (int i = 0; i < vertices.size(); ++i) {
          vertexPositions.put(vertices.getu(i), i);
@@ -1054,7 +1083,7 @@ public abstract class BasicPattern implements Pattern {
       boolean hasExplorationPlan = dataInput.readBoolean();
       if (hasExplorationPlan) {
          try {
-            explorationPlan = ReflectionUtils.newInstance(
+            explorationPlan = ReflectionSerializationUtils.newInstance(
                     (Class<? extends PatternExplorationPlan>) Class.forName(dataInput.readUTF())
             );
          } catch (ClassNotFoundException e) {
@@ -1075,10 +1104,62 @@ public abstract class BasicPattern implements Pattern {
    }
 
    @Override
-   public int getFirstVertexLabel() {
-      if (vertices.size() != 1) {
-         throw new RuntimeException("Only allowed for single-vertex patterns");
+   public ObjArrayList<IntArrayList> getVertexPosToEdgeIndices() {
+      if (vertexPosToEdgeIndices == null) {
+         vertexPosToEdgeIndices = new ObjArrayList<>(getNumberOfVertices());
       }
+
+      if (dirtyVertexPosToEdgeIndices) {
+         int numVertices = getNumberOfVertices();
+         int numEdges = getNumberOfEdges();
+         // reclaim old arrays
+         for (int i = 0; i < vertexPosToEdgeIndices.size(); ++i) {
+            vertexPosToEdgeIndices.getu(i).reclaim();
+         }
+
+         // clear mapping and construct it from scratch
+         vertexPosToEdgeIndices.clear();
+
+         for (int i = 0; i < numVertices; ++i) {
+            vertexPosToEdgeIndices.add(IntArrayListPool.instance().createObject());
+         }
+
+         for (int i = 0; i < numEdges; ++i) {
+            PatternEdge pedge = edges.getu(i);
+            vertexPosToEdgeIndices.getu(pedge.getSrcPos()).add(i);
+            vertexPosToEdgeIndices.getu(pedge.getDestPos()).add(i);
+         }
+
+         dirtyVertexPosToEdgeIndices = false;
+      }
+
+      return vertexPosToEdgeIndices;
+   }
+
+   @Override
+   public void setVertexLabels(int... vlabels) {
+      if (vlabels.length != getNumberOfVertices()) {
+         throw new RuntimeException(
+                 String.format("Found %d labels. Expected %d labels",
+                         vlabels.length, getNumberOfVertices()));
+      }
+
+      setVertexLabeled(true);
+
+      for (PatternEdge pedge : edges) {
+         pedge.setSrcLabel(vlabels[pedge.getSrcPos()]);
+         pedge.setDestLabel(vlabels[pedge.getDestPos()]);
+      }
+   }
+
+   @Override
+   public int getFirstVertexLabel() {
       return firstVertexLabel;
    }
+
+   @Override
+   public boolean edgeLabeled() {
+      return edgeLabeled;
+   }
+
 }

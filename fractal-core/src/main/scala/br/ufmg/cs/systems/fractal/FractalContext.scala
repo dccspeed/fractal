@@ -11,8 +11,9 @@ import one.profiler.Events
 import org.apache.spark.SparkContext
 import spire.ClassTag
 
+import java.util.Random
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future, Promise}
+import scala.concurrent.{Await, Future, Promise, future}
 import scala.util.Try
 
 /**
@@ -39,6 +40,37 @@ class FractalContext(sc: SparkContext, logLevel: String = "warn")
    def acceptingNewJobs: Boolean = _acceptingNewJobs
 
    def sparkContext: SparkContext = sc
+
+   def estimateThroughput[S <: Subgraph]
+   (_fractoids: Seq[Fractoid[S]], timeLimitMs: Long, _timePerStepMs: Long): Double = {
+      val random = new Random()
+      val fractoids = _fractoids.toArray
+
+      val timePerStepMs = Math.max(_timePerStepMs, timeLimitMs / _fractoids.length)
+
+      // force graph reading
+      _fractoids.head.fractalGraph.vfractoid.expand(1).aggregationCount
+
+      val start = System.currentTimeMillis()
+      var numSubgraphs = 0L
+      var remainingTimeMs = timeLimitMs
+      while (remainingTimeMs >= timePerStepMs) {
+         val start = System.currentTimeMillis()
+         val randomIdx = random.nextInt(fractoids.length)
+         val fractoid = fractoids(randomIdx)
+           .withStepTimeLimit(timePerStepMs)
+           .withNumThreads(1)
+         val stepNumSubgraphs = fractoid.aggregationCount
+         numSubgraphs += stepNumSubgraphs
+         val elapsedMs = System.currentTimeMillis() - start
+         remainingTimeMs -= elapsedMs
+         logApp(s"StepEstimate fractoid=${fractoid} elapsedMs=${elapsedMs} numSubgraphs=${stepNumSubgraphs}" +
+           s" remainingTime=${remainingTimeMs}")
+      }
+      val elapsedMs = System.currentTimeMillis() - start
+
+      numSubgraphs / elapsedMs.toDouble
+   }
 
    def submitFractalStep[S <: Subgraph, T]
    (fractoid: Fractoid[S])(callback: Fractoid[S] => T): T = {

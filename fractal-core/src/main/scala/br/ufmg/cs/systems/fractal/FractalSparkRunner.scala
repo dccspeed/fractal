@@ -13,7 +13,7 @@ import org.apache.hadoop.io.compress.{BZip2Codec, SnappyCodec}
 import org.apache.spark.{SparkConf, SparkContext}
 
 import java.io.File
-import java.util.Base64
+import java.util.{Base64, Random}
 import java.util.function.BiPredicate
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration.{Duration, pairIntToDuration}
@@ -588,6 +588,35 @@ object QuasiCliquesPAPO extends Logging {
    }
 }
 
+object QuerySpecializationPOEstimate extends Logging {
+   val appid: String = "query_specialization_po_estimate"
+
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             patternPath: String, timeLimitMs: Long): Unit = {
+
+      val fc = fractalGraph.fractalContext
+      val pattern = PatternUtils.fromFS(patternPath)
+      pattern.setInduced(false)
+      pattern.setVertexLabeled(true)
+      pattern.setEdgeLabeled(false)
+      val numSteps = 1
+
+      val (throughputEstimate, elapsedMs) = FractalSparkRunner.time {
+         val stepTimeLimitMs = fractalGraph.config.getStepTimeLimitMs
+         val fractoid = fractalGraph.querySpecializationPO(pattern)
+         val throughputEstimate = fc.estimateThroughput(Seq(fractoid), timeLimitMs, stepTimeLimitMs)
+         throughputEstimate
+      }
+
+      logApp(s"FinalResult" +
+        s" numVertices=${pattern.getNumberOfVertices}" +
+        s" patternQuery=${pattern}" +
+        s" numSteps=${numSteps}" +
+        s" elapsedMs=${elapsedMs}" +
+        s" throughputEstimate=${throughputEstimate}")
+   }
+}
+
 object QuerySpecializationPO extends Logging {
    val appid: String = "query_specialization_po"
 
@@ -635,6 +664,36 @@ object QuerySpecializationPO extends Logging {
          s" numSubgraphs=${numSubgraphs}" +
          s" elapsedMs=${elapsedMs}" +
          s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+   }
+}
+
+object QuerySpecializationPAEstimate extends Logging {
+   val appid: String = "query_specialization_pa_estimate"
+
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             patternPath: String, timeLimitMs: Long): Unit = {
+
+      val fc = fractalGraph.fractalContext
+      val pattern = PatternUtils.fromFS(patternPath)
+      pattern.setInduced(false)
+      pattern.setVertexLabeled(true)
+      pattern.setEdgeLabeled(false)
+
+      val ((numSteps, throughputEstimate), elapsedMs) = FractalSparkRunner.time {
+         val (numSteps, fractoidsIter) = fractalGraph
+           .querySpecializationPA(pattern)
+         val stepTimeLimitMs = fractalGraph.config.getStepTimeLimitMs
+         val throughputEstimate = fc.estimateThroughput(fractoidsIter.toSeq, timeLimitMs, stepTimeLimitMs)
+         (numSteps, throughputEstimate)
+      }
+
+      logApp(s"FinalResult" +
+        s" numVertices=${pattern.getNumberOfVertices}" +
+        s" patternQuery=${pattern}" +
+        s" numSteps=${numSteps}" +
+        s" elapsedMs=${elapsedMs}" +
+        s" throughputEstimate=${throughputEstimate}"
+      )
    }
 }
 
@@ -697,6 +756,35 @@ object QuerySpecializationPA extends Logging {
          s" numSubgraphs=${numSubgraphs}" +
          s" elapsedMs=${elapsedMs}" +
          s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+   }
+}
+
+object QuerySpecializationPAPOEstimate extends Logging {
+   val appid: String = "query_specialization_pa_po_estimate"
+
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             patternPath: String, timeLimitMs: Long): Unit = {
+
+      val fc = fractalGraph.fractalContext
+      val pattern = PatternUtils.fromFS(patternPath)
+      pattern.setInduced(false)
+      pattern.setVertexLabeled(true)
+      pattern.setEdgeLabeled(false)
+      val numSteps = 1
+
+      val (throughputEstimate, elapsedMs) = FractalSparkRunner.time {
+         val stepTimeLimitMs = fractalGraph.config.getStepTimeLimitMs
+         val fractoid = fractalGraph.querySpecializationPAPO(pattern)
+         val throughputEstimate = fc.estimateThroughput(Seq(fractoid), timeLimitMs, stepTimeLimitMs)
+         throughputEstimate
+      }
+
+      logApp(s"FinalResult" +
+        s" numVertices=${pattern.getNumberOfVertices}" +
+        s" patternQuery=${pattern}" +
+        s" numSteps=${numSteps}" +
+        s" elapsedMs=${elapsedMs}" +
+        s" throughputEstimate=${throughputEstimate}")
    }
 }
 
@@ -2210,6 +2298,27 @@ object FractalSparkRunner extends Logging {
             setRemainingConfigs()
             QuerySpecializationPAPO(fractalGraph, explorationSteps,
                patternPath)
+
+         case QuerySpecializationPOEstimate.appid =>
+            val patternPath = nextArg
+            val timeLimitMs = nextArg.toLong
+            setRemainingConfigs()
+            QuerySpecializationPOEstimate(fractalGraph, explorationSteps,
+               patternPath, timeLimitMs)
+
+         case QuerySpecializationPAEstimate.appid =>
+            val patternPath = nextArg
+            val timeLimitMs = nextArg.toLong
+            setRemainingConfigs()
+            QuerySpecializationPAEstimate(fractalGraph, explorationSteps,
+               patternPath, timeLimitMs)
+
+         case QuerySpecializationPAPOEstimate.appid =>
+            val patternPath = nextArg
+            val timeLimitMs = nextArg.toLong
+            setRemainingConfigs()
+            QuerySpecializationPAPOEstimate(fractalGraph, explorationSteps,
+               patternPath, timeLimitMs)
 
          case CanonicalPatternsGeneratorByVertex.appid =>
             val outputPath = nextArg

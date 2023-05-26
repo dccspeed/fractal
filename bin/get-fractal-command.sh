@@ -59,6 +59,9 @@ keywordsearch="${keywordsearch}|minimal_keyword_search_pa"
 queryspecialization="query_specialization_po"
 queryspecialization="${queryspecialization}|query_specialization_pa"
 queryspecialization="${queryspecialization}|query_specialization_pa_po"
+queryspecialization="${queryspecialization}|query_specialization_po_estimate"
+queryspecialization="${queryspecialization}|query_specialization_pa_estimate"
+queryspecialization="${queryspecialization}|query_specialization_pa_po_estimate"
 
 patternquerygenerator="pattern_query_generator"
 
@@ -595,6 +598,36 @@ ALGOPTION for '$app':
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 
+	query_specialization_po_estimate)
+	required="inputgraph steps query budget"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
+	;;
+
+	query_specialization_pa_estimate)
+	required="inputgraph steps query budget"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
+	;;
+
+	query_specialization_pa_po_estimate)
+	required="inputgraph steps query budget"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
+	;;
+
 	*)
     >&2 echo "Invalid application: ${app}"
     >&2 printf "$usage\n"
@@ -630,9 +663,7 @@ uienabled=${uienabled:-false}
 app_class=${app_class:-br.ufmg.cs.systems.fractal.FractalSparkRunner}
 packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties ${PROFILER_OPTIONS}\""
-args=${args:-"$labeling $inputgraph $app $total_cores $steps $log_level $steptimelimit $timelimit $fsmsupp $mindensity $query $plabeling $fraction $periodicthreshold $labelsset $gfiltering $seed $topk $outputdir $outputpath $configs"}
-
-echo "sdsdsdsd : $query" >&2
+args=${args:-"$labeling $inputgraph $app $total_cores $steps $log_level $steptimelimit $timelimit $fsmsupp $mindensity $query $budget $plabeling $fraction $periodicthreshold $labelsset $gfiltering $seed $topk $outputdir $outputpath $configs"}
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\

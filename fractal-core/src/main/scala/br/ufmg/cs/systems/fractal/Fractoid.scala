@@ -22,7 +22,7 @@ import scala.reflect.{ClassTag, classTag}
  */
 case class Fractoid[S <: Subgraph : ClassTag]
 (
-   private val fractalGraph: FractalGraph,
+   val fractalGraph: FractalGraph,
    step: Int,
    configBc: Broadcast[SparkConfiguration],
    computationContainer: ComputationContainer[S],
@@ -1196,6 +1196,15 @@ case class Fractoid[S <: Subgraph : ClassTag]
       newConfig.set("thread_stats_key", diagKey)
       val newConfigBc = sparkContext.broadcast(newConfig)
       (this.copy(configBc = newConfigBc), diagKey)
+   }
+
+   def withNumThreads(numThreads: Int): Fractoid[S] = {
+      val newConfs = scala.collection.mutable.Map[String, Any]()
+      config.confs.foreach(kv => newConfs.update(kv._1, kv._2))
+      val newConfig = new SparkConfiguration(newConfs)
+      newConfig.set("num_partitions", numThreads)
+      val newConfigBc = sparkContext.broadcast(newConfig)
+      this.copy(configBc = newConfigBc)
    }
 
    def withStepTimeLimit(stepTimeLimit: Long): Fractoid[S] = {

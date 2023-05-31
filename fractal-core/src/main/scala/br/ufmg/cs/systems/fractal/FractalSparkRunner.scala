@@ -1417,7 +1417,6 @@ object PeriodicSubgraphsInducedPO extends Logging {
       logApp(s" numSubgraphs=${numSubgraphs} elapsed=${elapsed}")
    }
 }
-
 object LabelSearchPA extends Logging {
    val appid: String = "label_search_pa"
 
@@ -1431,7 +1430,7 @@ object LabelSearchPA extends Logging {
          fractalGraph.filterEdges(
             (u,uLabels,v,vLabels,e,eLabels) => {
                labelsSet.contains(uLabels.getu(0)) &&
-                  labelsSet.contains(vLabels.getu(0))
+                 labelsSet.contains(vLabels.getu(0))
             })
       } else {
          fractalGraph
@@ -1462,20 +1461,58 @@ object LabelSearchPA extends Logging {
             remainingSteps -= 1
 
             logApp(s"StepResult fractoid=${fractoid}" +
-               s" remainingTimeMs=${remainingTime}" +
-               s" remainingSteps=${remainingSteps}" +
-               s" exception=${exception}" +
-               s" numVertices=${numVertices}" +
-               s" labelsSet=${labelsSet.toArray.sorted.mkString(",")}" +
-               s" gfiltering=${gfiltering}" +
-               s" numSteps=${numSteps}" +
-               s" stepTimeLimitMs=${stepTimeLimitMs}" +
-               s" numSubgraphs=${numSubgraphs}" +
-               s" elapsedMs=${elapsedMs}" +
-               s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+              s" remainingTimeMs=${remainingTime}" +
+              s" remainingSteps=${remainingSteps}" +
+              s" exception=${exception}" +
+              s" numVertices=${numVertices}" +
+              s" labelsSet=${labelsSet.toArray.sorted.mkString(",")}" +
+              s" gfiltering=${gfiltering}" +
+              s" numSteps=${numSteps}" +
+              s" stepTimeLimitMs=${stepTimeLimitMs}" +
+              s" numSubgraphs=${numSubgraphs}" +
+              s" elapsedMs=${elapsedMs}" +
+              s" throughput=${numSubgraphs / elapsedMs.toDouble}")
          }
 
          (numSteps, numSubgraphsTotal)
+      }
+
+      logApp(s"FinalResult" +
+        s" numVertices=${numVertices}" +
+        s" labelsSet=${labelsSet.toArray.sorted.mkString(",")}" +
+        s" gfiltering=${gfiltering}" +
+        s" numSteps=${numSteps}" +
+        s" numSubgraphs=${numSubgraphs}" +
+        s" elapsedMs=${elapsed}" +
+        s" throughput=${numSubgraphs / elapsed.toDouble}")
+   }
+}
+
+object LabelSearchPAEstimate extends Logging {
+   val appid: String = "label_search_pa_estimate"
+
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             labelsSet: Set[Int], gfiltering: Boolean, timeBudgetMs: Long): Unit = {
+
+      val fc = fractalGraph.fractalContext
+      val numVertices = explorationSteps + 1
+
+      val fg = if (gfiltering) {
+         fractalGraph.filterEdges(
+            (u,uLabels,v,vLabels,e,eLabels) => {
+               labelsSet.contains(uLabels.getu(0)) &&
+                  labelsSet.contains(vLabels.getu(0))
+            })
+      } else {
+         fractalGraph
+      }
+
+
+      val ((numSteps, throughputEstimate), elapsedMs) = FractalSparkRunner.time {
+         val (numSteps, fractoidsIter) = fg.labelSearchPA(labelsSet, numVertices)
+         val stepTimeLimitMs = fractalGraph.config.getStepTimeLimitMs
+         val throughputEstimate = fc.estimateThroughput(fractoidsIter.toSeq, timeBudgetMs, stepTimeLimitMs)
+         (numSteps, throughputEstimate)
       }
 
       logApp(s"FinalResult" +
@@ -1483,9 +1520,8 @@ object LabelSearchPA extends Logging {
          s" labelsSet=${labelsSet.toArray.sorted.mkString(",")}" +
          s" gfiltering=${gfiltering}" +
          s" numSteps=${numSteps}" +
-         s" numSubgraphs=${numSubgraphs}" +
-         s" elapsedMs=${elapsed}" +
-         s" throughput=${numSubgraphs / elapsed.toDouble}")
+         s" elapsedMs=${elapsedMs}" +
+         s" throughputEstimate=${throughputEstimate}")
    }
 }
 object LabelSearchPO extends Logging {
@@ -1501,7 +1537,7 @@ object LabelSearchPO extends Logging {
          fractalGraph.filterEdges(
             (u,uLabels,v,vLabels,e,eLabels) => {
                labelsSet.contains(uLabels.getu(0)) &&
-                  labelsSet.contains(vLabels.getu(0))
+                 labelsSet.contains(vLabels.getu(0))
             })
       } else {
          fractalGraph
@@ -1512,7 +1548,7 @@ object LabelSearchPO extends Logging {
       val (numSubgraphs, elapsedMs) = FractalSparkRunner.time {
          val stepTimeLimitMs = timeLimitMs
          val fractoid = fg.labelSearchPO(labelsSet, numVertices)
-            .withStepTimeLimit(stepTimeLimitMs)
+           .withStepTimeLimit(stepTimeLimitMs)
          val (numSubgraphsTry, elapsedMs) = FractalSparkRunner.time {
             fc.trySubmitFractalStep(fractoid)(
                f => f.aggregationCount(COUNT_AGG_REPORT))
@@ -1524,17 +1560,54 @@ object LabelSearchPO extends Logging {
          }
 
          logApp(s"StepResult fractoid=${fractoid}" +
-            s" exception=${exception}" +
-            s" numVertices=${numVertices}" +
-            s" labelsSet=${labelsSet.toArray.sorted.mkString(",")}" +
-            s" gfiltering=${gfiltering}" +
-            s" numSteps=${numSteps}" +
-            s" stepTimeLimitMs=${stepTimeLimitMs}" +
-            s" numSubgraphs=${numSubgraphs}" +
-            s" elapsedMs=${elapsedMs}" +
-            s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+           s" exception=${exception}" +
+           s" numVertices=${numVertices}" +
+           s" labelsSet=${labelsSet.toArray.sorted.mkString(",")}" +
+           s" gfiltering=${gfiltering}" +
+           s" numSteps=${numSteps}" +
+           s" stepTimeLimitMs=${stepTimeLimitMs}" +
+           s" numSubgraphs=${numSubgraphs}" +
+           s" elapsedMs=${elapsedMs}" +
+           s" throughput=${numSubgraphs / elapsedMs.toDouble}")
 
          numSubgraphs
+      }
+
+      logApp(s"FinalResult" +
+        s" numVertices=${numVertices}" +
+        s" labelsSet=${labelsSet.toArray.sorted.mkString(",")}" +
+        s" gfiltering=${gfiltering}" +
+        s" numSteps=${numSteps}" +
+        s" numSubgraphs=${numSubgraphs}" +
+        s" elapsedMs=${elapsedMs}" +
+        s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+   }
+}
+
+object LabelSearchPOEstimate extends Logging {
+   val appid: String = "label_search_po_estimate"
+
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             labelsSet: Set[Int], gfiltering: Boolean, timeBudgetMs: Long): Unit = {
+
+      val fc = fractalGraph.fractalContext
+      val numVertices = explorationSteps + 1
+
+      val fg = if (gfiltering) {
+         fractalGraph.filterEdges(
+            (u,uLabels,v,vLabels,e,eLabels) => {
+               labelsSet.contains(uLabels.getu(0)) &&
+                  labelsSet.contains(vLabels.getu(0))
+            })
+      } else {
+         fractalGraph
+      }
+
+      val numSteps = 1
+      val (throughputEstimate, elapsedMs) = FractalSparkRunner.time {
+         val stepTimeLimitMs = fg.config.getStepTimeLimitMs
+         val fractoid = fg.labelSearchPO(labelsSet, numVertices)
+         fc.estimateThroughput(Seq(fractoid), timeBudgetMs, stepTimeLimitMs)
       }
 
       logApp(s"FinalResult" +
@@ -1542,9 +1615,8 @@ object LabelSearchPO extends Logging {
          s" labelsSet=${labelsSet.toArray.sorted.mkString(",")}" +
          s" gfiltering=${gfiltering}" +
          s" numSteps=${numSteps}" +
-         s" numSubgraphs=${numSubgraphs}" +
          s" elapsedMs=${elapsedMs}" +
-         s" throughput=${numSubgraphs / elapsedMs.toDouble}")
+         s" throughputEstimate=${throughputEstimate}")
    }
 }
 
@@ -2236,12 +2308,28 @@ object FractalSparkRunner extends Logging {
             LabelSearchPO(fractalGraph, explorationSteps, labelsSet,
                gfiltering)
 
+         case LabelSearchPOEstimate.appid =>
+            val labelsSet = nextArg.split(",").map(str => str.trim.toInt).toSet
+            val gfiltering = nextArg.toBoolean
+            val timeBudgetMs = nextArg.toLong
+            setRemainingConfigs()
+            LabelSearchPOEstimate(fractalGraph, explorationSteps, labelsSet,
+               gfiltering, timeBudgetMs)
+
          case LabelSearchPA.appid =>
             val labelsSet = nextArg.split(",").map(str => str.trim.toInt).toSet
             val gfiltering = nextArg.toBoolean
             setRemainingConfigs()
             LabelSearchPA(fractalGraph, explorationSteps, labelsSet,
                gfiltering)
+
+         case LabelSearchPAEstimate.appid =>
+            val labelsSet = nextArg.split(",").map(str => str.trim.toInt).toSet
+            val gfiltering = nextArg.toBoolean
+            val timeBudgetMs = nextArg.toLong
+            setRemainingConfigs()
+            LabelSearchPAEstimate(fractalGraph, explorationSteps, labelsSet,
+               gfiltering, timeBudgetMs)
 
          case KeywordSearchPO.appid =>
             val keywords = nextArg.split(",").map(str => str.trim.toInt).toSet

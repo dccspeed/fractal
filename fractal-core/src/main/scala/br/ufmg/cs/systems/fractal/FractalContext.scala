@@ -1,6 +1,6 @@
 package br.ufmg.cs.systems.fractal
 
-import br.ufmg.cs.systems.fractal.computation.{ActorMessageSystem, LocalComputationStore}
+import br.ufmg.cs.systems.fractal.computation.{ActorMessageSystem, AroundWordEnumerator, ComputationContainer, LocalComputationStore, SubgraphEnumerator}
 import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.graph.MainGraphStore
 import br.ufmg.cs.systems.fractal.profiler.FractalProfiler
@@ -41,12 +41,13 @@ class FractalContext(sc: SparkContext, logLevel: String = "warn")
 
    def sparkContext: SparkContext = sc
 
-   def estimateThroughput[S <: Subgraph]
+   def estimateThroughput[S <: Subgraph : ClassTag]
    (_fractoids: Seq[Fractoid[S]], timeLimitMs: Long, _timePerStepMs: Long): Double = {
       val random = new Random()
       val fractoids = _fractoids.toArray
 
-      val timePerStepMs = Math.max(_timePerStepMs, timeLimitMs / _fractoids.length)
+      //val timePerStepMs = Math.max(_timePerStepMs, timeLimitMs / _fractoids.length)
+      val timePerStepMs = _timePerStepMs
 
       // force graph reading
       _fractoids.head.fractalGraph.vfractoid.expand(1).aggregationCount
@@ -54,22 +55,32 @@ class FractalContext(sc: SparkContext, logLevel: String = "warn")
       val start = System.currentTimeMillis()
       var numSubgraphs = 0L
       var remainingTimeMs = timeLimitMs
+      var throughputEstimateSum = 0.0
+      var numEstimates = 0
       while (remainingTimeMs >= timePerStepMs) {
          val start = System.currentTimeMillis()
-         val randomIdx = random.nextInt(fractoids.length)
-         val fractoid = fractoids(randomIdx)
+         //val randomIdx = random.nextInt(fractoids.length)
+         val randomIdx = 0
+         val _fractoid = fractoids(randomIdx)
            .withStepTimeLimit(timePerStepMs)
            .withNumThreads(1)
+
+         val computationContainer: ComputationContainer[S] = _fractoid
+           .computationContainer
+           .shallowCopy(subgraphEnumeratorClassOpt = Some(classOf[AroundWordEnumerator[S]]))
+         val fractoid = _fractoid.copy(computationContainer = computationContainer)
+
          val stepNumSubgraphs = fractoid.aggregationCount
          numSubgraphs += stepNumSubgraphs
          val elapsedMs = System.currentTimeMillis() - start
          remainingTimeMs -= elapsedMs
+         throughputEstimateSum += (stepNumSubgraphs / elapsedMs.toDouble)
+         numEstimates += 1
          logApp(s"StepEstimate fractoid=${fractoid} elapsedMs=${elapsedMs} numSubgraphs=${stepNumSubgraphs}" +
-           s" remainingTime=${remainingTimeMs}")
+           s" throughputEstimate=${stepNumSubgraphs / elapsedMs.toDouble} remainingTime=${remainingTimeMs}")
       }
-      val elapsedMs = System.currentTimeMillis() - start
 
-      numSubgraphs / elapsedMs.toDouble
+      throughputEstimateSum / numEstimates.toDouble
    }
 
    def submitFractalStep[S <: Subgraph, T]

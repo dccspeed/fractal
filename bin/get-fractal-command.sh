@@ -51,6 +51,8 @@ temporals="${temporals}|periodic_subgraphs_induced_pa_mcvc"
 
 subgraphsearch="label_search_po"
 subgraphsearch="${subgraphsearch}|label_search_pa"
+subgraphsearch="${subgraphsearch}|label_search_po_estimate"
+subgraphsearch="${subgraphsearch}|label_search_pa_estimate"
 
 keywordsearch="keyword_search_po"
 keywordsearch="${keywordsearch}|minimal_keyword_search_po"
@@ -489,8 +491,30 @@ ALGOPTION for '$app':
    gfiltering=true|false                   'Graph filtering: whether input graph should be filtered before enumeration'"
 	;;
 
+	label_search_po_estimate)
+	required="inputgraph steps labelsset gfiltering budget"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   labelsset=l1,l2,...,ln                  'Labels set: allowed labels for subgraphs'
+   gfiltering=true|false                   'Graph filtering: whether input graph should be filtered before enumeration'"
+	;;
+
 	label_search_pa)
 	required="inputgraph steps labelsset gfiltering"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   labelsset=l1,l2,...,ln                  'Labels set: allowed labels for subgraphs'
+   gfiltering=true|false                   'Graph filtering: whether input graph should be filtered before enumeration'"
+	;;
+
+	label_search_pa_estimate)
+	required="inputgraph steps labelsset gfiltering budget"
         appusage="
 
 ALGOPTION for '$app':
@@ -663,7 +687,7 @@ uienabled=${uienabled:-false}
 app_class=${app_class:-br.ufmg.cs.systems.fractal.FractalSparkRunner}
 packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties ${PROFILER_OPTIONS}\""
-args=${args:-"$labeling $inputgraph $app $total_cores $steps $log_level $steptimelimit $timelimit $fsmsupp $mindensity $query $budget $plabeling $fraction $periodicthreshold $labelsset $gfiltering $seed $topk $outputdir $outputpath $configs"}
+args=${args:-"$labeling $inputgraph $app $total_cores $steps $log_level $steptimelimit $timelimit $fsmsupp $mindensity $query $plabeling $fraction $periodicthreshold $labelsset $gfiltering $budget $seed $topk $outputdir $outputpath $configs"}
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\

@@ -458,6 +458,8 @@ public class PatternInducedSubgraph extends BasicSubgraph {
          if (graph.isVertexValid(u) &&
                  (!vertexLabeled || vertexPredicate.test(u))) extensions.add(u);
       }
+
+      extensions.shuffle();
    }
 
    @Override

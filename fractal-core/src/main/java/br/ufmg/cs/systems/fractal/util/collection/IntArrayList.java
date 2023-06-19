@@ -9,6 +9,7 @@ import com.koloboke.collect.IntIterator;
 import javax.annotation.Nonnull;
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.IntPredicate;
@@ -927,6 +928,15 @@ public class IntArrayList implements ReclaimableIntCollection, Externalizable {
       int elem = backingArray[i];
       backingArray[i] = backingArray[j];
       backingArray[j] = elem;
+   }
+
+   public void shuffle() {
+      int index;
+      for (int i = size() - 1; i > 0; i--)
+      {
+         index = ThreadLocalRandom.current().nextInt(i + 1);
+         swap(index, i);
+      }
    }
 
    private class IntAdderConsumer implements IntConsumer {

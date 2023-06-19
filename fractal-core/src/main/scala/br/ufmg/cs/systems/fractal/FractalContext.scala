@@ -52,23 +52,21 @@ class FractalContext(sc: SparkContext, logLevel: String = "warn")
       // force graph reading
       _fractoids.head.fractalGraph.vfractoid.expand(1).aggregationCount
 
-      val start = System.currentTimeMillis()
       var numSubgraphs = 0L
       var remainingTimeMs = timeLimitMs
       var throughputEstimateSum = 0.0
       var numEstimates = 0
       while (remainingTimeMs >= timePerStepMs) {
          val start = System.currentTimeMillis()
-         //val randomIdx = random.nextInt(fractoids.length)
-         val randomIdx = 0
-         val _fractoid = fractoids(randomIdx)
+         val randomIdx = random.nextInt(fractoids.length)
+         val fractoid = fractoids(randomIdx)
            .withStepTimeLimit(timePerStepMs)
            .withNumThreads(1)
 
-         val computationContainer: ComputationContainer[S] = _fractoid
-           .computationContainer
-           .shallowCopy(subgraphEnumeratorClassOpt = Some(classOf[AroundWordEnumerator[S]]))
-         val fractoid = _fractoid.copy(computationContainer = computationContainer)
+         //val computationContainer: ComputationContainer[S] = _fractoid
+         //  .computationContainer
+         //  .shallowCopy(subgraphEnumeratorClassOpt = Some(classOf[AroundWordEnumerator[S]]))
+         //val fractoid = _fractoid.copy(computationContainer = computationContainer)
 
          val stepNumSubgraphs = fractoid.aggregationCount
          numSubgraphs += stepNumSubgraphs

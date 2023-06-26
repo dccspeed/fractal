@@ -57,6 +57,8 @@ subgraphsearch="${subgraphsearch}|label_search_pa_estimate"
 keywordsearch="keyword_search_po"
 keywordsearch="${keywordsearch}|minimal_keyword_search_po"
 keywordsearch="${keywordsearch}|minimal_keyword_search_pa"
+keywordsearch="${keywordsearch}|minimal_keyword_search_po_estimate"
+keywordsearch="${keywordsearch}|minimal_keyword_search_pa_estimate"
 
 queryspecialization="query_specialization_po"
 queryspecialization="${queryspecialization}|query_specialization_pa"
@@ -492,13 +494,14 @@ ALGOPTION for '$app':
 	;;
 
 	label_search_po_estimate)
-	required="inputgraph steps labelsset gfiltering budget"
+	required="inputgraph steps labelsset gfiltering budget steptimelimit"
         appusage="
 
 ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    labelsset=l1,l2,...,ln                  'Labels set: allowed labels for subgraphs'
+   budget=<in ms>                          'Maximum time allowed to estimate throughput'
    gfiltering=true|false                   'Graph filtering: whether input graph should be filtered before enumeration'"
 	;;
 
@@ -514,7 +517,7 @@ ALGOPTION for '$app':
 	;;
 
 	label_search_pa_estimate)
-	required="inputgraph steps labelsset gfiltering budget"
+	required="inputgraph steps labelsset gfiltering budget steptimelimit"
         appusage="
 
 ALGOPTION for '$app':
@@ -546,6 +549,17 @@ ALGOPTION for '$app':
    gfiltering=true|false                   'Graph filtering: whether input graph should be filtered before enumeration'"
 	;;
 
+	minimal_keyword_search_po_estimate)
+	required="inputgraph steps labelsset gfiltering budget steptimelimit"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   labelsset=l1,l2,...,ln                  'Labels set: allowed labels for subgraphs'
+   gfiltering=true|false                   'Graph filtering: whether input graph should be filtered before enumeration'"
+	;;
+
 	minimal_keyword_search_pa)
 	required="inputgraph steps labelsset gfiltering"
         appusage="
@@ -554,6 +568,17 @@ ALGOPTION for '$app':
    inputgraph=<file-path>                  'Input graph file path'
    steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
    labelsset=l1,l2,...,ln                  'Labels set: keywords'
+   gfiltering=true|false                   'Graph filtering: whether input graph should be filtered before enumeration'"
+	;;
+
+	minimal_keyword_search_pa_estimate)
+	required="inputgraph steps labelsset gfiltering budget steptimelimit"
+        appusage="
+
+ALGOPTION for '$app':
+   inputgraph=<file-path>                  'Input graph file path'
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   labelsset=l1,l2,...,ln                  'Labels set: allowed labels for subgraphs'
    gfiltering=true|false                   'Graph filtering: whether input graph should be filtered before enumeration'"
 	;;
 
@@ -623,7 +648,7 @@ ALGOPTION for '$app':
 	;;
 
 	query_specialization_po_estimate)
-	required="inputgraph steps query budget"
+	required="inputgraph steps query budget steptimelimit"
         appusage="
 
 ALGOPTION for '$app':
@@ -633,7 +658,7 @@ ALGOPTION for '$app':
 	;;
 
 	query_specialization_pa_estimate)
-	required="inputgraph steps query budget"
+	required="inputgraph steps query budget steptimelimit"
         appusage="
 
 ALGOPTION for '$app':
@@ -643,7 +668,7 @@ ALGOPTION for '$app':
 	;;
 
 	query_specialization_pa_po_estimate)
-	required="inputgraph steps query budget"
+	required="inputgraph steps query budget steptimelimit"
         appusage="
 
 ALGOPTION for '$app':

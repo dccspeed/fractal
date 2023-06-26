@@ -81,6 +81,7 @@ public class VertexInducedSubgraph extends BasicSubgraph {
       }
 
       extensions.setFrom(extensionsSet);
+      extensions.shuffle();
    }
 
    @Override
@@ -104,6 +105,8 @@ public class VertexInducedSubgraph extends BasicSubgraph {
       for (int u = partitionId; u < totalNumWords; u += numPartitions) {
          if (graph.isVertexValid(u)) extensions.add(u);
       }
+
+      extensions.shuffle();
    }
 
    @Override

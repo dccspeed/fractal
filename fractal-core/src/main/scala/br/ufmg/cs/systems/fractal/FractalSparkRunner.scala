@@ -1708,6 +1708,45 @@ object MinimalKeywordSearchPO extends Logging {
    }
 }
 
+object MinimalKeywordSearchPOEstimate extends Logging {
+   val appid: String = "minimal_keyword_search_po_estimate"
+
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             keywords: Set[Int], gfiltering: Boolean, timeBudgetMs: Long): Unit = {
+
+      val fc = fractalGraph.fractalContext
+      val numVertices = explorationSteps + 1
+
+      val fg = if (gfiltering) {
+         fractalGraph.filterEdges(
+            (u,uLabels,v,vLabels,e,eLabels) => {
+               val uLabel = uLabels.getu(0)
+               val vLabel = vLabels.getu(0)
+               uLabel != vLabel || keywords.contains(uLabel)
+            })
+      } else {
+         fractalGraph
+      }
+
+      val ((numSteps, throughputEstimate), elapsedMs) = FractalSparkRunner.time {
+         val numSteps = 1
+         val fractoid = fg.minimalKeywordSearchPO(keywords, numVertices)
+         val stepTimeLimitMs = fractalGraph.config.getStepTimeLimitMs
+         val throughputEstimate = fc.estimateThroughput(Seq(fractoid),
+            timeBudgetMs, stepTimeLimitMs)
+         (numSteps, throughputEstimate)
+      }
+
+      logApp(s"FinalResult" +
+         s" numVertices=${numVertices}" +
+         s" keywords=${keywords.toArray.sorted.mkString(",")}" +
+         s" gfiltering=${gfiltering}" +
+         s" numSteps=${numSteps}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughputEstimate=${throughputEstimate}")
+   }
+}
+
 object MinimalKeywordSearchPA extends Logging {
    val appid: String = "minimal_keyword_search_pa"
 
@@ -1776,6 +1815,43 @@ object MinimalKeywordSearchPA extends Logging {
          s" numSubgraphs=${numSubgraphs}" +
          s" elapsedMs=${elapsed}" +
          s" throughput=${numSubgraphs / elapsed.toDouble}")
+   }
+}
+
+object MinimalKeywordSearchPAEstimate extends Logging {
+   val appid: String = "minimal_keyword_search_pa_estimate"
+
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int,
+             keywords: Set[Int], gfiltering: Boolean, timeBudgetMs: Long): Unit = {
+
+      val fc = fractalGraph.fractalContext
+      val numVertices = explorationSteps + 1
+
+      val fg = if (gfiltering) {
+         fractalGraph.filterEdges(
+            (u,uLabels,v,vLabels,e,eLabels) => {
+               val uLabel = uLabels.getu(0)
+               val vLabel = vLabels.getu(0)
+               uLabel != vLabel || keywords.contains(uLabel)
+            })
+      } else {
+         fractalGraph
+      }
+
+      val ((numSteps, throughputEstimate), elapsedMs) = FractalSparkRunner.time {
+         val (numSteps, fractoidsIter) = fg.minimalKeywordSearchPA(keywords, numVertices)
+         val stepTimeLimitMs = fractalGraph.config.getStepTimeLimitMs
+         val throughputEstimate = fc.estimateThroughput(fractoidsIter.toSeq, timeBudgetMs, stepTimeLimitMs)
+         (numSteps, throughputEstimate)
+      }
+
+      logApp(s"FinalResult" +
+         s" numVertices=${numVertices}" +
+         s" keywords=${keywords.toArray.sorted.mkString(",")}" +
+         s" gfiltering=${gfiltering}" +
+         s" numSteps=${numSteps}" +
+         s" elapsedMs=${elapsedMs}" +
+         s" throughputEstimate=${throughputEstimate}")
    }
 }
 
@@ -2345,12 +2421,28 @@ object FractalSparkRunner extends Logging {
             MinimalKeywordSearchPO(fractalGraph, explorationSteps, keywords,
                gfiltering)
 
+         case MinimalKeywordSearchPOEstimate.appid =>
+            val keywords = nextArg.split(",").map(str => str.trim.toInt).toSet
+            val gfiltering = nextArg.toBoolean
+            val timeBudgetMs = nextArg.toLong
+            setRemainingConfigs()
+            MinimalKeywordSearchPOEstimate(fractalGraph, explorationSteps,
+               keywords, gfiltering, timeBudgetMs)
+
          case MinimalKeywordSearchPA.appid =>
             val keywords = nextArg.split(",").map(str => str.trim.toInt).toSet
             val gfiltering = nextArg.toBoolean
             setRemainingConfigs()
             MinimalKeywordSearchPA(fractalGraph, explorationSteps, keywords,
                gfiltering)
+
+         case MinimalKeywordSearchPAEstimate.appid =>
+            val keywords = nextArg.split(",").map(str => str.trim.toInt).toSet
+            val gfiltering = nextArg.toBoolean
+            val timeBudgetMs = nextArg.toLong
+            setRemainingConfigs()
+            MinimalKeywordSearchPAEstimate(fractalGraph, explorationSteps, keywords,
+               gfiltering, timeBudgetMs)
 
          case PatternQueryGenerator.appid =>
             val fraction = nextArg.toDouble

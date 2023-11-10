@@ -430,6 +430,7 @@ public class PatternInducedSubgraph extends BasicSubgraph {
       }
 
       extensions.setFrom(extensionsSet);
+      extensions.shuffle();
    }
 
    public void computeFirstLevelExtensions(Computation computation,

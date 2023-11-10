@@ -511,6 +511,26 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
    }
 
    /**
+    * Frequent subgraph Mining (FSM)
+    * @param support threshold to determine what is frequent according to
+    *                the (minimum image)
+    * @param maxNumEdges
+    * @return an RDD with frequent patterns and their support
+    */
+   def fsmDatabasePO(vertexToGraphIdxPath: String, minSupport: Double,
+                     maxNumEdges: Int)
+   : RDD[(Pattern,collection.mutable.HashSet[Int])] = {
+      val sc = self.fractalContext.sparkContext
+      val vertexToGraphIdx = sc.textFile(vertexToGraphIdxPath)
+         .map(_.toInt).collect()
+      val numGraphs = vertexToGraphIdx.distinct.length
+      val vertexToGraphIdxBc = sc.broadcast(vertexToGraphIdx)
+
+      val app = new DatabaseFSMPO(minSupport, numGraphs, maxNumEdges, vertexToGraphIdxBc)
+      app.apply(self)
+   }
+
+   /**
     * Frequent subgraph mining (FSM) combining a pattern-aware and
     * pattern-oblivious subgraph exploration strategy
     * @param support

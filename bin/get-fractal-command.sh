@@ -71,11 +71,14 @@ labelbasedquerygenerator="label_query_generator"
 
 canonicalpatterngenerator="canonical_pattern_generator_vertex"
 
+patternsandplansheuristic="patterns_and_plans_heuristic"
+
 apps="${gqueryings}|${motifss}|${cliquess}|${quasicliquess}|${fsms}"
 apps="${apps}|${subgraphlisting}|${temporals}|${subgraphsearch}"
 apps="${apps}|${keywordsearch}|${extras}|${patternquerygenerator}"
 apps="${apps}|${canonicalpatterngenerator}"
 apps="${apps}|${labelbasedquerygenerator}|${queryspecialization}"
+apps="${apps}|${patternsandplansheuristic}"
 
 usage="
 APPS_AVAILABLE
@@ -652,6 +655,16 @@ ALGOPTION for '$app':
    query=<query-file-path>                 'Query input file path as adjacency list. See 'data/q1-triangle.graph' for an example.'"
 	;;
 
+	patterns_and_plans_heuristic)
+	inputgraph="place-holder"
+	required="steps induced"
+        appusage="
+
+ALGOPTION for '$app':
+   steps=1|2|...                           'Extension steps. If the target subgraph has size k, then steps=k-1'
+   induced=true|false                      'Plans should be generated for induced patterns (true) or not (false).'"
+	;;
+
 	*)
     >&2 echo "Invalid application: ${app}"
     >&2 printf "$usage\n"
@@ -687,7 +700,7 @@ uienabled=${uienabled:-false}
 app_class=${app_class:-br.ufmg.cs.systems.fractal.FractalSparkRunner}
 packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.11:2.5.3"
 extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties ${PROFILER_OPTIONS}\""
-args=${args:-"$labeling $inputgraph $app $total_cores $steps $log_level $steptimelimit $timelimit $fsmsupp $mindensity $query $plabeling $fraction $periodicthreshold $labelsset $gfiltering $budget $seed $topk $outputdir $outputpath $configs"}
+args=${args:-"$labeling $inputgraph $app $total_cores $steps $log_level $steptimelimit $timelimit $induced $fsmsupp $mindensity $query $plabeling $fraction $periodicthreshold $labelsset $gfiltering $budget $seed $topk $outputdir $outputpath $configs"}
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\
    --deploy-mode $deploy_mode \\

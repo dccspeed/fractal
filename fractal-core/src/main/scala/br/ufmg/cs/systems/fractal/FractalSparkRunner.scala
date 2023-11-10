@@ -1,24 +1,42 @@
 package br.ufmg.cs.systems.fractal
 
 import br.ufmg.cs.systems.fractal.callback.SubgraphCallback
-import br.ufmg.cs.systems.fractal.computation.{Computation, ExecutionEngine, SamplingEnumerator}
+import br.ufmg.cs.systems.fractal.computation.{Computation, SamplingEnumerator}
 import br.ufmg.cs.systems.fractal.gmlib.periodic.InducedPeriodicSubgraphsPAMCVC
-import br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph
-import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternUtils, PatternUtilsRDD}
-import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, Subgraph, VertexInducedSubgraph}
-import br.ufmg.cs.systems.fractal.util.{Logging, ReflectionSerializationUtils}
-import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
+import br.ufmg.cs.systems.fractal.pattern.{Pattern, PatternExplorationPlan, PatternExplorationPlanOrderingHeuristic, PatternUtils, PatternUtilsRDD}
+import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph, VertexInducedSubgraph}
+import br.ufmg.cs.systems.fractal.util.Logging
 import br.ufmg.cs.systems.fractal.util.ReportFuncs._
-import org.apache.hadoop.io.compress.{BZip2Codec, SnappyCodec}
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
+import com.koloboke.collect.map.hash.HashIntIntMaps
 import org.apache.spark.{SparkConf, SparkContext}
 
 import java.io.File
-import java.util.{Base64, Random}
 import java.util.function.BiPredicate
 import scala.collection.mutable.ArrayBuffer
-import scala.concurrent.duration.{Duration, pairIntToDuration}
-import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.util.{Failure, Success, Try}
+import scala.concurrent.ExecutionContext
+import scala.util.{Failure, Success}
+
+object GeneratePatternsAndPlansHeuristic extends Logging {
+   val appid: String = "patterns_and_plans_heuristic"
+
+   def apply(fractalGraph: FractalGraph, explorationSteps: Int, induced: Boolean): Unit = {
+      val sc = fractalGraph.fractalContext.sparkContext
+      val numVertices = explorationSteps + 1
+      val patternsIter = PatternUtilsRDD.getOrGenerateVertexPatternsRDD(sc, numVertices).toLocalIterator
+      while (patternsIter.hasNext) {
+         val pattern = patternsIter.next()
+         pattern.setVertexLabeled(false)
+         pattern.setEdgeLabeled(false)
+         pattern.setInduced(induced)
+         val patternWithPlan = PatternExplorationPlanOrderingHeuristic.apply(
+            pattern, HashIntIntMaps.newUpdatableMap()).getLast
+         logApp(s"PatternWithPlan ${patternWithPlan} plan=${patternWithPlan.explorationPlan()}" +
+           s" lowerBound=${patternWithPlan.vsymmetryBreakerLowerBound()}" +
+           s" upperBound=${patternWithPlan.vsymmetryBreakerUpperBound()}")
+      }
+   }
+}
 
 object SubgraphsListingPO extends Logging {
    val appid: String = "subgraphs_listing_po"
@@ -2412,6 +2430,12 @@ object FractalSparkRunner extends Logging {
             val outputPath = nextArg
             setRemainingConfigs()
             CanonicalPatternsGeneratorByVertex(fractalGraph, explorationSteps, outputPath)
+
+         case GeneratePatternsAndPlansHeuristic.appid =>
+            val induced = nextArg.toBoolean
+            setRemainingConfigs()
+            GeneratePatternsAndPlansHeuristic(fractalGraph, explorationSteps, induced)
+
 
          case appName =>
             throw new RuntimeException(s"Unknown app: ${appName}")

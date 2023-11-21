@@ -81,7 +81,6 @@ public class VertexInducedSubgraph extends BasicSubgraph {
       }
 
       extensions.setFrom(extensionsSet);
-      extensions.shuffle();
    }
 
    @Override
@@ -106,7 +105,6 @@ public class VertexInducedSubgraph extends BasicSubgraph {
          if (graph.isVertexValid(u)) extensions.add(u);
       }
 
-      extensions.shuffle();
    }
 
    @Override

@@ -484,7 +484,6 @@ ALGOPTION for '$app':
    periodicthreshold=2|3|4|...             'Periodic threshold: indicates how many times subgraphs must occur with an arbitrary periodicity'"
 	;;
 
-
 	label_search_po)
 	required="inputgraph steps labelsset gfiltering"
         appusage="

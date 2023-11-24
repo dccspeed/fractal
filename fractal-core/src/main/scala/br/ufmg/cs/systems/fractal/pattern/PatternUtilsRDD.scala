@@ -9,18 +9,17 @@ import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
 import java.util.Base64
-import scala.collection.JavaConverters._
-
+import scala.jdk.CollectionConverters._
 object PatternUtilsRDD extends Logging {
 
    def singleVertexRDD(sc: SparkContext, vertexLabel: Int): RDD[Pattern] = {
       val pattern = PatternUtils.singleVertexPattern(vertexLabel)
-      sc.parallelize(Array(pattern), 3 * sc.defaultParallelism)
+      sc.parallelize(Seq(pattern), 3 * sc.defaultParallelism)
    }
 
    def singleEdgeRDD(sc: SparkContext, vertexLabel: Int): RDD[Pattern] = {
       val pattern = PatternUtils.singleEdgePattern()
-      sc.parallelize(Array(pattern), 3 * sc.defaultParallelism)
+      sc.parallelize(Seq(pattern), 3 * sc.defaultParallelism)
    }
 
    def extendByVertexRDD(patterns: RDD[Pattern], vertexLabel: Int)

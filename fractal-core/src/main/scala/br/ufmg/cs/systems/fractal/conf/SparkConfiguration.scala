@@ -27,7 +27,7 @@ case class SparkConfiguration(confs: Map[String, Any])
          throw e
    }
 
-   def this() {
+   def this() = {
       this(Map(CONF_MASTER_HOSTNAME -> InetAddress.getLocalHost.getHostAddress))
    }
 

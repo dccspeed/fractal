@@ -2,9 +2,8 @@ package br.ufmg.cs.systems.fractal
 
 import br.ufmg.cs.systems.fractal.computation.SamplingEnumerator
 import br.ufmg.cs.systems.fractal.pattern.PatternUtils
-import br.ufmg.cs.systems.fractal.subgraph.{PatternInducedSubgraph, VertexInducedSubgraph}
+import br.ufmg.cs.systems.fractal.subgraph.PatternInducedSubgraph
 import br.ufmg.cs.systems.fractal.util.Logging
-import br.ufmg.cs.systems.fractal.util.ScalaFractalFuncs.CustomSubgraphCallback
 import org.apache.spark.{SparkConf, SparkContext}
 import org.scalatest.{BeforeAndAfterAll, FunSuite, Tag}
 

@@ -1242,7 +1242,7 @@ object PatternQueryingPAMCVC extends Logging {
       val fracs = fractalGraph.patternQueryingPAMCVC(pattern)
 
       val (results, elapsed) = FractalSparkRunner.time {
-         fc.trySubmitFractalSteps(fracs)(
+         fc.trySubmitFractalSteps(fracs.toIndexedSeq)(
             f => f.aggregationCount(COUNT_AGG_REPORT))
       }
 
@@ -1919,7 +1919,7 @@ object PatternQueryGenerator extends Logging {
       var numPartialPatterns = 0
       while (i < fractoids.length) {
          val fractoidsBatch = fractoids.slice(i, i + step)
-         val resultsBatch = fc.submitFractalSteps(fractoidsBatch)(f => {
+         val resultsBatch = fc.submitFractalSteps(fractoidsBatch.toIndexedSeq)(f => {
             val pattern = f.pattern
             f.aggregationCanonicalPatternLong(
                s => s.applyLabels(pattern), 0, _ => 1L, _ + _)
@@ -2112,7 +2112,7 @@ object CanonicalPatternsGeneratorByVertex extends Logging {
       val numVertices = explorationSteps + 1
       val patternsRDD = PatternUtilsRDD.getOrGenerateVertexPatternsRDD(sc,
          numVertices, outputPath)
-      logApp(s"npatterns=${patternsRDD.count}\n${patternsRDD.collect().mkString("\n")}")
+      logApp(s"npatterns=${patternsRDD.count()}\n${patternsRDD.collect().mkString("\n")}")
       logApp(s"numVertices=${numVertices} outputPath=${outputPath}")
    }
 }

@@ -200,7 +200,7 @@ class FSMPA(minSupport: Int, maxNumEdges: Int)
             logWarn(s"InterruptedExecution exception=${e}. " +
                s"Returning: ${results}")
       }
-      sc.union(results)
+      sc.union(results.toSeq)
    }
 
    def compute(fg: FractalGraph,

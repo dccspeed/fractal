@@ -6,7 +6,7 @@
  * user guide available at https://docs.gradle.org/4.2.1/userguide/java_library_plugin.html
  */
 
-version="SPARK-2.4.3"
+version="SPARK-3.5.0"
 
 buildscript {
    repositories {
@@ -15,17 +15,13 @@ buildscript {
       jcenter()
       maven { url "https://plugins.gradle.org/m2/" }
    }
-   dependencies {
-      classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
-   }
 }
 
 apply plugin: 'java-library'
 apply plugin: 'java'
 apply plugin: 'scala'
 apply plugin: 'application'
-apply plugin: "com.github.johnrengelman.shadow"
- 
+
 repositories {
     jcenter()
     mavenCentral()
@@ -37,28 +33,12 @@ dependencies {
     compile project(':fractal-apps')
 }
 
-shadowJar {
-   zip64 true
-   transform(com.github.jengelman.gradle.plugins.shadow.transformers.AppendingTransformer.class) {
-      resource = "reference.conf"
-   }
-}
-
 task scalaTest(dependsOn: ['testClasses'], type: JavaExec) {
-  environment "SPARK_SCALA_VERSION", "2.11"
+  environment "SPARK_SCALA_VERSION", "2.13"
   main = 'org.scalatest.tools.Runner'
   args = ['-R', 'build/classes/scala/test', '-o']
   classpath = sourceSets.test.runtimeClasspath
 }
-
-//test.dependsOn scalaTest
-
-task assemble(dependsOn: ['shadowJar'], overwrite: true)
-
-//test {
-//    testLogging.showStandardStreams = true
-//    jvmArgs "-javaagent:${projectDir}/lib/aspectjweaver-1.8.10.jar"
-//}
 
 application {
     applicationDefaultJvmArgs = ['-Xmx10g']
@@ -69,51 +49,13 @@ subprojects {
    apply plugin: 'java-library'
    apply plugin: 'java'
    apply plugin: 'scala'
-   apply plugin: "com.github.johnrengelman.shadow"
 
    task scalaTest(dependsOn: ['testClasses'], type: JavaExec) {
-      environment "SPARK_SCALA_VERSION", "2.11"
+      environment "SPARK_SCALA_VERSION", "2.13"
       main = 'org.scalatest.tools.Runner'
       args = ['-R', 'build/classes/scala/test', '-o']
       classpath = sourceSets.test.runtimeClasspath
    }
 
-   shadowJar {
-      zip64 true
-      transform(com.github.jengelman.gradle.plugins.shadow.transformers.AppendingTransformer.class) {
-         resource = "reference.conf"
-      }
-   }
-
    test.dependsOn scalaTest
-
-    //dependencies {
-    //    testImplementation 'junit:junit:4.13'
-    //}
-
-    //test {
-    //    useJUnit()
-
-    //    maxHeapSize = '1G'
-
-    //    maxParallelForks = 10
-
-    //    testLogging {
-    //        // set options for log level LIFECYCLE
-    //        events "started", "skipped", "failed"
-    //        exceptionFormat "full"
-
-    //        // set options for log level DEBUG
-    //        debug {
-    //            events "started", "skipped", "failed"
-    //            exceptionFormat "full"
-    //        }
-
-    //        // remove standard output/error logging from --info builds
-    //        // by assigning only 'failed' and 'skipped' events
-    //        info.events = ["failed", "skipped"]
-    //    }
-    //}
-
-   task assemble(dependsOn: ['test', 'shadowJar'], overwrite: true)
 }

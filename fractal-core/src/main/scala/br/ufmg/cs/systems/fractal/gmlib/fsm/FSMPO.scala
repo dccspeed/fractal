@@ -70,11 +70,11 @@ class FSMPO(minSupport: Int, maxNumEdges: Int)
             quickPatterns.add(quickPatern)
             (canonicalPattern, (quickPatterns,supp))
          }
-         .reduceByKey { case ((p1, s1), (p2, s2)) =>
-            p1.addAll(p2)
-            s1.aggregate(s2)
-            (p1, s1)
-         }
+         .reduceByKey((ps1, ps2) => {
+            ps1._1.addAll(ps2._1)
+            ps1._2.aggregate(ps2._2)
+            ps1
+         })
    }
 
    /**

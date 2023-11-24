@@ -327,8 +327,8 @@ object SparkFromScratchMasterEngineAggregation {
 class FilterPrimitiveLast[S <: Subgraph] extends ProcessComputeFunc[S] {
    override def toString = "FL"
 
-   override def apply(enum: SubgraphEnumerator[S], c: Computation[S]): Long = {
-      val subgraph = enum.getSubgraph
+   override def apply(enumerator: SubgraphEnumerator[S], c: Computation[S]): Long = {
+      val subgraph = enumerator.getSubgraph
       if (c.filter_FILTERING_PRIMITIVE(subgraph)) {
          AggregationPrimitive(c, subgraph)
          c.addValidSubgraphs(1)
@@ -347,9 +347,9 @@ class FilterPrimitiveLast[S <: Subgraph] extends ProcessComputeFunc[S] {
 class FilterPrimitive[S <: Subgraph] extends ProcessComputeFunc[S] {
    override def toString = "F"
 
-   override def apply(enum: SubgraphEnumerator[S],
+   override def apply(enumerator: SubgraphEnumerator[S],
                       c: Computation[S]): Long = {
-      val subgraph = enum.getSubgraph
+      val subgraph = enumerator.getSubgraph
       if (c.filter_FILTERING_PRIMITIVE(subgraph)) {
          c.addValidSubgraphs(1)
          c.nextComputation().compute()

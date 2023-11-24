@@ -524,7 +524,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
       }
 
       val objObjRDD = aggregationObjObj[K, V](objObjSubgraphAggregation)
-         .reduceByKey { case (v1, v2) => _reduce(v1, v2); v1 }
+         .reduceByKey((v1, v2) => {_reduce(v1, v2); v1 })
 
       objObjRDD
    }
@@ -563,7 +563,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
       }
 
       val objObjRDD = aggregationObjObj[K, V](objObjSubgraphAggregation)
-         .reduceByKey { case (v1, v2) => _reduce(v1, v2); v1 }
+         .reduceByKey((v1, v2) => {_reduce(v1, v2); v1})
 
       objObjRDD
    }
@@ -627,7 +627,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
 
       val objObjRDD = aggregationObjObjWithCallback[K, V](
          objObjSubgraphAggregation, callback)
-         .reduceByKey { case (v1, v2) => _reduce(v1, v2); v1 }
+         .reduceByKey((v1, v2) => {_reduce(v1, v2); v1})
 
       objObjRDD
    }
@@ -684,7 +684,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
          .map(kv => {
             kv._1.turnCanonical(); kv
          })
-         .reduceByKey { case (v1, v2) => aggregate(v1, v2); v1 }
+         .reduceByKey((v1, v2) => {aggregate(v1, v2); v1})
 
       objObjRDD
    }
@@ -822,7 +822,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
       }
 
       val longObjRDD = aggregationLongObj[V](longObjSubgraphAggregation)
-         .reduceByKey { case (v1, v2) => _reduce(v1, v2); v1 }
+         .reduceByKey((v1, v2) => {_reduce(v1, v2); v1})
 
       longObjRDD
    }

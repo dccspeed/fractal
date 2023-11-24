@@ -170,7 +170,7 @@ class FSMPAPO(minSupport: Int, maxNumEdges: Int)
       //      logWarn(s"InterruptedExecution exception=${e}. " +
       //         s"Returning: ${results}")
       //}
-      sc.union(results)
+      sc.union(results.toSeq)
    }
 
    def compute(fg: FractalGraph,
@@ -231,7 +231,7 @@ class FSMPAPO(minSupport: Int, maxNumEdges: Int)
             fractoidsAndCanonicalPatternsSupportsRDDs.unzip
 
          frequentPatternsSupportsRDD = frequentPatternsSupports(
-            sc.union(canonicalPatternsSupportsRDDs)
+            sc.union(canonicalPatternsSupportsRDDs.toIndexedSeq)
                .reduceByKey((s1,s2) => {
                   aggregate(s1,s2)
                   s1

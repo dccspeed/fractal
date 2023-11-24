@@ -2,10 +2,8 @@ package br.ufmg.cs.systems.fractal.util.collection;
 
 import br.ufmg.cs.systems.fractal.util.pool.IntArrayListViewPool;
 import com.koloboke.collect.IntCursor;
-import org.mortbay.log.Log;
 
 import javax.annotation.Nonnull;
-import javax.annotation.OverridingMethodsMustInvokeSuper;
 import java.util.Arrays;
 import java.util.ConcurrentModificationException;
 import java.util.function.IntConsumer;

@@ -65,11 +65,11 @@ class DatabaseFSMPO(minSupport: Double, numGraphs: Int, maxNumEdges: Int,
             quickPatterns.add(quickPatern)
             (canonicalPattern, (quickPatterns,supp))
          }
-         .reduceByKey { case ((p1, s1), (p2, s2)) =>
-            p1.addAll(p2)
-            s2.foreach(s1.add(_))
-            (p1, s1)
-         }
+         .reduceByKey((ps1, ps2) => {
+            ps1._1.addAll(ps2._1)
+            ps2._2.foreach(ps1._2.add(_))
+            ps1
+         })
    }
 
    /**

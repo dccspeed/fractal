@@ -6,7 +6,7 @@ import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjArrayList}
 import org.apache.spark.graphx.{Graph, VertexId, Edge => GraphXEdge}
 import org.apache.spark.{SparkConf, SparkContext}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 // TODO: merge this into the FractalGraphRDD -- support for GraphX convertions
 object GraphConverter {

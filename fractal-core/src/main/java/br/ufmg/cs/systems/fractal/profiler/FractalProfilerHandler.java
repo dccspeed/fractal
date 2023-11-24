@@ -1,11 +1,7 @@
 package br.ufmg.cs.systems.fractal.profiler;
 
-import br.ufmg.cs.systems.fractal.util.FractalNativeUtils;
 import one.profiler.AsyncProfiler;
 import org.apache.log4j.Logger;
-import org.spark_project.jetty.server.HttpChannelState;
-
-import java.io.IOException;
 
 /**
  * Wrapper used for built-in profiling.

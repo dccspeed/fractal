@@ -17,6 +17,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 
 import scala.collection.mutable.Map
 import scala.concurrent.duration._
+import scala.language.postfixOps
 
 sealed trait SeqNum {
    def seqNum: Long
@@ -958,10 +959,10 @@ class SlaveActor[S <: Subgraph](args: SlaveActor.Args[S])
    private def reportStats(): Unit = {
       val threadId = computation.getPartitionId
       val runtime = Runtime.getRuntime()
-      val maxMemory = runtime.maxMemory()
-      val totalMemory = runtime.totalMemory()
-      val freeMemory = runtime.freeMemory()
-      val usedMemory = totalMemory - freeMemory
+      val maxMemory = runtime.maxMemory().toDouble
+      val totalMemory = runtime.totalMemory().toDouble
+      val freeMemory = runtime.freeMemory().toDouble
+      val usedMemory = (totalMemory - freeMemory)
       val validSubgraphs = computation.lastComputation().getNumValidExtensions
 
       val statsMsg = Stats(threadId, validSubgraphs, maxMemory, totalMemory,

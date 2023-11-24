@@ -67,7 +67,7 @@ object InputParser {
       saveAsTextFile(outputFile)
   }
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]) = {
     // args
     var i = 0
     val option = args(i)

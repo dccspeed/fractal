@@ -1,6 +1,6 @@
 package br.ufmg.cs.systems.fractal
 
-import br.ufmg.cs.systems.fractal.computation.{ActorMessageSystem, AroundWordEnumerator, ComputationContainer, LocalComputationStore, SubgraphEnumerator}
+import br.ufmg.cs.systems.fractal.computation.{ActorMessageSystem, LocalComputationStore}
 import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.graph.MainGraphStore
 import br.ufmg.cs.systems.fractal.profiler.FractalProfiler
@@ -13,7 +13,7 @@ import spire.ClassTag
 
 import java.util.Random
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future, Promise, future}
+import scala.concurrent.{Await, Future}
 import scala.util.Try
 
 /**
@@ -219,7 +219,7 @@ class FractalContext(sc: SparkContext, logLevel: String = "warn")
          i += 1
       }
 
-      (results, diag)
+      (results.toIndexedSeq, diag)
    }
 
    /**

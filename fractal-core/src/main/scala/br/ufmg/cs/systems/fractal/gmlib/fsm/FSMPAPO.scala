@@ -20,13 +20,13 @@ class FSMPAPO(minSupport: Int, maxNumEdges: Int)
    protected type PatternsSupports = RDD[(Pattern,MinImageSupport)]
    protected type Patterns = RDD[Pattern]
 
-   // reusable support value
-   protected val minImageSupport = new MinImageSupport(minSupport)
-
    // value function: min image support
-   protected val value: EdgeInducedSubgraph => MinImageSupport = s => {
-      minImageSupport.setSubgraph(s)
-      minImageSupport
+   protected val value: EdgeInducedSubgraph => MinImageSupport = {
+      val minImageSupport = new MinImageSupport(minSupport)
+      s => {
+         minImageSupport.setSubgraph(s)
+         minImageSupport
+      }
    }
 
    // aggregate function

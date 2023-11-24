@@ -25,16 +25,18 @@ class FSMPA(minSupport: Int, maxNumEdges: Int)
    protected type Patterns = RDD[Pattern]
 
    // reusable support value
-   protected val minImageSupport = new MinImageSupport(minSupport)
 
    // function to get key function
    protected def key(pattern: Pattern): PatternInducedSubgraph => Pattern =
       _.applyLabels(pattern)
 
    // value function: min image support
-   protected val value: PatternInducedSubgraph => MinImageSupport = s => {
-      minImageSupport.setSubgraph(s)
-      minImageSupport
+   protected val value: PatternInducedSubgraph => MinImageSupport = {
+      val minImageSupport = new MinImageSupport(minSupport)
+      s => {
+         minImageSupport.setSubgraph(s)
+         minImageSupport
+      }
    }
 
    // aggregate function

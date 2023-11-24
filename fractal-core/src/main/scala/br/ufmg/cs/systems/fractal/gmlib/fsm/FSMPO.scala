@@ -14,17 +14,16 @@ class FSMPO(minSupport: Int, maxNumEdges: Int)
 
    private var lastCurrentTimeMs: Long = System.currentTimeMillis()
 
-
    // reusable pattern key
    private val key: EdgeInducedSubgraph => Pattern = s => s.quickPattern()
 
-   // reusable minimum image support value
-   private val minImageSupp = new MinImageSupport(minSupport)
-
    // reusable support value
-   private val value: EdgeInducedSubgraph => MinImageSupport = s => {
-      minImageSupp.setSubgraph(s)
-      minImageSupp
+   private val value: EdgeInducedSubgraph => MinImageSupport = {
+      val minImageSupp = new MinImageSupport(minSupport)
+      s => {
+         minImageSupp.setSubgraph(s)
+         minImageSupp
+      }
    }
 
    // support aggregation function

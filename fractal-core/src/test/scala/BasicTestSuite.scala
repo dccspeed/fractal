@@ -32,7 +32,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
    private val motifsGt: Map[(String, Int), Array[Long]] = {
       var motifsGt = Map.empty[(String, Int), Array[Long]]
       val in = Source.fromFile("../data/test/motifs-test.gt")
-      for (line <- in.getLines) {
+      for (line <- in.getLines()) {
          val toks = line.trim.split(" ")
          val (graph, numVertices, numMotifs) = (toks(0), toks(1), toks(2))
          val counts = new Array[Long](numMotifs.toInt)
@@ -51,7 +51,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
    private val patternMatchingGt: Map[(String, String, Int), Long] = {
       var patternMatchingGt = Map.empty[(String, String, Int), Long]
       val in = Source.fromFile("../data/test/pattern-matching-test.gt")
-      for (line <- in.getLines) {
+      for (line <- in.getLines()) {
          val toks = line.trim.split(" ")
          val (graph, query, numVertices, numSubgraphs) = (toks(0), toks(1),
             toks(2), toks(3))
@@ -68,7 +68,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
    private val fsmGt: Map[(String, Int), Long] = {
       var fsmGt = Map.empty[(String, Int), Long]
       val in = Source.fromFile("../data/test/fsm-test.gt")
-      for (line <- in.getLines) {
+      for (line <- in.getLines()) {
          val toks = line.trim.split(" ")
          val (graph, minSupport, numPatterns) = (toks(0), toks(1), toks(2))
          fsmGt = fsmGt + ((graph, minSupport.toInt) -> numPatterns.toLong)
@@ -83,7 +83,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
    private val maximalCliqueGt: Map[(String, Int), Long] = {
       var maximalCliqueGt = Map.empty[(String, Int), Long]
       val in = Source.fromFile("../data/test/maximal-clique-test.gt")
-      for (line <- in.getLines) {
+      for (line <- in.getLines()) {
          val toks = line.trim.split(" ")
          val (graph, maxSize, numSubgraphs) = (toks(0), toks(1), toks(2))
          maximalCliqueGt = maximalCliqueGt + ((graph, maxSize.toInt) ->
@@ -94,7 +94,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
    }
 
    /** set up spark context */
-   override def beforeAll: Unit = {
+   override def beforeAll(): Unit = {
       master = s"local[${numPartitions}]"
       // spark conf and context
       val conf = new SparkConf()
@@ -126,7 +126,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
    }
 
    /** stop spark context */
-   override def afterAll: Unit = {
+   override def afterAll(): Unit = {
       if (sc != null) {
          sc.stop()
          fc.stop()
@@ -364,7 +364,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
          assert(motifsMap2.equals(motifsMap1),
             s"${motifsMap1.values.sum} ${motifsMap2.values.sum} " +
                s"\n${
-                  motifsMap1 -- motifsMap2.keys
+                  motifsMap1.filterNot(kv => motifsMap2.contains(kv._1))
                }\n${motifsMap1}\n${motifsMap2}")
 
          val motifsMap3 = chosenGraph.motifsPAMCVC(numVertices).collectAsMap()

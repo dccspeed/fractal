@@ -14,7 +14,7 @@ Fractal is open-source with the Apache 2.0 license.
 
 ## Research
 * Original Fractal paper (SIGMOD '19) is available [here](https://dl.acm.org/citation.cfm?id=3319875).
-* Reproducibility for "Graph Pattern Mining Paradigms: Consolidation and Renewed Bearing" (HiPC '23): [```docs/reproducibility-hipc2023.md```](fractal/blob/hipc2023/docs/reproducibility-hipc2023.md)
+* Reproducibility for "Graph Pattern Mining Paradigms: Consolidation and Renewed Bearing" (HiPC '23): [```docs/reproducibility-hipc2023.md```](docs/reproducibility-hipc2023.md)
 
 ## Requirements for running
 

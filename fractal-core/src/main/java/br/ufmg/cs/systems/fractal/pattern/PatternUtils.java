@@ -21,7 +21,6 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.log4j.Logger;
 
-import javax.xml.soap.Text;
 import java.io.*;
 import java.util.HashSet;
 import java.util.Iterator;

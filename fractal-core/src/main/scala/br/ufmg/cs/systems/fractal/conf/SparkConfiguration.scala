@@ -221,7 +221,7 @@ case class SparkConfiguration(confs: Map[String, Any])
       if (value.isInstanceOf[java.lang.Boolean]) {
          value.asInstanceOf[java.lang.Boolean]
       } else if (value.isInstanceOf[String]) {
-         new java.lang.Boolean(value.asInstanceOf[String])
+         java.lang.Boolean.valueOf(value.asInstanceOf[String])
       } else {
          throw new RuntimeException(s"Invalid boolean for (${key}, ${value})")
       }

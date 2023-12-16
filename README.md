@@ -47,7 +47,8 @@ Example: directory ```data/citeseer``` illustrates a valid formatting.
 ```
 export JAVA_HOME=<openjdk-8-installation-folder>
 wget https://archive.apache.org/dist/spark/spark-3.5.0/spark-3.5.0-bin-hadoop3-scala2.13.tgz
-mv spark-3.5.0-bin-hadoop3-scala2.13.tgz spark
+tar xf spark-3.5.0-bin-hadoop3-scala2.13.tgz
+mv spark-3.5.0-bin-hadoop3-scala2.13 spark
 cd spark
 export SPARK_HOME=`pwd` 
 ```

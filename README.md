@@ -1,6 +1,4 @@
 # Fractal: A General-Purpose Graph Pattern Mining System
-[![Build Status](https://travis-ci.com/dccspeed/fractal.svg?branch=master)](https://travis-ci.com/dccspeed/fractal)
-
 *Current Version:* SPARK-3.5.0
 
 Fractal is a high performance and high productivity system for supporting distributed graph
@@ -14,12 +12,12 @@ Fractal is open-source with the Apache 2.0 license.
 
 ## Research papers
 
-* Fractal: A General-Purpose Graph Pattern Mining System ([SIGMOD '19](https://dl.acm.org/citation.cfm?id=3319875)).
-* Graph Pattern Mining: Consolidation and Renewed Bearing ([HiPC '23](https://)).
+* [v1.0.0](https://github.com/dccspeed/fractal/releases/tag/v1.0.0) : Fractal: A General-Purpose Graph Pattern Mining System ([SIGMOD '19](https://dl.acm.org/citation.cfm?id=3319875)).
+* [v2.0.0](https://github.com/dccspeed/fractal/releases/tag/v2.0.0) : Graph Pattern Mining: Consolidation and Renewed Bearing ([HiPC '23](https://)).
 
 ## Requirements for running
 
-* OpenJDK 8
+* OpenJDK 8 or 11
 * Spark 3.5.0
 
 ## Preparing your input
@@ -40,7 +38,33 @@ Edge ids are also represented as indexes ```e = 0..m-1```
 
 Example: directory ```data/citeseer``` illustrates a valid formatting.
 
-## Installing Fractal
+## Quick installation with Docker (local)
+
+We provide a Docker image for this project. Run the following command to build a local Docker image:
+```
+git clone git@github.com:dccspeed/fractal.git fractal
+cd fractal
+export FRACTAL_HOME=`pwd`
+docker buildx build --output type=docker --tag fractal .
+```
+
+### Running built-in applications
+
+For a list and description regarding built-in applications:
+
+```
+docker run fractal:latest
+```
+
+Data folder with input graphs can be mounted via Docker volumes (```-v```). Arguments to Fractal runner are passed via 
+Docker environment variables (```-e```). For example, the following command submit a Pattern-oblivious motif counting
+application as a Docker container:
+
+```
+docker run -v ./data/:/data -e app=motifs_po -e steps=3 -e inputgraph=/data/citeseer fractal:latest
+```
+
+## Manual installation (distributed)
 
 1. Download and configure Spark 3.5.0:
 
@@ -59,9 +83,10 @@ git clone https://github.com/dccspeed/fractal.git # or direct download
 cd fractal
 export FRACTAL_HOME=`pwd`
 ./gradlew jar # download dependencies and build the project
+./gradlew test # run tests
 ```
 
-## Running built-in applications
+### Running built-in applications
 
 For a list and description regarding built-in applications:
 
@@ -69,7 +94,7 @@ For a list and description regarding built-in applications:
 ./bin/fractal.sh
 ```
 
-## Running custom applications
+### Running custom applications
 
 You can also implement your own application using Fractal API. We provide the subproject 
 "fractal-apps" to make this process easier. All you need to do is to add your application class

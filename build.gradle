@@ -12,7 +12,6 @@ buildscript {
    repositories {
       mavenLocal()
       mavenCentral()
-      jcenter()
       maven { url "https://plugins.gradle.org/m2/" }
    }
 }
@@ -29,8 +28,8 @@ repositories {
 }
 
 dependencies {
-    compile project(':fractal-core')
-    compile project(':fractal-apps')
+    compileOnly project(':fractal-core')
+    compileOnly project(':fractal-apps')
 }
 
 task scalaTest(dependsOn: ['testClasses'], type: JavaExec) {

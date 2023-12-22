@@ -43,7 +43,7 @@ class MotifsPAMCVC(numVertices: Int)
                }
 
             val partialMapRDD = fg.pfractoid(pattern)
-               .expand(pattern.getNumberOfVertices, classOf[MCVCEnumerator])
+               .extend(pattern.getNumberOfVertices, classOf[MCVCEnumerator])
                .aggregationCanonicalPatternLong(
                   s => s.applyLabels(pattern), 0L, _ => 1L, _ + _)
                //.expand(mcvcSize)

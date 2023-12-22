@@ -13,7 +13,7 @@ object MyMotifsApp extends Logging {
     val graphPath = args(0) // input graph
     val fgraph = fc.textFile(graphPath)
 
-    val motifs = fgraph.vfractoid.expand(3)
+    val motifs = fgraph.vfractoid.extend(3)
 
     val motifsCountsRDD = motifs.aggregationCanonicalPatternLong(
       s => s.quickPattern(), 0L, _ => 1L, _ + _

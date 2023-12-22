@@ -41,9 +41,9 @@ class MotifsHybrid(numVertices: Int)
              * Motifs counting RDD
              */
             val mappingRDD = fg.pfractoid(pattern)
-               .expand(numVertices - 1)
+               .extend(numVertices - 1)
                .vfractoid
-               .expand(1)
+               .extend(1)
                .aggregationCanonicalPatternLong(
                   s => {
                      s.quickPattern()

@@ -164,7 +164,7 @@ case class FractalGraph
       val reduceFunc: (RoaringBitmap, RoaringBitmap) => Unit =
          (b1,b2) => b1.or(b2)
 
-      val validVertices = vfractoid.expand(1)
+      val validVertices = vfractoid.extend(1)
          .filter((s,c) => {
             vertexGraphFilterFunc(s.getVertices.getLast, s.getMainGraph)
          })
@@ -215,7 +215,7 @@ case class FractalGraph
       val reduceFunc: (RoaringBitmap, RoaringBitmap) => Unit =
          (b1,b2) => b1.or(b2)
 
-      val validEdges = efractoid.expand(1)
+      val validEdges = efractoid.extend(1)
          .filter((s,c) => {
             val g = s.getMainGraph
             val e = s.getEdges.getLast
@@ -269,7 +269,7 @@ case class FractalGraph
          s.getMainGraph.firstVertexLabel(u)
       }
 
-      val map = vfractoid.expand(1)
+      val map = vfractoid.extend(1)
          .aggregationIntInt(getVertexLabel, 0, s => 1, _ + _)
 
       map

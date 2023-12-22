@@ -70,9 +70,9 @@ class QuasiCliquesPAPO(maxNumVertices: Int, minDensity: Double)
          .map(p => {
             val app = this
             val _minDegree = minDegree
-            fg.pfractoid(p).expand(p.getNumberOfVertices)
+            fg.pfractoid(p).extend(p.getNumberOfVertices)
                .vfractoid
-               .expand(1)
+               .extend(1)
                .filter((s,c) => app.quasiCliquePatternFilter(s.quickPattern, _minDegree))
          })
 

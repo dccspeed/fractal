@@ -91,7 +91,7 @@ class KeywordSearchPO(keywords: Set[Int], numEdges: Int)
 
    override def apply(fgraph: FractalGraph): Fractoid[EdgeInducedSubgraph] = {
       fgraph.efractoid
-         .expand(1)
+         .extend(1)
          .filter(lastEdgeCoversNewWord _)
          .explore(numEdges - 1)
          .filter(coversAllKeywords _)

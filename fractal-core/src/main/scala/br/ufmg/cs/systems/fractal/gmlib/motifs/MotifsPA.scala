@@ -40,7 +40,7 @@ class MotifsPA(numVertices: Int)
             /**
              * Motifs counting RDD
              */
-            val mappingRDD = fg.pfractoid(pattern).expand(numVertices)
+            val mappingRDD = fg.pfractoid(pattern).extend(numVertices)
                .aggregationCanonicalPatternLong(
                   s => {
                      s.applyLabels(pattern)

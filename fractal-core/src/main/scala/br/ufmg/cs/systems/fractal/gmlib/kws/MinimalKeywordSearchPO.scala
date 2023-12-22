@@ -152,7 +152,7 @@ class MinimalKeywordSearchPO(keywords: Set[Int], numVertices: Int)
 
    override def apply(fgraph: FractalGraph): Fractoid[VertexInducedSubgraph] = {
       fgraph.vfractoid
-         .expand(1)
+         .extend(1)
          .filter(checkAndFillLabelCounts _)
          .explore(numVertices - 1)
          .filter(minimalKeywordSearchFilter _)

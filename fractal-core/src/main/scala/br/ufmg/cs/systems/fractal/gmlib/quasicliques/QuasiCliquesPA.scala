@@ -66,7 +66,7 @@ class QuasiCliquesPA(maxNumVertices: Int, minDensity: Double)
       val numSteps = quasiCliquePatterns.count().toInt
       val sortedPatterns = quasiCliquePatterns.sortBy(p => -p.getNumberOfEdges)
       val fractoidsIter = sortedPatterns.toLocalIterator
-         .map(p => fg.pfractoid(p).expand(p.getNumberOfVertices))
+         .map(p => fg.pfractoid(p).extend(p.getNumberOfVertices))
 
       (numSteps, fractoidsIter)
    }

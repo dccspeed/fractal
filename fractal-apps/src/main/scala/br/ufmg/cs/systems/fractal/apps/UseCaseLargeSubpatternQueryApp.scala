@@ -44,7 +44,7 @@ object UseCaseLargeSubpatternQueryApp extends Logging {
       logApp(s"RandomPattern ${pattern}")
 
       // random target label
-      val vlabels = fg.vfractoid.expand(1)
+      val vlabels = fg.vfractoid.extend(1)
          .aggregationLongLong(getLabelFromVertex, 0L, s => 0L, _ + _)
          .keys
          .collect()
@@ -80,7 +80,7 @@ object UseCaseLargeSubpatternQueryApp extends Logging {
          extendedPattern.setVertexLabeled(true)
          val future = Future({
             val c = fg.pfractoid(extendedPattern)
-               .expand(extendedPattern.getNumberOfVertices)
+               .extend(extendedPattern.getNumberOfVertices)
                .aggregationCount
             logApp(s"ExtendedPatternPA ${extendedPattern} -> ${c}")
             c
@@ -106,9 +106,9 @@ object UseCaseLargeSubpatternQueryApp extends Logging {
 
       // visit same subgraphs using a hybrid approach: match and explore
       val extendedPatternsHybrid = fg
-         .pfractoid(pattern).expand(pattern.getNumberOfVertices)
+         .pfractoid(pattern).extend(pattern.getNumberOfVertices)
          .vfractoid
-         .expand(1, classOf[NeighborhoodEnumerator])
+         .extend(1, classOf[NeighborhoodEnumerator])
          .filter((s,c) => {
             val graph = s.getMainGraph
             val lastVertex = s.getVertices.getLast

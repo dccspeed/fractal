@@ -121,9 +121,9 @@ class QuerySpecializationPAPO(_pattern: Pattern)
 
    override def apply(fg: FractalGraph): Fractoid[EdgeInducedSubgraph] = {
       val fractoid = fg.pfractoid(_pattern)
-         .expand(_pattern.getNumberOfVertices)
+         .extend(_pattern.getNumberOfVertices)
          .efractoid
-         .expand(1, classOf[AllEdgesSubgraphEnumerator])
+         .extend(1, classOf[AllEdgesSubgraphEnumerator])
          .filter(isSubgraphValid _)
 
       fractoid

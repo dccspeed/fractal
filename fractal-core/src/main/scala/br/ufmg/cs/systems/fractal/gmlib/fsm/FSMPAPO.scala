@@ -129,9 +129,9 @@ class FSMPAPO(minSupport: Int, maxNumEdges: Int)
    protected def canonicalPatternsSupports(fg: FractalGraph, pattern: Pattern)
    : (Fractoid[EdgeInducedSubgraph], PatternsSupports) = {
       val fractoid = fg.pfractoid(pattern)
-         .expand(pattern.getNumberOfVertices)
+         .extend(pattern.getNumberOfVertices)
          .efractoid
-         .expand(1)
+         .extend(1)
       val aggregation = fractoid
          .aggregationObjObj(
             s => s.quickPattern(), value, aggregate, ReportFuncs.FSM_AGG_REPORT)
@@ -179,7 +179,7 @@ class FSMPAPO(minSupport: Int, maxNumEdges: Int)
 
       // patterns -> supports
       val (firstFractoid, canonicalPatternsSupportsRDD) = {
-         val fractoid = fg.efractoid.expand(1)
+         val fractoid = fg.efractoid.extend(1)
          val rdd = fractoid
             .aggregationObjObj(
                s => s.quickPattern(), value, aggregate)

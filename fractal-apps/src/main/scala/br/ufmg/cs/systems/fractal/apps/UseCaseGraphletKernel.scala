@@ -74,7 +74,7 @@ object UseCaseGraphletKernel extends Logging {
          .set("vertex_labeled", true)
 
       // setup fractoid representing 5-vertex induced subgraphs
-      val motifs = fgraph.vfractoid.expand(5)
+      val motifs = fgraph.vfractoid.extend(5)
 
       // setup aggreation key for subgraphs in Fractal
       val subgraphToPatternGraphIdx: VertexInducedSubgraph => (Pattern, Int) =

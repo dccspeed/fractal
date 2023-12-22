@@ -133,7 +133,7 @@ class InducedPeriodicSubgraphsPO(periodicThreshold: Int)
     * @return fractoid that can be explored an arbitrary number of times
     */
    override def apply(fgraph: FractalGraph): Fractoid[VertexInducedSubgraph] = {
-      fgraph.vfractoid.expand(1).filter(
+      fgraph.vfractoid.extend(1).filter(
          (s,c) => periodicFilter(s, c)
       )
    }

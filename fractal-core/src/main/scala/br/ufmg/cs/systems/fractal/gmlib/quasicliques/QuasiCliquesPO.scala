@@ -110,7 +110,7 @@ class QuasiCliquesPO(maxNumVertices: Int, minDensity: Double)
 
    override def apply(fg: FractalGraph): Fractoid[VertexInducedSubgraph] = {
       val numSteps = maxNumVertices - 1
-      fg.vfractoid.expand(1)
+      fg.vfractoid.extend(1)
          .filter(isQuasiClique)
          .explore(numSteps)
    }

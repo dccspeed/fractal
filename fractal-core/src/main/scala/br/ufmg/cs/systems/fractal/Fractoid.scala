@@ -914,23 +914,23 @@ case class Fractoid[S <: Subgraph : ClassTag]
    }
 
    /**
-    * Perform *n* expansion iterations
+    * Perform *n* extension iterations
     *
-    * @param n number of expansions
+    * @param n number of extensions
     * @return new result
     */
-   def expand(n: Int): Fractoid[S] = {
-      expand(n, null)
+   def extend(n: Int): Fractoid[S] = {
+      extend(n, null)
    }
 
    /**
-    * Perform *n* expansion iterations using custom subgraph enumerator
+    * Perform *n* extension iterations using custom subgraph enumerator
     *
-    * @param n number of expansions
+    * @param n number of extensions
     * @param senumClass subgraph enumerator class
     * @return new result
     */
-   def expand(n: Int, senumClass: Class[_ <: SubgraphEnumerator[S]])
+   def extend(n: Int, senumClass: Class[_ <: SubgraphEnumerator[S]])
    : Fractoid[S] = {
       logDebug(s"Expand fractoid=${this} n=${n}")
       // base step, no effect
@@ -955,7 +955,7 @@ case class Fractoid[S <: Subgraph : ClassTag]
       }
 
       // recursive call
-      stepResult.expand(n - 1, senumClass)
+      stepResult.extend(n - 1, senumClass)
    }
 
    /**

@@ -36,11 +36,11 @@ object GraphFilteringUseCaseApp extends Logging {
 
       // force reading main graph
       val startReadingGraph1 = System.currentTimeMillis()
-      fg.vfractoid.expand(1).aggregationCount
+      fg.vfractoid.extend(1).aggregationCount
       val elapsedReadingGraph1 = System.currentTimeMillis() - startReadingGraph1
 
       val startReadingGraph2 = System.currentTimeMillis()
-      filteredFg.vfractoid.expand(1).aggregationCount
+      filteredFg.vfractoid.extend(1).aggregationCount
       val elapsedReadingGraph2 = System.currentTimeMillis() - startReadingGraph2
 
       val labelFilter
@@ -62,14 +62,14 @@ object GraphFilteringUseCaseApp extends Logging {
          }
 
       val start1 = System.currentTimeMillis()
-      val count1 = fg.vfractoid.expand(1)
+      val count1 = fg.vfractoid.extend(1)
          .filter(labelFilter)
          .explore(targetNumVertices - 1)
          .aggregationCount
       val elapsed1 = System.currentTimeMillis() - start1
 
       val start2 = System.currentTimeMillis()
-      val count2 = filteredFg.vfractoid.expand(1)
+      val count2 = filteredFg.vfractoid.extend(1)
          .filter(labelFilter)
          .explore(targetNumVertices - 1)
          .aggregationCount

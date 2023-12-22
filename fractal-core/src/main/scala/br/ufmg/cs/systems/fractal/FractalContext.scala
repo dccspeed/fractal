@@ -50,7 +50,7 @@ class FractalContext(sc: SparkContext, logLevel: String = "warn")
       val timePerStepMs = _timePerStepMs
 
       // force graph reading
-      _fractoids.head.fractalGraph.vfractoid.expand(1).aggregationCount
+      _fractoids.head.fractalGraph.vfractoid.extend(1).aggregationCount
 
       var numSubgraphs = 0L
       var remainingTimeMs = timeLimitMs
@@ -232,6 +232,33 @@ class FractalContext(sc: SparkContext, logLevel: String = "warn")
                 graphClass: String = Configuration.CONF_MAINGRAPH_CLASS_DEFAULT)
    : FractalGraph = {
       new FractalGraph(path, graphClass, this, logLevel)
+   }
+
+   /**
+    * Create unlabeled graph from adjacency lists
+    * @param path graph directory path
+    * @return fractal graph
+    */
+   def unlabeledGraphFromAdjLists(path: String): FractalGraph = {
+      textFile(path, graphClass = classOf[graph.UnlabeledMainGraph].getCanonicalName)
+   }
+
+   8yy/**
+    * Create vertex labeled graph from adjacency lists
+    * @param path graph directory path
+    * @return fractal graph
+    */
+   def vertexLabeledGraphFromAdjLists(path: String): FractalGraph = {
+      textFile(path, graphClass = classOf[graph.VLabeledMainGraph].getCanonicalName)
+   }
+
+   /**
+    * Create vertex and edge labeled graph from adjacency lists
+    * @param path graph directory path
+    * @return fractal graph
+    */
+   def vertexEdgeLabeledGraphFromAdjLists(path: String): FractalGraph = {
+      textFile(path, graphClass = classOf[graph.VELabeledMainGraph].getCanonicalName)
    }
 
    /**

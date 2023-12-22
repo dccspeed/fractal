@@ -114,7 +114,7 @@ class QuerySpecializationPO(val patternsBc: Broadcast[Array[Pattern]])
    override def apply(fg: FractalGraph): Fractoid[EdgeInducedSubgraph] = {
       val numEdges = patterns.head.getNumberOfEdges
       fg.efractoid
-         .expand(1)
+         .extend(1)
          .filter((s,c) => isSubpatternOf(s.quickPattern()))
          .explore(numEdges - 1)
    }

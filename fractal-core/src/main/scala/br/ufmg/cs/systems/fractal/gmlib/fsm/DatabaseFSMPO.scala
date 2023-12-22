@@ -168,7 +168,7 @@ class DatabaseFSMPO(minSupport: Double, numGraphs: Int, maxNumEdges: Int,
       val quickPatterns = new ObjSet[Pattern]()
 
       // cumulative fractoid or exploring edge-induced search space
-      var frac = fg.efractoid.expand(1)
+      var frac = fg.efractoid.extend(1)
 
       // quick patterns -> supports
       var quickPatternMapRDD = quickPatternsSupports(frac)
@@ -206,7 +206,7 @@ class DatabaseFSMPO(minSupport: Double, numGraphs: Int, maxNumEdges: Int,
          // add a new edge to candidate subgraphs
          frac = frac
             .filter((s,c) => quickPatternsBc.value.contains(s.quickPattern))
-            .expand(1)
+            .extend(1)
 
          // quick pattern -> support
          quickPatternMapRDD = quickPatternsSupports(frac)

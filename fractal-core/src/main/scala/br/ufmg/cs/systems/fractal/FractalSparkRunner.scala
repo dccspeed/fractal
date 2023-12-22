@@ -43,7 +43,7 @@ object SubgraphsListingPO extends Logging {
 
    def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
       val frac = fractalGraph
-         .efractoid.expand(1).explore(explorationSteps)
+         .efractoid.extend(1).explore(explorationSteps)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
          frac.aggregationCount
@@ -113,7 +113,7 @@ object InducedSubgraphsListingPO extends Logging {
    val appid: String = "induced_subgraphs_listing_po"
 
    def apply(fractalGraph: FractalGraph, explorationSteps: Int): Unit = {
-      val frac = fractalGraph.vfractoid.expand(1).explore(explorationSteps)
+      val frac = fractalGraph.vfractoid.extend(1).explore(explorationSteps)
 
       val (numSubgraphs, elapsed) = FractalSparkRunner.time {
          frac.aggregationCount
@@ -147,7 +147,7 @@ object InducedSubgraphsListingSamplePA extends Logging {
             val fractoid = fractalGraph
                .set(fractionKey, fraction)
                .pfractoid(pattern)
-               .expand(1, senumClass)
+               .extend(1, senumClass)
                .explore(explorationSteps)
             val (numSubgraphs, elapsedMs) = FractalSparkRunner.time {
                fractoid.aggregationCount
@@ -180,7 +180,7 @@ object InducedSubgraphsListingSamplePO extends Logging {
          fractalGraph
             .set(fractionKey, fraction)
             .vfractoid
-            .expand(1, senumClass)
+            .extend(1, senumClass)
             .explore(explorationSteps)
             .aggregationCount
       }
@@ -269,7 +269,7 @@ object MotifsSamplePA extends Logging {
             val fractoid = fractalGraph
                .set("sampling_fraction", fraction)
                .pfractoid(pattern)
-               .expand(pattern.getNumberOfVertices,
+               .extend(pattern.getNumberOfVertices,
                   classOf[SamplingEnumerator[PatternInducedSubgraph]])
 
             val (numSubgraphs, elapsedMs) = FractalSparkRunner.time {
@@ -1902,7 +1902,7 @@ object PatternQueryGenerator extends Logging {
             val fractionKey = "sampling_fraction"
             val seedKey = "sampling_seed"
             fg.set(fractionKey, fraction).set(seedKey, seed)
-               .pfractoid(pattern).expand(numVertices, senumClass)
+               .pfractoid(pattern).extend(numVertices, senumClass)
          })
 
       val numQueryPatterns = fractoids.size
@@ -2063,7 +2063,7 @@ object LabelQueryGenerator extends Logging {
          .set(fractionKey, fraction)
          .set(seedKey, seed)
          .vfractoid
-         .expand(1, senumClass)
+         .extend(1, senumClass)
          .filter((s, _) => getLabels(s).size() == s.getNumVertices)
          .explore(numVertices - 1)
          .aggregationObjLong(getLabels, 0L, _ => 1L, _ + _)

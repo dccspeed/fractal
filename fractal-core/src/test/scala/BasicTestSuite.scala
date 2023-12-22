@@ -141,7 +141,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       cubeGraph.set("num_partitions", numPartitions)
 
       for (k <- 1 to (numSubgraph.size - 1)) {
-         val vsubgraphsFrac = cubeGraph.vfractoid.expand(1).explore(k)
+         val vsubgraphsFrac = cubeGraph.vfractoid.extend(1).explore(k)
          val numSubgraphs = vsubgraphsFrac.aggregationCount
 
          assert(numSubgraphs == numSubgraph(k))
@@ -292,7 +292,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       val sample = citeseerSingleLabelGraph
          .set(fractionKey, fraction)
          .pfractoid(trianglePattern)
-         .expand(3, senumClass)
+         .extend(3, senumClass)
       val estimate = sample.aggregationCount / fraction
 
       // error
@@ -322,7 +322,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       val sample = citeseerSingleLabelGraph
          .set(fractionKey, fraction)
          .pfractoid(squarePattern)
-         .expand(4, senumClass)
+         .extend(4, senumClass)
       val estimate = sample.aggregationCount / fraction
 
       // error

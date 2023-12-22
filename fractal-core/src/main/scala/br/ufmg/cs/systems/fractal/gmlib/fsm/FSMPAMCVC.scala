@@ -28,7 +28,7 @@ class FSMPAMCVC(minSupport: Int, maxNumEdges: Int)
          }
 
       val fractoid = fg.pfractoid(pattern)
-         .expand(mcvcSize)
+         .extend(mcvcSize)
       val aggregation = fractoid
          .aggregationObjObjWithCallback[Pattern,MinImageSupport](
             key(pattern), value, aggregate, callback)

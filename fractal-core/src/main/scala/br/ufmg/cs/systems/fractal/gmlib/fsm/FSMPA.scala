@@ -99,7 +99,7 @@ class FSMPA(minSupport: Int, maxNumEdges: Int)
     */
    protected def canonicalPatternsSupports(fg: FractalGraph, pattern: Pattern)
    : (Fractoid[PatternInducedSubgraph], PatternsSupports) = {
-      val fractoid = fg.pfractoid(pattern).expand(pattern.getNumberOfVertices)
+      val fractoid = fg.pfractoid(pattern).extend(pattern.getNumberOfVertices)
       val aggregation = fractoid
          .aggregationObjObj[Pattern,MinImageSupport](
             key(pattern), value, aggregate, ReportFuncs.FSM_AGG_REPORT)

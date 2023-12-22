@@ -10,7 +10,7 @@ class MotifsPO(numVertices: Int)
    extends BuiltInApplication[RDD[(Pattern,Long)]] {
 
    override def apply(fg: FractalGraph): RDD[(Pattern, Long)] = {
-      fg.vfractoid.expand(numVertices).aggregationCanonicalPatternLong(
+      fg.vfractoid.extend(numVertices).aggregationCanonicalPatternLong(
          s => {
             s.quickPattern()
          }, 0, _ => 1L, _ + _)

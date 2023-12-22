@@ -17,10 +17,12 @@ RUN wget https://archive.apache.org/dist/spark/spark-3.5.0/spark-3.5.0-bin-hadoo
 RUN cd $FRACTAL_HOME && ./gradlew jar
 
 # Used to force spark-submit to download packages and store into image
-ARG app=motifs_po
-ARG steps=2
-ARG inputgraph=/app/fractal/data/citeseer
+ENV app=motifs_po
+ENV steps=2
+ENV inputgraph=/app/fractal/data/citeseer
 RUN $FRACTAL_HOME/bin/fractal.sh && rm -rf /root/.gradle && apk del wget tar git
+
+RUN cd $FRACTAL_HOME && ./gradlew jar
 
 # Fractal built-in runner as default command
 CMD ["/bin/bash", "-c",  "/app/fractal/bin/fractal.sh"]

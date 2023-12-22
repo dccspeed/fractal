@@ -219,7 +219,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       val fractionKey = "sampling_fraction"
       self.set(fractionKey, fraction)
          .vfractoid
-         .expand(numVertices, senumClass)
+         .extend(numVertices, senumClass)
          .aggregationCanonicalPatternLong(
             s => s.quickPattern(), 0, _ => 1L, _ + _)
    }
@@ -230,7 +230,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     * @return fractoid with cliques computation
     */
    def cliquesPO(numVertices: Int): Fractoid[VertexInducedSubgraph] = {
-      self.vfractoid.expand(1)
+      self.vfractoid.extend(1)
          .filter((s,c) => s.numEdgesAdded == s.getNumVertices - 1)
          .explore(numVertices - 1)
    }
@@ -269,7 +269,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       val senumClass = classOf[KClistEnumerator[VertexInducedSubgraph]]
       self.set("clique_size", numVertices)
          .vfractoidNoEdgeUpdate
-         .expand(numVertices, senumClass)
+         .extend(numVertices, senumClass)
    }
 
    /**
@@ -327,7 +327,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       }
 
       val frac = self.vfractoid
-         .expand(1)
+         .extend(1)
          .filter((s,c) => s.numEdgesAdded() == s.getNumVertices - 1)
          .explore(maxNumVertices - 1)
          .filter(isMaximal)
@@ -466,7 +466,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
 
       val senumClass = classOf[MaximalCliquesEnumerator[VertexInducedSubgraph]]
       self.vfractoid
-         .expand(maxNumVertices, senumClass)
+         .extend(maxNumVertices, senumClass)
          .filter(isMaximal)
    }
 
@@ -573,7 +573,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
          }
 
       val frac = self.efractoid
-         .expand(1)
+         .extend(1)
          .filter(edgeFilterFunc)
 
       frac
@@ -599,7 +599,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
          val explorationPlanMCVC = nextPattern.explorationPlan()
 
          val gquerying = self.pfractoid(nextPattern)
-            .expand(nextPattern.getNumberOfVertices, classOf[MCVCEnumerator])
+            .extend(nextPattern.getNumberOfVertices, classOf[MCVCEnumerator])
 
          logInfo(s"MCVCPartialResult pattern=${nextPattern}" +
             s" sbLower=${nextPattern.vsymmetryBreakerLowerBound()}" +
@@ -647,7 +647,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
     */
    def patternQueryingPA(pattern: Pattern): Fractoid[PatternInducedSubgraph] = {
       logInfo (s"Querying pattern ${pattern} in ${this}.")
-      self.pfractoid(pattern).expand(1)
+      self.pfractoid(pattern).extend(1)
    }
 
    /**
@@ -659,7 +659,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       logInfo (s"Querying fraction=${fraction} of pattern ${pattern} in ${this}.")
       val fractionKey = "sampling_fraction"
       val senumClass = classOf[SamplingEnumerator[PatternInducedSubgraph]]
-      self.set(fractionKey, fraction).pfractoid(pattern).expand(1, senumClass)
+      self.set(fractionKey, fraction).pfractoid(pattern).extend(1, senumClass)
    }
 
    /**
@@ -780,7 +780,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
          pattern.setInduced(true)
          pattern.setVertexLabeled(false)
          self.pfractoid(pattern)
-            .expand(1).filter(labelFilter)
+            .extend(1).filter(labelFilter)
             .explore(numVertices - 1)
       }))
    }
@@ -811,7 +811,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
             valid
          }
 
-     self.vfractoid.expand(1).filter(labelFilter).explore(numVertices - 1)
+     self.vfractoid.extend(1).filter(labelFilter).explore(numVertices - 1)
    }
 
    /**
@@ -868,7 +868,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       pattern.setEdgeLabeled(false)
 
       // graph vertex labels
-      val vertexLabels = self.vfractoid.expand(1)
+      val vertexLabels = self.vfractoid.extend(1)
          .aggregationLongLong(
             s => {
                val graph = s.getMainGraph()
@@ -914,7 +914,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       val sc = self.fractalContext.sparkContext
 
       // graph vertex labels
-      val vertexLabels = self.vfractoid.expand(1)
+      val vertexLabels = self.vfractoid.extend(1)
          .aggregationLongLong(
             s => {
                val graph = s.getMainGraph()
@@ -949,7 +949,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
             pattern.setInduced(false)
             pattern.setVertexLabeled(true)
             pattern.setEdgeLabeled(false)
-            self.pfractoid(pattern).expand(pattern.getNumberOfVertices)
+            self.pfractoid(pattern).extend(pattern.getNumberOfVertices)
          })
 
       (numSteps, fractoidsIter)
@@ -990,7 +990,7 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
          .set("random_walk_seed", seed)
          .set("num_partitions", numThreads)
          .vfractoid
-         .expand(numVertices,
+         .extend(numVertices,
             classOf[RandomWalkEnumerator[VertexInducedSubgraph]])
          .aggregationCanonicalPatternLong(
             s => s.quickPattern(), 0L, s => 0L, (v, _) => v)

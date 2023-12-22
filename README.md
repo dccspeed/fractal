@@ -14,6 +14,7 @@ Fractal is open-source with the Apache 2.0 license.
 
 * [v1.0.0](https://github.com/dccspeed/fractal/releases/tag/v1.0.0) : Fractal: A General-Purpose Graph Pattern Mining System ([SIGMOD '19](https://dl.acm.org/citation.cfm?id=3319875)).
 * [v2.0.0](https://github.com/dccspeed/fractal/releases/tag/v2.0.0) : Graph Pattern Mining: Consolidation and Renewed Bearing ([HiPC '23](https://)).
+* [v3.0.0](https://github.com/dccspeed/fractal): Current version: support for Spark 3.0 and Java 11.
 
 ## Requirements for running
 
@@ -38,14 +39,29 @@ Edge ids are also represented as indexes ```e = 0..m-1```
 
 Example: directory ```data/citeseer``` illustrates a valid formatting.
 
-## Quick installation with Docker (local)
+## Quick start with interactive notebook via Docker (local)
+
+Run the following command to build a local Docker image that runs an Almond Scala/Spark Kernel Notebook with support
+for Fractal:
+
+```
+docker buildx build --output type=docker --tag fractalnb -f notebook/Dockerfile https://github.com/dccspeed/fractal.git
+```
+
+Run the container:
+
+```
+docker run -it --rm -p 8888:8888 fractalnb:latest
+```
+
+The local URL for accessing the notebook kernel should appear in the output.
+Notebook examples are provided in ```notebook/```
+
+## Quick installation via Docker (local)
 
 We provide a Docker image for this project. Run the following command to build a local Docker image:
 ```
-git clone git@github.com:dccspeed/fractal.git fractal
-cd fractal
-export FRACTAL_HOME=`pwd`
-docker buildx build --output type=docker --tag fractal .
+docker buildx build --output type=docker --tag fractal https://github.com/dccspeed/fractal.git
 ```
 
 ### Running built-in applications

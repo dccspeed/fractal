@@ -1,5 +1,6 @@
 # Fractal: A General-Purpose Graph Pattern Mining System
-*Current Version:* SPARK-3.5.0
+
+[![Build Gradle project](https://github.com/dccspeed/fractal/actions/workflows/build-gradle-project.yml/badge.svg)](https://github.com/dccspeed/fractal/actions/workflows/build-gradle-project.yml)
 
 Fractal is a high performance and high productivity system for supporting distributed graph
 pattern mining (GPM) applications. Our current version is tested on Spark 3.5.0.

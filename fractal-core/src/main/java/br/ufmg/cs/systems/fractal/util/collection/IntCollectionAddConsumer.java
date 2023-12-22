@@ -1,6 +1,7 @@
 package br.ufmg.cs.systems.fractal.util.collection;
 
 import com.koloboke.collect.IntCollection;
+
 import java.util.function.IntConsumer;
 
 public class IntCollectionAddConsumer implements IntConsumer {

@@ -1,67 +1,80 @@
 package br.ufmg.cs.systems.fractal.graph;
 
-import br.ufmg.cs.systems.fractal.util.collection.AtomicBitSetArray;
-import br.ufmg.cs.systems.fractal.util.collection.ReclaimableIntCollection;
+import br.ufmg.cs.systems.fractal.computation.Computation;
+import br.ufmg.cs.systems.fractal.conf.Configuration;
+import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
+import br.ufmg.cs.systems.fractal.util.EdgePredicates;
+import br.ufmg.cs.systems.fractal.util.VertexPredicate;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayListView;
 import com.koloboke.collect.IntCollection;
+
+import java.io.IOException;
 import java.util.function.IntConsumer;
-import java.util.function.Predicate;
 
-public interface MainGraph<V,E> {
-    int getId();
-    
-    void setId(int id);
+public interface MainGraph {
+   void init(Configuration configuration) throws IOException;
 
-    void reset();
+   boolean isEdgeValid(int u, int v, int e);
 
-    boolean isNeighborVertex(int v1, int v2);
+   boolean isVertexValid(int u);
 
-    MainGraph addVertex(Vertex vertex);
+   int numVertices();
 
-    Vertex[] getVertices();
+   IntArrayListView neighborhoodEdges(int u);
 
-    Vertex getVertex(int vertexId);
+   void neighborhoodEdges(int u, IntArrayListView view);
 
-    int getNumberVertices();
+   int numEdges();
 
-    Edge[] getEdges();
+   boolean isEdgeValid(int e);
 
-    Edge getEdge(int edgeId);
+   int edgeSrc(int e);
 
-    int getNumberEdges();
+   int edgeDst(int e);
 
-    ReclaimableIntCollection getEdgeIds(int v1, int v2);
+   int firstEdgeLabel(int e);
 
-    MainGraph addEdge(Edge edge);
+   int firstVertexLabel(int u);
 
-    boolean areEdgesNeighbors(int edge1Id, int edge2Id);
+   void forEachEdge(int u, int v, IntConsumer consumer);
 
-    @Deprecated
-    boolean isNeighborEdge(int src1, int dest1, int edge2);
+   IntArrayListView neighborhoodVertices(int u);
 
-    VertexNeighbourhood getVertexNeighbourhood(int vertexId);
+   void neighborhoodVertices(int u, IntArrayListView view);
 
-    IntCollection getVertexNeighbours(int vertexId);
+   void forEachCommonEdgeLabels(IntArrayList edges, IntConsumer consumer);
 
-    boolean isEdgeLabelled();
+   // Canonical subgraph enumeration
 
-    boolean isMultiGraph();
+   void validExtensionsPatternInducedLabeled(Computation computation,
+                                             Subgraph subgraph,
+                                             IntArrayList intersectionVertexIdxs,
+                                             IntArrayList differenceVertexIdxs,
+                                             IntArrayList starts,
+                                             IntArrayList ends,
+                                             int vertexLowerBound,
+                                             int vertexUpperBound,
+                                             VertexPredicate vpred,
+                                             EdgePredicates epreds,
+                                             IntCollection result);
 
-    void forEachEdgeId(int v1, int v2, IntConsumer intConsumer);
+   void validExtensionsPatternInduced(Computation computation,
+                                      Subgraph subgraph,
+                                      IntArrayList intersectionVertexIdxs,
+                                      IntArrayList differenceVertexIdxs,
+                                      IntArrayList starts, IntArrayList ends,
+                                      int vertexLowerBound,
+                                      int vertexUpperBound,
+                                      IntCollection result);
 
-    int filterVertices(AtomicBitSetArray tag);
+   void validExtensionsEdgeInduced(Computation computation, Subgraph subgraph,
+                                   IntCollection validExtensions);
 
-    int filterVertices(Predicate<Vertex<V>> vpred);
+   void validExtensionsVertexInduced(Computation computation,
+                                     Subgraph subgraph,
+                                     IntCollection validExtensions);
 
-    int filterEdges(AtomicBitSetArray tag);
 
-    int filterEdges(Predicate<Edge<E>> epred);
-
-    int undoVertexFilter();
-    
-    int undoEdgeFilter();
-
-    int filter(AtomicBitSetArray vtag, AtomicBitSetArray etag);
-
-    void buildSortedNeighborhood();
-
+   int vertexDegree(int u);
 }

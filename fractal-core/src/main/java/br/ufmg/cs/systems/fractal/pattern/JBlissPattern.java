@@ -10,110 +10,86 @@ import fi.tkk.ics.jbliss.Reporter;
 import org.apache.log4j.Logger;
 
 public class JBlissPattern extends BasicPattern {
-    private static final Logger LOG = Logger.getLogger(JBlissPattern.class);
+   private static final Logger LOG = Logger.getLogger(JBlissPattern.class);
 
-    private Graph<Integer> jblissGraph;
+   private Graph<Integer> jblissGraph;
 
-    public JBlissPattern() {
-        super();
-    }
+   public JBlissPattern() {
+      super();
+      jblissGraph = new Graph<>(this);
+   }
 
-    public JBlissPattern(JBlissPattern other) {
-        super(other);
-    }
+   public JBlissPattern(JBlissPattern other) {
+      super(other);
+      jblissGraph = new Graph<>(this);
+   }
 
-    @Override
-    public void init(Configuration config) {
-        super.init(config);
-        jblissGraph = new Graph<>(this);
-    }
+   @Override
+   public void init(Configuration config) {
+      super.init(config);
+   }
 
-    @Override
-    public Pattern copy() {
-        Pattern pattern = new JBlissPattern(this);
-        pattern.init(getConfig());
-        return pattern;
-    }
+   @Override
+   public Pattern copy() {
+      Pattern pattern = new JBlissPattern(this);
+      pattern.init(getConfig());
+      return pattern;
+   }
 
-    protected class VertexPositionEquivalencesReporter implements Reporter {
-        VertexPositionEquivalences equivalences;
+   protected class VertexPositionEquivalencesReporter implements Reporter {
+      VertexPositionEquivalences equivalences;
 
-        public VertexPositionEquivalencesReporter(VertexPositionEquivalences equivalences) {
-            this.equivalences = equivalences;
-        }
+      public VertexPositionEquivalencesReporter(VertexPositionEquivalences equivalences) {
+         this.equivalences = equivalences;
+      }
 
-        @Override
-        public void report(HashIntIntMap generator, Object user_param) {
-            IntIntCursor generatorCursor = generator.cursor();
+      @Override
+      public void report(HashIntIntMap generator, Object user_param) {
+         IntIntCursor generatorCursor = generator.cursor();
 
-            while (generatorCursor.moveNext()) {
-                int oldPos = generatorCursor.key();
-                int newPos = generatorCursor.value();
+         while (generatorCursor.moveNext()) {
+            int oldPos = generatorCursor.key();
+            int newPos = generatorCursor.value();
 
-                equivalences.addEquivalence(oldPos, newPos);
-                //equivalences.addEquivalence(newPos, oldPos);
-            }
-        }
-    }
+            equivalences.addEquivalence(oldPos, newPos);
+            //equivalences.addEquivalence(newPos, oldPos);
+         }
+      }
+   }
 
-    protected class EdgePositionEquivalencesReporter implements Reporter {
-        EdgePositionEquivalences equivalences;
+   @Override
+   protected void fillVertexPositionEquivalences(VertexPositionEquivalences vertexPositionEquivalences, IntArrayList vertexLabels, IntArrayList edgeLabels) {
+      int numVertices = getNumberOfVertices();
+      int numEdges = getNumberOfEdges();
+      for (int i = 0; i < numVertices; ++i) {
+         vertexPositionEquivalences.addEquivalence(i, i);
+      }
 
-        public EdgePositionEquivalencesReporter(EdgePositionEquivalences equivalences) {
-            this.equivalences = equivalences;
-        }
-
-        @Override
-        public void report(HashIntIntMap generator, Object user_param) {
-            IntIntCursor generatorCursor = generator.cursor();
-
-            while (generatorCursor.moveNext()) {
-                int oldPos = generatorCursor.key();
-                int newPos = generatorCursor.value();
-
-                equivalences.addEquivalence(oldPos, newPos);
-                //equivalences.addEquivalence(newPos, oldPos);
-            }
-        }
-    }
-
-    @Override
-    protected void fillVertexPositionEquivalences(VertexPositionEquivalences vertexPositionEquivalences, IntArrayList vertexLabels) {
-        for (int i = 0; i < getNumberOfVertices(); ++i) {
+      if (edgeLabels != null) {
+         for (int i = numVertices; i < numVertices + numEdges; ++i) {
             vertexPositionEquivalences.addEquivalence(i, i);
-        }
+         }
+      }
 
-        VertexPositionEquivalencesReporter reporter = new VertexPositionEquivalencesReporter(vertexPositionEquivalences);
-        jblissGraph.findAutomorphisms(reporter, null, vertexLabels);
-        vertexPositionEquivalences.propagateEquivalences();
-    }
-    
-    @Override
-    protected void fillEdgePositionEquivalences(EdgePositionEquivalences edgePositionEquivalences, IntArrayList edgeLabels) {
-        for (int i = 0; i < getNumberOfEdges(); ++i) {
-            edgePositionEquivalences.addEquivalence(i, i);
-        }
+      VertexPositionEquivalencesReporter reporter = new VertexPositionEquivalencesReporter(vertexPositionEquivalences);
+      jblissGraph.findAutomorphisms(reporter, null, vertexLabels, edgeLabels);
+      vertexPositionEquivalences.propagateEquivalences();
+   }
 
-        EdgePositionEquivalencesReporter reporter = new EdgePositionEquivalencesReporter(edgePositionEquivalences);
-        jblissGraph.findEdgeAutomorphisms(reporter, null, edgeLabels);
-        edgePositionEquivalences.propagateEquivalences();
-    }
+   @Override
+   protected void fillCanonicalLabelling(IntIntMap canonicalLabelling) {
+      jblissGraph.fillCanonicalLabeling(canonicalLabelling);
+   }
 
-    @Override
-    protected void fillCanonicalLabelling(IntIntMap canonicalLabelling) {
-        jblissGraph.fillCanonicalLabeling(canonicalLabelling);
-    }
+   @Override
+   public boolean turnCanonical() {
+      dirtyVertexPositionEquivalences = true;
 
-    @Override
-    public boolean turnCanonical() {
-        dirtyVertexPositionEquivalences = true;
+      return super.turnCanonical();
+   }
 
-        return super.turnCanonical();
-    }
-
-    @Override
-    public String toString() {
-       return "JBlissPattern{jblissGraph=" + jblissGraph + " " +
-          super.toString() + "}";
-    }
+   @Override
+   public String toString() {
+      return "bliss{" + super.toString() + "}";
+   }
 }

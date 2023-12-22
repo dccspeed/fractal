@@ -1,18 +1,18 @@
 package br.ufmg.cs.systems.fractal.misc
 
 import br.ufmg.cs.systems.fractal.util.Logging
-import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.graphx.{Edge, Graph, GraphLoader}
+import org.apache.spark.{SparkConf, SparkContext}
 
 class TriangleCount(sc: SparkContext, inputFile: String, numPartitions: Int,
     inputType: String) extends Logging {
 
-  def run {
+  def run() = {
     val start = System.currentTimeMillis
     val graph = TriangleCount.loadGraph (sc, inputFile, inputType,
       numPartitions)
     val triCounts = graph.triangleCount()
-    val numTriangles = triCounts.vertices.values.sum / 3
+    val numTriangles = triCounts.vertices.values.sum() / 3
     val elapsed = System.currentTimeMillis - start
     logInfo (s"TriangleCount numTriangles=${numTriangles} elapsed=${elapsed}")
   }
@@ -58,11 +58,11 @@ object TriangleCount {
 
   }
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]) = {
     val conf = new SparkConf().setAppName("TriangleCount")
     val sc = new SparkContext(conf)
     sc.setLogLevel ("INFO")
-    new TriangleCount (sc, args(0), args(1).toInt, args(2)).run
+    new TriangleCount (sc, args(0), args(1).toInt, args(2)).run()
     sc.stop()
   }
 }

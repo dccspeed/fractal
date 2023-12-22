@@ -3,18 +3,40 @@ package br.ufmg.cs.systems.fractal.pattern;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
+import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
 import com.koloboke.collect.map.IntIntMap;
-import org.apache.hadoop.io.Writable;
+import com.koloboke.collect.set.ObjSet;
 
 import java.io.Externalizable;
-import java.io.IOException;
 
-public interface Pattern extends Writable, Externalizable {
+public interface Pattern extends Externalizable {
     Pattern copy();
 
-    void init(Configuration config);
-    
-    void reset();
+   ObjArrayList<IntArrayList> getVertexPosToEdgeIndices();
+
+   void setVertexLabels(int... vlabels);
+
+   int getFirstVertexLabel();
+
+   void addVertexStandalone(int vlabel);
+
+   void addVertexStandalone();
+
+   void init(Configuration config);
+
+   void removeLastNEdges(int n);
+
+   void removeLastNVertices(int n);
+
+   IntArrayList getVertexLabels(boolean shouldConsiderVertexLabels);
+
+   IntArrayList getEdgeLabels(boolean shouldConsiderEdgeLabels);
+
+   PatternExplorationPlan explorationPlan();
+
+   void setExplorationPlan(PatternExplorationPlan explorationPlan);
+
+   void reset();
 
     void setSubgraph(Subgraph subgraph);
 
@@ -24,7 +46,11 @@ public interface Pattern extends Writable, Externalizable {
 
     boolean addEdge(PatternEdge patternEdge);
 
-    int getNumberOfEdges();
+   void addEdgeStandalone(PatternEdge edge);
+
+   int getNumberOfEdges();
+
+    boolean relabel(IntIntMap labeling);
 
     boolean turnCanonical();
 
@@ -34,27 +60,42 @@ public interface Pattern extends Writable, Externalizable {
 
     VertexPositionEquivalences getVertexPositionEquivalences();
     
-    VertexPositionEquivalences getVertexPositionEquivalences(IntArrayList vertexLabels);
-    
-    EdgePositionEquivalences getEdgePositionEquivalences();
-    
-    EdgePositionEquivalences getEdgePositionEquivalences(IntArrayList edgeLabels);
+    VertexPositionEquivalences getVertexPositionEquivalences(IntArrayList vertexLabels, IntArrayList edgeLabels);
 
-    IntIntMap getCanonicalLabeling();
+   IntIntMap getCanonicalLabeling();
 
-    public boolean testSymmetryBreakerExt(Subgraph subgraph, int targetVertex);
+   ObjArrayList<IntArrayList> vsymmetryBreakerUpperBound();
 
-    public boolean testSymmetryBreakerPos(Subgraph subgraph, int pos);
-    
-    public int sbLowerBound(Subgraph subgraph, int pos);
+   ObjArrayList<IntArrayList> vsymmetryBreakerLowerBound();
 
-    public void readSymmetryBreakingConditions(String path) throws IOException;
-    
-    public Configuration getConfig();
+   void updateSymmetryBreaker();
 
-    String toOutputString();
-   
-    ////////
-    boolean equals(Object o, int upTo);
+   void updateSymmetryBreakerVertexUnlabeled();
+
+   int sbUpperBound(Subgraph subgraph, int pos);
+
+   int sbLowerBound(Subgraph subgraph, int pos);
+
+   boolean sbValidOrdering(IntArrayList ordering);
+
+   boolean connectedValidOrdering(IntArrayList ordering);
+
+   void updateSymmetryBreaker(IntArrayList ordering);
+
+   boolean induced();
+
+    void setInduced(boolean induced);
+
+   boolean vertexLabeled();
+
+   boolean edgeLabeled();
+
+   void setVertexLabeled(boolean vertexLabeled);
+
+   void setEdgeLabeled(boolean edgeLabeled);
+
+   Configuration getConfig();
+
+   boolean equals(Object o, int upTo);
     
 }

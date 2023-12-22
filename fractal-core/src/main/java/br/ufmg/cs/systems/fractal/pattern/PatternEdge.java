@@ -1,204 +1,189 @@
 package br.ufmg.cs.systems.fractal.pattern;
 
-import br.ufmg.cs.systems.fractal.graph.Edge;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
-import br.ufmg.cs.systems.fractal.graph.Vertex;
-import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgePool;
-import org.apache.hadoop.io.Writable;
 
-import java.io.DataInput;
-import java.io.DataOutput;
-import java.io.IOException;
+import java.io.*;
 
-public class PatternEdge implements Comparable<PatternEdge>, Writable {
+public class PatternEdge implements Comparable<PatternEdge>, Externalizable {
 
-    /// protected MainGraph mainGraph;
-    private int srcPos;
-    private int srcLabel;
-    private int destPos;
-    private int destLabel;
+   /// protected MainGraph mainGraph;
+   private int srcPos;
+   private int srcLabel;
+   private int destPos;
+   private int destLabel;
 
-    public PatternEdge() {
-        this(null, -1, -1, -1, -1);
-    }
+   public PatternEdge() {
+      this(null, -1, -1, -1, -1);
+   }
 
-    public PatternEdge(PatternEdge edge) {
-        setFromOther(edge);
-    }
+   public PatternEdge(PatternEdge edge) {
+      setFromOther(edge);
+   }
 
-    public PatternEdge(MainGraph mainGraph,
-          int srcPos, int srcLabel, int destPos, int destLabel) {
-        // this.mainGraph = mainGraph;
-        this.srcPos = srcPos;
-        this.srcLabel = srcLabel;
-        this.destPos = destPos;
-        this.destLabel = destLabel;
-    }
+   public PatternEdge(MainGraph mainGraph,
+                      int srcPos, int srcLabel, int destPos, int destLabel) {
+      this.srcPos = srcPos;
+      this.srcLabel = srcLabel;
+      this.destPos = destPos;
+      this.destLabel = destLabel;
+   }
 
-    public void reclaim() {
-        PatternEdgePool.instance(false).reclaimObject(this);
-    }
+   public void setFromOther(PatternEdge edge) {
+      setSrcPos(edge.getSrcPos());
+      setSrcLabel(edge.getSrcLabel());
 
-    public void setFromOther(PatternEdge edge) {
-        // this.mainGraph = edge.mainGraph;
-        setSrcPos(edge.getSrcPos());
-        setSrcLabel(edge.getSrcLabel());
+      setDestPos(edge.getDestPos());
+      setDestLabel(edge.getDestLabel());
+   }
 
-        setDestPos(edge.getDestPos());
-        setDestLabel(edge.getDestLabel());
-    }
+   public void setFromEdge(MainGraph mainGraph, int edgeId, int srcPos, int dstPos, int srcId) {
+      int srcVertexId = mainGraph.edgeSrc(edgeId);
+      int dstVertexId = mainGraph.edgeDst(edgeId);
 
-    public void setFromEdge(MainGraph mainGraph, Edge edge, int srcPos, int dstPos) {
-        setFromEdge(mainGraph, edge, srcPos, dstPos, edge.getSourceId());
-    }
+      int srcVertexLabel = mainGraph.firstVertexLabel(srcVertexId);
+      int dstVertexLabel = mainGraph.firstVertexLabel(dstVertexId);
 
-    public void setFromEdge(MainGraph mainGraph, Edge edge, int srcPos, int dstPos, int srcId) {
-        // this.mainGraph = mainGraph;
+      setSrcLabel(srcVertexLabel);
+      setDestLabel(dstVertexLabel);
 
-        int srcVertexId = edge.getSourceId();
-        int dstVertexId = edge.getDestinationId();
+      if (srcId != srcVertexId) {
+         invert();
+      }
 
-        Vertex srcVertex = mainGraph.getVertex(srcVertexId);
-        Vertex dstVertex = mainGraph.getVertex(dstVertexId);
+      setSrcPos(srcPos);
+      setDestPos(dstPos);
+   }
 
-        setSrcLabel(srcVertex.getVertexLabel());
-        setDestLabel(dstVertex.getVertexLabel());
+   public void invert() {
+      int tmp = srcPos;
+      srcPos = destPos;
+      destPos = tmp;
 
-        if (srcId != srcVertexId) {
-            invert();
-        }
+      tmp = srcLabel;
+      srcLabel = destLabel;
+      destLabel = tmp;
+   }
 
-        setSrcPos(srcPos);
-        setDestPos(dstPos);
-    }
+   public int getSrcPos() {
+      return srcPos;
+   }
 
-    public void invert() {
-        int tmp = srcPos;
-        srcPos = destPos;
-        destPos = tmp;
+   public void setSrcPos(int srcPos) {
+      this.srcPos = srcPos;
+   }
 
-        tmp = srcLabel;
-        srcLabel = destLabel;
-        destLabel = tmp;
-    }
+   public int getSrcLabel() {
+      return srcLabel;
+   }
 
-    public int getSrcPos() {
-        return srcPos;
-    }
+   public void setSrcLabel(int srcLabel) {
+      this.srcLabel = srcLabel;
+   }
 
-    public void setSrcPos(int srcPos) {
-        this.srcPos = srcPos;
-    }
+   public int getDestPos() {
+      return destPos;
+   }
 
-    public int getSrcLabel() {
-        return srcLabel;
-    }
+   public void setDestPos(int destPos) {
+      this.destPos = destPos;
+   }
 
-    public void setSrcLabel(int srcLabel) {
-        this.srcLabel = srcLabel;
-    }
+   public int getDestLabel() {
+      return destLabel;
+   }
 
-    public int getDestPos() {
-        return destPos;
-    }
+   public void setDestLabel(int destLabel) {
+      this.destLabel = destLabel;
+   }
 
-    public void setDestPos(int destPos) {
-        this.destPos = destPos;
-    }
+   public int getLabel() {
+      return 0;
+   }
 
-    public int getDestLabel() {
-        return destLabel;
-    }
+   public String toString() {
+      return ("(" + srcPos + "," + srcLabel + "-" + destPos + "," + destLabel + ")");
+   }
 
-    public void setDestLabel(int destLabel) {
-        this.destLabel = destLabel;
-    }
+   public void write(DataOutput out) throws IOException {
+      out.writeInt(this.srcPos);
+      out.writeInt(this.srcLabel);
+      out.writeInt(this.destPos);
+      out.writeInt(this.destLabel);
+   }
 
-    public int getLabel() {
-       int firstLabel, secondLabel;
-       if (srcLabel < destLabel) {
-          firstLabel = srcLabel;
-          secondLabel = destLabel;
-       } else {
-          firstLabel = destLabel;
-          secondLabel = srcLabel;
-       }
+   public void readFields(DataInput in) throws IOException {
+      this.srcPos = in.readInt();
+      this.srcLabel = in.readInt();
+      this.destPos = in.readInt();
+      this.destLabel = in.readInt();
+   }
 
-       return 10 * firstLabel + secondLabel;
-    }
+   @Override
+   public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
 
-    public String toString() {
-        return ("[" + srcPos + "," + srcLabel + "-" + destPos + "," + destLabel + "]");
-    }
+      PatternEdge that = (PatternEdge) o;
 
-    @Override
-    public void write(DataOutput out) throws IOException {
-        out.writeInt(this.srcPos);
-        out.writeInt(this.srcLabel);
-        out.writeInt(this.destPos);
-        out.writeInt(this.destLabel);
-    }
+      if (srcPos != that.srcPos) return false;
+      if (srcLabel != that.srcLabel) return false;
+      if (destPos != that.destPos) return false;
+      if (destLabel != that.destLabel) return false;
+      return true;
+   }
 
-    @Override
-    public void readFields(DataInput in) throws IOException {
-        this.srcPos = in.readInt();
-        this.srcLabel = in.readInt();
-        this.destPos = in.readInt();
-        this.destLabel = in.readInt();
-    }
+   @Override
+   public int hashCode() {
+      int result = srcPos;
+      result = 31 * result + srcLabel;
+      result = 31 * result + destPos;
+      result = 31 * result + destLabel;
+      return result;
+   }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+   @Override
+   public int compareTo(PatternEdge o) {
+      if (equals(o)) {
+         return 0;
+      }
 
-        PatternEdge that = (PatternEdge) o;
+      int result;
 
-        if (srcPos != that.srcPos) return false;
-        if (srcLabel != that.srcLabel) return false;
-        if (destPos != that.destPos) return false;
-        if (destLabel != that.destLabel) return false;
-        return true;
-        //return isForward == that.isForward;
+      boolean srcPosEqual = this.srcPos == o.getSrcPos();
+      boolean dstPosEqual = this.destPos == o.getDestPos();
 
-    }
+      if (srcPosEqual && dstPosEqual) {
+         if (this.srcLabel == o.getSrcLabel()) {
+            result = Integer.compare(destLabel, o.getDestLabel());
+         }
+         else {
+            result = Integer.compare(srcLabel, o.getSrcLabel());
+         }
+      }
+      else if (dstPosEqual) {
+         result = -1 * Integer.compare(srcPos, o.getSrcPos());
+      }
+      else {
+         result = Integer.compare(destPos, o.getDestPos());
+      }
 
-    @Override
-    public int hashCode() {
-        int result = srcPos;
-        result = 31 * result + srcLabel;
-        result = 31 * result + destPos;
-        result = 31 * result + destLabel;
-        //result = 31 * result + (isForward ? 1 : 0);
-        return result;
-    }
+      return result;
+   }
 
-    @Override
-    public int compareTo(PatternEdge o) {
-        if (equals(o)) {
-            return 0;
-        }
+   @Override
+   public void writeExternal(ObjectOutput objectOutput) throws IOException {
+      objectOutput.writeInt(srcPos);
+      objectOutput.writeInt(srcLabel);
+      objectOutput.writeInt(destPos);
+      objectOutput.writeInt(destLabel);
+   }
 
-        int result;
-
-        boolean srcPosEqual = this.srcPos == o.getSrcPos();
-        boolean dstPosEqual = this.destPos == o.getDestPos();
-
-        if (srcPosEqual && dstPosEqual) {
-            if (this.srcLabel == o.getSrcLabel()) {
-                result = Integer.compare(destLabel, o.getDestLabel());
-            }
-            else {
-                result = Integer.compare(srcLabel, o.getSrcLabel());
-            }
-        }
-        else if (dstPosEqual) {
-            result = -1 * Integer.compare(srcPos, o.getSrcPos());
-        }
-        else {
-            result = Integer.compare(destPos, o.getDestPos());
-        }
-
-        return result;
-    }
+   @Override
+   public void readExternal(ObjectInput objectInput)
+           throws IOException, ClassNotFoundException {
+      srcPos = objectInput.readInt();
+      srcLabel = objectInput.readInt();
+      destPos = objectInput.readInt();
+      destLabel = objectInput.readInt();
+   }
 }

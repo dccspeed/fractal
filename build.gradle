@@ -6,25 +6,21 @@
  * user guide available at https://docs.gradle.org/4.2.1/userguide/java_library_plugin.html
  */
 
-version="SPARK-2.2.0"
+version="SPARK-3.5.0"
 
 buildscript {
    repositories {
       mavenLocal()
       mavenCentral()
-      jcenter()
       maven { url "https://plugins.gradle.org/m2/" }
-   }
-   dependencies {
-      classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
    }
 }
 
 apply plugin: 'java-library'
 apply plugin: 'java'
 apply plugin: 'scala'
-apply plugin: "com.github.johnrengelman.shadow"
- 
+apply plugin: 'application'
+
 repositories {
     jcenter()
     mavenCentral()
@@ -32,55 +28,33 @@ repositories {
 }
 
 dependencies {
-    compile project(':fractal-core')
-    compile project(':fractal-apps')
-}
-
-shadowJar {
-   zip64 true
-   transform(com.github.jengelman.gradle.plugins.shadow.transformers.AppendingTransformer.class) {
-      resource = "reference.conf"
-   }
+    compileOnly project(':fractal-core')
+    compileOnly project(':fractal-apps')
 }
 
 task scalaTest(dependsOn: ['testClasses'], type: JavaExec) {
-  environment "SPARK_SCALA_VERSION", "2.11"
+  environment "SPARK_SCALA_VERSION", "2.13"
   main = 'org.scalatest.tools.Runner'
   args = ['-R', 'build/classes/scala/test', '-o']
   classpath = sourceSets.test.runtimeClasspath
 }
 
-test.dependsOn scalaTest
-
-task assemble(dependsOn: ['shadowJar'], overwrite: true)
-
-//test {
-//    testLogging.showStandardStreams = true
-//    jvmArgs "-javaagent:${projectDir}/lib/aspectjweaver-1.8.10.jar"
-//}
-
+application {
+    applicationDefaultJvmArgs = ['-Xmx10g']
+    mainClassName = project.hasProperty("mainClass") ? getProperty("mainClass") : "NULL"
+}
 
 subprojects {
    apply plugin: 'java-library'
    apply plugin: 'java'
    apply plugin: 'scala'
-   apply plugin: "com.github.johnrengelman.shadow"
 
    task scalaTest(dependsOn: ['testClasses'], type: JavaExec) {
-      environment "SPARK_SCALA_VERSION", "2.11"
+      environment "SPARK_SCALA_VERSION", "2.13"
       main = 'org.scalatest.tools.Runner'
       args = ['-R', 'build/classes/scala/test', '-o']
       classpath = sourceSets.test.runtimeClasspath
    }
 
-   shadowJar {
-      zip64 true
-      transform(com.github.jengelman.gradle.plugins.shadow.transformers.AppendingTransformer.class) {
-         resource = "reference.conf"
-      }
-   }
-
    test.dependsOn scalaTest
-
-   task assemble(dependsOn: ['test', 'shadowJar'], overwrite: true)
 }

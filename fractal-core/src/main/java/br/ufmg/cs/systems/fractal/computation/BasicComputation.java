@@ -1,242 +1,282 @@
 package br.ufmg.cs.systems.fractal.computation;
 
-import br.ufmg.cs.systems.fractal.aggregation.AggregationStorage;
+import br.ufmg.cs.systems.fractal.aggregation.SubgraphAggregation;
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.graph.MainGraph;
 import br.ufmg.cs.systems.fractal.pattern.Pattern;
 import br.ufmg.cs.systems.fractal.subgraph.Subgraph;
-import com.koloboke.collect.IntCollection;
-import org.apache.hadoop.io.Writable;
+import br.ufmg.cs.systems.fractal.util.ReflectionSerializationUtils;
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import org.apache.log4j.Logger;
 
 public abstract class BasicComputation<S extends Subgraph>
-      implements Computation<S>, java.io.Serializable {
-    
-    private static final Logger LOG = Logger.getLogger(BasicComputation.class);
+        implements Computation<S> {
 
-    private transient int depth;
-    
-    private transient SubgraphEnumerator<S> bypassIter;
-    
-    private transient SubgraphEnumerator<S> subgraphEnumerator;
+   private static final Logger LOG = Logger.getLogger(BasicComputation.class);
 
-    private transient CommonExecutionEngine<S> executionEngine;
-    private transient MainGraph mainGraph;
-    private transient Configuration configuration;
+   protected transient int depth;
 
-  @Override
-    public final void setExecutionEngine(
-          CommonExecutionEngine<S> executionEngine) {
-        this.executionEngine = executionEngine;
-    }
+   protected transient SubgraphEnumerator<S> subgraphEnumerator;
+   protected transient S subgraph;
 
-    @Override
-    public final CommonExecutionEngine<S> getExecutionEngine() {
-       return this.executionEngine;
-    }
+   protected transient ExecutionEngine<S> executionEngine;
+   protected transient MainGraph mainGraph;
+   protected transient Configuration configuration;
+   protected transient Computation<S> nextComputation;
+   protected transient Computation<S> previousComputation;
+   protected transient Computation<S> lastComputation;
 
-    public MainGraph getMainGraph() {
-        return mainGraph;
-    }
+   // basic counters
+   private transient long extensionUniqueCandidates;
+   private transient long expansionCandidates;
+   private transient long canonicalSubgraphs;
+   private transient long validSubgraphs;
+   private transient long internalWorkSteals;
+   private transient long externalWorkSteals;
+   private transient boolean forcedTermination;
 
-    @Override
-    public Configuration getConfig() {
-        return configuration;
-    }
+   private transient boolean active;
 
-    @Override
-    public void init(Configuration<S> config) {
-        configuration = config;
-        mainGraph = configuration.getMainGraph();
+   @Override
+   public void setForcedTermination(boolean forcedTermination) {
+      this.forcedTermination = forcedTermination;
+   }
 
-        // subgraph enumerator used to bypass a computation depth, i.e.,
-        // without subgraph expansion
-        bypassIter = new SubgraphEnumerator<S>() {
-           private boolean hasNext;
+   @Override
+   public boolean getForcedTermination() {
+      return this.forcedTermination;
+   }
 
-           @Override
-           public synchronized SubgraphEnumerator<S> set(
-                   Computation<S> computation, S subgraph) {
-              this.computation = computation;
-              this.subgraph = subgraph;
-              this.hasNext = true;
-              return this;
-           }
+   @Override
+   public void addCanonicalSubgraphs(long inc) {
+      this.canonicalSubgraphs += inc;
+   }
 
-           @Override
-           public synchronized SubgraphEnumerator<S> set(IntCollection wordIds) {
-             this.wordIds = wordIds;
-             return this;
-           }
+   @Override
+   public void addExpansionNeighborhood(IntArrayList extensionCandidates) {
+      this.expansionCandidates +=
+              subgraph.computeExtensionCost(extensionCandidates);
+   }
 
-           @Override
-           public synchronized SubgraphEnumerator<S> forkEnumerator(Computation<S> computation) {
-             return this;
-           }
+   @Override
+   public long getNumUniqueExtensions() {
+      return extensionUniqueCandidates;
+   }
 
-           @Override
-           public boolean isActive() {
-             return false;
-           }
+   @Override
+   public void addExtensionUniqueCandidates(long inc) {
+      this.extensionUniqueCandidates += inc;
+   }
 
-           @Override
-           public boolean hasNext() {
-              return hasNext;
-           }
+   @Override
+   public void addValidSubgraphs(long inc) {
+      this.validSubgraphs += inc;
+   }
 
-           @Override
-           public S next() {
-              hasNext = false;
-              return subgraph;
-           }
+   @Override
+   public long getInternalWorkSteals() {
+      return internalWorkSteals;
+   }
 
-           @Override
-           public String toString() {
-             return "emptyEnumerator";
-           }
-        };
+   @Override
+   public long getExternalWorkSteals() {
+      return externalWorkSteals;
+   }
 
-        subgraphEnumerator = configuration.createSubgraphEnumerator(shouldBypass());
-    }
+   @Override
+   public void addInternalWorkSteals(long inc) {
+      this.internalWorkSteals += inc;
+   }
 
-    @Override
-    public void initAggregations(Configuration<S> config) {
-        configuration = config;
-    }
+   @Override
+   public void addExternalWorkSteals(long inc) {
+      this.externalWorkSteals += inc;
+   }
 
-    @Override
-    public final long compute(S subgraph) {
-      subgraphEnumerator.set(this, subgraph);
-      return processCompute(expandCompute(subgraph));
-    }
+   @Override
+   public void compute() {
+      subgraphEnumerator.computeExtensions_EXTENSION_PRIMITIVE();
+      processCompute(subgraphEnumerator);
+   }
 
-    @Override
-    public Computation<S> nextComputation() {
-       return null;
-    }
+   @Override
+   public boolean filter_FILTERING_PRIMITIVE(S subgraph) {
+      return true;
+   }
 
-    @Override
-    public SubgraphEnumerator<S> expandCompute(S subgraph) {
-      subgraphEnumerator.computeExtensions();
-      return subgraphEnumerator;
-    }
+   @Override
+   public long getNumCanonicalExtensions() {
+      return canonicalSubgraphs;
+   }
 
-    @Override
-    public boolean shouldBypass() {
-       return false;
-    }
+   @Override
+   public Configuration getConfig() {
+      return configuration;
+   }
 
-    @Override
-    public IntCollection getPossibleExtensions(S subgraph) {
-       return subgraph.computeExtensions(this);
-    }
+   @Override
+   public final int getDepth() {
+      return this.depth;
+   }
 
-    @Override
-    public boolean filter(S existingSubgraph, int newWord) {
-        return existingSubgraph.isCanonicalSubgraphWithWord(newWord);
-    }
-    
-    @Override
-    public <K extends Writable, V extends Writable>
-    AggregationStorage<K, V> readAggregation(String name) {
-        return executionEngine.getAggregatedValue(name);
-    }
-    
-    @Override
-    public <K extends Writable, V extends Writable>
-    AggregationStorage<K, V> getAggregationStorage(String name) {
-        return executionEngine.getAggregationStorage(name);
-    }
+   @Override
+   public final ExecutionEngine<S> getExecutionEngine() {
+      return this.executionEngine;
+   }
 
-    @Override
-    public <K extends Writable, V extends Writable>
-    void map(String name, K key, V value) {
-        executionEngine.map(name, key, value);
-    }
+   @Override
+   public final void setExecutionEngine(ExecutionEngine<S> executionEngine) {
+      this.executionEngine = executionEngine;
+   }
 
-    @Override
-    public int getPartitionId() {
-        return executionEngine.getPartitionId();
-    }
+   @Override
+   public long getNumExtensions() {
+      return expansionCandidates;
+   }
 
-    @Override
-    public int getNumberPartitions() {
-        return executionEngine.getNumberPartitions();
-    }
+   @Override
+   public int getNumberPartitions() {
+      return executionEngine.numPartitions();
+   }
 
-    @Override
-    public final int getStep() {
-        return (int) executionEngine.getStep();
-    }
+   public int getPartitionId() {
+      return executionEngine.getPartitionId();
+   }
 
-    @Override
-    public void process(S subgraph) {
-       // Empty by default
-    }
+   @Override
+   public Pattern getPattern() {
+      return null;
+   }
 
-    @Override
-    public boolean filter(S subgraph) {
-        return true;
-    }
+   @Override
+   public void setPattern(Pattern pattern) {
 
-    @Override
-    public String computationLabel() {
-       return null;
-    }
+   }
 
-  @Override
-    public SubgraphEnumerator<S> getSubgraphEnumerator() {
-       return this.subgraphEnumerator;
-    }
+   @Override
+   public final int getStep() {
+      return executionEngine.getStep();
+   }
 
-    @Override
-    public SubgraphEnumerator<S> forkEnumerator(Computation<S> computation) {
-       Computation<S> curr = this;
-       Computation<S> currComp = computation;
-       SubgraphEnumerator<S> consumer = null;
+   @Override
+   public SubgraphAggregation<S> getSubgraphAggregation() {
+      if (executionEngine != null) {
+         return executionEngine.getSubgraphAggregation();
+      } else {
+         return null;
+      }
+   }
 
-       while (curr != null && curr.nextComputation() != null) {
-          if (curr.getSubgraphEnumerator() != null &&
-                curr.getSubgraphEnumerator().isActive()) {
-             consumer = curr.getSubgraphEnumerator().forkEnumerator(currComp);
-             if (consumer.hasNext()) {
-                return consumer;
-             }
-          }
-          curr = curr.nextComputation();
-          currComp = currComp.nextComputation();
+   @Override
+   public SubgraphEnumerator<S> getSubgraphEnumerator() {
+      return this.subgraphEnumerator;
+   }
+
+   @Override
+   public long getNumValidExtensions() {
+      return validSubgraphs;
+   }
+
+   @Override
+   public void init(Configuration config) {
+      active = true;
+      configuration = config;
+      mainGraph = configuration.getMainGraph();
+      subgraphEnumerator = ReflectionSerializationUtils.newInstance(
+              getSubgraphEnumeratorClass()
+      );
+      subgraphEnumerator.init(config, this);
+      nextComputation = nextComputation();
+      lastComputation = this;
+      while (lastComputation.nextComputation() != null) {
+         Computation<S> currNextComputation = lastComputation.nextComputation();
+         currNextComputation.setPreviousComputation(lastComputation);
+         lastComputation = currNextComputation;
+      }
+   }
+
+   @Override
+   public void init(ExecutionEngine<S> engine, Configuration config) {
+      S subgraph = (S) config.createSubgraph(getSubgraphClass());
+
+      Computation<S> currComp = this;
+      while (currComp != null) {
+         currComp.setSubgraph(subgraph);
+         currComp.setExecutionEngine(engine);
+         currComp.init(config);
+         currComp.getSubgraphEnumerator().setComputation(currComp);
+         currComp.getSubgraphEnumerator().setSubgraph(subgraph);
+         currComp.initAggregations(config);
+         currComp = currComp.nextComputation();
       }
 
+      setDepth(0);
+   }
+
+   @Override
+   public void initAggregations(Configuration config) {
+      configuration = config;
+   }
+
+   @Override
+   public Computation<S> lastComputation() {
+      return lastComputation;
+   }
+
+   @Override
+   public Computation<S> nextComputation() {
       return null;
-    }
+   }
 
-    @Override
-    public void finish() {
-    }
+   @Override
+   public final Computation<S> previousComputation() {
+      return previousComputation;
+   }
 
-    @Override
-    public final void output(S subgraph) {
-       executionEngine.output(subgraph);
-    }
+   @Override
+   public final void setPreviousComputation(Computation<S> previousComputation) {
+      this.previousComputation = previousComputation;
+   }
 
-    @Override
-    public final int setDepth(int depth) {
-       this.depth = depth;
-       Computation<S> nextComp = nextComputation();
-       if (nextComp != null) {
-          return 1 + nextComp.setDepth(this.depth + 1);
-       } else {
-          return 1;
-       }
-    }
+   @Override
+   public void process(S subgraph) {
+      // Empty by default
+   }
 
-    @Override
-    public final int getDepth() {
-       return this.depth;
-    }
+   @Override
+   public final int setDepth(int depth) {
+      this.depth = depth;
+      Computation<S> nextComp = nextComputation();
+      if (nextComp != null) {
+         return 1 + nextComp.setDepth(this.depth + 1);
+      } else {
+         return 1;
+      }
+   }
 
-  @Override
-    public Pattern getPattern() {
-       return null;
-    }
+   @Override
+   public void setSubgraph(S subgraph) {
+      this.subgraph = subgraph;
+   }
+
+   @Override
+   public void terminate() {
+      setForcedTermination(true);
+      this.active = false;
+      getSubgraphEnumerator().terminate();
+   }
+
+   @Override
+   public boolean isActive() {
+      return active;
+   }
+
+   public MainGraph getMainGraph() {
+      return mainGraph;
+   }
+
+   @Override
+   public Class<? extends SubgraphEnumerator<S>> getSubgraphEnumeratorClass() {
+      return null;
+   }
 }

@@ -243,7 +243,7 @@ class FractalContext(sc: SparkContext, logLevel: String = "warn")
       textFile(path, graphClass = classOf[graph.UnlabeledMainGraph].getCanonicalName)
    }
 
-   8yy/**
+   /**
     * Create vertex labeled graph from adjacency lists
     * @param path graph directory path
     * @return fractal graph

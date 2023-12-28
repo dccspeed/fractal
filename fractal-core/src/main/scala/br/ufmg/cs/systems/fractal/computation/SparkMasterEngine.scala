@@ -70,7 +70,11 @@ trait SparkMasterEngine[S <: Subgraph] extends Logging {
 
    def intIntRDD
    (intIngSubgraphAggregation: IntIntSubgraphAggregation[S])
-   : RDD[(Int,Int)]
+   : RDD[(Int, Int)]
+
+   def objRDD[K <: Serializable : ClassTag]
+   (objSubgraphAggregation: ObjSubgraphAggregation[S, K])
+   : RDD[K]
 }
 
 object SparkMasterEngine {

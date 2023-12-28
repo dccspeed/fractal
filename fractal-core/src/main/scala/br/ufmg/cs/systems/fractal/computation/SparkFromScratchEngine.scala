@@ -331,6 +331,39 @@ class SparkFromScratchEngine[S <: Subgraph]
     * This call starts this engine computation and aggregates the valid
     * subgraphs by key/value, where both keys and values are objects
     *
+    * @param objSubgraphAggregation
+    * @tparam K object type parameter (must be serializable)
+    * @return an iterator of K to be consumed downstream
+    */
+   override def computeAggregationObj[K <: Serializable]
+   (objSubgraphAggregation: ObjSubgraphAggregation[S, K])
+   : Iterator[K] = {
+      // initialization
+      subgraphAggregation = objSubgraphAggregation
+      objSubgraphAggregation.init(configuration)
+      init()
+      ensureExecutionContext()
+      ensureReportStatsExecutor()
+
+      // future acting as a key/value *producer* (async)
+      val computeFuture = Future(compute())(executionContext)
+
+      // iterator acting as a key/value *consumer*
+      val objIterator = new ObjIteratorConsumer[S,K](
+         objSubgraphAggregation, () => {finalizeEngine()})
+
+      // finish consumer after producer finished producing (async)
+      computeFuture.onComplete { _ =>
+         objIterator.finishIterator
+      }(executionContext)
+
+      objIterator
+   }
+
+   /**
+    * This call starts this engine computation and aggregates the valid
+    * subgraphs by key/value, where both keys and values are objects
+    *
     * @param objObjSubgraphAggregation
     * @tparam K key type parameter
     * @tparam V value type parameter

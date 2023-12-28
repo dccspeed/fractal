@@ -3,7 +3,6 @@ package br.ufmg.cs.systems.fractal
 import java.io.Serializable
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
-
 import br.ufmg.cs.systems.fractal.aggregation._
 import br.ufmg.cs.systems.fractal.callback._
 import br.ufmg.cs.systems.fractal.computation._
@@ -12,6 +11,7 @@ import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util._
 import org.apache.spark.SparkContext
+import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.rdd.RDD
 
@@ -664,6 +664,39 @@ case class Fractoid[S <: Subgraph : ClassTag]
    }
 
    /**
+    *
+    * @param objSubgraphAggregation
+    * @tparam K
+    * @return
+    */
+   def aggregationObj
+   [K <: Serializable : ClassTag]
+   (objSubgraphAggregation: ObjSubgraphAggregation[S, K])
+   : RDD[K] = {
+      val callback = subgraphAggregationCallback
+      val objRDD = withNextStepId
+         .withInitAggregations(c => callback.init(c))
+         .withProcess((s, c) => callback.apply(s, c))
+         .masterEngineImmutable
+         .objRDD[K](objSubgraphAggregation)
+
+      objRDD
+   }
+
+   def aggregationObj[K <: Serializable : ClassTag](_map: S => K): RDD[K] = {
+      val objSubgraphAggregation = new ObjSubgraphAggregation[S, K] {
+
+         override def aggregate_AGGREGATION_PRIMITIVE(subgraph: S): Unit = {
+            map(_map(subgraph))
+         }
+      }
+
+      val objRDD = aggregationObj[K](objSubgraphAggregation)
+
+      objRDD
+   }
+
+   /**
     * Aggregates valid subgraphs by mapping each valid subgraph to a
     * key/value pair and reducing the values by key. Values in this
     * function are objects. Keys in this function are canonical patterns
@@ -847,6 +880,28 @@ case class Fractoid[S <: Subgraph : ClassTag]
          .longObjRDD[V](longObjSubgraphAggregation)
 
       longObjRDD
+   }
+
+   def pythonSubgraphs(): JavaRDD[String] = {
+
+      //val clazz = Class.forName("org.apache.spark.api.python.SerDeUtil$")
+      //val javaRddClazz = Class.forName("org.apache.spark.api.java.JavaRDD")
+      //println(clazz.getDeclaredMethods.mkString(" "))
+      //val field = clazz.getField("MODULE$")
+      //field.setAccessible(true)
+      //val inst = field.get(null)
+      //val method = clazz.getDeclaredMethod("javaToPython", javaRddClazz)
+      //method.setAccessible(true)
+
+      val rdd = aggregationObj[SerializableSubgraph](s => SerializableSubgraph
+         .fromInternalSubgraph(s))
+         .map(_.toIntArray().mkString(","))
+
+      // Invoke the private method
+      //val result = method.invoke(inst, rdd.toJavaRDD())
+      //result.asInstanceOf[JavaRDD[Array[Byte]]]
+
+      rdd.toJavaRDD()
    }
 
    def explore(n: Int): Fractoid[S] = {

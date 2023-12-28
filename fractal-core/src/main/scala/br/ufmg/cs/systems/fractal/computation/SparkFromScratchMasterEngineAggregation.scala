@@ -132,6 +132,13 @@ class SparkFromScratchMasterEngineAggregation[S <: Subgraph]
          _.computeAggregationLongObj(longObjSubgraphAggregation))
    }
 
+   override def objRDD[K <: Serializable : ClassTag]
+   (objSubgraphAggregation: ObjSubgraphAggregation[S, K])
+   : RDD[K] = {
+      execEnginesRDD.flatMap(
+         _.computeAggregationObj[K](objSubgraphAggregation))
+   }
+
    override def execEnginesRDD: RDD[SparkEngine[S]] = {
       try {
          init()
@@ -200,8 +207,8 @@ object SparkFromScratchMasterEngineAggregation {
 
       // auxiliar function used to create engines with proper typing
       def createEngine[R <: Subgraph](step: Int,
-                                      configBc: Broadcast[SparkConfiguration],
-                                      computation: ComputationContainer[R])
+                                                  configBc: Broadcast[SparkConfiguration],
+                                                  computation: ComputationContainer[R])
       : SparkFromScratchEngine[R] = {
          configBc.value.initializeWithTag(isMaster = false)
          val execEngine = new SparkFromScratchEngine[R](

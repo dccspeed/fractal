@@ -39,7 +39,7 @@ steptimelimit=${steptimelimit:--1}
 jars=${jars:-""}
 uienabled=${uienabled:-false}
 app_class=${app_class:-br.ufmg.cs.systems.fractal.FractalSparkRunner}
-packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.13:2.5.23"
+packages="com.koloboke:koloboke-impl-jdk8:1.0.0,com.typesafe.akka:akka-remote_2.13:2.5.23,black.ninia:jep:4.2.0"
 extrajavaoptions="\"-Dlog4j.configuration=file://$FRACTAL_HOME/conf/log4j.properties ${PROFILER_OPTIONS}\""
 
 cmd="$SPARK_HOME/bin/spark-submit --master $spark_master \\

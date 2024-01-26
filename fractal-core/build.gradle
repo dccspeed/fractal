@@ -55,6 +55,7 @@ dependencies {
 
     implementation 'org.jgrapht:jgrapht-opt:1.4.0'
 
+    implementation 'black.ninia:jep:4.2.0'
 }
 
 sourceSets {

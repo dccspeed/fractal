@@ -1,0 +1,59 @@
+package br.ufmg.cs.systems.fractal.util;
+
+import br.ufmg.cs.systems.fractal.graph.VELabeledMainGraph;
+import org.apache.log4j.Logger;
+
+import java.io.*;
+
+public class PythonFilterRunner {
+   private static final Logger LOG =
+           Logger.getLogger(PythonFilterRunner.class);
+   private Process process;
+   private BufferedReader inputStreamReader;
+   private OutputStreamWriter outputStreamWriter;
+   public PythonFilterRunner(String filterstr) {
+      // start process
+      ProcessBuilder processBuilder = new ProcessBuilder("python", "/home" +
+              "/viniciusvdias/repos/fractal-subgraph-mapping/fractal-core/src" +
+              "/main/python/filterrunner.py", filterstr);
+      processBuilder.redirectErrorStream(false);
+
+      process = null;
+      try {
+         process = processBuilder.start();
+      } catch (IOException e) {
+         throw new RuntimeException(e);
+      }
+      inputStreamReader =
+              new BufferedReader(new InputStreamReader(process.getInputStream()));
+      outputStreamWriter = new OutputStreamWriter(process.getOutputStream());
+   }
+
+   public boolean test(String subgraphstr) {
+      // send subgraphstr to process
+      String result;
+      try {
+         outputStreamWriter.write(subgraphstr + "\n");
+         outputStreamWriter.flush();
+         // read result from process
+         result = inputStreamReader.readLine();
+      } catch (IOException e) {
+         throw new RuntimeException(e);
+      }
+
+      if (result.startsWith("true")) {
+         return true;
+      } else {
+         return false;
+      }
+   }
+
+   @Override
+   protected void finalize() throws Throwable {
+      super.finalize();
+      LOG.error("finalize");
+      outputStreamWriter.write("CLOSE\n");
+      outputStreamWriter.flush();
+      //process.destroy();
+   }
+}

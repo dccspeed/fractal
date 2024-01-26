@@ -7,6 +7,10 @@ case class SerializableSubgraph(vids: Array[Int], eids: Array[Int],
       Array(vids.length) ++ Array(eids.length) ++ vids ++ eids ++
          pedges.flatMap(kv => Array(kv._1,kv._2)) ++ pvlabels ++ pelabels
    }
+
+   def asString(): String = {
+      toIntArray().mkString(",");
+   }
 }
 
 object SerializableSubgraph {

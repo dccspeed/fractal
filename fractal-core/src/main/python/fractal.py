@@ -1,4 +1,5 @@
 from pyspark.rdd import RDD
+import hexserializer as hexser
 
 class Fractoid:
     def __init__(self, sc, fracjvm):
@@ -7,6 +8,10 @@ class Fractoid:
 
     def extend(self, k):
         return Fractoid(self._sc, self._fracjvm.extend(k))
+
+    def filter(self, filter):
+        filterstr = hexser.dumps(filter)
+        return Fractoid(self._sc, self._fracjvm.pythonFilter(filterstr))
 
     def subgraphs(self):
         subgraphs = self._fracjvm.pythonSubgraphs()
@@ -74,3 +79,9 @@ class Subgraph:
             self.pvlabels.append(int(next(toks)))
         for i in range(self.num_edges):
             self.pelabels.append(int(next(toks)))
+
+    def __str__(self):
+        return "Subgraph(num_vertices=%d, num_edges=%d, vids=%s, eids=%s, " \
+               "pedges=%s, pvlabels=%s, pelabels=%s)" % (
+            self.num_vertices, self.num_edges, self.vids, self.eids,
+            self.pedges, self.pvlabels, self.pelabels)

@@ -884,22 +884,9 @@ case class Fractoid[S <: Subgraph : ClassTag]
 
    def pythonSubgraphs(): JavaRDD[String] = {
 
-      //val clazz = Class.forName("org.apache.spark.api.python.SerDeUtil$")
-      //val javaRddClazz = Class.forName("org.apache.spark.api.java.JavaRDD")
-      //println(clazz.getDeclaredMethods.mkString(" "))
-      //val field = clazz.getField("MODULE$")
-      //field.setAccessible(true)
-      //val inst = field.get(null)
-      //val method = clazz.getDeclaredMethod("javaToPython", javaRddClazz)
-      //method.setAccessible(true)
-
       val rdd = aggregationObj[SerializableSubgraph](s => SerializableSubgraph
          .fromInternalSubgraph(s))
          .map(_.toIntArray().mkString(","))
-
-      // Invoke the private method
-      //val result = method.invoke(inst, rdd.toJavaRDD())
-      //result.asInstanceOf[JavaRDD[Array[Byte]]]
 
       rdd.toJavaRDD()
    }
@@ -1029,6 +1016,10 @@ case class Fractoid[S <: Subgraph : ClassTag]
       val result = handleNextResult(filterComp)
       logDebug(s"Filter before: ${this} after: ${result}")
       result
+   }
+
+   def pythonFilter(filterstr: String): Fractoid[S] = {
+      filter(new PythonFilter[S](filterstr))
    }
 
    /**

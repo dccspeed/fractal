@@ -56,4 +56,10 @@ object Logging {
       }
    }
 
+   def logError(msg: String) : Unit = {
+      if (log.isEnabledFor(Level.ERROR)) {
+         log.log(Level.ERROR, msg)
+      }
+   }
+
 }

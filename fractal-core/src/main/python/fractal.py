@@ -39,7 +39,7 @@ class FractalContext:
     def __init__(self, sc):
         self._sc = sc
         self._fcjvm = sc._jvm.br.ufmg.cs.systems.fractal.FractalContext(
-            sc._jsc.sc(), "warn")
+            sc._jsc.sc(), "info")
 
     def unlabeledGraphFromAdjLists(self, path):
         return FractalGraph(self._sc,

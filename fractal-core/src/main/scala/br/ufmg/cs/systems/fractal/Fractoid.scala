@@ -1018,8 +1018,12 @@ case class Fractoid[S <: Subgraph : ClassTag]
       result
    }
 
-   def pythonFilter(filterstr: String): Fractoid[S] = {
+   def pythonFilter2(filterstr: String): Fractoid[S] = {
       filter(new PythonFilter[S](filterstr))
+   }
+
+   def pythonFilter(filterstr: String): Fractoid[S] = {
+      filter(new PythonFilterJep[S](filterstr))
    }
 
    /**

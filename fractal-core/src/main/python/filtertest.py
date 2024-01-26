@@ -5,6 +5,8 @@ import os, sys
 path = sys.argv[1]
 k = int(sys.argv[2])
 
+print(path, k)
+
 # create a SparkConf and SparkContext
 conf = SparkConf().setAppName("MyFractalApp")
 sc = SparkContext(conf=conf)
@@ -19,10 +21,10 @@ fc = FractalContext(sc)
 fg = fc.unlabeledGraphFromAdjLists(path)
 func = lambda s: s.num_edges == 6
 frac = fg.vfractoid().extend(k).filter(func)
-subgraphs = frac.subgraphs().collect()
+subgraphs = frac.subgraphs()
 
-for subgraph in subgraphs:
-    print(subgraph)
+print("count:", subgraphs.count())
+
 
 # stop the context
 fc.stop()

@@ -15,15 +15,15 @@ nsubgraphsinvalid = 0
 
 while True:
     subgraphstr = sys.stdin.readline().strip()
-    if subgraphstr == "CLOSE":
-        break
+    subgraph = Subgraph(subgraphstr)
 
-    #print("subgraph string:", subgraphstr, file=f)
-    try:
-        subgraph = Subgraph(subgraphstr)
-    except Exception as e:
-        print("error:", e, subgraphstr, file=f)
-        break
+    #if subgraphstr == "CLOSE":
+    #    break
+    #try:
+    #    subgraph = Subgraph(subgraphstr)
+    #except Exception as e:
+    #    print("error:", e, subgraphstr, file=f)
+    #    break
 
     #print("subgraph object:", subgraph, file=f)
 
@@ -38,8 +38,6 @@ while True:
     else:
         print("false")
         nsubgraphsinvalid += 1
-
-    sys.stdout.flush()
 
 print("exit num subgraphs:", nsubgraphsvalid, "/",
       (nsubgraphsvalid+nsubgraphsinvalid), file=f)

@@ -11,7 +11,7 @@ class Fractoid:
 
     def filter(self, filter):
         filterstr = hexser.dumps(filter)
-        return Fractoid(self._sc, self._fracjvm.pythonFilter(filterstr))
+        return Fractoid(self._sc, self._fracjvm.pythonFilter2(filterstr))
 
     def subgraphs(self):
         subgraphs = self._fracjvm.pythonSubgraphs()
@@ -19,6 +19,12 @@ class Fractoid:
         subgraphs = RDD(subgraphs, self._sc)
         subgraphs = subgraphs.map(lambda sstr: Subgraph(sstr))
         return subgraphs
+
+    def count(self):
+        return self._fracjvm.aggregationCount()
+
+    def __str__(self):
+        return self._fracjvm.toString()
 
 
 class FractalGraph:
@@ -67,6 +73,14 @@ class Subgraph:
         self.pedges = []
         self.pvlabels = []
         self.pelabels = []
+        self.adjlists = {}
+        def add_edge(src, dst):
+            if src not in self.adjlists:
+                self.adjlists[src] = set()
+            self.adjlists[src].add(dst)
+            if dst not in self.adjlists:
+                self.adjlists[dst] = set()
+            self.adjlists[dst].add(src)
         for i in range(self.num_vertices):
             self.vids.append(int(next(toks)))
         for i in range(self.num_edges):
@@ -75,10 +89,14 @@ class Subgraph:
             src = int(next(toks))
             dst = int(next(toks))
             self.pedges.append((src,dst))
+            add_edge(src, dst)
         for i in range(self.num_vertices):
             self.pvlabels.append(int(next(toks)))
         for i in range(self.num_edges):
             self.pelabels.append(int(next(toks)))
+
+    def pattern(self):
+        return self.pedges
 
     def __str__(self):
         return "Subgraph(num_vertices=%d, num_edges=%d, vids=%s, eids=%s, " \

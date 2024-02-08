@@ -33,11 +33,13 @@ while True:
 
     # run filter
     if result:
-        print("true")
+        sys.stdout.write('1')
         nsubgraphsvalid += 1
     else:
-        print("false")
+        sys.stdout.write('0')
         nsubgraphsinvalid += 1
+
+    sys.stdout.flush()
 
 print("exit num subgraphs:", nsubgraphsvalid, "/",
       (nsubgraphsvalid+nsubgraphsinvalid), file=f)

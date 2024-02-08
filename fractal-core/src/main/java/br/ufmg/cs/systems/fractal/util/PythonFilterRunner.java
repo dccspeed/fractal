@@ -31,17 +31,17 @@ public class PythonFilterRunner {
 
    public boolean test(String subgraphstr) {
       // send subgraphstr to process
-      String result;
+      int result;
       try {
          outputStreamWriter.write(subgraphstr + "\n");
          outputStreamWriter.flush();
          // read result from process
-         result = inputStreamReader.readLine();
+         result = inputStreamReader.read();
       } catch (IOException e) {
          throw new RuntimeException(e);
       }
 
-      if (result.startsWith("true")) {
+      if (result == '1') {
          return true;
       } else {
          return false;

@@ -1,7 +1,7 @@
 package br.ufmg.cs.systems.fractal
 
 import java.io.Serializable
-import java.util.UUID
+import java.util.{Base64, UUID}
 import java.util.concurrent.atomic.AtomicInteger
 import br.ufmg.cs.systems.fractal.aggregation._
 import br.ufmg.cs.systems.fractal.callback._
@@ -10,6 +10,7 @@ import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
 import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.subgraph._
 import br.ufmg.cs.systems.fractal.util._
+import org.apache.hadoop.io.compress.BZip2Codec
 import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.broadcast.Broadcast
@@ -887,6 +888,14 @@ case class Fractoid[S <: Subgraph : ClassTag]
       val rdd = aggregationObj[SerializableSubgraph](s => SerializableSubgraph
          .fromInternalSubgraph(s))
          .map(_.toIntArray().mkString(","))
+
+      rdd.toJavaRDD()
+   }
+
+   def jsonSubgraphs(): JavaRDD[String] = {
+
+      val rdd = aggregationObj[String](
+         s => SerializableSubgraph.fromInternalSubgraphToJSON(s))
 
       rdd.toJavaRDD()
    }

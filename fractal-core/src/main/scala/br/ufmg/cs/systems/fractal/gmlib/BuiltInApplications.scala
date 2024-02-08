@@ -35,6 +35,20 @@ import scala.concurrent.{Await, Future}
  * @param self fractal graph
  */
 class BuiltInApplications(self: FractalGraph) extends Logging {
+   /**
+    * Sample of induced subgraphs uniformly at random
+    * @param numVertices motifs size
+    * @param fraction sample fraction
+    * @return fractoid
+    */
+   def inducedSubgraphsSample(numVertices: Int, fraction: Double)
+   : Fractoid[VertexInducedSubgraph] = {
+      val senumClass = classOf[SamplingEnumerator[VertexInducedSubgraph]]
+      val fractionKey = "sampling_fraction"
+      self.set(fractionKey, fraction)
+         .vfractoid
+         .extend(numVertices, senumClass)
+   }
 
    /**
     * Generated all subgraphs using the PA approach

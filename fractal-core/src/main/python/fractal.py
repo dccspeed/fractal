@@ -20,6 +20,12 @@ class Fractoid:
         subgraphs = subgraphs.map(lambda sstr: Subgraph(sstr))
         return subgraphs
 
+    def jsonsubgraphs(self):
+        subgraphs = self._fracjvm.jsonSubgraphs()
+        subgraphs = self._sc._jvm.org.apache.spark.api.python.SerDeUtil.javaToPython(subgraphs)
+        subgraphs = RDD(subgraphs, self._sc)
+        return subgraphs
+
     def count(self):
         return self._fracjvm.aggregationCount()
 
@@ -31,6 +37,8 @@ class FractalGraph:
     def __init__(self, sc, fgjvm):
         self._sc = sc
         self._fgjvm = fgjvm
+        self._gmlib = sc._jvm.br.ufmg.cs.systems.fractal.gmlib \
+            .BuiltInApplications(fgjvm)
 
     def vfractoid(self):
        return Fractoid(self._sc, self._fgjvm.vfractoid())
@@ -40,6 +48,13 @@ class FractalGraph:
 
     def pfractoid(self, pattern):
         raise NotImplementedError
+
+    def motifsPO(self, k):
+        return self._gmlib.motifsPO(k).toJavaRDD()
+
+    def inducedSubgraphsSample(self, k, fraction):
+        return Fractoid(self._sc,
+                        self._gmlib.inducedSubgraphsSample(k, fraction))
 
 class FractalContext:
     def __init__(self, sc):
@@ -97,6 +112,13 @@ class Subgraph:
 
     def pattern(self):
         return self.pedges
+
+    def edgelist(self):
+        vertices = self.vids
+        return [(vertices[src],vertices[dst]) for (src,dst) in self.pedges]
+
+    def __repr__(self):
+        return self.__str__()
 
     def __str__(self):
         return "Subgraph(num_vertices=%d, num_edges=%d, vids=%s, eids=%s, " \

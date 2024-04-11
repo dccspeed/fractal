@@ -2,8 +2,6 @@ package br.ufmg.cs.systems.fractal.util
 
 import br.ufmg.cs.systems.fractal.computation.Computation
 import br.ufmg.cs.systems.fractal.subgraph.{SerializableSubgraph, Subgraph}
-import jep.Interpreter
-import jep.SharedInterpreter
 
 class PythonFilter[S <: Subgraph](val filterstr: String) extends Function2[S,
    Computation[S],Boolean] with Serializable {

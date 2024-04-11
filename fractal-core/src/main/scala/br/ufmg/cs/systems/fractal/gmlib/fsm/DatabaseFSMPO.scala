@@ -17,10 +17,12 @@ class DatabaseFSMPO(minSupport: Double, numGraphs: Int, maxNumEdges: Int,
    private var lastCurrentTimeMs: Long = System.currentTimeMillis()
 
    // reusable pattern key
-   private val key: EdgeInducedSubgraph => Pattern = s => s.quickPattern()
+   @transient
+   private lazy val key: EdgeInducedSubgraph => Pattern = s => s.quickPattern()
 
    // reusable support value
-   private val value: EdgeInducedSubgraph => HashSet[Int] = s => {
+   @transient
+   private lazy val value: EdgeInducedSubgraph => HashSet[Int] = s => {
       HashSet(vertexToGraphIdxBc.value(s.getVertices.getLast))
    }
 
@@ -43,7 +45,7 @@ class DatabaseFSMPO(minSupport: Double, numGraphs: Int, maxNumEdges: Int,
     * @return collection of quick patterns -> supports
     */
    private def quickPatternsSupports(frac: Fractoid[EdgeInducedSubgraph])
-   : RDD[(Pattern,HashSet[Int])] = {
+   = {
       frac.aggregationObjObj[Pattern,HashSet[Int]](key, value, aggregate)
    }
 

@@ -18,6 +18,10 @@ case class SerializableSubgraph(vids: Array[Int], eids: Array[Int],
    def asString(): String = {
       toIntArray().mkString(",");
    }
+
+   override def toString: String = {
+      s"SerializableSubgraph(${vids.mkString(",")}, ${eids.mkString(",")}, ${pedges.mkString(",")}, ${pvlabels.mkString(",")}, ${pelabels.mkString(",")})"
+   }
 }
 
 object SerializableSubgraph {

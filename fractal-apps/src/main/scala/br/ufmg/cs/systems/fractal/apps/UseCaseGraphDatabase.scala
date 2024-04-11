@@ -26,41 +26,17 @@ object UseCaseGraphDatabase extends Logging {
 
     patternsSupports.cache()
     val iter = patternsSupports.collect().sortBy(_._2.size).iterator
+    var numPatterns = 0L
     while (iter.hasNext) {
       val (motif, graphs) = iter.next()
       logApp(s"motif=${motif} support=${graphs.size}")
+      numPatterns += 1
     }
 
     patternsSupports.unpersist()
 
-    //val vertexToGraphIdx = sc.textFile(vertexToGraphIdxPath)
-    //   .map(_.toInt).collect()
-    //val numGraphs = vertexToGraphIdx.distinct.length
-    //val vertexToGraphIdxBc = sc.broadcast(vertexToGraphIdx)
+    logApp(s"Number of patterns: ${numPatterns}")
 
-    //val motifs = fgraph.efractoid.expand(numEdges)
-
-    //val motifsCountsRDD = motifs
-    //   .aggregationCanonicalPatternObj[collection.mutable.HashSet[Int]](
-    //     s => s.quickPattern(),
-    //     s => collection.mutable.HashSet(
-    //       vertexToGraphIdxBc.value(s.getVertices.getLast)),
-    //     (s1,s2) => s2.foreach(s1.add(_))
-    //   )
-    //   .mapValues(_.size)
-
-    //motifsCountsRDD.cache()
-    //val iter = motifsCountsRDD.collect().sortBy(_._2).iterator
-    //while (iter.hasNext) {
-    //  val (motif, count) = iter.next()
-    //  val support = count / numGraphs.toDouble
-    //  if (support >= minSupport) {
-    //    logApp(s"motif=${motif} support=${support}")
-    //  }
-    //}
-
-    //motifsCountsRDD.unpersist()
-    
     // environment cleaning
     fc.stop()
     sc.stop()

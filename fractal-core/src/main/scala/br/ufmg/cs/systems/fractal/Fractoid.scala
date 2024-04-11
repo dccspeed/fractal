@@ -900,6 +900,11 @@ case class Fractoid[S <: Subgraph : ClassTag]
       rdd.toJavaRDD()
    }
 
+   def subgraphs(): RDD[SerializableSubgraph] = {
+      aggregationObj(s => SerializableSubgraph
+         .fromInternalSubgraph(s))
+   }
+
    def explore(n: Int): Fractoid[S] = {
       var currResult = this
       var i = 0
@@ -1027,12 +1032,8 @@ case class Fractoid[S <: Subgraph : ClassTag]
       result
    }
 
-   def pythonFilter2(filterstr: String): Fractoid[S] = {
-      filter(new PythonFilter[S](filterstr))
-   }
-
    def pythonFilter(filterstr: String): Fractoid[S] = {
-      filter(new PythonFilterJep[S](filterstr))
+      filter(new PythonFilter[S](filterstr))
    }
 
    /**

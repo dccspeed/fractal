@@ -21,37 +21,33 @@ public class EgoNetEnumeratorVertexInduced extends SubgraphEnumerator<VertexIndu
 
    private static final int MAX_HOP = 10;
    private IntArrayListView neighbors;
-   private ObjArrayList<IntSet> extensionsByHop;
+   private IntSet hopExtensions;
    private final VertexAdderConsumer vertexAdderConsumer = new VertexAdderConsumer();
 
    @Override
    public void init(Configuration config, Computation<VertexInducedSubgraph> computation) {
       neighbors = new IntArrayListView();
-      extensionsByHop = new ObjArrayList<>(MAX_HOP);
+      hopExtensions = HashIntSets.newMutableSet();
    }
 
    @Override
    public boolean extend_EXTENSION_PRIMITIVE() {
-      LOG.error("extend " + subgraph + " " + this);
       if (prefixSize == 0) return super.extend_EXTENSION_PRIMITIVE();
 
       int eidx = extensionsIdx.getAndIncrement();
       if (eidx < extensionsSize) {
-         int hopExtensionsIdx = extensions.get(eidx);
-
-         while (extensionsByHop.size() - 1 > hopExtensionsIdx) {
-            int numExtensionsToRemove = extensionsByHop.getLast().size();
-            extensionsByHop.removeLast();
-            for (int i = 0; i < numExtensionsToRemove; ++i) subgraph.removeLastWord();
+         int hopExtensionsSize = extensions.get(eidx);
+         if (hopExtensionsSize != hopExtensions.size()) {
+            throw new RuntimeException("invalid extension");
          }
 
-         IntSet hopExtensions = extensionsByHop.getLast();
-         hopExtensions.forEach(vertexAdderConsumer);
 
-         LOG.error("extendAfter " + subgraph);
+         hopExtensions.forEach(vertexAdderConsumer);
 
          return true;
       }
+
+      for (int i = 0; i < hopExtensions.size(); ++i) subgraph.removeLastWord();
       return false;
    }
 
@@ -61,37 +57,27 @@ public class EgoNetEnumeratorVertexInduced extends SubgraphEnumerator<VertexIndu
       IntArrayList vertices = subgraph.getVertices();
       int numVertices = vertices.size();
 
-      int hopExtensionsIdx = extensionsByHop.size();
-
-      IntSet extensionSet = extensionsByHop.getu(hopExtensionsIdx);
-      if (extensionSet == null) extensionSet = HashIntSets.newMutableSet();
 
       // compute hop extensions
-      extensionSet.clear();
+      hopExtensions.clear();
       for (int i = 0; i < numVertices; ++i) {
          int u = vertices.getu(i);
          graph.neighborhoodVertices(u, neighbors);
-         LOG.error(u + " " + neighbors);
          for (int j = 0; j < neighbors.size(); ++j) {
             int v = neighbors.getu(j);
-            extensionSet.add(v);
+            hopExtensions.add(v);
          }
       }
 
       // remove extensions already in subgraph
       for (int i = 0; i < numVertices; ++i) {
-         extensionSet.removeInt(vertices.getu(i));
+         hopExtensions.removeInt(vertices.getu(i));
       }
-
-      // add hop extensions to the pool of extensions
-      extensionsByHop.add(extensionSet);
 
       // make hopExtensions idx the only placeholder extension
       extensions.clear();
-      extensions.add(hopExtensionsIdx);
+      extensions.add(hopExtensions.size());
       newExtensions(extensions);
-
-      LOG.error("compute " + subgraph + " extensions " + extensions + " hopExtensions " + extensionSet);
    }
 
    private class VertexAdderConsumer implements IntConsumer {

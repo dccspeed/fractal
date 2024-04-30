@@ -53,7 +53,6 @@ public class SubgraphEnumerator<S extends Subgraph> {
       this.prefix.clear();
       this.prefixSize = 0;
       this.extensionsIdx.set(0);
-      LOG.error("compute " + subgraph + " extensions " + extensions);
    }
 
    public synchronized void newExtensions(IntCollection newExtensions) {
@@ -70,15 +69,12 @@ public class SubgraphEnumerator<S extends Subgraph> {
    }
 
    public boolean extend_EXTENSION_PRIMITIVE() {
-      LOG.error("extendFirst " + subgraph);
       int eidx = extensionsIdx.getAndIncrement();
       if (eidx < extensionsSize) {
          while (subgraph.getNumWords() > prefixSize) subgraph.removeLastWord();
          subgraph.addWord(extensions.getu(eidx));
-         LOG.error("extendAfterTrue " + subgraph);
          return true;
       }
-      LOG.error("extendAfterFalse " + subgraph);
       return false;
    }
 

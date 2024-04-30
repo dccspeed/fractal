@@ -26,6 +26,7 @@ case class SerializableSubgraph(vids: Array[Int], eids: Array[Int],
 
 object SerializableSubgraph {
    def fromInternalSubgraph(s: Subgraph): SerializableSubgraph = {
+      Logging.logError(s"from ${s}")
       val numVertices = s.getNumVertices
       val numEdges = s.getNumEdges
       val vids = new Array[Int](numVertices)

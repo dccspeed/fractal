@@ -22,6 +22,7 @@ public class EgoNetEnumeratorVertexInduced extends SubgraphEnumerator<VertexIndu
    private static final int MAX_HOP = 10;
    private IntArrayListView neighbors;
    private IntSet hopExtensions;
+   private IntArrayList hopExtensionsSizes;
    private final VertexAdderConsumer vertexAdderConsumer = new VertexAdderConsumer();
 
    @Override
@@ -30,9 +31,28 @@ public class EgoNetEnumeratorVertexInduced extends SubgraphEnumerator<VertexIndu
       hopExtensions = HashIntSets.newMutableSet();
    }
 
+   private void ensureState() {
+      if (hopExtensionsSizes != null) return;
+      IntArrayList hopExtensionsSizes = new IntArrayList();
+      hopExtensionsSizes.add(1);
+      this.hopExtensionsSizes = hopExtensionsSizes;
+      SubgraphEnumerator senum = this;
+      while (senum.nextEnumerator() != null) {
+         senum = senum.nextEnumerator();
+         if (senum instanceof EgoNetEnumeratorVertexInduced) {
+            EgoNetEnumeratorVertexInduced enenum = (EgoNetEnumeratorVertexInduced) senum;
+            if (enenum.hopExtensionsSizes == null) {
+               enenum.hopExtensionsSizes = hopExtensionsSizes;
+            }
+         }
+      }
+   }
+
    @Override
    public boolean extend_EXTENSION_PRIMITIVE() {
       if (prefixSize == 0) return super.extend_EXTENSION_PRIMITIVE();
+
+      ensureState();
 
       int eidx = extensionsIdx.getAndIncrement();
       if (eidx < extensionsSize) {
@@ -41,26 +61,33 @@ public class EgoNetEnumeratorVertexInduced extends SubgraphEnumerator<VertexIndu
             throw new RuntimeException("invalid extension");
          }
 
+         hopExtensionsSizes.add(hopExtensionsSizes.getLast() + hopExtensionsSize);
+
 
          hopExtensions.forEach(vertexAdderConsumer);
 
          return true;
       }
 
+      hopExtensionsSizes.removeLast();
       for (int i = 0; i < hopExtensions.size(); ++i) subgraph.removeLastWord();
+
       return false;
    }
 
    @Override
    public synchronized void computeExtensions_EXTENSION_PRIMITIVE() {
+      ensureState();
       MainGraph graph = subgraph.getMainGraph();
       IntArrayList vertices = subgraph.getVertices();
       int numVertices = vertices.size();
 
+      int from = hopExtensionsSizes.size() == 1 ? 0 : hopExtensionsSizes.get(hopExtensionsSizes.size() - 2);
+      int to = hopExtensionsSizes.getLast();
 
       // compute hop extensions
       hopExtensions.clear();
-      for (int i = 0; i < numVertices; ++i) {
+      for (int i = from; i < to; ++i) {
          int u = vertices.getu(i);
          graph.neighborhoodVertices(u, neighbors);
          for (int j = 0; j < neighbors.size(); ++j) {

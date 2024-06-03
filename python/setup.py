@@ -1,7 +1,4 @@
-from setuptools import setup, find_packages, Extension
-import os
-import subprocess
-from glob import glob
+from setuptools import setup
 
 # Project information
 name = "pyfractal"
@@ -9,11 +6,11 @@ version = "3.0.0"
 description = "A brief description of what your package does."
 author = "Vinícius Dias"
 author_email = "vvsdias@gmail.com"
-license = "MIT"
-url = "https://github.com/username/my-project"
+license = "Apache 2.0"
+url = "https://github.com/dccspeed/fractal"
 classifiers = [
     "Programming Language :: Python",
-    "License :: OSI Approved :: MIT License",
+    "License :: Apache 2.0",
 ]
 install_requires = ["networkx", "dill", "pyspark"]
 scripts = []

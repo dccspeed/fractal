@@ -1,4 +1,0 @@
-networkx
-dill
-wheel
-setuptools

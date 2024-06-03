@@ -1,19 +1,24 @@
+ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
+
 all: build
 install: sparkinstall pyfractalinstall
 
-build: sparkbuild/spark
-
-pyfractalinstall:
-	pip install .
-
-sparkbuild/spark:
-	mkdir -p sparkbuild
-	cd sparkbuild && wget "https://archive.apache.org/dist/spark/spark-3.5.0/spark-3.5.0-bin-hadoop3-scala2.13.tgz" && tar xf spark-3.5.0-bin-hadoop3-scala2.13.tgz && mv spark-3.5.0-bin-hadoop3-scala2.13 spark
+build: $(ROOT_DIR)/sparkbuild/spark $(ROOT_DIR)/src/pyfractal/fractal-core-SPARK-3.5.0.jar
 
 sparkinstall: build
-	cd sparkbuild &&  pip install spark/python
+	cd $(ROOT_DIR)/sparkbuild && pip install spark/python
+
+pyfractalinstall:
+	pip install $(ROOT_DIR)
+
+$(ROOT_DIR)/sparkbuild/spark:
+	mkdir -p $(ROOT_DIR)/sparkbuild
+	cd $(ROOT_DIR)/sparkbuild && wget "https://archive.apache.org/dist/spark/spark-3.5.0/spark-3.5.0-bin-hadoop3-scala2.13.tgz" && tar xf spark-3.5.0-bin-hadoop3-scala2.13.tgz && mv spark-3.5.0-bin-hadoop3-scala2.13 spark
+
+$(ROOT_DIR)/src/pyfractal/fractal-core-SPARK-3.5.0.jar:
+	 cd "$(ROOT_DIR)/.." && ./gradlew jar && cp fractal-core/build/libs/*.jar "$(ROOT_DIR)/src/pyfractal/"
 
 clean:
-	rm -rf sparkbuild
+	rm -rf $(ROOT_DIR)/sparkbuild
 
-.PHONY: all build install sparkinstall pyfractalinstall
+.PHONY: all clean build install sparkinstall pyfractalinstall

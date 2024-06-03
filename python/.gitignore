@@ -1,0 +1,14 @@
+*.pyc
+*.exe
+*.so
+*.whl
+*.egg
+*.egg-info
+*.dist
+*.log
+# Hidden files in venv folders
+.venv
+venv
+build/*
+sparkbuild/*
+__pycache__/*

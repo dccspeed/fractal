@@ -12,7 +12,7 @@ classifiers = [
     "Programming Language :: Python",
     "License :: Apache 2.0",
 ]
-install_requires = ["networkx", "dill", "pyspark"]
+install_requires = ["networkx", "dill", "", "pyspark"]
 scripts = []
 
 setup(name=name, version=version, description=description, author=author, author_email=author_email, license=license,

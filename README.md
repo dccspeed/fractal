@@ -74,7 +74,7 @@ docker run -it --rm -p 8888:8888 fractalnb:latest
 ```
 
 The local URL for accessing the notebook kernel should appear in the output.
-Notebook examples are provided in ```notebook/```
+Notebook examples are provided in ```notebook_python/```
 
 ## Quick installation via Docker (local)
 

@@ -3,6 +3,7 @@ import os
 from pyspark.rdd import RDD
 import networkx as nx
 import pyfractal.hexserializer as hexser
+from pyfractal.util import pattern_to_networkx
 
 def create_graph(sstr):
     g = nx.Graph()
@@ -86,6 +87,9 @@ class FractalGraph:
         self._gmlib = sc._jvm.br.ufmg.cs.systems.fractal.gmlib \
             .BuiltInApplications(fgjvm)
 
+    def set(self, key, value):
+        return FractalGraph(self._sc, self._fgjvm.set(key, value))
+
     def vfractoid(self):
        return Fractoid(self._sc, self._fgjvm.vfractoid())
 
@@ -94,6 +98,16 @@ class FractalGraph:
 
     def pfractoid(self, pattern):
         raise NotImplementedError
+
+    def motifs(self, k):
+        motif_count = self.motifsPO(k).collect()
+        output = []
+        for mc in motif_count:
+            pattern_jvm = mc._1()
+            pattern = pattern_to_networkx(pattern_jvm)
+            count = mc._2()
+            output.append((pattern,count))
+        return output
 
     def motifsPO(self, k):
         return self._gmlib.motifsPO(k).toJavaRDD()

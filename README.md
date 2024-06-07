@@ -70,7 +70,7 @@ docker buildx build --output type=docker --tag fractalpynb -f notebook_python/Do
 Run the container:
 
 ```
-docker run -it --rm -p 8888:8888 fractalnb:latest
+docker run -it --rm -p 8888:8888 fractalpynb:latest
 ```
 
 The local URL for accessing the notebook kernel should appear in the output.

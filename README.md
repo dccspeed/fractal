@@ -40,13 +40,31 @@ Edge ids are also represented as indexes ```e = 0..m-1```
 
 Example: directory ```data/citeseer``` illustrates a valid formatting.
 
-## Quick start with interactive notebook via Docker (local)
+## Quick start with interactive Scala notebook via Docker (local)
 
 Run the following command to build a local Docker image that runs an Almond Scala/Spark Kernel Notebook with support
 for Fractal:
 
 ```
 docker buildx build --output type=docker --tag fractalnb -f notebook/Dockerfile https://github.com/dccspeed/fractal.git
+```
+
+Run the container:
+
+```
+docker run -it --rm -p 8888:8888 fractalnb:latest
+```
+
+The local URL for accessing the notebook kernel should appear in the output.
+Notebook examples are provided in ```notebook/```
+
+## Quick start with interactive Python notebook via Docker (local)
+
+Run the following command to build a local Docker image that runs a Jupyter Lab Kernel Notebook with support
+for Fractal:
+
+```
+docker buildx build --output type=docker --tag fractalpynb -f notebook_python/Dockerfile https://github.com/dccspeed/fractal.git
 ```
 
 Run the container:

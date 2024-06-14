@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal.gmlib
 
+import br.ufmg.cs.systems.fractal.aggregation.LongLongSubgraphAggregation
 import br.ufmg.cs.systems.fractal.computation.{AllEdgesSubgraphEnumerator, Computation, RandomWalkEnumerator, SamplingEnumerator}
 import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.gmlib.clique.{KClistEnumerator, MaximalCliquesEnumerator}
@@ -19,6 +20,7 @@ import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
 import com.koloboke.collect.set.hash.{HashIntSets, HashObjSets}
 import org.apache.spark.rdd.RDD
 
+import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -35,6 +37,56 @@ import scala.concurrent.{Await, Future}
  * @param self fractal graph
  */
 class BuiltInApplications(self: FractalGraph) extends Logging {
+
+   def motifCountFeatures(k: Int): RDD[(Long,Array[Long])] = {
+      val sc = self.fractalContext.sparkContext
+      val patterns = ArrayBuffer.empty[Pattern]
+      for (i <- 2 to k) {
+         val kpatterns = PatternUtilsRDD.vertexPatternsRDD(sc, i)
+         patterns.addAll(kpatterns.collect())
+      }
+
+      patterns.sortInPlaceWith((p1,p2) => p1.getEdges.compareTo(p2.getEdges) < 0)
+      val numPatterns = patterns.size
+
+      var i = 0
+      var rdds = List.empty[RDD[(Long,(Int,Long))]]
+      while (i < numPatterns) {
+         val pattern = patterns(i)
+         val aggregation = new LongLongSubgraphAggregation[PatternInducedSubgraph] {
+            override def reduce(v1: Long, v2: Long): Long = v1 + v2
+
+            override def defaultValue(): Long = 0L
+
+            override def aggregate_AGGREGATION_PRIMITIVE(subgraph: PatternInducedSubgraph): Unit = {
+               val vertices = subgraph.getVertices
+               var i = 0
+               while (i < vertices.size()) {
+                  map(vertices.getu(i), 1L)
+                  i += 1
+               }
+            }
+         }
+
+         val dim = i
+         val vertexCountRDD = self.pfractoid(pattern)
+           .extend(pattern.getNumberOfVertices)
+           .aggregationLongLong(aggregation)
+           .mapValues(c => (dim, c))
+
+         rdds = vertexCountRDD :: rdds
+
+         i += 1
+      }
+
+      val vertexCountVectors = sc.union(rdds).groupByKey().mapValues(tups => {
+         val vector = new Array[Long](numPatterns)
+         tups.foreach { case (dim,c) => vector(dim) = c }
+         vector
+      })
+
+      vertexCountVectors
+   }
    /**
     * Sample of induced subgraphs uniformly at random
     * @param numVertices motifs size

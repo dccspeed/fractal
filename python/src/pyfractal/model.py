@@ -94,7 +94,7 @@ class FractalGraph:
        return Fractoid(self._sc, self._fgjvm.vfractoid())
 
     def efractoid(self):
-        return Fractoid(self._sc, self._fgjvm.vfractoid())
+        return Fractoid(self._sc, self._fgjvm.efractoid())
 
     def pfractoid(self, pattern):
         raise NotImplementedError
@@ -108,6 +108,9 @@ class FractalGraph:
             count = mc._2()
             output.append((pattern,count))
         return output
+
+    def motif_count_features(self, k):
+        return self._gmlib.motifCountFeatures(k).toJavaRDD()
 
     def motifsPO(self, k):
         return self._gmlib.motifsPO(k).toJavaRDD()

@@ -284,8 +284,13 @@ class WorkStealingSystem [S <: Subgraph]
 
       while (continue) {
          val computations = LocalComputationStore.localComputations(
-            c.getExecutionEngine.getStageId
+            c.getExecutionEngine.getStageId,
+            c.getExecutionEngine.getStep
          ).asInstanceOf[ObjArrayList[Computation[S]]]
+         //val computations = LocalComputationStore.localComputations(
+         //   c.getExecutionEngine.getStageId
+         //).asInstanceOf[ObjArrayList[Computation[S]]]
+
          lastInternalSteals = workStealingComputeLocalIter(c, computations)
          internalSteals += lastInternalSteals
          continue = lastInternalSteals > 0 && remoteWorkQueueIsEmpty

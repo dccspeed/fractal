@@ -1,46 +1,13 @@
-import sys
 import os
-from pyspark.rdd import RDD
+import tempfile
+
 import networkx as nx
+from pyspark.rdd import RDD
+
 import pyfractal.hexserializer as hexser
-from pyfractal.util import pattern_to_networkx
+from pyfractal.util import pattern_to_networkx, get_memory_mapped_2dlongtensor, write_pyg_data_as_fractal_graph, \
+    networkx_from_string
 
-def create_graph(sstr):
-    g = nx.Graph()
-    toks = iter(sstr.split(","))
-    num_vertices = int(next(toks))
-    num_edges = int(next(toks))
-    edgeids = []
-    vertexids = []
-    edges = []
-    pvlabels = []
-    pelabels = []
-
-    for i in range(num_vertices):
-        vertexids.append(int(next(toks)))
-
-    for i in range(num_edges):
-        edgeids.append(int(next(toks)))
-
-    for i in range(num_edges):
-        src = int(next(toks))
-        dst = int(next(toks))
-        edges.append((src, dst))
-
-    for i in range(num_vertices):
-        pvlabels.append(int(next(toks)))
-
-    for i in range(num_edges):
-        pelabels.append(int(next(toks)))
-
-    for i in range(num_vertices):
-        g.add_node(vertexids[i], label=pvlabels[i])
-
-    for i in range(num_edges):
-        e = edges[i]
-        g.add_edge(vertexids[e[0]], vertexids[e[1]], label=pelabels[i], id=edgeids[i])
-
-    return g
 
 class Fractoid:
     def __init__(self, sc, fracjvm):
@@ -65,7 +32,7 @@ class Fractoid:
         subgraphs = self._fracjvm.pythonSubgraphs()
         subgraphs = self._sc._jvm.org.apache.spark.api.python.SerDeUtil.javaToPython(subgraphs)
         subgraphs = RDD(subgraphs, self._sc)
-        subgraphs = subgraphs.map(create_graph)
+        subgraphs = subgraphs.map(networkx_from_string)
         return subgraphs
 
     def jsonsubgraphs(self):
@@ -109,8 +76,15 @@ class FractalGraph:
             output.append((pattern,count))
         return output
 
-    def motif_count_features(self, k):
-        return self._gmlib.motifCountFeatures(k).toJavaRDD()
+    def graphlet_degree_vectors(self, k):
+        with tempfile.NamedTemporaryFile() as tmpfile:
+            path = tmpfile.name
+            self._gmlib.graphletDegreeVectorsAsTensor(k, path)
+            tensor = get_memory_mapped_2dlongtensor(path)
+        return tensor
+
+    def khop_induced_subgraphs(self, k):
+        return Fractoid(self._sc, self._gmlib.kHopInducedSubgraphs(k)).subgraphs_networkx()
 
     def motifsPO(self, k):
         return self._gmlib.motifsPO(k).toJavaRDD()
@@ -124,6 +98,9 @@ class FractalGraph:
 
 class FractalContext:
     def __init__(self, sc):
+        self.graphdir = None
+        if sc.sparkContext is not None:
+            sc = sc.sparkContext
         self._sc = sc
         self._fcjvm = sc._jvm.br.ufmg.cs.systems.fractal.FractalContext(
             sc._jsc.sc(), "info")
@@ -131,20 +108,29 @@ class FractalContext:
         sc.addPyFile("%s/model.py" % script_path)
         sc.addPyFile("%s/hexserializer.py" % script_path)
 
+    def unlabeledGraphFromPyGData(self, data):
+        self.graphdir = tempfile.TemporaryDirectory(prefix="pydata2fractal", delete=False)
+        write_pyg_data_as_fractal_graph(data, self.graphdir.name)
+        return self.unlabeledGraphFromAdjLists(self.graphdir.name)
+
     def unlabeledGraphFromAdjLists(self, path):
         return FractalGraph(self._sc,
-                            self._fcjvm.unlabeledGraphFromAdjLists(path))
+                            self._fcjvm.unlabeledGraphFromAdjLists(path)).set("ws_external", "false")
 
     def vertexLabeledGraphFromAdjLists(self, path):
         return FractalGraph(self._sc,
-                            self._fcjvm.vertexLabeledGraphFromAdjLists(path))
+                            self._fcjvm.vertexLabeledGraphFromAdjLists(path)).set("ws_external", "false")
 
     def vertexEdgeLabeledGraphFromAdjLists(self, path):
         return FractalGraph(self._sc,
-                            self._fcjvm.vertexEdgeLabeledGraphFromAdjLists(path))
+                            self._fcjvm.vertexEdgeLabeledGraphFromAdjLists(path)).set("ws_external", "false")
 
     def stop(self):
         self._fcjvm.stop()
+
+    def __del__(self):
+        if self.graphdir is not None:
+            self.graphdir.cleanup()
 
 
 class Subgraph:

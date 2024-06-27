@@ -75,6 +75,10 @@ public class VertexPositionEquivalences {
         return equivalences[pos];
     }
 
+    public IntSet[] getAllEquivalences() {
+        return equivalences;
+    }
+
     public EdgePositionEquivalences getEdgeEquivalences(PatternEdgeArrayList edges) {
        int numEdges = edges.size();
        IntSet[] equivalences = new IntSet[numEdges];

@@ -563,6 +563,8 @@ class SlaveActor[S <: Subgraph](args: SlaveActor.Args[S])
          val readyToFinish = workStealed == 0 &&
             getReadyToFinishCount == slaves.length
 
+         logDebug(s"Request ${workStealed} ${readyToFinish}")
+
          if (readyToFinish) { // indicate termination
             val msg = StealWorkResponse(null, slaves.length,
                req.seqNum, nextSeqNum)
@@ -581,6 +583,9 @@ class SlaveActor[S <: Subgraph](args: SlaveActor.Args[S])
          } else {
             val msg = StealWorkResponse(null, 0, req.seqNum, nextSeqNum)
             req.thief ! msg
+
+            logDebug(s"${req}: ${self} sending ${msg} to" +
+              s" ${req.thief}")
          }
 
       // the request has not yet reached the end of the tour among pivots and
@@ -850,6 +855,7 @@ class SlaveActor[S <: Subgraph](args: SlaveActor.Args[S])
    }
 
    private def maybeCheckReadyToFinishSlaves(): Unit = {
+      logDebug(s"MaybeCheckReadyToFinish ${outbox} ${slaves} ${readyToFinishCount}")
       if (outbox != null && slaves != null &&
          readyToFinishCount != slaves.length) {
          val msg = ReadyToFinish(partitionId, false)
@@ -886,8 +892,15 @@ class SlaveActor[S <: Subgraph](args: SlaveActor.Args[S])
 
    private def tryStealFromLocal(workUnit: IntArrayList): Int = {
       val computations = LocalComputationStore.localComputations(
-         computation.getExecutionEngine.getStageId
+         computation.getExecutionEngine.getStageId,
+         computation.getExecutionEngine.getStep
       ).asInstanceOf[ObjArrayList[Computation[S]]]
+
+      //val computations = LocalComputationStore.localComputations(
+      //   computation.getExecutionEngine.getStageId
+      //).asInstanceOf[ObjArrayList[Computation[S]]]
+
+      logDebug(s"Computations=${computations}")
 
       if (computations == null) return -1
 

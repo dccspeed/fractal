@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal.util
 
+import org.apache.ivy.util.DefaultMessageLogger
 import org.apache.log4j.{Level, LogManager, Logger}
 
 /**

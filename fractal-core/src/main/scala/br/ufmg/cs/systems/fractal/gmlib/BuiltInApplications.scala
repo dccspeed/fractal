@@ -1,7 +1,7 @@
 package br.ufmg.cs.systems.fractal.gmlib
 
-import br.ufmg.cs.systems.fractal.aggregation.LongLongSubgraphAggregation
-import br.ufmg.cs.systems.fractal.computation.{AllEdgesSubgraphEnumerator, Computation, RandomWalkEnumerator, SamplingEnumerator}
+import br.ufmg.cs.systems.fractal.aggregation.{LongLongSubgraphAggregation, ObjLongSubgraphAggregation}
+import br.ufmg.cs.systems.fractal.computation.{AllEdgesSubgraphEnumerator, Computation, EgoNetEnumeratorVertexInduced, RandomWalkEnumerator, SamplingEnumerator}
 import br.ufmg.cs.systems.fractal.conf.Configuration
 import br.ufmg.cs.systems.fractal.gmlib.clique.{KClistEnumerator, MaximalCliquesEnumerator}
 import br.ufmg.cs.systems.fractal.gmlib.fsm._
@@ -13,17 +13,19 @@ import br.ufmg.cs.systems.fractal.gmlib.quasicliques.{QuasiCliquesPA, QuasiCliqu
 import br.ufmg.cs.systems.fractal.gmlib.queryspecialization.{QuerySpecializationPAPO, QuerySpecializationPO}
 import br.ufmg.cs.systems.fractal.pattern._
 import br.ufmg.cs.systems.fractal.subgraph.{EdgeInducedSubgraph, PatternInducedSubgraph, VertexInducedSubgraph}
-import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
+import br.ufmg.cs.systems.fractal.util.collection.{IntArrayList, ObjArrayList}
 import br.ufmg.cs.systems.fractal.util.pool.{IntArrayListPool, IntArrayListViewPool}
-import br.ufmg.cs.systems.fractal.util.{Logging, Utils}
+import br.ufmg.cs.systems.fractal.util.{Logging, MemoryMappedWriter, Utils}
 import br.ufmg.cs.systems.fractal.{FractalGraph, Fractoid}
 import com.koloboke.collect.set.hash.{HashIntSets, HashObjSets}
 import org.apache.spark.rdd.RDD
 
+import java.nio.file.{Files, Paths}
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
+import scala.reflect.io.Path
 
 /**
  * Built-in algorithms with the following alternative implementations:
@@ -38,7 +40,19 @@ import scala.concurrent.{Await, Future}
  */
 class BuiltInApplications(self: FractalGraph) extends Logging {
 
-   def motifCountFeatures(k: Int): RDD[(Long,Array[Long])] = {
+   def kHopInducedSubgraphs(k: Int): Fractoid[VertexInducedSubgraph] = {
+      val khopFractoid = self.vfractoid.extend(k, classOf[EgoNetEnumeratorVertexInduced])
+      khopFractoid
+   }
+
+   def graphletDegreeVectorsAsTensor(k: Int, path: String): Future[String]= {
+      val createFileFuture = Future {MemoryMappedWriter.writeStatus(path) }
+      val vectors = graphpletDegreeVectorsAsRDD(k).sortByKey().values.collect()
+      Await.result(createFileFuture, Duration.Inf)
+      Future { MemoryMappedWriter.write2dLongTensor(vectors, path); path }
+   }
+
+   def graphpletDegreeVectorsAsRDD(k: Int): RDD[(Int,Array[Long])] = {
       val sc = self.fractalContext.sparkContext
       val patterns = ArrayBuffer.empty[Pattern]
       for (i <- 2 to k) {
@@ -50,43 +64,97 @@ class BuiltInApplications(self: FractalGraph) extends Logging {
       val numPatterns = patterns.size
 
       var i = 0
-      var rdds = List.empty[RDD[(Long,(Int,Long))]]
+      var rdds = List.empty[RDD[(Int,(Int,Long))]]
+      var offset = 0
       while (i < numPatterns) {
-         val pattern = patterns(i)
-         val aggregation = new LongLongSubgraphAggregation[PatternInducedSubgraph] {
+
+         val patternWithoutPlan = patterns(i)
+         val patternWithPlan = PatternExplorationPlan.apply(patternWithoutPlan).get(0)
+
+         val equivalences = patternWithPlan.getVertexPositionEquivalences
+         val orbitsSet = HashObjSets.newUpdatableSet(equivalences.getAllEquivalences)
+         val orbitsArray = new Array[Array[Int]](orbitsSet.size())
+         val cur = orbitsSet.cursor()
+         var j = 0
+         while (cur.moveNext()) {
+            val orbit = cur.elem().toIntArray
+            orbit.sortInPlace()
+            orbitsArray(j) = orbit
+            j += 1
+         }
+
+         orbitsArray.sortInPlaceBy(arr => arr(0))
+
+         //j = 0
+         //while (j < orbitsArray.length) {
+         //   logApp(s"Orbit=${offset+j} Pattern=${patternWithPlan} Equivalences=${orbitsArray(j).mkString(",")}")
+         //   j += 1
+         //}
+
+         val _offset = offset
+         val aggregation = new ObjLongSubgraphAggregation[PatternInducedSubgraph,(Int,Int)] {
+            val orbitsArrayLocal = orbitsArray
             override def reduce(v1: Long, v2: Long): Long = v1 + v2
 
             override def defaultValue(): Long = 0L
 
             override def aggregate_AGGREGATION_PRIMITIVE(subgraph: PatternInducedSubgraph): Unit = {
                val vertices = subgraph.getVertices
-               var i = 0
-               while (i < vertices.size()) {
-                  map(vertices.getu(i), 1L)
-                  i += 1
+               var orbit = 0
+               while (orbit < orbitsArrayLocal.length) {
+                  var i = 0
+                  val eqVertexPositions = orbitsArrayLocal(orbit)
+                  while (i < eqVertexPositions.length) {
+                     val u = vertices.getu(eqVertexPositions(i))
+                     map((_offset + orbit, u), 1L)
+                     i += 1
+                  }
+                  orbit += 1
                }
             }
          }
 
-         val dim = i
-         val vertexCountRDD = self.pfractoid(pattern)
-           .extend(pattern.getNumberOfVertices)
-           .aggregationLongLong(aggregation)
-           .mapValues(c => (dim, c))
+         val vertexCountRDD = self.pfractoid(patternWithPlan)
+           .extend(patternWithPlan.getNumberOfVertices)
+           .aggregationObjLong(aggregation)
+           .map(kv => {
+              val (k,c) = kv
+              val (dim, u) = k
+              val tup = (u, (dim, c))
+              tup
+           })
+
+         offset += orbitsArray.length
 
          rdds = vertexCountRDD :: rdds
 
          i += 1
       }
 
+      val _offset = offset
       val vertexCountVectors = sc.union(rdds).groupByKey().mapValues(tups => {
-         val vector = new Array[Long](numPatterns)
+         val vector = new Array[Long](_offset)
          tups.foreach { case (dim,c) => vector(dim) = c }
          vector
       })
 
-      vertexCountVectors
+      val toVertex: VertexInducedSubgraph => Long = s => s.getVertices.getLast.toLong
+      val zeroArray: VertexInducedSubgraph => Array[Long] = s => Array.fill(_offset)(0L)
+      val emptyReduce: (Array[Long], Array[Long]) => Unit = (_,_) => {}
+
+      // isolated vertices
+      val isolatedVertices = self.vfractoid
+        .extend(1)
+        .filter((s,c) => {
+           val graph = s.getMainGraph
+           graph.vertexDegree(s.getVertices.getLast) == 0
+        })
+        .aggregationLongObj[Array[Long]](toVertex, zeroArray, emptyReduce)
+        .map(kv => (kv._1.toInt, kv._2))
+
+      vertexCountVectors.union(isolatedVertices)
    }
+
    /**
     * Sample of induced subgraphs uniformly at random
     * @param numVertices motifs size

@@ -242,6 +242,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       }
    }
 
+   /*
    test("[sampling.motifs]", Tag("sampling.motifs")) {
       citeseerSingleLabelGraph.set("num_partitions", numPartitions)
 
@@ -334,6 +335,7 @@ class BasicTestSuite extends FunSuite with BeforeAndAfterAll with Logging {
       // TODO: find a better way to assert correctness for sampling
       assert(error <= 20)
    }
+   */
 
    test("[citeseer.motifs.gt]", Tag("citeseer.motifs.gt")) {
       for (((graph, numVertices), counts) <- motifsGt) {

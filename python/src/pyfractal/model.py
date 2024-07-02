@@ -66,7 +66,7 @@ class FractalGraph:
     def pfractoid(self, pattern):
         raise NotImplementedError
 
-    def motifs(self, k):
+    def motif_counting(self, k):
         motif_count = self.motifsPO(k).collect()
         output = []
         for mc in motif_count:

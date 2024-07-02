@@ -5,6 +5,7 @@ import time
 import networkx as nx
 import torch
 
+
 def networkx_from_string(sstr):
     g = nx.Graph()
     toks = iter(sstr.split(","))
@@ -42,6 +43,7 @@ def networkx_from_string(sstr):
 
     return g
 
+
 def pattern_to_networkx(jvmpattern):
     g = nx.Graph()
     nedges = jvmpattern.getNumberOfEdges()
@@ -49,9 +51,16 @@ def pattern_to_networkx(jvmpattern):
     for i in range(nedges):
         edge = edges.get(i)
         src = edge.getSrcPos()
+        g.add_node(src, label=edge.getSrcLabel())
+        dst = edge.getDestPos()
+        g.add_node(dst, label=edge.getDestLabel())
+    for i in range(nedges):
+        edge = edges.get(i)
+        src = edge.getSrcPos()
         dst = edge.getDestPos()
         g.add_edge(src, dst)
     return g
+
 
 def write_pyg_data_as_fractal_graph(data, graphdir):
     adjlists = dict()
@@ -83,6 +92,7 @@ def write_pyg_data_as_fractal_graph(data, graphdir):
                 f.write(f"{v},{e}")
             f.write("\n")
 
+
 def get_memory_mapped_2dlongtensor(file_path):
     # Open the memory-mapped file
     with open(file_path, mode="r+b") as file:
@@ -102,7 +112,7 @@ def get_memory_mapped_2dlongtensor(file_path):
 
         # read long values
         datasize = struct.calcsize(f">{nrows * ncols}q")
-        data = struct.unpack(f">{nrows * ncols}q", mmapped[12:12+datasize])
+        data = struct.unpack(f">{nrows * ncols}q", mmapped[12:12 + datasize])
 
         # convert to PyTorch tensor
         tensor = torch.tensor(data, dtype=torch.float32).view(nrows, ncols)
@@ -111,7 +121,3 @@ def get_memory_mapped_2dlongtensor(file_path):
         mmapped.close()
 
         return tensor
-
-
-
-

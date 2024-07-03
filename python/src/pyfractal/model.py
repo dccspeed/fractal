@@ -47,18 +47,21 @@ class Fractoid:
     def __str__(self):
         return self._fracjvm.toString()
 
+
 class FractalGraph:
     def __init__(self, sc, fgjvm):
         self._sc = sc
         self._fgjvm = fgjvm
         self._gmlib = sc._jvm.br.ufmg.cs.systems.fractal.gmlib \
             .BuiltInApplications(fgjvm)
+        self.num_vertices = self.vfractoid().extend(1).count()
+        self.num_edges = self.efractoid().extend(1).count()
 
     def set(self, key, value):
         return FractalGraph(self._sc, self._fgjvm.set(key, value))
 
     def vfractoid(self):
-       return Fractoid(self._sc, self._fgjvm.vfractoid())
+        return Fractoid(self._sc, self._fgjvm.vfractoid())
 
     def efractoid(self):
         return Fractoid(self._sc, self._fgjvm.efractoid())
@@ -73,7 +76,26 @@ class FractalGraph:
             pattern_jvm = mc._1()
             pattern = pattern_to_networkx(pattern_jvm)
             count = mc._2()
-            output.append((pattern,count))
+            output.append((pattern, count))
+        return output
+
+    def cliques(self, k):
+        return Fractoid(self._sc, self._gmlib.cliquesPO(k)).subgraphs_networkx()
+
+    def quasi_cliques(self, k, min_density):
+        return Fractoid(self._sc, self._gmlib.quasiCliquesPO(k, min_density)).subgraphs_networkx()
+
+    def frequent_subgraph_mining(self, k, min_support):
+        min_image_support = min_support * self.num_vertices
+        if min_image_support - int(min_image_support) > 0:
+            min_image_support += 1
+        min_image_support = int(min_image_support)
+        pattern_support = self._gmlib.fsmPO(min_image_support, k).toJavaRDD().collect()
+        output = []
+        for ps in pattern_support:
+            pattern_jvm = ps._1()
+            pattern = pattern_to_networkx(pattern_jvm)
+            output.append(pattern)
         return output
 
     def graphlet_degree_vectors(self, k):
@@ -96,6 +118,7 @@ class FractalGraph:
         return Fractoid(self._sc,
                         self._gmlib.inducedSubgraphsSample(k, fraction))
 
+
 class FractalContext:
     def __init__(self, sc):
         self.graphdir = None
@@ -103,7 +126,7 @@ class FractalContext:
             sc = sc.sparkContext
         self._sc = sc
         self._fcjvm = sc._jvm.br.ufmg.cs.systems.fractal.FractalContext(
-            sc._jsc.sc(), "info")
+            sc._jsc.sc(), "error")
         script_path = os.path.dirname(os.path.realpath(__file__))
         sc.addPyFile("%s/model.py" % script_path)
         sc.addPyFile("%s/hexserializer.py" % script_path)
@@ -144,6 +167,7 @@ class Subgraph:
         self.pvlabels = []
         self.pelabels = []
         self.adjlists = {}
+
         def add_edge(src, dst):
             if src not in self.adjlists:
                 self.adjlists[src] = set()
@@ -151,6 +175,7 @@ class Subgraph:
             if dst not in self.adjlists:
                 self.adjlists[dst] = set()
             self.adjlists[dst].add(src)
+
         for i in range(self.num_vertices):
             self.vids.append(int(next(toks)))
         for i in range(self.num_edges):
@@ -158,7 +183,7 @@ class Subgraph:
         for i in range(self.num_edges):
             src = int(next(toks))
             dst = int(next(toks))
-            self.pedges.append((src,dst))
+            self.pedges.append((src, dst))
             add_edge(src, dst)
         for i in range(self.num_vertices):
             self.pvlabels.append(int(next(toks)))
@@ -169,7 +194,7 @@ class Subgraph:
         return self.pedges
 
     def to_networkx(self):
-        edges = [(self.vids[src], self.vids[dst]) for (src,dst) in self.pedges]
+        edges = [(self.vids[src], self.vids[dst]) for (src, dst) in self.pedges]
         g = nx.from_edgelist(edges)
         for i in range(self.num_vertices):
             u = self.vids[i]
@@ -182,7 +207,7 @@ class Subgraph:
 
     def edgelist(self):
         vertices = self.vids
-        return [(vertices[src],vertices[dst]) for (src,dst) in self.pedges]
+        return [(vertices[src], vertices[dst]) for (src, dst) in self.pedges]
 
     def __repr__(self):
         return self.__str__()

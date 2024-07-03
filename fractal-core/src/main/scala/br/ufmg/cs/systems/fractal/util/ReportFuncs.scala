@@ -14,7 +14,7 @@ object ReportFuncs {
    val COUNT_AGG_REPORT: (ExecutionEngine[_ <: Subgraph],LongSubgraphAggregation[_ <: Subgraph]) => Unit =
       (engine, agg) => {
          val progress = agg.value()
-         Logging.logApp(s"ProgressStepStageThread ${engine.getStep}" +
+         Logging.logInfo(s"ProgressStepStageThread ${engine.getStep}" +
             s" ${engine.getStageId} ${engine.getPartitionId} ${progress}")
       }
 
@@ -38,7 +38,7 @@ object ReportFuncs {
                exception = true
          }
 
-         Logging.logApp(s"ProgressStepStageThreadEdgesException" +
+         Logging.logInfo(s"ProgressStepStageThreadEdgesException" +
             s" ${engine.getStep} ${engine.getStageId}" +
             s" ${engine.getPartitionId} ${numEdges} ${exception} ${progress}")
       }

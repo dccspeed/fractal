@@ -144,11 +144,11 @@ class FSMPO(minSupport: Int, maxNumEdges: Int)
          val (pattern, support) = iter.next()
          numSubgraphs += support.getNumSubgraphsAggregated
          numPatterns += 1
-         logApp(s"FrequentPattern numEdges=${numEdges}" +
+         logInfo(s"FrequentPattern numEdges=${numEdges}" +
             s" minSupport=${minSupport} pattern=${pattern} support=${support}")
       }
 
-      logApp(s"StepResult fractoid=${fractoid}" +
+      logInfo(s"StepResult fractoid=${fractoid}" +
          s" numEdges=${numEdges}" +
          s" support=${minSupport}" +
          s" numSteps=1" +
@@ -157,7 +157,7 @@ class FSMPO(minSupport: Int, maxNumEdges: Int)
          s" elapsedMs=${elapsedMs}" +
          s" throughput=${numSubgraphs / elapsedMs.toDouble}")
 
-      logApp(s"FrequentPatternsResult" +
+      logInfo(s"FrequentPatternsResult" +
          s" numEdges=${numEdges}" +
          s" support=${minSupport}" +
          s" numSteps=1" +

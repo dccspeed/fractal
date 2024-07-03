@@ -63,4 +63,10 @@ object Logging {
       }
    }
 
+   def logInfo(msg: String) : Unit = {
+      if (log.isEnabledFor(Level.INFO)) {
+         log.log(Level.INFO, msg)
+      }
+   }
+
 }

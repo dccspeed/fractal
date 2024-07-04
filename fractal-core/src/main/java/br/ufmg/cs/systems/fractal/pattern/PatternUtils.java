@@ -2,6 +2,7 @@ package br.ufmg.cs.systems.fractal.pattern;
 
 import br.ufmg.cs.systems.fractal.conf.Configuration;
 import br.ufmg.cs.systems.fractal.pattern.pool.PatternEdgePool;
+import br.ufmg.cs.systems.fractal.util.Logging$;
 import br.ufmg.cs.systems.fractal.util.TextFileParser;
 import br.ufmg.cs.systems.fractal.util.collection.IntArrayList;
 import br.ufmg.cs.systems.fractal.util.collection.ObjArrayList;
@@ -22,6 +23,8 @@ import org.apache.hadoop.fs.Path;
 import org.apache.log4j.Logger;
 
 import java.io.*;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.function.Consumer;
@@ -793,6 +796,56 @@ public class PatternUtils {
       pattern.setVertexLabeled(hasVlabels);
       pattern.setEdgeLabeled(hasElabels);
       pattern.setInduced(false);
+
+      return pattern;
+   }
+
+   public static Pattern fromSerializablePattern(SerializablePattern serializablePattern,
+                                                 boolean vertexLabeled, boolean edgeLabeled, boolean induced) {
+      Pattern pattern = configuration.createPattern();
+      Node[] nodes = serializablePattern.nodesArray();
+      Link[] links = serializablePattern.linksArray();
+
+      Arrays.sort(nodes, (node1, node2) -> {
+         if (node1.id() < node2.id()) return -1;
+         else if (node1.id() > node2.id()) return 1;
+         else return 0;
+      });
+
+      int numVertices = nodes.length;
+
+      if (vertexLabeled) {
+         for (int u = 0; u < numVertices; ++u) {
+            if (nodes[u].id() != u) throw new RuntimeException("Invalid SerializablePattern: " + serializablePattern);
+            pattern.addVertexStandalone(nodes[u].label());
+         }
+      } else {
+         for (int u = 0; u < numVertices; ++u) {
+            if (nodes[u].id() != u) throw new RuntimeException("Invalid SerializablePattern: " + serializablePattern);
+            pattern.addVertexStandalone();
+         }
+      }
+
+      for (Link link : links) {
+         PatternEdge edge =
+                 PatternEdgePool.instance(edgeLabeled).createObject();
+
+         int src = link.source();
+         int dst = link.target();
+
+         int srcLabel = vertexLabeled ? nodes[src].label() : 1;
+         int dstLabel = vertexLabeled ? nodes[dst].label() : 1;
+         edge.setSrcPos(src);
+         edge.setDestPos(dst);
+         edge.setSrcLabel(srcLabel);
+         edge.setDestLabel(dstLabel);
+
+         pattern.addEdgeStandalone(edge);
+      }
+
+      pattern.setVertexLabeled(vertexLabeled);
+      pattern.setEdgeLabeled(edgeLabeled);
+      pattern.setInduced(induced);
 
       return pattern;
    }

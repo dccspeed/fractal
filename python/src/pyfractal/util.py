@@ -58,7 +58,7 @@ def pattern_to_networkx(jvmpattern):
         edge = edges.get(i)
         src = edge.getSrcPos()
         dst = edge.getDestPos()
-        g.add_edge(src, dst)
+        g.add_edge(src, dst, label=edge.getLabel())
     return g
 
 

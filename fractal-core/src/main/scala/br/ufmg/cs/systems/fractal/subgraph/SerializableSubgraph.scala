@@ -1,6 +1,8 @@
 package br.ufmg.cs.systems.fractal.subgraph
 
+import br.ufmg.cs.systems.fractal.pattern.Pattern
 import br.ufmg.cs.systems.fractal.util.Logging
+import br.ufmg.cs.systems.fractal.util.collection.IntArrayList
 
 import scala.collection.mutable.ArrayBuffer
 import org.json4s._
@@ -25,9 +27,27 @@ case class SerializableSubgraph(vids: Array[Int], eids: Array[Int],
 }
 
 object SerializableSubgraph {
-   def fromInternalSubgraph(s: Subgraph): SerializableSubgraph = {
-      val numVertices = s.getNumVertices
-      val numEdges = s.getNumEdges
+   def fromInternalSubgraph(s: Subgraph, patternWithExecPlan: Pattern): SerializableSubgraph = {
+      var pattern: Pattern = null
+      var vertices: IntArrayList = null
+      var edges: IntArrayList = null
+
+      if (s.isInstanceOf[PatternInducedSubgraph]) {
+         val ps = s.asInstanceOf[PatternInducedSubgraph]
+         if (patternWithExecPlan == null) {
+            throw new RuntimeException(s"Pattern is null, although fractoid is pattern induced")
+         }
+         pattern = ps.applyLabels(patternWithExecPlan)
+         vertices = ps.getVertices
+         edges = ps.getEdges(patternWithExecPlan)
+      } else {
+         pattern = s.quickPattern()
+         vertices = s.getVertices
+         edges = s.getEdges
+      }
+
+      val numVertices = pattern.getNumberOfVertices
+      val numEdges = pattern.getNumberOfEdges
       val vids = new Array[Int](numVertices)
       val eids = new Array[Int](numEdges)
       val pedges = new Array[(Int,Int)](numEdges)
@@ -36,18 +56,17 @@ object SerializableSubgraph {
 
       var i = 0
       while (i < numVertices) {
-         val u = s.getVertices.get(i)
+         val u = vertices.get(i)
          vids(i) = u
          pvlabels(i) = s.getMainGraph.firstVertexLabel(u)
          i += 1
       }
 
-      val pattern = s.quickPattern()
       //pattern.turnCanonical()
       val patternEdges = pattern.getEdges
       i = 0
       while (i < numEdges) {
-         val e = s.getEdges.get(i)
+         val e = edges.get(i)
          eids(i) = e
          pelabels(i) = s.getMainGraph.firstEdgeLabel(e)
          val pedge = patternEdges.get(i)
@@ -55,13 +74,14 @@ object SerializableSubgraph {
          i += 1
       }
 
-      SerializableSubgraph(vids, eids, pedges, pvlabels, pelabels)
+      val ss = SerializableSubgraph(vids, eids, pedges, pvlabels, pelabels)
+      ss
    }
 
-   def fromInternalSubgraphToJSON(s: Subgraph): String = {
+   def fromInternalSubgraphToJSON(s: Subgraph, p: Pattern): String = {
       implicit val formats = DefaultFormats
 
-      val subgraph = fromInternalSubgraph(s)
+      val subgraph = fromInternalSubgraph(s, p)
 
 
       val numVertices = subgraph.vids.length

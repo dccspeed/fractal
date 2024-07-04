@@ -885,8 +885,9 @@ case class Fractoid[S <: Subgraph : ClassTag]
 
    def pythonSubgraphs(): JavaRDD[String] = {
 
+      val _pattern = pattern
       val rdd = aggregationObj[SerializableSubgraph](s => SerializableSubgraph
-         .fromInternalSubgraph(s))
+         .fromInternalSubgraph(s, _pattern))
          .map(_.toIntArray().mkString(","))
 
       rdd.toJavaRDD()
@@ -894,15 +895,17 @@ case class Fractoid[S <: Subgraph : ClassTag]
 
    def jsonSubgraphs(): JavaRDD[String] = {
 
+      val _pattern = pattern
       val rdd = aggregationObj[String](
-         s => SerializableSubgraph.fromInternalSubgraphToJSON(s))
+         s => SerializableSubgraph.fromInternalSubgraphToJSON(s, _pattern))
 
       rdd.toJavaRDD()
    }
 
    def subgraphs(): RDD[SerializableSubgraph] = {
+      val _pattern = pattern
       aggregationObj(s => SerializableSubgraph
-         .fromInternalSubgraph(s))
+         .fromInternalSubgraph(s, _pattern))
    }
 
    def explore(n: Int): Fractoid[S] = {

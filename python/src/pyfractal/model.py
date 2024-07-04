@@ -1,5 +1,6 @@
 import os
 import tempfile
+import json
 
 import networkx as nx
 from pyspark.rdd import RDD
@@ -52,6 +53,7 @@ class FractalGraph:
     def __init__(self, sc, fgjvm):
         self._sc = sc
         self._fgjvm = fgjvm
+        self._jvm = sc._jvm
         self._gmlib = sc._jvm.br.ufmg.cs.systems.fractal.gmlib \
             .BuiltInApplications(fgjvm)
         self.num_vertices = self.vfractoid().extend(1).count()
@@ -66,8 +68,18 @@ class FractalGraph:
     def efractoid(self):
         return Fractoid(self._sc, self._fgjvm.efractoid())
 
-    def pfractoid(self, pattern):
-        raise NotImplementedError
+    def pfractoid(self, nxgraph, vertex_labeled=False, edge_labeled=False, induced=False):
+        g = nxgraph.copy()
+        for u in g.nodes:
+            g.nodes[u]['label'] = g.nodes[u].get('label', 1)
+        for u, v in g.edges:
+            g.edges[u, v]['label'] = g.edges[u, v].get('label', 0)
+        nxdata = json.dumps(nx.node_link_data(g))
+        ser_pattern_obj = self._jvm.br.ufmg.cs.systems.fractal.pattern.SerializablePattern
+        ser_pattern = ser_pattern_obj.fromNodeLinkNetworkxJSON(nxdata)
+        pattern_utils = self._jvm.br.ufmg.cs.systems.fractal.pattern.PatternUtils
+        pattern = pattern_utils.fromSerializablePattern(ser_pattern, vertex_labeled, edge_labeled, induced)
+        return Fractoid(self._sc, self._fgjvm.pfractoid(pattern))
 
     def motif_counting(self, k):
         motif_count = self.motifsPO(k).collect()
@@ -78,6 +90,10 @@ class FractalGraph:
             count = mc._2()
             output.append((pattern, count))
         return output
+
+    def pattern_querying(self, nxgraph, vertex_labeled=False, edge_labeled=False, induced=False):
+        num_vertices = nxgraph.number_of_nodes()
+        return self.pfractoid(nxgraph, vertex_labeled, edge_labeled, induced).extend(num_vertices).subgraphs_networkx()
 
     def cliques(self, k):
         return Fractoid(self._sc, self._gmlib.cliquesPO(k)).subgraphs_networkx()

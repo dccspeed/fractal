@@ -10,7 +10,7 @@ class PythonFilter[S <: Subgraph](val filterstr: String) extends Function2[S,
    override def apply(s: S,
                       c: Computation[S]): Boolean = {
       pythonFilterRunner.test(SerializableSubgraph
-        .fromInternalSubgraph(s).asString())
+        .fromInternalSubgraph(s, c.getPattern).asString())
    }
 }
 

@@ -44,10 +44,10 @@ def draw_enumeration_tree_from_subgraphs(subgraphs, figsize):
     labels = nx.get_node_attributes(G, 'vid')
     pos = graphviz_layout(G, prog="dot")
     nx.draw_networkx(G, pos, vmin=-1, vmax=max(groups), labels=labels, with_labels=True, node_color=colors,
-                     node_size=400, cmap=plt.cm.Pastel1)
+                     node_size=400, cmap=plt.cm.Pastel1, linewidths=1, edgecolors='black')
 
 
-def draw_fractal_graph(fg, figsize, prog="sfdp"):
+def draw_fractal_graph(fg, figsize, prog="sfdp", title=None, color_mode="vid"):
 
     edge_subgraphs = fg.efractoid().extend(1).subgraphs_networkx().collect()
     wholegraph = nx.Graph()
@@ -55,13 +55,19 @@ def draw_fractal_graph(fg, figsize, prog="sfdp"):
         wholegraph = nx.compose(wholegraph, eg)
 
     plt.figure(figsize=figsize)
-    plt.title("Grafo de entrada")
+    if title is not None:
+        plt.title(title)
     nodes = wholegraph.nodes()
     labels = {l: l for l in nodes}
-    colors = [c for c in nodes]
+    if color_mode == "vid":
+        colors = [c for c in nodes]
+    elif color_mode == "vlabel":
+        vlabels = nx.get_node_attributes(wholegraph, 'label')
+        colors = [vlabels[c] for c in nodes]
+
     pos = graphviz_layout(wholegraph, prog=prog)
     nx.draw_networkx(wholegraph, pos, vmin=-1, vmax=max(colors), labels=labels, with_labels=True, node_color=colors,
-                     node_size=1000, cmap=plt.cm.Pastel1)
+                     node_size=1000, cmap=plt.cm.Pastel1, linewidths=1, edgecolors='black')
 
 
 def draw_graphs_in_grid(subgraphs_titles, ncols, figsize, with_labels=False):
@@ -90,7 +96,7 @@ def draw_graphs_in_grid(subgraphs_titles, ncols, figsize, with_labels=False):
             colors = [mapping[subgraph.nodes[n]['label']] for n in nodes]
             pos = nx.circular_layout(subgraph)
             ax.set_title(title)
-            nx.draw(subgraph, pos, with_labels=with_labels, ax=ax, node_color=colors, cmap=plt.cm.Pastel1)
+            nx.draw(subgraph, pos, vmin=-1, with_labels=with_labels, ax=ax, node_color=colors, cmap=plt.cm.Pastel1, linewidths=1, edgecolors='black')
             idx += 1
 
     plt.show()

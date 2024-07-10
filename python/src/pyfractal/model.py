@@ -56,8 +56,19 @@ class FractalGraph:
         self._jvm = sc._jvm
         self._gmlib = sc._jvm.br.ufmg.cs.systems.fractal.gmlib \
             .BuiltInApplications(fgjvm)
-        self.num_vertices = self.vfractoid().extend(1).count()
-        self.num_edges = self.efractoid().extend(1).count()
+        self._num_vertices = None
+        self._num_edges = None
+
+    def get_num_vertices(self):
+        if self._num_vertices is None:
+            self._num_vertices = self.vfractoid().extend(1).count()
+        return self._num_vertices
+
+    def get_num_edges(self):
+        if self._num_edges is None:
+            self._num_edges = self.efractoid().extend(1).count()
+        return self._num_edges
+
 
     def set(self, key, value):
         return FractalGraph(self._sc, self._fgjvm.set(key, value))
@@ -102,7 +113,7 @@ class FractalGraph:
         return Fractoid(self._sc, self._gmlib.quasiCliquesPO(k, min_density)).subgraphs_networkx()
 
     def frequent_subgraph_mining(self, k, min_support):
-        min_image_support = min_support * self.num_vertices
+        min_image_support = min_support * self.get_num_vertices()
         if min_image_support - int(min_image_support) > 0:
             min_image_support += 1
         min_image_support = int(min_image_support)

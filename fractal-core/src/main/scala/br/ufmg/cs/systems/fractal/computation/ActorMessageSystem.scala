@@ -3,7 +3,6 @@ package br.ufmg.cs.systems.fractal.computation
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Arrays, Comparator, Properties}
-
 import akka.actor._
 import akka.routing._
 import br.ufmg.cs.systems.fractal.FractalContext
@@ -16,6 +15,7 @@ import com.koloboke.collect.map.hash.HashLongObjMaps
 import com.typesafe.config.{Config, ConfigFactory}
 
 import scala.collection.mutable.Map
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
@@ -1035,7 +1035,8 @@ object ActorMessageSystem extends Logging {
       ConfigFactory.load(combinedConfig)
    }
 
-   private lazy val executorAkkaSys: ActorSystem = {
+   private def executorAkkaSys: ActorSystem = {
+      if (executorAkkaSysOpt.isDefined) return executorAkkaSysOpt.get
       val props = getDefaultProperties
       // setting "0" means to allocate the first/any OS port available
       props.setProperty("akka.remote.netty.tcp.port", "0")
@@ -1046,7 +1047,8 @@ object ActorMessageSystem extends Logging {
       as
    }
 
-   private lazy val masterAkkaSys: ActorSystem = {
+   private def masterAkkaSys: ActorSystem = {
+      if (masterAkkaSysOpt.isDefined) return masterAkkaSysOpt.get
       val props = getDefaultProperties
       props.setProperty("akka.remote.netty.tcp.port", "2552")
       val as = ActorSystem("fractal-msgsys",
@@ -1065,12 +1067,18 @@ object ActorMessageSystem extends Logging {
    }
 
    def shutdown() = {
+      import scala.concurrent.ExecutionContext.Implicits.global
+      var futures = List.empty[Future[Terminated]]
       if (executorAkkaSysOpt.isDefined) {
-         executorAkkaSysOpt.get.terminate()
+         futures = executorAkkaSysOpt.get.terminate() :: futures
       }
       if (masterAkkaSysOpt.isDefined) {
-         masterAkkaSysOpt.get.terminate()
+         futures = masterAkkaSysOpt.get.terminate() :: futures
       }
+      val future = Future.sequence(futures)
+      Await.result(future, Duration.Inf)
+      _masterAkkaSysOpt = None
+      _executorAkkaSysOpt = None
    }
 
    def createActor(engine: SparkMasterEngine[_ <: Subgraph]): ActorRef =

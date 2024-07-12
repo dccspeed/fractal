@@ -66,6 +66,10 @@ public class Configuration implements Serializable {
            "fractal.maingraph.edge.filtering.predicate";
    public static final String CONF_MAINGRAPH_VERTEX_FILTERING_PREDICATE =
            "fractal.maingraph.vertex.filtering.predicate";
+
+   public static final String CONF_MASTER_AKKA_SYS_PORT = "fractal.master.akkasys.port";
+
+   public static final int CONF_MASTER_AKKA_SYS_PORT_DEFAULT = 2552;
    protected transient long infoPeriod;
    protected transient long startTime;
    protected transient long timeLimit;
@@ -82,6 +86,8 @@ public class Configuration implements Serializable {
    private transient boolean isGraphVertexLabeled;
    private transient EdgeFilteringPredicate edgePredicate;
    private transient VertexFilteringPredicate vertexPredicate;
+
+   private transient int masterAkkaSysPort;
 
    public Configuration() {
    }
@@ -289,12 +295,20 @@ public class Configuration implements Serializable {
       return vertexPredicate;
    }
 
+   public int getMasterAkkaSysPort() {
+      return masterAkkaSysPort;
+   }
+
    public void setEdgeFilteringPredicate(EdgeFilteringPredicate edgePredicate) {
       this.edgePredicate = edgePredicate;
    }
 
    public void setVertexFilteringPredicate(VertexFilteringPredicate vertexPredicate) {
       this.vertexPredicate = vertexPredicate;
+   }
+
+   public void setMasterAkkaSysPort(int port) {
+      this.masterAkkaSysPort = port;
    }
 
    private String getMainGraphKey() {

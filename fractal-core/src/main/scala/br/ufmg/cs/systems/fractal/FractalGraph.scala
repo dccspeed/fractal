@@ -1,5 +1,6 @@
 package br.ufmg.cs.systems.fractal
 
+import br.ufmg.cs.systems.fractal.computation.ActorMessageSystem
 import br.ufmg.cs.systems.fractal.conf.SparkConfiguration
 import br.ufmg.cs.systems.fractal.gmlib.BuiltInApplications
 import br.ufmg.cs.systems.fractal.graph.{EdgeFilteringPredicate, MainGraph, UnlabeledMainGraph, VertexFilteringPredicate}
@@ -43,6 +44,7 @@ case class FractalGraph
          logDebug(s"Setting (${k},${v}) from graph")
       }
 
+      _config.set("master_akkasys_port", ActorMessageSystem.masterAkkaSystemRunnningPort)
       _config.set("input_graph_path", path)
       _config.set("input_graph_class", graphClass)
       _config.set("log_level", logLevel)

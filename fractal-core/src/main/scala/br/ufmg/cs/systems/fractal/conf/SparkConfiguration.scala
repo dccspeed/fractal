@@ -105,6 +105,8 @@ case class SparkConfiguration(confs: Map[String, Any])
       // vertex filtering predicate
       updateIfExists("vertex_filtering_predicate",
          CONF_MAINGRAPH_VERTEX_FILTERING_PREDICATE)
+
+      updateIfExists("master_akkasys_port", CONF_MASTER_AKKA_SYS_PORT)
    }
 
    def initializeWithTag(isMaster: Boolean): Unit = synchronized {
@@ -187,6 +189,10 @@ case class SparkConfiguration(confs: Map[String, Any])
       setVertexFilteringPredicate(
          getValue(CONF_MAINGRAPH_VERTEX_FILTERING_PREDICATE, null)
             .asInstanceOf[VertexFilteringPredicate]
+      )
+
+      setMasterAkkaSysPort(
+         getInteger(CONF_MASTER_AKKA_SYS_PORT, CONF_MASTER_AKKA_SYS_PORT_DEFAULT).intValue()
       )
 
       initialized = true

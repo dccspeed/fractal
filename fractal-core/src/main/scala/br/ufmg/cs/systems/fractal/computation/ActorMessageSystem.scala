@@ -1,5 +1,7 @@
 package br.ufmg.cs.systems.fractal.computation
 
+import akka.actor.ProviderSelection.Cluster
+
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Arrays, Comparator, Properties}
@@ -1008,6 +1010,10 @@ object ActorMessageSystem extends Logging {
       }
    }
 
+   lazy val masterAkkaSystemRunnningPort: Int = {
+      masterAkkaSys.asInstanceOf[ExtendedActorSystem].provider.getDefaultAddress.port.get
+   }
+
    private var _masterAkkaSysOpt: Option[ActorSystem] = None
 
    private var _executorAkkaSysOpt: Option[ActorSystem] = None
@@ -1050,7 +1056,7 @@ object ActorMessageSystem extends Logging {
    private def masterAkkaSys: ActorSystem = {
       if (masterAkkaSysOpt.isDefined) return masterAkkaSysOpt.get
       val props = getDefaultProperties
-      props.setProperty("akka.remote.netty.tcp.port", "2552")
+      props.setProperty("akka.remote.netty.tcp.port", "0")
       val as = ActorSystem("fractal-msgsys",
          config = Some(getAkkaConfig(props)))
       _masterAkkaSysOpt = Option(as)
@@ -1087,8 +1093,9 @@ object ActorMessageSystem extends Logging {
       if (!fc.acceptingNewJobs) {
          throw new InterruptedException(s"${fc} not accepting new jobs.")
       }
+     val masterSystemPort = engine.config.getMasterAkkaSysPort
       val remotePath = s"akka.tcp://fractal-msgsys@" +
-         s"${engine.config.getMasterHostname}:2552" +
+         s"${engine.config.getMasterHostname}:${masterSystemPort}" +
          s"/user/master-actor-${engine.step}"
       val args = new MasterActor.Args(remotePath, engine)
       val masterRef = masterAkkaSys.actorOf(
@@ -1100,8 +1107,9 @@ object ActorMessageSystem extends Logging {
    }
 
    def createActor[S <: Subgraph](engine: SparkEngine[S]): ActorRef = {
+      val masterSystemPort = engine.configuration.getMasterAkkaSysPort
       val remotePath = s"akka.tcp://fractal-msgsys@" +
-         s"${engine.configuration.getMasterHostname}:2552" +
+         s"${engine.configuration.getMasterHostname}:${masterSystemPort}" +
          s"/user/master-actor-${engine.step}"
       val args = new SlaveActor.Args(remotePath, engine)
       val slaveActorRef = executorAkkaSys.actorOf(

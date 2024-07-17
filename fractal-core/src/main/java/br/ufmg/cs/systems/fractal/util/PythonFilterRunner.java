@@ -14,7 +14,6 @@ public class PythonFilterRunner {
    public PythonFilterRunner(String filterstr) {
       // start process
       String filterRunnerPath = System.getenv("PYFRACTAL_LIB") + "/filterrunner.py";
-      LOG.error(filterRunnerPath);
       ProcessBuilder processBuilder = new ProcessBuilder("python", filterRunnerPath, filterstr);
       processBuilder.redirectErrorStream(false);
 
@@ -51,9 +50,7 @@ public class PythonFilterRunner {
    @Override
    protected void finalize() throws Throwable {
       super.finalize();
-      LOG.error("finalize");
-      outputStreamWriter.write("CLOSE\n");
+      outputStreamWriter.write("CLOSE\n"); // force process to finish
       outputStreamWriter.flush();
-      //process.destroy();
    }
 }

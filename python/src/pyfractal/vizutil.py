@@ -49,8 +49,7 @@ def draw_enumeration_tree_from_subgraphs(subgraphs, figsize, title=None, **kwarg
 
 
 def draw_fractal_graph(fg, figsize, prog="sfdp", title=None, color_mode="vid", **kwargs):
-
-    edge_subgraphs = fg.efractoid().extend(1).subgraphs_networkx().collect()
+    edge_subgraphs = fg.edge_induced().extend(1).subgraphs_networkx().collect()
     wholegraph = nx.Graph()
     for eg in edge_subgraphs:
         wholegraph = nx.compose(wholegraph, eg)
@@ -91,13 +90,13 @@ def draw_graphs_in_grid(subgraphs_titles, ncols, figsize, with_labels=False, **k
                 ax.set_visible(False)
                 continue
             title = subgraphs_titles[subgraph]
-            groups = set(nx.get_node_attributes(subgraph, 'label').values())
-            mapping = dict(zip(sorted(groups), count()))
             nodes = subgraph.nodes()
-            colors = [mapping[subgraph.nodes[n]['label']] for n in nodes]
+            vlabels = nx.get_node_attributes(subgraph, 'label')
+            colors = [vlabels[c] for c in nodes]
             pos = nx.circular_layout(subgraph)
             ax.set_title(title)
-            nx.draw(subgraph, pos, vmin=-1, with_labels=with_labels, ax=ax, node_color=colors, cmap=plt.cm.Pastel1, linewidths=1, edgecolors='black', **kwargs)
+            nx.draw(subgraph, pos, vmin=-1, with_labels=with_labels, ax=ax, node_color=colors, cmap=plt.cm.Pastel1,
+                    linewidths=1, edgecolors='black', **kwargs)
             idx += 1
 
-    plt.show()
+    return fig

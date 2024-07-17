@@ -1,6 +1,8 @@
+import json
 import os
 import tempfile
-import json
+import threading
+import time
 
 import networkx as nx
 from pyspark.rdd import RDD
@@ -61,25 +63,24 @@ class FractalGraph:
 
     def get_num_vertices(self):
         if self._num_vertices is None:
-            self._num_vertices = self.vfractoid().extend(1).count()
+            self._num_vertices = self.vertex_induced().extend(1).count()
         return self._num_vertices
 
     def get_num_edges(self):
         if self._num_edges is None:
-            self._num_edges = self.efractoid().extend(1).count()
+            self._num_edges = self.edge_induced().extend(1).count()
         return self._num_edges
-
 
     def set(self, key, value):
         return FractalGraph(self._sc, self._fgjvm.set(key, value))
 
-    def vfractoid(self):
+    def vertex_induced(self):
         return Fractoid(self._sc, self._fgjvm.vfractoid())
 
-    def efractoid(self):
+    def edge_induced(self):
         return Fractoid(self._sc, self._fgjvm.efractoid())
 
-    def pfractoid(self, nxgraph, vertex_labeled=False, edge_labeled=False, induced=False):
+    def pattern_induced(self, nxgraph, vertex_labeled=False, edge_labeled=False, induced=False):
         g = nxgraph.copy()
         for u in g.nodes:
             g.nodes[u]['label'] = g.nodes[u].get('label', 1)
@@ -104,7 +105,7 @@ class FractalGraph:
 
     def pattern_querying(self, nxgraph, vertex_labeled=False, edge_labeled=False, induced=False):
         num_vertices = nxgraph.number_of_nodes()
-        return self.pfractoid(nxgraph, vertex_labeled, edge_labeled, induced).extend(num_vertices).subgraphs_networkx()
+        return self.pattern_induced(nxgraph, vertex_labeled, edge_labeled, induced).extend(num_vertices).subgraphs_networkx()
 
     def cliques(self, k):
         return Fractoid(self._sc, self._gmlib.cliquesPO(k)).subgraphs_networkx()
@@ -139,7 +140,7 @@ class FractalGraph:
         return self._gmlib.motifsPO(k).toJavaRDD()
 
     def induced_subgraphs(self, k):
-        return self.vfractoid().extend(k)
+        return self.vertex_induced().extend(k)
 
     def induced_subgraphs_sample(self, k, fraction):
         return Fractoid(self._sc,
@@ -157,6 +158,11 @@ class FractalContext:
         script_path = os.path.dirname(os.path.realpath(__file__))
         sc.addPyFile("%s/model.py" % script_path)
         sc.addPyFile("%s/hexserializer.py" % script_path)
+        def periodic_gc():
+            self._sc._jvm.System.gc()
+            threading.Timer(10, periodic_gc).start()
+
+        periodic_gc()
 
     def unlabeledGraphFromPyGData(self, data):
         self.graphdir = tempfile.TemporaryDirectory(prefix="pydata2fractal", delete=False)

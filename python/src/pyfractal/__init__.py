@@ -1,10 +1,12 @@
 from pyspark.sql import SparkSession
 
+
 def fractal_jar_path():
     import os
     script_path = os.path.dirname(os.path.realpath(__file__))
     os.environ["PYFRACTAL_LIB"] = script_path
     return f"{script_path}/fractal-core-SPARK-3.5.0.jar"
+
 
 DefaultSparkBuilder = SparkSession.builder \
     .config("spark.jars.packages",

@@ -163,15 +163,15 @@ class FractalContext:
         write_pyg_data_as_fractal_graph(data, self.graphdir.name)
         return self.unlabeledGraphFromAdjLists(self.graphdir.name)
 
-    def unlabeledGraphFromAdjLists(self, path):
+    def unlabeled_graph(self, path):
         return FractalGraph(self._sc,
                             self._fcjvm.unlabeledGraphFromAdjLists(path)).set("ws_external", "false")
 
-    def vertexLabeledGraphFromAdjLists(self, path):
+    def vertex_labeled_graph(self, path):
         return FractalGraph(self._sc,
                             self._fcjvm.vertexLabeledGraphFromAdjLists(path)).set("ws_external", "false")
 
-    def vertexEdgeLabeledGraphFromAdjLists(self, path):
+    def vertex_edge_labeled_graph(self, path):
         return FractalGraph(self._sc,
                             self._fcjvm.vertexEdgeLabeledGraphFromAdjLists(path)).set("ws_external", "false")
 

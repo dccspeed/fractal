@@ -13,9 +13,9 @@ public class PythonFilterRunner {
    private OutputStreamWriter outputStreamWriter;
    public PythonFilterRunner(String filterstr) {
       // start process
-      ProcessBuilder processBuilder = new ProcessBuilder("python", "/home" +
-              "/viniciusvdias/repos/fractal-subgraph-mapping/fractal-core/src" +
-              "/main/python/filterrunner.py", filterstr);
+      String filterRunnerPath = System.getenv("PYFRACTAL_LIB") + "/filterrunner.py";
+      LOG.error(filterRunnerPath);
+      ProcessBuilder processBuilder = new ProcessBuilder("python", filterRunnerPath, filterstr);
       processBuilder.redirectErrorStream(false);
 
       process = null;

@@ -40,6 +40,7 @@ class Net(torch.nn.Module):
 
         return x
 
+
 def train(model, optimizer, train_loader):
     model.train()
 
@@ -67,21 +68,19 @@ def test(model, loader):
     return total_correct / len(loader.dataset)
 
 
+spark = pf.DefaultSparkBuilder() \
+    .master("local[8]") \
+    .config("spark.driver.memory", "2g") \
+    .appName("demo") \
+    .getOrCreate()
+fc = FractalContext(spark)
+
+
 def build_graphlet_degree_vectors_with_fractal(data):
-    spark = pf.DefaultSparkBuilder \
-        .master("local[8]") \
-        .config("spark.driver.memory", "2g") \
-        .appName("demo") \
-        .getOrCreate()
-
-    fc = FractalContext(spark)
-    fg = fc.unlabeledGraphFromPyGData(data)
+    fg = fc.unlabeled_graph_from_pyg_data(data)
     x = fg.graphlet_degree_vectors(5)
-
-    fc.stop()
-    spark.stop()
-
     return x
+
 
 # get MUTAG dataset
 path = osp.dirname(osp.realpath(__file__))
@@ -99,12 +98,13 @@ print(f"Time to get GDV features using Fractal: {elapsed} seconds")
 # apply GDV features to a copy of the dataset
 dataset_with_gdv_features = []
 for i in range(len(dataset)):
-    data = dataset[i]
-    from_idx = full_batched_data.ptr[i]
-    to_idx = full_batched_data.ptr[i + 1]
-    x = full_batched_data_x[from_idx:to_idx]
-    data.x = x
-    dataset_with_gdv_features.append(data)
+   data = dataset[i]
+   from_idx = full_batched_data.ptr[i]
+   to_idx = full_batched_data.ptr[i + 1]
+   x = full_batched_data_x[from_idx:to_idx]
+   data.x = x
+   dataset_with_gdv_features.append(data)
+
 
 def train_test_dataset(dataset):
     num_features = dataset[0].x.shape[1]
@@ -132,9 +132,12 @@ def train_test_dataset(dataset):
         print(f'Train Loss: {train_loss:.2f} Val Acc: {val_acc:.2f} Test Acc: {test_acc:.2f}')
     print(f"Avg Test Acc: {torch.tensor(accs).mean():.2f}")
 
+
 print("\n== Model with default features ==")
 train_test_dataset(dataset)
 
 print("\n== Model with Graphlet Degree Vector Features ==")
 train_test_dataset(dataset_with_gdv_features)
 
+fc.stop()
+spark.stop()

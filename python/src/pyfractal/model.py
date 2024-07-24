@@ -150,6 +150,7 @@ class FractalGraph:
 class FractalContext:
     def __init__(self, sc):
         self.graphdir = None
+        self.gc_timer = None
         if sc.sparkContext is not None:
             sc = sc.sparkContext
         self._sc = sc
@@ -160,14 +161,15 @@ class FractalContext:
         sc.addPyFile("%s/hexserializer.py" % script_path)
         def periodic_gc():
             self._sc._jvm.System.gc()
-            threading.Timer(10, periodic_gc).start()
+            self.gc_timer = threading.Timer(10, periodic_gc)
+            self.gc_timer.start()
 
         periodic_gc()
 
-    def unlabeledGraphFromPyGData(self, data):
+    def unlabeled_graph_from_pyg_data(self, data):
         self.graphdir = tempfile.TemporaryDirectory(prefix="pydata2fractal", delete=False)
         write_pyg_data_as_fractal_graph(data, self.graphdir.name)
-        return self.unlabeledGraphFromAdjLists(self.graphdir.name)
+        return self.unlabeled_graph(self.graphdir.name)
 
     def unlabeled_graph(self, path):
         return FractalGraph(self._sc,
@@ -182,6 +184,9 @@ class FractalContext:
                             self._fcjvm.vertexEdgeLabeledGraphFromAdjLists(path)).set("ws_external", "false")
 
     def stop(self):
+        if self.gc_timer is not None:
+            self.gc_timer.cancel()
+            self.gc_timer = None
         self._fcjvm.stop()
 
     def __del__(self):

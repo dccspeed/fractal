@@ -45,7 +45,7 @@ def draw_enumeration_tree_from_subgraphs(subgraphs, figsize, title=None, **kwarg
     labels = nx.get_node_attributes(G, 'vid')
     pos = graphviz_layout(G, prog="dot")
     nx.draw_networkx(G, pos, vmin=-1, vmax=max(groups), labels=labels, with_labels=True, node_color=colors,
-                     node_size=400, cmap=plt.cm.Pastel1, linewidths=1, edgecolors='black', **kwargs)
+                     cmap=plt.cm.Pastel1, linewidths=1, edgecolors='black', **kwargs)
 
 
 def draw_fractal_graph(fg, figsize, prog="sfdp", title=None, color_mode="vid", **kwargs):
@@ -67,10 +67,10 @@ def draw_fractal_graph(fg, figsize, prog="sfdp", title=None, color_mode="vid", *
 
     pos = graphviz_layout(wholegraph, prog=prog)
     nx.draw_networkx(wholegraph, pos, vmin=-1, vmax=max(colors), labels=labels, with_labels=True, node_color=colors,
-                     node_size=1000, cmap=plt.cm.Pastel1, linewidths=1, edgecolors='black', **kwargs)
+                     cmap=plt.cm.Pastel1, linewidths=1, edgecolors='black', **kwargs)
 
 
-def draw_graphs_in_grid(subgraphs_titles, ncols, figsize, with_labels=False, **kwargs):
+def draw_graphs_in_grid(subgraphs_titles, ncols, figsize, pad_axis_x=1, pad_axis_y=1, with_labels=False, labeled=True, **kwargs):
     if len(subgraphs_titles) == 0:
         return None
     if len(subgraphs_titles) < ncols:
@@ -92,9 +92,19 @@ def draw_graphs_in_grid(subgraphs_titles, ncols, figsize, with_labels=False, **k
             title = subgraphs_titles[subgraph]
             nodes = subgraph.nodes()
             vlabels = nx.get_node_attributes(subgraph, 'label')
-            colors = [vlabels[c] for c in nodes]
+            if labeled:
+                colors = [vlabels[c] for c in nodes]
+            else:
+                colors = "white"
             pos = nx.circular_layout(subgraph)
-            ax.set_title(title)
+            minx = min([x for x,_ in pos.values()])
+            maxx = max([x for x,_ in pos.values()])
+            ax.set_xlim(minx-pad_axis_x, maxx+pad_axis_x)
+            miny = min([y for _,y in pos.values()])
+            maxy = max([y for _,y in pos.values()])
+            ax.set_ylim(miny-pad_axis_y, maxy+pad_axis_y)
+            ax.set_title(title, fontsize=kwargs.get('font_size', 20))
+            ax.axis('off')
             nx.draw(subgraph, pos, vmin=-1, with_labels=with_labels, ax=ax, node_color=colors, cmap=plt.cm.Pastel1,
                     linewidths=1, edgecolors='black', **kwargs)
             idx += 1

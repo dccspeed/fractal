@@ -9,7 +9,7 @@ from pyspark.rdd import RDD
 
 import pyfractal.hexserializer as hexser
 from pyfractal.util import pattern_to_networkx, get_memory_mapped_2dlongtensor, write_pyg_data_as_fractal_graph, \
-    networkx_from_string
+    networkx_from_string, write_nx_graph_as_fractal_graph
 
 
 class Fractoid:
@@ -170,6 +170,11 @@ class FractalContext:
         self.graphdir = tempfile.TemporaryDirectory(prefix="pydata2fractal", delete=False)
         write_pyg_data_as_fractal_graph(data, self.graphdir.name)
         return self.unlabeled_graph(self.graphdir.name)
+
+    def vertex_labeled_graph_from_nx_graph(self, data):
+        self.graphdir = tempfile.TemporaryDirectory(prefix="nxgraph2fractal", delete=False)
+        write_nx_graph_as_fractal_graph(data, self.graphdir.name)
+        return self.vertex_labeled_graph(self.graphdir.name)
 
     def unlabeled_graph(self, path):
         return FractalGraph(self._sc,

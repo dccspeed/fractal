@@ -184,6 +184,16 @@ public class LocalComputationStore {
       ObjArrayList<Computation<? extends Subgraph>> computations =
               activeComputations.get(key);
 
+      while (computations == null) {
+         try {
+            LOG.info("ActiveComputationsMapNotReady. Trying again.");
+            Thread.sleep(100);
+            computations = activeComputations.get(key);
+         } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+         }
+      }
+
       synchronized (computations) {
          computations.add(computation);
       }

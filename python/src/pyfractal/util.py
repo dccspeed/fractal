@@ -62,6 +62,38 @@ def pattern_to_networkx(jvmpattern):
     return g
 
 
+def write_nx_graph_as_fractal_graph(graph, graphdir):
+    nvertices = graph.number_of_nodes()
+    nedges = graph.number_of_edges()
+
+    vmap = {}
+    for u in sorted(list(graph.nodes())):
+        vmap[u] = len(vmap)
+
+    remapped_graph = nx.relabel_nodes(graph, vmap)
+    vlabels = nx.get_node_attributes(remapped_graph, 'label')
+
+    with open(f"{graphdir}/metadata", "w") as f:
+        f.write(f"{nvertices} {nedges}\n")
+
+    with open(f"{graphdir}/adjlists", "w") as f:
+        edge_id_map = {}
+        for u in range(nvertices):
+            adjlist = sorted(list(remapped_graph.neighbors(u)))
+            for i in range(len(adjlist)):
+                v = adjlist[i]
+                e = edge_id_map.get((min(u, v), max(u, v)), len(edge_id_map))
+                edge_id_map[(min(u, v), max(u, v))] = e
+                if i > 0: f.write(" ")
+                f.write(f"{v},{e}")
+            f.write("\n")
+
+    with open(f"{graphdir}/vlabels", "w") as f:
+        for u in range(nvertices):
+            vlabel = vlabels[u]
+            f.write(f"{vlabel}\n")
+
+
 def write_pyg_data_as_fractal_graph(data, graphdir):
     adjlists = dict()
     edgeidx = dict()

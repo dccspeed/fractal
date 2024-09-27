@@ -100,7 +100,7 @@ def draw_edge_enumeration_tree_from_subgraphs(subgraphs, figsize, title=None, **
 
 
 def draw_fractal_graph(fg, figsize, prog="sfdp", title=None, color_mode="vid", **kwargs):
-    edge_subgraphs = fg.edge_induced().extend(1).subgraphs_networkx().collect()
+    edge_subgraphs = fg.efractoid().extend(1).subgraphs_networkx().collect()
     wholegraph = nx.Graph()
     for eg in edge_subgraphs:
         wholegraph = nx.compose(wholegraph, eg)
